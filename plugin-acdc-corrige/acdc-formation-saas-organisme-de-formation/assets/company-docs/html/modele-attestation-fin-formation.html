@@ -1,0 +1,244 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Attestation de fin de formation - ACDC-Formation</title>
+  <style>
+    :root {
+      --navy: #0C2D52;
+      --gold: #C5A253;
+      --ink: #1f2937;
+      --muted: #6b7280;
+      --line: #111827;
+      --paper: #ffffff;
+    }
+
+    @page {
+      size: A4 portrait;
+      margin: 0;
+    }
+
+    * { box-sizing: border-box; }
+
+    body {
+      margin: 0;
+      background: #edf1f5;
+      font-family: Rubik, Arial, Helvetica, sans-serif;
+      color: var(--ink);
+    }
+
+    .page {
+      width: 210mm;
+      min-height: 297mm;
+      height: 297mm;
+      margin: 10px auto;
+      background: var(--paper);
+      box-shadow: 0 10px 30px rgba(0,0,0,0.08);
+      position: relative;
+      padding: 12mm 14mm 18mm;
+      overflow: hidden;
+      
+    }
+
+    .header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 12mm;
+      padding-bottom: 4mm;
+      border-bottom: 2px solid var(--gold);
+      margin-bottom: 6mm;
+    }
+
+    .brand {
+      display: flex;
+      align-items: center;
+      gap: 6mm;
+    }
+
+    .brand img {
+      height: 18mm;
+      width: auto;
+      object-fit: contain;
+    }
+
+    .brand-text {
+      color: var(--navy);
+      line-height: 1.2;
+    }
+
+    .brand-text strong {
+      display: block;
+      font-size: 16pt;
+      letter-spacing: 0.02em;
+    }
+
+    .brand-text span {
+      font-size: 8.5pt;
+      color: var(--gold);
+      font-weight: 600;
+    }
+
+    h1 {
+      margin: 0 0 7mm;
+      text-align: center;
+      font-size: 16pt;
+      color: #111827;
+      font-weight: 500;
+    }
+
+    .section-title {
+      font-size: 9.8pt;
+      font-weight: 700;
+      text-transform: uppercase;
+      margin: 7mm 0 4mm;
+      letter-spacing: 0.02em;
+    }
+
+    .block-title {
+      font-size: 11.2pt;
+      font-weight: 400;
+      margin: 0 0 3mm;
+      color: #111827;
+    }
+
+    .field {
+      display: flex;
+      align-items: baseline;
+      gap: 3mm;
+      margin: 1.6mm 0;
+      font-size: 9.4pt;
+      line-height: 1.35;
+    }
+
+    .field .label {
+      white-space: nowrap;
+    }
+
+    .dots {
+      flex: 1;
+      border-bottom: 2px dotted #6b7280;
+      transform: translateY(-1mm);
+      min-height: 0;
+    }
+
+    .certifie {
+      margin: 8mm 0 6mm;
+      font-size: 10pt;
+      font-weight: 500;
+      text-transform: uppercase;
+    }
+
+    .formation-note {
+      margin-top: 2mm;
+      font-size: 8.8pt;
+      line-height: 1.45;
+      text-align: justify;
+    }
+
+    .formation-note strong {
+      font-weight: 700;
+    }
+
+    .signatures {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 12mm;
+      margin-top: 9mm;
+    }
+
+    .sign-box {
+      font-size: 9.4pt;
+      line-height: 1.45;
+    }
+
+    .sign-box h3 {
+      margin: 0 0 4mm;
+      font-size: 10pt;
+      font-weight: 700;
+    }
+
+    .footer {
+      position: absolute;
+      left: 14mm;
+      right: 14mm;
+      bottom: 6mm;
+      text-align: center;
+      font-size: 7.8pt;
+      color: #374151;
+      line-height: 1.35;
+      border-top: 1px solid #d1d5db;
+      padding-top: 3mm;
+    }
+
+    @media print {
+      body { background: white; }
+      .page { margin: 0; box-shadow: none; }
+    }
+  </style>
+</head>
+<body>
+  <div class="page">
+    <div class="header">
+      <div class="brand">
+        <img src="https://acdcformation.com/wp-content/uploads/2026/03/Logo-ACDC.png" alt="Logo ACDC-Formation" />
+        <div class="brand-text">
+          <strong>ACDC-Formation</strong>
+          <span>Azur - Compètences - Développement - Conseil </span>
+        </div>
+      </div>
+    </div>
+
+    <h1 style="font-family: Rubik, Arial, Helvetica, sans-serif;">Attestation de fin de formation</h1>
+
+    <div class="block-title">Organisme d'accueil :</div>
+    <div class="field"><span class="label">Nom ou dénomination sociale :</span><span class="dots"></span></div>
+    <div class="field"><span class="label">Adresse :</span><span class="dots"></span></div>
+    <div class="field"><span class="label">Téléphone :</span><span class="dots"></span></div>
+
+    <div class="certifie">Certifie que :</div>
+
+    <div class="block-title">L'apprenant :</div>
+    <div class="field"><span class="label">Nom :</span><span class="dots"></span></div>
+    <div class="field"><span class="label">Prénom :</span><span class="dots"></span></div>
+    <div class="field"><span class="label">Né(e) le :</span><span class="dots"></span></div>
+    <div class="field"><span class="label">Adresse :</span><span class="dots"></span></div>
+    <div class="field"><span class="label">Numéro de téléphone :</span><span class="dots"></span></div>
+    <div class="field"><span class="label">Courriel :</span><span class="dots"></span></div>
+
+    <div class="section-title">A effectué une formation :</div>
+
+    <div class="block-title">Formation :</div>
+    <div class="field"><span class="label">Date de la formation : du</span><span class="dots"></span><span class="label">au</span><span class="dots"></span></div>
+    <div class="field"><span class="label">Soit une durée de :</span><span class="dots"></span></div>
+    <div class="field"><span class="label">Type de formation :</span><span class="dots"></span></div>
+
+    <div class="formation-note">
+      <strong>Type d’action de formation conformément à l’art. L6313-1 du code du travail :</strong>
+      Action de formation (action concourant au développement des compétences qui entre dans le champ d’application des dispositions relatives à la formation professionnelle).
+    </div>
+
+    <div class="signatures">
+      <div class="sign-box">
+        <h3>Signature de l’apprenant</h3>
+        <div class="field"><span class="label">Signé le</span><span class="dots"></span><span class="label">à</span><span class="dots"></span></div>
+        <div style="margin-top: 8mm;">Signature</div>
+      </div>
+
+      <div class="sign-box">
+        <h3>Signature de la direction de l'organisme de formation :</h3>
+        <div class="field"><span class="label">Signé le</span><span class="dots"></span><span class="label">à</span><span class="dots"></span></div>
+        <div style="margin-top: 1mm; position: relative; height: 26mm;">
+          <img src="https://acdcformation.com/wp-content/uploads/2026/04/Signature-seule-David-scaled.png" alt="Signature direction" style="position:absolute; left:0; top:-6mm; height: 60mm; width: auto; object-fit: contain; opacity: 0.95;" />
+        </div>
+      </div>
+    </div>
+
+    <div class="footer">
+      7 avenue Paul Cézanne - 83310 Cogolin - France - Siret : 405109901 00042 - NDA : 93 83 08347 83<br />
+      e-mail : contact@acdc-formation.com - Tél : 06 78 26 91 10 - site web : acdc-formation.com
+    </div>
+  </div>
+</body>
+</html>

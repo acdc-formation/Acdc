@@ -1,0 +1,593 @@
+.acdc-form input,
+.acdc-form textarea,
+.acdc-form select,
+.acdc-config-form input,
+.acdc-form-panel input[type="text"],
+.acdc-form-panel input[type="number"],
+.acdc-form-panel input[type="file"],
+.acdc-form-panel input[type="email"],
+.acdc-form-panel input[type="date"],
+.acdc-form-panel input[type="time"],
+.acdc-form-panel input[type="tel"],
+.acdc-form-panel input[type="search"],
+.acdc-form-panel input[type="url"],
+.acdc-form-panel select,
+.acdc-form-panel textarea,
+.acdc-search-bar input[type="search"],
+.acdc-list-toolbar input[type="search"] {
+    width: 100%;
+    max-width: 100%;
+    min-height: 40px;
+    padding: 10px 12px;
+    border: 1px solid var(--acdc-border);
+    border-radius: var(--acdc-radius-panel);
+    background: #fff;
+    color: var(--acdc-text);
+    box-sizing: border-box;
+}
+
+.acdc-form textarea,
+.acdc-form-panel textarea,
+.acdc-needs-section textarea,
+.acdc-company-profile-form textarea,
+.acdc-contract-builder-form textarea {
+    min-height: 96px;
+}
+
+.acdc-form input:focus,
+.acdc-form textarea:focus,
+.acdc-form select:focus,
+.acdc-config-form input:focus,
+.acdc-form-panel input:focus,
+.acdc-form-panel select:focus,
+.acdc-form-panel textarea:focus,
+.acdc-search-bar input[type="search"]:focus,
+.acdc-list-toolbar input[type="search"]:focus {
+    outline: none;
+    border-color: var(--acdc-primary-dark);
+    box-shadow: var(--acdc-focus-ring);
+}
+
+.acdc-form label,
+.acdc-form-panel label {
+    display: block;
+    margin-bottom: 6px;
+    color: var(--acdc-text);
+}
+
+.acdc-form-panel p,
+.acdc-learner-form .acdc-grid-2cols p,
+.acdc-prospect-form .acdc-grid-2cols p,
+.acdc-needs-section .acdc-grid-2cols > p {
+    margin: 0 0 16px;
+}
+
+.acdc-form-panel .acdc-grid-2cols {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 16px;
+}
+
+.acdc-search-bar {
+    display: flex;
+    gap: 12px;
+    align-items: center;
+}
+
+.acdc-search-bar input[type="search"],
+.acdc-list-toolbar input[type="search"] {
+    flex: 1;
+    max-width: none;
+}
+
+.acdc-checkbox-line {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+}
+
+.acdc-checkbox-line > label:not(.acdc-switch) input[type="checkbox"],
+.acdc-checkbox-line > input[type="checkbox"] {
+    width: 18px;
+    height: 18px;
+}
+
+.acdc-switch input[type="checkbox"] {
+    position: absolute !important;
+    width: 1px !important;
+    height: 1px !important;
+    margin: 0 !important;
+    padding: 0 !important;
+    border: 0 !important;
+    opacity: 0 !important;
+    pointer-events: none;
+    appearance: none;
+    -webkit-appearance: none;
+    clip: rect(0 0 0 0);
+    clip-path: inset(50%);
+    overflow: hidden;
+}
+
+.acdc-login-shell {
+    display: flex;
+    min-height: 100vh;
+    align-items: center;
+    justify-content: center;
+    padding: 40px;
+}
+
+.acdc-login-card {
+    width: min(520px, 100%);
+    background: #fff;
+    border: 1px solid var(--acdc-border);
+    border-radius: var(--acdc-radius-modal);
+    padding: 28px;
+    box-shadow: var(--acdc-shadow-modal);
+}
+
+.acdc-needs-form,
+.acdc-contract-builder-form {
+    display: flex;
+    flex-direction: column;
+    gap: 18px;
+}
+
+.acdc-needs-section,
+.acdc-company-profile-form .acdc-panel,
+.acdc-profile-section,
+.acdc-calendar-board {
+    padding: 0;
+    overflow: hidden;
+}
+
+.acdc-needs-section-title,
+.acdc-profile-section h3,
+.acdc-company-profile-form .acdc-panel h3 {
+    padding: 18px 24px;
+}
+
+.acdc-needs-section-title {
+    font-size: 20px;
+    line-height: 25px;
+    font-weight: 600;
+}
+
+.acdc-profile-section h3,
+.acdc-company-profile-form .acdc-panel h3 {
+    margin: 0;
+    padding: 18px 22px;
+}
+
+.acdc-needs-section .acdc-grid-2cols,
+.acdc-needs-section > p {
+    padding-left: 24px;
+    padding-right: 24px;
+}
+
+.acdc-needs-section .acdc-grid-2cols {
+    padding-top: 18px;
+}
+
+.acdc-needs-section > p {
+    margin: 18px 0;
+}
+
+.acdc-contract-grid {
+    display: grid;
+    grid-template-columns: minmax(200px, 260px) minmax(0, 1fr);
+    gap: 18px;
+    align-items: start;
+    padding: 14px 22px;
+    border-top: 1px solid var(--acdc-border);
+}
+
+.acdc-contract-grid:first-child {
+    border-top: none;
+}
+
+.acdc-contract-label {
+    font-size: 13px;
+    line-height: 1.5;
+    color: var(--acdc-text-muted);
+    font-weight: 600;
+    word-break: break-word;
+    hyphens: auto;
+}
+
+.acdc-contract-builder-form input[type="text"],
+.acdc-contract-builder-form input[type="number"],
+.acdc-contract-builder-form input[type="url"],
+.acdc-contract-builder-form textarea {
+    width: 100%;
+}
+
+.acdc-contract-grid > div:not(.acdc-contract-label) {
+    width: 100%;
+    min-width: 0;
+}
+
+.acdc-contract-grid input[type="text"],
+.acdc-contract-grid input[type="number"],
+.acdc-contract-grid input[type="email"],
+.acdc-contract-grid input[type="date"],
+.acdc-contract-grid input[type="time"],
+.acdc-contract-grid input[type="tel"],
+.acdc-contract-grid input[type="search"],
+.acdc-contract-grid input[type="url"],
+.acdc-contract-grid select,
+.acdc-contract-grid textarea {
+    width: 100%;
+    max-width: none;
+}
+
+.acdc-company-profile-form .acdc-grid-2cols,
+.acdc-profile-table,
+.acdc-profile-preview-row,
+.acdc-profile-cta-row,
+.acdc-form-actions {
+    padding: 0 22px 18px;
+}
+
+.acdc-need-form-row {
+    display: flex;
+    gap: 10px;
+    align-items: center;
+    padding: 0 22px 18px;
+    flex-wrap: wrap;
+}
+
+.acdc-profile-modal-link-wrap {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    align-items: flex-start;
+}
+
+.acdc-profile-meta code {
+    background: #eef3f8;
+    padding: 2px 6px;
+    border-radius: 6px;
+}
+
+.acdc-formation-title-row {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 16px;
+    margin-bottom: 16px;
+}
+
+.acdc-company-profile-form .acdc-panel,
+.acdc-formation-section,
+.acdc-panel-collapsible {
+    box-shadow: none;
+}
+
+@media (max-width: 900px) {
+    .acdc-form-panel .acdc-grid-2cols,
+    .acdc-contract-grid,
+    .acdc-grid-question-row,
+    .acdc-grid-score-row {
+        grid-template-columns: 1fr;
+    }
+
+    .acdc-search-bar,
+    .acdc-inline-actions {
+        flex-direction: column;
+        align-items: flex-start;
+    }
+}
+
+
+.acdc-contract-builder-form select,
+.acdc-registration-contract-form select,
+.acdc-registration-contract-form input[type="date"] {
+    width: 100%;
+}
+
+.acdc-contract-rich-editor {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+}
+
+.acdc-contract-rich-toolbar {
+    display: flex;
+    gap: 6px;
+    flex-wrap: wrap;
+}
+
+.acdc-contract-rich-toolbar button {
+    width: 30px;
+    height: 30px;
+    border-radius: 8px;
+    border: 1px solid var(--acdc-border);
+    background: #fff;
+    color: var(--acdc-text);
+    font-size: 12px;
+    line-height: 1;
+    cursor: pointer;
+}
+
+.acdc-contract-rich-toolbar button:hover {
+    border-color: var(--acdc-primary);
+    color: var(--acdc-primary-dark);
+}
+
+.acdc-registration-contract-form .acdc-center-mb-18 {
+    margin-bottom: 18px;
+}
+
+.acdc-registration-help {
+    margin: 8px 0 0;
+    font-size: 12px;
+    line-height: 16px;
+    color: var(--acdc-text-muted);
+}
+
+.acdc-registration-with-action {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) auto;
+    gap: 10px;
+    align-items: center;
+}
+
+.acdc-registration-action-link {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 24px;
+    height: 24px;
+    color: var(--acdc-primary-dark);
+    text-decoration: none;
+}
+
+.acdc-registration-mode-group,
+.acdc-registration-mode-single {
+    display: block;
+}
+
+
+/* Normalisation des écrans Outils et statistiques */
+.acdc-center-panel{ text-align:center; }
+.acdc-guide-button{ display:inline-flex; align-items:center; gap:8px; }
+.acdc-guide-button-icon{
+    display:inline-flex;
+    align-items:center;
+    justify-content:center;
+    width:16px;
+    height:16px;
+    border-radius:999px;
+    background: var(--acdc-primary-soft);
+    color: var(--acdc-button-text);
+    font-size:10px;
+    line-height:1;
+    border:1px solid var(--acdc-primary);
+}
+.acdc-actions-gap-top{ margin-top:18px; }
+.acdc-actions-gap-top-lg{ margin-top:24px; }
+.acdc-modal-lead{
+    font-size:18px;
+    line-height:20px;
+    color: var(--acdc-text-muted);
+    margin: 0 0 18px;
+}
+.acdc-chip{
+    display:inline-flex;
+    align-items:center;
+    justify-content:center;
+    padding:6px 10px;
+    border:1px solid var(--acdc-border);
+    border-radius:var(--acdc-radius-pill);
+    background:#fff;
+    color:var(--acdc-text-muted);
+    font-size:12px;
+    font-weight:600;
+}
+.acdc-upload-dropzone{
+    display:flex;
+    align-items:center;
+    gap:14px;
+    padding:14px;
+    border:2px dashed var(--acdc-border);
+    border-radius:var(--acdc-radius-panel);
+    background:var(--acdc-surface);
+    color:var(--acdc-text-muted);
+    cursor:pointer;
+}
+.acdc-upload-dropzone input{ display:none; }
+.acdc-upload-dropzone-static{ cursor:default; }
+.acdc-input-suffix-wrap{
+    display:flex;
+    align-items:stretch;
+    width:100%;
+    max-width:680px;
+}
+.acdc-input-suffix-wrap .acdc-input-suffix-field{
+    max-width:none;
+    border-top-right-radius:0;
+    border-bottom-right-radius:0;
+}
+.acdc-input-suffix-addon{
+    display:inline-flex;
+    align-items:center;
+    padding:0 14px;
+    border:1px solid var(--acdc-border);
+    border-left:0;
+    border-radius:0 var(--acdc-radius-panel) var(--acdc-radius-panel) 0;
+    background:#fff;
+    color:var(--acdc-text-muted);
+    min-height:40px;
+    white-space:nowrap;
+}
+.acdc-contract-grid-compact{ grid-template-columns:1fr; }
+
+.acdc-page-billing_settings .acdc-contract-grid,
+.acdc-page-catalog.acdc-page-action-settings .acdc-contract-grid,
+.acdc-page-bpf .acdc-contract-grid,
+.acdc-page-settings .acdc-contract-grid {
+    grid-template-columns: 1fr;
+    gap: 10px;
+}
+
+.acdc-page-billing_settings .acdc-contract-label,
+.acdc-page-catalog.acdc-page-action-settings .acdc-contract-label,
+.acdc-page-bpf .acdc-contract-label,
+.acdc-page-settings .acdc-contract-label {
+    color: var(--acdc-text);
+    font-weight: 500;
+}
+
+.acdc-page-billing_settings .acdc-contract-grid > div:nth-child(4n+1),
+.acdc-page-billing_settings .acdc-contract-grid > div:nth-child(4n+3),
+.acdc-page-catalog.acdc-page-action-settings .acdc-contract-grid > div:nth-child(4n+1),
+.acdc-page-catalog.acdc-page-action-settings .acdc-contract-grid > div:nth-child(4n+3),
+.acdc-page-bpf .acdc-contract-grid > div:nth-child(4n+1),
+.acdc-page-bpf .acdc-contract-grid > div:nth-child(4n+3),
+.acdc-page-settings .acdc-contract-grid > div:nth-child(4n+1),
+.acdc-page-settings .acdc-contract-grid > div:nth-child(4n+3) {
+    margin-top: 8px;
+}
+
+.acdc-page-billing_settings .acdc-contract-grid > div:nth-child(2),
+.acdc-page-billing_settings .acdc-contract-grid > div:nth-child(4),
+.acdc-page-catalog.acdc-page-action-settings .acdc-contract-grid > div:nth-child(2),
+.acdc-page-catalog.acdc-page-action-settings .acdc-contract-grid > div:nth-child(4),
+.acdc-page-bpf .acdc-contract-grid > div:nth-child(2),
+.acdc-page-bpf .acdc-contract-grid > div:nth-child(4),
+.acdc-page-settings .acdc-contract-grid > div:nth-child(2),
+.acdc-page-settings .acdc-contract-grid > div:nth-child(4) {
+    margin-bottom: 6px;
+}
+
+.acdc-page-billing_settings .acdc-panel,
+.acdc-page-catalog.acdc-page-action-settings .acdc-panel,
+.acdc-page-bpf .acdc-panel,
+.acdc-page-settings .acdc-panel,
+.acdc-page-statistics .acdc-panel,
+.acdc-page-statistics_pedagogical .acdc-panel,
+.acdc-page-statistics_trainers .acdc-panel,
+.acdc-page-statistics_financial .acdc-panel,
+.acdc-page-statistics_performance .acdc-panel {
+    border-radius: var(--acdc-radius-panel);
+}
+
+.acdc-page-statistics input[type="search"],
+.acdc-page-statistics_pedagogical input[type="search"],
+.acdc-page-statistics_trainers input[type="search"],
+.acdc-page-statistics_financial input[type="search"],
+.acdc-page-statistics_performance input[type="search"],
+.acdc-page-bpf input[type="search"],
+.acdc-page-catalog input[type="search"] {
+    min-height: 40px;
+    border-radius: var(--acdc-radius-panel);
+}
+
+.acdc-page-statistics .acdc-inline-wrap,
+.acdc-page-statistics_pedagogical .acdc-inline-wrap,
+.acdc-page-statistics_trainers .acdc-inline-wrap,
+.acdc-page-statistics_financial .acdc-inline-wrap,
+.acdc-page-statistics_performance .acdc-inline-wrap,
+.acdc-page-bpf .acdc-inline-wrap,
+.acdc-page-catalog .acdc-inline-wrap {
+    align-items: center;
+}
+
+.acdc-page-settings .acdc-grid-2cols {
+    grid-template-columns: 1fr;
+}
+
+@media (max-width: 900px) {
+    .acdc-input-suffix-wrap {
+        flex-direction: column;
+    }
+    .acdc-input-suffix-wrap .acdc-input-suffix-field {
+        border-radius: var(--acdc-radius-panel);
+    }
+    .acdc-input-suffix-addon {
+        border-left: 1px solid var(--acdc-border);
+        border-top: 0;
+        border-radius: 0 0 var(--acdc-radius-panel) var(--acdc-radius-panel);
+        min-height: 40px;
+    }
+}
+
+
+/* Outils et statistiques — formulaires pleine largeur */
+.acdc-contract-builder-form .acdc-contract-grid > div:not(.acdc-contract-label) > input[type="text"],
+.acdc-contract-builder-form .acdc-contract-grid > div:not(.acdc-contract-label) > input[type="number"],
+.acdc-contract-builder-form .acdc-contract-grid > div:not(.acdc-contract-label) > input[type="email"],
+.acdc-contract-builder-form .acdc-contract-grid > div:not(.acdc-contract-label) > input[type="tel"],
+.acdc-contract-builder-form .acdc-contract-grid > div:not(.acdc-contract-label) > input[type="search"],
+.acdc-contract-builder-form .acdc-contract-grid > div:not(.acdc-contract-label) > input[type="url"],
+.acdc-contract-builder-form .acdc-contract-grid > div:not(.acdc-contract-label) > select,
+.acdc-contract-builder-form .acdc-contract-grid > div:not(.acdc-contract-label) > textarea {
+    display:block;
+    width:100%;
+    max-width:none;
+    min-width:0;
+    box-sizing:border-box;
+}
+
+.acdc-profile-cta-row{display:flex;align-items:center;justify-content:space-between;gap:18px;flex-wrap:wrap}
+.acdc-profile-cta-actions{display:flex;align-items:center;justify-content:flex-end;gap:12px;flex-wrap:wrap;margin-left:auto}
+.acdc-company-static-doc-page{padding:24px;background:#fff;border:1px solid var(--acdc-border);border-radius:14px}
+.acdc-company-static-doc-actions{display:flex;justify-content:flex-end;gap:12px;flex-wrap:wrap;margin-bottom:18px}
+.acdc-company-static-doc-page iframe{width:100%;min-height:1400px;border:1px solid var(--acdc-border);border-radius:12px;background:#fff}
+.acdc-color-input{width:72px!important;max-width:72px;padding:0;border:none;background:transparent;vertical-align:middle;margin-right:8px}
+.acdc-inline-upload-preview{display:block;margin-top:8px}.acdc-inline-upload-preview img{max-width:120px;max-height:72px;object-fit:contain;border:1px solid var(--acdc-border);border-radius:10px;background:#fff;padding:4px}
+.acdc-inline-upload-file{display:block;margin-top:8px;color:var(--acdc-text-muted);font-size:12px}
+
+/* ACDC 3.20.11 — alignement strict des grands champs de la page Modifier un apprenant */
+.acdc-learner-form .acdc-grid-2cols > .acdc-learner-wide-field {
+    grid-column: 1 / -1;
+    width: 100%;
+}
+
+.acdc-learner-form .acdc-learner-wide-field textarea {
+    width: 100%;
+    box-sizing: border-box;
+}
+
+/* ACDC 3.20.99 — Champ plein-largeur dans une grille 2 colonnes (générique).
+   Utilisé par le champ Description du formulaire formateur, remonté sous SIRET. */
+.acdc-grid-2cols > .acdc-field-fullrow {
+    grid-column: 1 / -1;
+    width: 100%;
+}
+
+.acdc-field-fullrow textarea {
+    width: 100%;
+    box-sizing: border-box;
+}
+
+/* ACDC 3.20.100 — Bloc « Préférences et confidentialité » sur la fiche formateur :
+   layout autonome 2 colonnes en grid, avec fallback 1 colonne sur mobile. */
+@media (max-width: 781px) {
+    .acdc-trainer-prefs-cols {
+        grid-template-columns: 1fr !important;
+        gap: 24px !important;
+    }
+}
+
+/* ACDC 3.21.08 — Paires de champs côte à côte dans le formulaire convention */
+.acdc-contract-inline-pair {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 0;
+    border-top: 1px solid var(--acdc-border);
+}
+.acdc-contract-inline-pair > .acdc-contract-grid {
+    border-top: none;
+}
+.acdc-contract-inline-pair > .acdc-contract-grid:last-child {
+    border-left: 0.5px solid var(--acdc-border);
+}
+@media (max-width: 900px) {
+    .acdc-contract-inline-pair {
+        grid-template-columns: 1fr;
+    }
+    .acdc-contract-inline-pair > .acdc-contract-grid:last-child {
+        border-left: none;
+    }
+}

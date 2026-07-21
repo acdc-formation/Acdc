@@ -1,0 +1,726 @@
+/* Industrialisation 3.18.62 — composants mutualisés */
+.acdc-floating-menu-base,
+.acdc-row-menu-dropdown-floating,
+.acdc-bpf-row-menu-dropdown,
+.acdc-table-action-menu,
+.acdc-prospect-patch-menu{
+  position:fixed;
+  min-width:220px;
+  background:#fff;
+  border:1px solid var(--acdc-border, #dce4ec);
+  border-radius:var(--acdc-radius, 10px);
+  box-shadow:var(--acdc-shadow-modal, 0 10px 30px rgba(28,44,64,.12));
+  padding:8px 0;
+}
+
+.acdc-floating-menu-base a,
+.acdc-floating-menu-base button,
+.acdc-row-menu-dropdown-floating a,
+.acdc-bpf-row-menu-dropdown a,
+.acdc-table-action-menu a,
+.acdc-table-action-menu button,
+.acdc-prospect-patch-menu a{
+  display:flex;
+  align-items:center;
+  gap:10px;
+  width:100%;
+  padding:10px 14px;
+  color:var(--acdc-text, #0C2D52);
+  text-decoration:none;
+  background:transparent;
+  border:0;
+  text-align:left;
+  cursor:pointer;
+}
+
+.acdc-floating-menu-base a:hover,
+.acdc-floating-menu-base button:hover,
+.acdc-row-menu-dropdown-floating a:hover,
+.acdc-bpf-row-menu-dropdown a:hover,
+.acdc-table-action-menu a:hover,
+.acdc-table-action-menu button:hover,
+.acdc-prospect-patch-menu a:hover{
+  background:var(--acdc-soft-bg, #fbf8f7);
+}
+
+.acdc-action-icon-base,
+.acdc-row-action-icon,
+.acdc-prospect-patch-icon,
+.acdc-table-action-trigger{
+  display:inline-flex;
+  align-items:center;
+  justify-content:center;
+  text-decoration:none;
+  line-height:1;
+}
+
+.acdc-dialog-scroll,
+.acdc-modal-dialog,
+.acdc-modal__dialog,
+.acdc-modal-dialog-large,
+.acdc-modal-dialog-medium,
+.acdc-modal-dialog-mediumwide,
+.acdc-modal-dialog-email,
+.acdc-modal-dialog-contract,
+.acdc-modal-dialog-compact{
+  overscroll-behavior:contain;
+}
+
+
+/* Industrialisation 3.18.62 — structures de rendu mutualisées */
+.acdc-section-head-standard{
+  display:flex;
+  align-items:center;
+  justify-content:space-between;
+  gap:16px;
+}
+
+.acdc-section-head-actions,
+.acdc-toolbar-actions{
+  display:flex;
+  align-items:center;
+  gap:10px;
+  flex-wrap:wrap;
+}
+
+.acdc-toolbar-standard,
+.acdc-toolbar-standard-panel{
+  margin-bottom:18px;
+}
+
+.acdc-toolbar-standard form,
+.acdc-toolbar-standard-panel form{
+  display:flex;
+  align-items:center;
+  gap:12px;
+  flex-wrap:wrap;
+}
+
+.acdc-toolbar-standard-panel{
+  padding:16px 18px;
+}
+
+.acdc-toolbar-standard-panel .acdc-search-icon,
+.acdc-toolbar-standard .acdc-search-icon{
+  flex:0 0 auto;
+}
+
+.acdc-toolbar-standard-panel input[type="search"],
+.acdc-toolbar-standard input[type="search"]{
+  min-width:220px;
+  max-width:420px;
+}
+
+.acdc-empty-state-standard{
+  padding:72px 24px;
+  text-align:center;
+}
+
+.acdc-empty-state-standard p{
+  margin:0;
+  color:#1E4777;
+}
+
+.acdc-empty-state-actions{
+  margin-top:16px;
+}
+
+.acdc-choice-tiles{
+  display:grid;
+  grid-template-columns:repeat(2,minmax(0,1fr));
+  gap:18px;
+}
+
+.acdc-choice-tile{
+  min-height:98px;
+  display:flex;
+  flex-direction:column;
+  justify-content:center;
+  align-items:center;
+  text-align:center;
+  text-decoration:none;
+}
+
+.acdc-choice-tile-title{
+  font-size:20px;
+  color:#C5A253;
+  font-weight:700;
+  display:block;
+}
+
+.acdc-choice-tile-subtitle{
+  margin-top:8px;
+  color:#1E4777;
+  font-size:13px;
+  font-weight:600;
+}
+
+@media (max-width: 900px){
+  .acdc-choice-tiles{grid-template-columns:1fr;}
+}
+
+
+/* Correctif 3.19.81 — interrupteurs : conserver une géométrie stable via la feuille versionnée */
+.acdc-switch{
+  position:relative !important;
+  display:inline-block !important;
+  width:var(--acdc-ui-toggle-width, 52px) !important;
+  min-width:var(--acdc-ui-toggle-width, 52px) !important;
+  max-width:var(--acdc-ui-toggle-width, 52px) !important;
+  height:var(--acdc-ui-toggle-height, 28px) !important;
+  min-height:var(--acdc-ui-toggle-height, 28px) !important;
+  flex:0 0 var(--acdc-ui-toggle-width, 52px) !important;
+  border-radius:999px !important;
+  overflow:visible !important;
+  vertical-align:middle !important;
+}
+
+.acdc-switch input{
+  position:absolute !important;
+  opacity:0 !important;
+  width:0 !important;
+  height:0 !important;
+  pointer-events:none !important;
+}
+
+.acdc-switch-slider{
+  position:absolute !important;
+  inset:0 !important;
+  display:block !important;
+  width:100% !important;
+  height:100% !important;
+  box-sizing:border-box !important;
+  border-radius:999px !important;
+  background:var(--acdc-toggle-inactive, #d8dee7) !important;
+  border:none !important;
+}
+
+.acdc-switch-slider::before{
+  content:'' !important;
+  position:absolute !important;
+  top:3px !important;
+  left:3px !important;
+  width:calc(var(--acdc-ui-toggle-height, 28px) - 6px) !important;
+  height:calc(var(--acdc-ui-toggle-height, 28px) - 6px) !important;
+  min-width:calc(var(--acdc-ui-toggle-height, 28px) - 6px) !important;
+  max-width:calc(var(--acdc-ui-toggle-height, 28px) - 6px) !important;
+  border-radius:50% !important;
+  background:#ffffff !important;
+  box-shadow:0 1px 2px rgba(12,45,82,.18) !important;
+  transform:translateX(0) !important;
+  transition:transform .2s ease !important;
+}
+
+.acdc-switch input:checked + .acdc-switch-slider{
+  background:var(--acdc-toggle-active, #d6a353) !important;
+}
+
+.acdc-switch input:checked + .acdc-switch-slider::before{
+  transform:translateX(calc(var(--acdc-ui-toggle-width, 52px) - var(--acdc-ui-toggle-height, 28px))) !important;
+}
+
+.acdc-switch input:not(:checked) + .acdc-switch-slider{
+  background:var(--acdc-toggle-inactive, #d8dee7) !important;
+}
+
+/* ACDC 3.20.37 — Règle finale de priorité : colonnes alignées à gauche */
+.acdc-portal-shell table th,
+.acdc-portal-shell table td,
+.acdc-page table th,
+.acdc-page table td,
+.acdc-panel table th,
+.acdc-panel table td,
+.acdc-table-wrap table th,
+.acdc-table-wrap table td,
+table.acdc-table th,
+table.acdc-table td,
+.acdc-admin-shell table th,
+.acdc-admin-shell table td,
+.acdc-portal-shell table th > *,
+.acdc-portal-shell table td > *,
+.acdc-page table th > *,
+.acdc-page table td > *,
+.acdc-panel table th > *,
+.acdc-panel table td > *,
+.acdc-table-wrap table th > *,
+.acdc-table-wrap table td > *,
+table.acdc-table th > *,
+table.acdc-table td > *,
+.acdc-admin-shell table th > *,
+.acdc-admin-shell table td > * {
+    text-align: left !important;
+}
+
+.acdc-actions-cell-icons,
+.acdc-table td.acdc-actions-cell-icons,
+.acdc-companies-actions-inline,
+.acdc-groups-actions-inline {
+    text-align: left !important;
+    justify-content: flex-start !important;
+}
+
+/* ACDC 3.20.57 — neutralisation phase 1 : suppression du :root parasite.
+ * Les variables --acdc-action-icon-* sont désormais pilotées exclusivement
+ * par le back office via get_dynamic_css(). Aucune valeur n'est plus
+ * définie en dur dans les CSS.
+ * Variable manquante --acdc-action-icon-border-hover : conservée comme
+ * fallback dans les sélecteurs ci-dessous (var(..., var(--acdc-action-icon-color))).
+ */
+
+body .acdc-formations-actions,
+body .acdc-learners-actions-inline,
+body .acdc-groups-actions-inline,
+body .acdc-companies-actions-inline,
+body .acdc-actions-inline,
+body .acdc-row-actions,
+body .acdc-table-actions,
+body .acdc-actions-cell-icons > .acdc-actions-inline,
+body .acdc-actions-cell-icons > .acdc-row-actions,
+body .acdc-actions-cell-icons > .acdc-table-actions{
+  display:inline-flex !important;
+  align-items:center !important;
+  justify-content:flex-start !important;
+  gap:var(--acdc-action-icon-gap) !important;
+  column-gap:var(--acdc-action-icon-gap) !important;
+  row-gap:0 !important;
+  white-space:nowrap !important;
+}
+
+body .acdc-formations-actions > *,
+body .acdc-learners-actions-inline > *,
+body .acdc-groups-actions-inline > *,
+body .acdc-companies-actions-inline > *,
+body .acdc-actions-inline > *,
+body .acdc-row-actions > *,
+body .acdc-table-actions > *,
+body .acdc-actions-cell-icons > .acdc-actions-inline > *,
+body .acdc-actions-cell-icons > .acdc-row-actions > *,
+body .acdc-actions-cell-icons > .acdc-table-actions > *{
+  margin:0 !important;
+}
+
+body .acdc-actions-cell-icons,
+body .acdc-table td.acdc-actions-cell-icons,
+body td.acdc-actions-cell-icons,
+body td.acdc-actions-cell,
+body td.column-actions{
+  white-space:nowrap !important;
+}
+
+/* ACDC 3.20.63 — alignement vertical centré des cellules d'actions.
+ * Sans cette règle, la règle générale .acdc-table td { vertical-align: top }
+ * de tables.css aligne les boutons d'action en haut de la cellule. Quand la
+ * ligne contient des colonnes textuelles multi-lignes (formation, adresse, etc.),
+ * la hauteur totale dépasse celle des boutons, ce qui crée un décalage visuel
+ * entre le texte (en haut) et les boutons (qui paraissent collés au plafond).
+ * On force l'alignement vertical au milieu uniquement sur les cellules qui
+ * contiennent des actions, sans toucher aux autres colonnes textuelles.
+ *
+ * Couvre les trois cas :
+ *  - cellules dont la <td> a une classe d'actions explicite (Apprenants,
+ *    Sessions, Entreprises, Groupes, Formations) ;
+ *  - cellule décorée dynamiquement par AcdcActionHub (.acdc-action-hub-cell) ;
+ *  - cellule Prospects dont la <td> n'a aucune classe mais contient un wrapper
+ *    .acdc-prospect-actions (via :has(), supporté par tous les navigateurs
+ *    courants en 2026 : Chrome 105+, Firefox 121+, Safari 15.4+).
+ */
+body .acdc-table td.acdc-actions-cell-icons,
+body .acdc-table td.acdc-actions-cell,
+body .acdc-table td.column-actions,
+body .acdc-table td.acdc-action-hub-cell,
+body .acdc-table td:has(> .acdc-prospect-actions),
+body .acdc-table td:has(> .acdc-action-hub-wrap),
+body .acdc-table td:has(> .acdc-actions-inline),
+body .acdc-table td:has(> .acdc-row-actions),
+body .acdc-table td:has(> .acdc-formations-actions){
+  vertical-align: middle !important;
+}
+
+body .acdc-actions-cell-icons > :is(a, button, .acdc-row-menu, .acdc-row-action-icon, .acdc-action-icon),
+body td.acdc-actions-cell > :is(a, button, .acdc-row-menu, .acdc-row-action-icon, .acdc-action-icon),
+body td.column-actions > :is(a, button, .acdc-row-menu, .acdc-row-action-icon, .acdc-action-icon){
+  margin-right:var(--acdc-action-icon-gap) !important;
+}
+
+body .acdc-actions-cell-icons > :is(a, button, .acdc-row-menu, .acdc-row-action-icon, .acdc-action-icon):last-child,
+body td.acdc-actions-cell > :is(a, button, .acdc-row-menu, .acdc-row-action-icon, .acdc-action-icon):last-child,
+body td.column-actions > :is(a, button, .acdc-row-menu, .acdc-row-action-icon, .acdc-action-icon):last-child{
+  margin-right:0 !important;
+}
+
+body :is(.acdc-formations-actions,.acdc-learners-actions-inline,.acdc-groups-actions-inline,.acdc-companies-actions-inline,.acdc-actions-inline,.acdc-row-actions,.acdc-table-actions,.acdc-actions-cell-icons,td.acdc-actions-cell,td.column-actions) :is(.acdc-action-icon,.acdc-action-icon-base,.acdc-row-action-icon,.acdc-row-view-link,.acdc-row-edit-link,.acdc-row-delete-link,.acdc-row-menu-toggle,.acdc-table-action-trigger,.acdc-icon-link){
+  width:var(--acdc-action-icon-box-size) !important;
+  min-width:var(--acdc-action-icon-box-size) !important;
+  max-width:var(--acdc-action-icon-box-size) !important;
+  height:var(--acdc-action-icon-box-size) !important;
+  min-height:var(--acdc-action-icon-box-size) !important;
+  max-height:var(--acdc-action-icon-box-size) !important;
+  padding:0 !important;
+  box-sizing:border-box !important;
+  display:inline-flex !important;
+  align-items:center !important;
+  justify-content:center !important;
+  flex:0 0 var(--acdc-action-icon-box-size) !important;
+  border:1px solid var(--acdc-action-icon-border) !important;
+  border-radius:var(--acdc-action-icon-radius, 14px) !important;
+  background:var(--acdc-action-icon-bg) !important;
+  color:var(--acdc-action-icon-color) !important;
+  text-decoration:none !important;
+  line-height:1 !important;
+  vertical-align:middle !important;
+  box-shadow:none !important;
+  overflow:visible !important;
+  transition:background .18s ease, border-color .18s ease, box-shadow .18s ease, transform .18s ease, color .18s ease !important;
+}
+
+body :is(.acdc-formations-actions,.acdc-learners-actions-inline,.acdc-groups-actions-inline,.acdc-companies-actions-inline,.acdc-actions-inline,.acdc-row-actions,.acdc-table-actions,.acdc-actions-cell-icons,td.acdc-actions-cell,td.column-actions) :is(.acdc-action-icon,.acdc-action-icon-base,.acdc-row-action-icon,.acdc-row-view-link,.acdc-row-edit-link,.acdc-row-delete-link,.acdc-row-menu-toggle,.acdc-table-action-trigger,.acdc-icon-link):hover,
+body :is(.acdc-formations-actions,.acdc-learners-actions-inline,.acdc-groups-actions-inline,.acdc-companies-actions-inline,.acdc-actions-inline,.acdc-row-actions,.acdc-table-actions,.acdc-actions-cell-icons,td.acdc-actions-cell,td.column-actions) :is(.acdc-action-icon,.acdc-action-icon-base,.acdc-row-action-icon,.acdc-row-view-link,.acdc-row-edit-link,.acdc-row-delete-link,.acdc-row-menu-toggle,.acdc-table-action-trigger,.acdc-icon-link):focus-visible{
+  background:var(--acdc-action-icon-bg-hover, var(--acdc-action-icon-hover-bg, var(--acdc-action-icon-bg))) !important;
+  border-color:var(--acdc-action-icon-border-hover, var(--acdc-action-icon-color)) !important;
+  color:var(--acdc-action-icon-color) !important;
+  box-shadow:var(--acdc-action-icon-shadow-hover, var(--acdc-shadow-panel, none)) !important;
+  transform:translateY(-1px) !important;
+  outline:none !important;
+}
+
+body :is(.acdc-formations-actions,.acdc-learners-actions-inline,.acdc-groups-actions-inline,.acdc-companies-actions-inline,.acdc-actions-inline,.acdc-row-actions,.acdc-table-actions,.acdc-actions-cell-icons,td.acdc-actions-cell,td.column-actions) :is(.acdc-action-icon,.acdc-action-icon-base,.acdc-row-action-icon,.acdc-row-view-link,.acdc-row-edit-link,.acdc-row-delete-link,.acdc-row-menu-toggle,.acdc-table-action-trigger,.acdc-icon-link) :is(svg, .dashicons, .material-symbols-outlined, .material-icons, .fa, .fas, .far, .fal, .fab, i){
+  width:var(--acdc-action-icon-glyph-size) !important;
+  min-width:var(--acdc-action-icon-glyph-size) !important;
+  max-width:var(--acdc-action-icon-glyph-size) !important;
+  height:var(--acdc-action-icon-glyph-size) !important;
+  min-height:var(--acdc-action-icon-glyph-size) !important;
+  max-height:var(--acdc-action-icon-glyph-size) !important;
+  font-size:var(--acdc-action-icon-glyph-size) !important;
+  line-height:var(--acdc-action-icon-glyph-size) !important;
+  color:var(--acdc-action-icon-color) !important;
+  fill:none !important;
+  stroke:currentColor !important;
+  stroke-width:2 !important;
+}
+
+body .acdc-row-menu{
+  display:inline-flex !important;
+  align-items:center !important;
+  justify-content:center !important;
+  margin:0 !important;
+  padding:0 !important;
+  flex:0 0 var(--acdc-action-icon-box-size) !important;
+}
+
+body .acdc-row-menu .acdc-row-menu-toggle,
+body .acdc-formations-actions .acdc-row-menu,
+body .acdc-formations-actions .acdc-row-menu-toggle,
+body .acdc-formations-actions .acdc-row-view-link,
+body .acdc-formations-actions .acdc-row-edit-link,
+body .acdc-formations-actions .acdc-action-icon,
+body .acdc-formations-actions .acdc-action-icon-base{
+  margin:0 !important;
+}
+
+/* ACDC 3.20.54 — lien Prérequis : couleur cliquable stable avant clic */
+body .acdc-table .formation-prereq-trigger,
+body .acdc-table .formation-prereq-trigger:link,
+body .acdc-table .formation-prereq-trigger:visited,
+body .acdc-table .formation-prereq-trigger:hover,
+body .acdc-table .formation-prereq-trigger:focus,
+body .acdc-table .formation-prereq-trigger:active,
+body a.formation-prereq-trigger,
+body a.formation-prereq-trigger:link,
+body a.formation-prereq-trigger:visited,
+body a.formation-prereq-trigger:hover,
+body a.formation-prereq-trigger:focus,
+body a.formation-prereq-trigger:active{
+  color:#d6ad6b !important;
+  -webkit-text-fill-color:#d6ad6b !important;
+  text-decoration:none !important;
+  font-weight:600 !important;
+  cursor:pointer !important;
+}
+
+/* ACDC 3.20.56 — rendu unique des actions de listes */
+.acdc-action-hub-cell{
+  min-width: 126px;
+  text-align: left;
+  vertical-align: middle;
+  white-space: nowrap;
+}
+.acdc-action-hub-wrap,
+.acdc-action-hub-zone,
+.acdc-action-hub-form{
+  display: inline-flex;
+  align-items: center;
+  justify-content: flex-start;
+  gap: 6px;
+  flex-wrap: nowrap;
+  margin: 0;
+}
+.acdc-action-hub-cell > a,
+.acdc-action-hub-cell > button,
+.acdc-action-hub-cell > form,
+.acdc-action-hub-cell .acdc-action-hub-wrap > a,
+.acdc-action-hub-cell .acdc-action-hub-wrap > button,
+.acdc-action-hub-zone > a,
+.acdc-action-hub-zone > button{
+  margin: 0 !important;
+}
+.acdc-action-hub-btn,
+.acdc-action-hub-cell a.acdc-action-hub-btn,
+.acdc-action-hub-cell button.acdc-action-hub-btn,
+.acdc-action-hub-zone a.acdc-action-hub-btn,
+.acdc-action-hub-zone button.acdc-action-hub-btn{
+  width: var(--acdc-action-icon-frame-size, 34px) !important;
+  min-width: var(--acdc-action-icon-frame-size, 34px) !important;
+  height: var(--acdc-action-icon-frame-size, 34px) !important;
+  min-height: var(--acdc-action-icon-frame-size, 34px) !important;
+  padding: 0 !important;
+  border: 1px solid var(--acdc-action-icon-border, #e8d8bd) !important;
+  border-radius: var(--acdc-action-icon-radius, 10px) !important;
+  display: inline-flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+  gap: 0 !important;
+  background: var(--acdc-action-icon-bg, #fffaf2) !important;
+  color: var(--acdc-action-icon-color, var(--acdc-icon-color, var(--acdc-primary, #8b5b23))) !important;
+  box-shadow: 0 6px 16px rgba(60, 41, 20, .06) !important;
+  text-decoration: none !important;
+  line-height: 1 !important;
+  font-size: 0 !important;
+  cursor: pointer !important;
+  transition: background-color .16s ease, border-color .16s ease, color .16s ease, box-shadow .16s ease, transform .16s ease;
+}
+.acdc-action-hub-btn svg{
+  width: var(--acdc-action-icon-glyph-size, 20px) !important;
+  height: var(--acdc-action-icon-glyph-size, 20px) !important;
+  display: block !important;
+  fill: none !important;
+  stroke: currentColor !important;
+  stroke-width: 1.9 !important;
+  stroke-linecap: round !important;
+  stroke-linejoin: round !important;
+  pointer-events: none !important;
+}
+.acdc-action-hub-btn:hover,
+.acdc-action-hub-btn:focus-visible{
+  background: var(--acdc-action-icon-bg-hover, var(--acdc-action-icon-hover-bg, #f7ead5)) !important;
+  border-color: var(--acdc-action-icon-border-hover, var(--acdc-action-icon-color, #d6a353)) !important;
+  color: var(--acdc-action-icon-color, var(--acdc-icon-color, var(--acdc-primary, #6f4418))) !important;
+  box-shadow: 0 10px 22px rgba(60, 41, 20, .12) !important;
+  transform: translateY(-1px);
+  outline: none !important;
+}
+/* Variantes sémantiques (delete, validate, cancel) : couleurs en dur conservées
+ * volontairement car elles relèvent de l'ergonomie universelle (rouge = supprimer,
+ * vert = valider). Le back office n'expose pas de champ pour ces couleurs.
+ * À transformer en variables le jour où le back office proposera des champs
+ * "Couleur Supprimer", "Couleur Valider", "Couleur Annuler".
+ */
+.acdc-action-hub-btn--delete{
+  color: #9f2f25 !important;
+  border-color: #efd2cd !important;
+  background: #fff7f5 !important;
+}
+.acdc-action-hub-btn--delete:hover,
+.acdc-action-hub-btn--delete:focus-visible{
+  color: #7e221a !important;
+  border-color: #d79a91 !important;
+  background: #ffe9e5 !important;
+}
+.acdc-action-hub-btn--validate{
+  color: #2f6f46 !important;
+  border-color: #cce6d2 !important;
+  background: #f6fff8 !important;
+}
+.acdc-action-hub-btn--cancel{
+  color: #8a4a17 !important;
+}
+.acdc-action-hub-sr{
+  position: absolute !important;
+  width: 1px !important;
+  height: 1px !important;
+  padding: 0 !important;
+  margin: -1px !important;
+  overflow: hidden !important;
+  clip: rect(0, 0, 0, 0) !important;
+  white-space: nowrap !important;
+  border: 0 !important;
+}
+.acdc-action-hub-input{
+  min-width: var(--acdc-action-icon-frame-size, 34px) !important;
+  height: var(--acdc-action-icon-frame-size, 34px) !important;
+  border-radius: var(--acdc-action-icon-radius, 10px) !important;
+}
+
+/* ACDC 3.20.67 — Cadenas de verrouillage des largeurs de colonnes.
+ * Posé automatiquement à droite de la barre de recherche (.acdc-search-row
+ * ou .acdc-list-toolbar) ou en repli au-dessus du tableau.
+ * État ouvert = modifiable, État fermé = verrouillé.
+ */
+.acdc-table-lock-toggle{
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 36px;
+  height: 36px;
+  margin-left: auto;
+  padding: 0;
+  border: 1px solid var(--acdc-border, #dce4ec);
+  border-radius: 10px;
+  background: #ffffff;
+  color: var(--acdc-primary, #8b5b23);
+  cursor: pointer;
+  transition: background .18s ease, border-color .18s ease, color .18s ease, box-shadow .18s ease;
+  box-shadow: 0 1px 2px rgba(12, 45, 82, .04);
+}
+.acdc-table-lock-toggle:hover{
+  background: #fbf4e8;
+  border-color: var(--acdc-primary, #8b5b23);
+}
+.acdc-table-lock-toggle.is-locked{
+  background: var(--acdc-primary, #8b5b23);
+  border-color: var(--acdc-primary, #8b5b23);
+  color: #ffffff;
+}
+.acdc-table-lock-toggle.is-locked:hover{
+  background: #6f441a;
+  border-color: #6f441a;
+}
+.acdc-table-lock-toggle svg{
+  display: block;
+}
+.acdc-table-lock-fallback{
+  display: flex;
+  justify-content: flex-end;
+  margin-bottom: 8px;
+}
+
+/* ============================================================
+   ACDC Tooltips — 3.21.09-hotfix5
+   Bulle unique attachée au <body> via JS (acdc-ui-system.js).
+   Positionnement par getBoundingClientRect() → aucun clipping
+   par les cellules de tableau, les modales ou tout overflow.
+   ============================================================ */
+
+.acdc-tooltip-bubble{
+  position: fixed;
+  z-index: 99999;
+  pointer-events: none;
+  background: #0f2c52;
+  color: #ffffff;
+  font-family: Arial, sans-serif;
+  font-size: 11px;
+  font-weight: 600;
+  line-height: 1.4;
+  white-space: nowrap;
+  padding: 5px 10px;
+  border-radius: 6px;
+  box-shadow: 0 4px 14px rgba(15,44,82,.22);
+  opacity: 0;
+  transition: opacity .15s ease;
+}
+
+.acdc-tooltip-bubble::after{
+  content: '';
+  position: absolute;
+  left: var(--acdc-tip-arrow, 50%);
+  transform: translateX(-50%);
+  top: 100%;
+  border: 5px solid transparent;
+  border-top-color: #0f2c52;
+}
+
+.acdc-tooltip-bubble.is-below::after{
+  top: auto;
+  bottom: 100%;
+  border-top-color: transparent;
+  border-bottom-color: #0f2c52;
+}
+
+/* ── ACDC 3.21.57 — Onglets formulaire formation ─────────────────────────── */
+.acdc-form-tabs {
+  margin-top: 0;
+}
+.acdc-form-tab-nav {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  border-bottom: 2px solid var(--acdc-border, #dce4ec);
+  margin-bottom: 0;
+  padding-bottom: 0;
+}
+.acdc-form-tab-btn {
+  background: var(--acdc-bg-subtle, #f8f9fb);
+  border: 1px solid var(--acdc-border, #dce4ec);
+  border-bottom: none;
+  border-radius: 8px 8px 0 0;
+  padding: 9px 16px;
+  cursor: pointer;
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--acdc-text-muted, #4b5d76);
+  margin-bottom: -2px;
+  font-family: inherit;
+  transition: background .15s, color .15s;
+  white-space: nowrap;
+}
+.acdc-form-tab-btn:hover {
+  background: #fff;
+  color: var(--acdc-text, #0f2c52);
+}
+.acdc-form-tab-btn.is-active {
+  background: #fff;
+  border-color: var(--acdc-border, #dce4ec);
+  border-bottom-color: #fff;
+  color: var(--acdc-primary, #8b5b23);
+  font-weight: 700;
+  position: relative;
+  z-index: 1;
+}
+.acdc-form-tab-panel {
+  border: 1px solid var(--acdc-border, #dce4ec);
+  border-top: none;
+  background: #fff;
+  padding: 22px 20px;
+  border-radius: 0 0 10px 10px;
+}
+.acdc-form-tab-panel[hidden] {
+  display: none !important;
+}
+
+/* ── Labels hint inline ───────────────────────────────────────────────────── */
+.acdc-label-hint {
+  font-size: 11px;
+  font-weight: 600;
+  color: #8a6d2a;
+  background: #fbf2e3;
+  border: 1px solid #e8d4a8;
+  border-radius: 4px;
+  padding: 1px 6px;
+  vertical-align: middle;
+  margin-left: 6px;
+}
+
+/* ── Checkbox inline (financement) ───────────────────────────────────────── */
+.acdc-checkbox-inline {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--acdc-text, #0f2c52);
+  cursor: pointer;
+  padding: 6px 10px;
+  border: 1px solid var(--acdc-border, #dce4ec);
+  border-radius: 8px;
+  background: #fff;
+  transition: border-color .15s, background .15s;
+}
+.acdc-checkbox-inline:hover {
+  border-color: var(--acdc-primary, #8b5b23);
+  background: #fbf8f4;
+}
+.acdc-checkbox-inline input {
+  width: 16px !important;
+  min-height: unset !important;
+  height: 16px !important;
+  margin: 0;
+}

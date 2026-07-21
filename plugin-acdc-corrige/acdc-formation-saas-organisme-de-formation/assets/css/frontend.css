@@ -1,0 +1,100 @@
+@import url('./base.css');
+@import url('./layout.css');
+@import url('./components.css');
+@import url('./forms.css');
+@import url('./tables.css');
+@import url('./modal.css');
+@import url('./calendar.css');
+@import url('./surveys.css');
+
+
+.acdc-prospect-editor .acdc-field-help{display:block;margin-top:6px;color:var(--acdc-text-muted);font-size:12px;line-height:1.45;}
+.acdc-prospect-profile-panels{display:flex;flex-direction:column;gap:18px;}
+.acdc-prospect-repeaters-head{display:flex;align-items:center;justify-content:space-between;gap:12px;margin:8px 0 10px;}
+.acdc-prospect-badges{display:flex;flex-wrap:wrap;gap:10px;margin-bottom:12px;}
+.acdc-prospect-chip{display:inline-flex;align-items:center;gap:8px;padding:8px 12px;border:1px solid var(--acdc-border);border-radius:999px;background:#fff;font-size:12px;color:var(--acdc-text);}
+.acdc-prospect-chip-remove{border:none;background:transparent;color:var(--acdc-danger);font-size:16px;line-height:1;cursor:pointer;padding:0;}
+.acdc-modal-dialog-compact{width:min(640px,92vw);height:auto;max-height:90vh;}
+.acdc-modal-body-padding{padding:18px 20px;overflow:auto;}
+.acdc-prospect-followup-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:16px;}
+.acdc-prospect-followup-card{border:1px solid var(--acdc-border);border-radius:var(--acdc-radius-panel);background:#fff;padding:16px;}
+.acdc-prospect-followup-card h3{margin:0 0 10px;font-size:16px;line-height:1.25;color:var(--acdc-text);}
+.acdc-prospect-followup-card p{margin:0 0 8px;}
+@media (max-width: 960px){.acdc-prospect-followup-grid{grid-template-columns:1fr;}.acdc-prospect-repeaters-head{align-items:flex-start;flex-direction:column;}}
+
+
+.acdc-prospect-patch-actions{display:flex;align-items:center;gap:var(--acdc-action-icon-gap, 12px);white-space:nowrap;position:relative;}
+.acdc-prospect-patch-actions svg{display:block;width:var(--acdc-action-icon-glyph-size, 18px);height:var(--acdc-action-icon-glyph-size, 18px);}
+.acdc-prospect-patch-icon,.acdc-prospect-patch-trigger{color:var(--acdc-action-icon-color, var(--acdc-icon-color, var(--acdc-primary, #e9c77c))) !important;text-decoration:none !important;}
+
+.acdc-prospect-repeaters-head-inline{justify-content:flex-start;}
+.acdc-prospect-repeaters-head-inline .acdc-button{margin-left:0;}
+.acdc-prospect-full-row{grid-column:1 / -1;}
+.acdc-prospect-full-row > p{margin:0 0 16px;}
+
+
+/* Prospects — alignements correctifs 3.17.13 */
+.acdc-prospect-full-row,
+.acdc-prospect-repeaters-head,
+.acdc-prospect-badges,
+.acdc-prospect-editor > .acdc-field-help {
+  padding-left:24px;
+  padding-right:24px;
+  box-sizing:border-box;
+}
+
+.acdc-prospect-full-row textarea,
+.acdc-prospect-full-row input,
+.acdc-prospect-full-row select {
+  width:100%;
+  max-width:none;
+}
+
+.acdc-prospect-repeaters-head {
+  justify-content:flex-start;
+}
+
+.acdc-prospect-repeaters-head strong {
+  margin:0;
+}
+
+.acdc-prospect-repeaters-head .acdc-button {
+  margin-left:12px;
+}
+
+.acdc-prospect-badges {
+  margin-top:0;
+}
+
+@media (max-width: 960px){
+  .acdc-prospect-full-row,
+  .acdc-prospect-repeaters-head,
+  .acdc-prospect-badges,
+  .acdc-prospect-editor > .acdc-field-help {
+    padding-left:18px;
+    padding-right:18px;
+  }
+
+  .acdc-prospect-repeaters-head .acdc-button {
+    margin-left:0;
+  }
+}
+
+.acdc-commanditaire-stack {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  line-height: 1.25;
+}
+
+.acdc-commanditaire-primary {
+  display: block;
+  font-weight: 600;
+  color: var(--acdc-text, #0C2D52);
+}
+
+.acdc-commanditaire-secondary {
+  display: block;
+  font-size: 12px;
+  color: var(--acdc-text-muted, #1E4777);
+}
