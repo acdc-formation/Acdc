@@ -4,6 +4,17 @@ Toutes les modifications notables de ce projet sont documentées ici.
 Format inspiré de [Keep a Changelog](https://keepachangelog.com/fr/1.1.0/).
 L'historique détaillé antérieur est archivé dans [`release-notes/`](release-notes/).
 
+## [3.25.105] — 2026-07-22
+
+### Performance
+- Fin du N+1 émargement dans les listes de séances (≈400 requêtes/page → 2). Méthodes de
+  préchargement en lot `get_by_session_ids` / `get_learners_for_emarg_ids`, câblées sur les
+  3 sites (séances validées, statistiques formateurs, dérivation des statuts).
+
+### Ajouté
+- `ACDC\Support\EmargeStatus` (dérivation pure des statuts présence/signature) + 9 tests.
+  Suite PHPUnit : 31 tests / 62 assertions.
+
 ## [3.25.104] — 2026-07-22
 
 ### Ajouté

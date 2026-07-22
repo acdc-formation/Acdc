@@ -10161,6 +10161,22 @@ trait ACDC_Kernel_Render_Trait {
     <div class="acdc-panel acdc-mb-18"><div class="acdc-inline-wrap" style="justify-content:space-between;align-items:center;gap:16px;"><input type="search" placeholder="Rechercher" style="max-width:420px;"><div class="acdc-inline-wrap" style="gap:10px;"><button type="button" class="acdc-icon-button"><?php echo $this->render_inline_icon( 'settings', 16 ); ?></button><button type="button" class="acdc-icon-button"><?php echo $this->render_inline_icon( 'filter', 16 ); ?></button><button type="button" class="acdc-icon-button"><?php echo $this->render_inline_icon( 'chevron-down', 16 ); ?></button></div></div></div>
 
     <div class="acdc-panel"><div class="acdc-table-wrap"><table class="acdc-table"><thead><tr><th>Apprenant/Groupe</th><th>Formation</th><th>Formateur</th><th>Type</th><th>Format</th><th>Méthode d’émargement</th><th>Date et heures de la séance</th><th>Lieu</th><th>Signature formateur</th><th>Présence(s) apprenant(s)</th><th></th></tr></thead><tbody>
+      <?php
+      // Anti N+1 : préchargement de l'émargement de toutes les séances de la page (2 requêtes).
+      $emarg_by_session_k = array();
+      $emarg_lrns_by_id_k = array();
+      if ( ! empty( $items ) && class_exists( 'ACDC_Emargement' ) ) {
+          $emarg_core_k = ACDC_Emargement::get_instance()->core;
+          $sess_ids_k = array();
+          foreach ( $items as $item ) { $sess_ids_k[] = (int) $item->id; }
+          $emarg_by_session_k = $emarg_core_k->get_by_session_ids( $sess_ids_k );
+          if ( ! empty( $emarg_by_session_k ) ) {
+              $emarg_ids_k = array();
+              foreach ( $emarg_by_session_k as $em_k ) { $emarg_ids_k[] = (int) $em_k->id; }
+              $emarg_lrns_by_id_k = $emarg_core_k->get_learners_for_emarg_ids( $emarg_ids_k );
+          }
+      }
+      ?>
       <?php if ( ! empty( $items ) ) : foreach ( $items as $item ) :
         $view_url = add_query_arg( array( 'action' => 'view', 'item_id' => (int) $item->id ), $view_base );
         $date_label = '—';
@@ -10183,9 +10199,7 @@ trait ACDC_Kernel_Render_Trait {
         <td><?php echo esc_html( $date_label ); ?></td>
         <td><?php echo nl2br( esc_html( ! empty( $item->location_display ) ? $item->location_display : '—' ) ); ?></td>
         <?php
-        $emarg_ses = ( class_exists( 'ACDC_Emargement' ) )
-            ? ACDC_Emargement::get_instance()->core->get_by_session_id( (int) $item->id )
-            : null;
+        $emarg_ses = isset( $emarg_by_session_k[ (int) $item->id ] ) ? $emarg_by_session_k[ (int) $item->id ] : null;
         $t_status = $emarg_ses ? $emarg_ses->trainer_status : 'none';
         ?>
         <td>
@@ -10213,7 +10227,7 @@ trait ACDC_Kernel_Render_Trait {
         <td>
           <?php
           if ( $emarg_ses ) :
-            $emarg_learners = ACDC_Emargement::get_instance()->core->get_learners_for_emarg( $emarg_ses->id );
+            $emarg_learners = isset( $emarg_lrns_by_id_k[ (int) $emarg_ses->id ] ) ? $emarg_lrns_by_id_k[ (int) $emarg_ses->id ] : array();
             foreach ( $emarg_learners as $el ) :
               $is_signed = 'signe' === $el->status;
               $is_absent = 'absent' === $el->status;

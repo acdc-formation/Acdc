@@ -195,6 +195,55 @@ class ACDC_Emarg_Core {
         ) );
     }
 
+    /**
+     * Anti N+1 : précharge les fiches d'émargement de plusieurs séances en une requête.
+     *
+     * @param int[] $session_ids
+     * @return array [session_id => fiche] (la plus récente par séance, comme get_by_session_id).
+     */
+    public function get_by_session_ids( $session_ids ) {
+        global $wpdb;
+        $ids = array_values( array_unique( array_filter( array_map( 'absint', (array) $session_ids ) ) ) );
+        if ( empty( $ids ) ) {
+            return array();
+        }
+        $ph   = implode( ',', array_fill( 0, count( $ids ), '%d' ) );
+        $rows = $wpdb->get_results( $wpdb->prepare(
+            "SELECT * FROM {$this->table_sessions} WHERE session_id IN ($ph) ORDER BY id ASC",
+            $ids
+        ) );
+        $map = array();
+        foreach ( (array) $rows as $r ) {
+            // id croissant → la dernière valeur conservée a l'id le plus grand = la plus récente.
+            $map[ (int) $r->session_id ] = $r;
+        }
+        return $map;
+    }
+
+    /**
+     * Anti N+1 : précharge les apprenants d'émargement de plusieurs fiches en une requête.
+     *
+     * @param int[] $emarg_session_ids
+     * @return array [emarg_session_id => [apprenants...]]
+     */
+    public function get_learners_for_emarg_ids( $emarg_session_ids ) {
+        global $wpdb;
+        $ids = array_values( array_unique( array_filter( array_map( 'absint', (array) $emarg_session_ids ) ) ) );
+        if ( empty( $ids ) ) {
+            return array();
+        }
+        $ph   = implode( ',', array_fill( 0, count( $ids ), '%d' ) );
+        $rows = $wpdb->get_results( $wpdb->prepare(
+            "SELECT * FROM {$this->table_learners} WHERE emarg_session_id IN ($ph) ORDER BY learner_name ASC",
+            $ids
+        ) );
+        $map = array();
+        foreach ( (array) $rows as $r ) {
+            $map[ (int) $r->emarg_session_id ][] = $r;
+        }
+        return $map;
+    }
+
     /* -----------------------------------------------------------------------
      * Sauvegarder la signature du formateur
      * -------------------------------------------------------------------- */

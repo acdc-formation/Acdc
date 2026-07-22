@@ -120,42 +120,32 @@ trait ACDC_Sessions_Core_Trait {
     $rows = ! empty( $values ) ? $wpdb->get_results( $wpdb->prepare( $sql, $values ) ) : $wpdb->get_results( $sql );
 
     if ( ! empty( $rows ) ) {
+      // Anti N+1 : préchargement de l'émargement de TOUTES les séances de la page en 2 requêtes.
+      $emarg_by_session = array();
+      $learners_by_emarg = array();
+      if ( class_exists( 'ACDC_Emargement' ) ) {
+        $emarg_core = ACDC_Emargement::get_instance()->core;
+        $session_ids = array();
+        foreach ( $rows as $row ) { $session_ids[] = (int) $row->id; }
+        $emarg_by_session  = $emarg_core->get_by_session_ids( $session_ids );
+        if ( ! empty( $emarg_by_session ) ) {
+          $emarg_ids = array();
+          foreach ( $emarg_by_session as $em ) { $emarg_ids[] = (int) $em->id; }
+          $learners_by_emarg = $emarg_core->get_learners_for_emarg_ids( $emarg_ids );
+        }
+      }
       foreach ( $rows as $row ) {
         $row->learner_or_group_label = $this->get_session_validated_learner_or_group_label( $row );
         $row->trainer_display_name = $this->get_session_validated_trainer_label( $row );
         $row->location_display = $this->get_session_validated_location_label( $row );
         $row->trainer_signature_label = 'SIGNÉE';
-        // Statuts réels dérivés de l'émargement (affichage + filtres opérants).
-        $sig_label  = 'Non générée';
-        $pres_label = 'Non générée';
-        if ( class_exists( 'ACDC_Emargement' ) ) {
-          $emarg = ACDC_Emargement::get_instance()->core->get_by_session_id( (int) $row->id );
-          if ( $emarg ) {
-            $emarg_learners = ACDC_Emargement::get_instance()->core->get_learners_for_emarg( $emarg->id );
-            $total_l  = is_array( $emarg_learners ) ? count( $emarg_learners ) : 0;
-            $signed_l = 0;
-            $absent_l = 0;
-            foreach ( (array) $emarg_learners as $el ) {
-              if ( 'signe' === $el->status ) { $signed_l++; }
-              elseif ( 'absent' === $el->status ) { $absent_l++; }
-            }
-            if ( 0 === $total_l ) {
-              $sig_label = 'En attente';
-              $pres_label = 'En attente';
-            } elseif ( $signed_l === $total_l ) {
-              $sig_label = 'Complète';
-              $pres_label = 'Complète';
-            } elseif ( $signed_l > 0 ) {
-              $sig_label = 'Partielle';
-              $pres_label = 'Partielle';
-            } else {
-              $sig_label = 'En attente';
-              $pres_label = ( $absent_l > 0 ) ? 'Absences' : 'En attente';
-            }
-          }
-        }
-        $row->learner_signature_label = $sig_label;
-        $row->presence_status_label = $pres_label;
+        // Statuts réels dérivés de l'émargement préchargé (affichage + filtres opérants).
+        $emarg = isset( $emarg_by_session[ (int) $row->id ] ) ? $emarg_by_session[ (int) $row->id ] : null;
+        $emarg_learners = ( $emarg && isset( $learners_by_emarg[ (int) $emarg->id ] ) ) ? $learners_by_emarg[ (int) $emarg->id ] : array();
+        $counts = \ACDC\Support\EmargeStatus::countStatuses( $emarg_learners );
+        $labels = \ACDC\Support\EmargeStatus::deriveLabels( (bool) $emarg, $counts['total'], $counts['signed'], $counts['absent'] );
+        $row->learner_signature_label = $labels['signature'];
+        $row->presence_status_label = $labels['presence'];
       }
     }
 

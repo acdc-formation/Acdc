@@ -152,6 +152,22 @@ trait ACDC_Sessions_Render_Trait {
               </tr>
             </thead>
             <tbody>
+            <?php
+            // Anti N+1 : préchargement de l'émargement de toutes les séances de la page (2 requêtes).
+            $emarg_by_session_s = array();
+            $emarg_lrns_by_id_s = array();
+            if ( class_exists( 'ACDC_Emargement' ) ) {
+                $emarg_core_s = ACDC_Emargement::get_instance()->core;
+                $sess_ids_s = array();
+                foreach ( $items as $entry ) { $sess_ids_s[] = (int) $entry->id; }
+                $emarg_by_session_s = $emarg_core_s->get_by_session_ids( $sess_ids_s );
+                if ( ! empty( $emarg_by_session_s ) ) {
+                    $emarg_ids_s = array();
+                    foreach ( $emarg_by_session_s as $em_s ) { $emarg_ids_s[] = (int) $em_s->id; }
+                    $emarg_lrns_by_id_s = $emarg_core_s->get_learners_for_emarg_ids( $emarg_ids_s );
+                }
+            }
+            ?>
             <?php foreach ( $items as $entry ) : ?>
               <?php list( $view_url, $edit_url, $delete_url ) = $this->get_session_row_action_links( $entry, $base_tab ); ?>
               <tr>
@@ -170,9 +186,7 @@ trait ACDC_Sessions_Render_Trait {
                 <td><?php echo esc_html( $this->get_session_datetime_label( $entry ) ); ?></td>
                 <td><?php echo esc_html( $entry->location_display ); ?></td>
                 <?php
-                $emarg_ses_s = ( class_exists( 'ACDC_Emargement' ) )
-                    ? ACDC_Emargement::get_instance()->core->get_by_session_id( (int) $entry->id )
-                    : null;
+                $emarg_ses_s = isset( $emarg_by_session_s[ (int) $entry->id ] ) ? $emarg_by_session_s[ (int) $entry->id ] : null;
                 $t_status_s = $emarg_ses_s ? $emarg_ses_s->trainer_status : 'none';
                 ?>
                 <td>
@@ -204,7 +218,7 @@ trait ACDC_Sessions_Render_Trait {
                 <td>
                   <?php
                   if ( $emarg_ses_s ) :
-                    $emarg_lrns_s = ACDC_Emargement::get_instance()->core->get_learners_for_emarg( $emarg_ses_s->id );
+                    $emarg_lrns_s = isset( $emarg_lrns_by_id_s[ (int) $emarg_ses_s->id ] ) ? $emarg_lrns_by_id_s[ (int) $emarg_ses_s->id ] : array();
                     foreach ( $emarg_lrns_s as $el_s ) :
                       $is_signed_s = 'signe' === $el_s->status;
                       $is_absent_s = 'absent' === $el_s->status;
