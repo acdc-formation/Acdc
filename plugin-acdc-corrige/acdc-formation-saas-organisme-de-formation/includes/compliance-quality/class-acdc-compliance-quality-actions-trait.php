@@ -141,7 +141,7 @@ trait ACDC_Compliance_Quality_Actions_Trait {
         foreach ( $rc_rows as $rcr ) {
           $ctype = strtolower( (string) $rcr->commanditaire_type );
           $amt   = (float) $rcr->total_ht;
-          if ( false !== strpos( $ctype, 'entreprise' ) || false !== strpos( $ctype, 'opco' ) ) {
+          if ( false !== strpos( $ctype, 'entreprise' ) || false !== strpos( $ctype, 'opco' ) || false !== strpos( $ctype, 'salarié' ) || false !== strpos( $ctype, 'salarie' ) ) {
             $c1_val += $amt;
           } else {
             // Independant, particulier, autre → C9
@@ -620,6 +620,8 @@ trait ACDC_Compliance_Quality_Actions_Trait {
     $records[ $year ]['data'] = array(
       'c1'             => round( $c1_val, 0 ),
       'c9'             => round( $c9_val, 0 ),
+      'c10'            => (int) $ext_summary['ca'],
+      'c_total'        => (int) ( $c1_val + $c9_val + $ext_summary['ca'] ),
       'd_total'        => round( $d_total_val, 0 ),
       'd_salaires'     => round( $d_salaires_val, 0 ),
       'd_achats'       => round( $d_achats_val, 0 ),

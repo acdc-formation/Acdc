@@ -3552,10 +3552,12 @@ Vos réponses nous permettront d’évaluer nos pratiques, d’identifier des ax
         if ( ! empty( $participant->alert_flag ) ) {
           $stats['alerts']++;
         }
-        $score = $this->get_questionnaire_session_participant_score( $session->id, $participant->id );
-        if ( '' !== (string) $score && null !== $score ) {
-          $score_sum += (float) $score;
-          $score_count++;
+        if ( in_array( (string) ( $participant->participant_status ?? '' ), array( 'repondu', 'termine' ), true ) ) {
+          $score = $this->get_questionnaire_session_participant_score( $session->id, $participant->id );
+          if ( '' !== (string) $score && null !== $score ) {
+            $score_sum += (float) $score;
+            $score_count++;
+          }
         }
       }
     }
@@ -3586,6 +3588,9 @@ Vos réponses nous permettront d’évaluer nos pratiques, d’identifier des ax
     $sum = 0;
     $count = 0;
     foreach ( (array) $participants as $participant ) {
+      if ( ! in_array( (string) ( $participant->participant_status ?? '' ), array( 'repondu', 'termine' ), true ) ) {
+        continue;
+      }
       $score = $this->get_questionnaire_session_participant_score( $session_id, $participant->id );
       if ( '' !== (string) $score && null !== $score ) {
         $sum += (float) $score;
@@ -4665,10 +4670,12 @@ private function maybe_auto_create_questionnaire_actions_from_response( $session
         if ( ! empty( $participant->alert_flag ) ) {
           $stats['alerts']++;
         }
-        $score = $this->get_questionnaire_session_participant_score( $session->id, $participant->id );
-        if ( '' !== (string) $score && null !== $score ) {
-          $score_sum += (float) $score;
-          $score_count++;
+        if ( in_array( (string) ( $participant->participant_status ?? '' ), array( 'repondu', 'termine' ), true ) ) {
+          $score = $this->get_questionnaire_session_participant_score( $session->id, $participant->id );
+          if ( '' !== (string) $score && null !== $score ) {
+            $score_sum += (float) $score;
+            $score_count++;
+          }
         }
       }
     }

@@ -227,6 +227,11 @@ class ACDC_Sig_Public {
     private function render_form( $request ) {
         // Refus via GET
         if ( isset( $_GET['refuse'] ) && '1' === $_GET['refuse'] ) {
+            // Protection : exiger un nonce valide pour empêcher un refus déclenché
+            // par un simple GET (pré-chargeur de lien / antivirus e-mail).
+            if ( ! isset( $_GET['_wpnonce'] ) || ! wp_verify_nonce( sanitize_text_field( wp_unslash( $_GET['_wpnonce'] ) ), 'acdc_sig_refuse_' . $request->token ) ) {
+                return $this->message( 'error', "Lien de refus invalide ou expiré. Veuillez utiliser le bouton « Refuser » de la page de signature." );
+            }
             global $wpdb;
             $wpdb->update( $this->core->table_requests, array( 'status' => 'refuse', 'updated_at' => current_time( 'mysql' ) ), array( 'id' => $request->id ) );
             $this->core->log_event( $request->id, 'refused', 'Refus par le signataire.', $_SERVER['REMOTE_ADDR'] ?? '', $_SERVER['HTTP_USER_AGENT'] ?? '' );
@@ -247,7 +252,7 @@ class ACDC_Sig_Public {
                         ? $request->doc_url
                         : '';
 
-        $refuse_url = esc_url( add_query_arg( array( 'sig' => $request->token, 'refuse' => '1' ), $this->core->get_signature_page_url() ) );
+        $refuse_url = esc_url( wp_nonce_url( add_query_arg( array( 'sig' => $request->token, 'refuse' => '1' ), $this->core->get_signature_page_url() ), 'acdc_sig_refuse_' . $request->token ) );
 
         ob_start();
         ?>
@@ -408,6 +413,13 @@ class ACDC_Sig_Public {
 
         if ( ! $request || 'signe' === $request->status ) {
             wp_safe_redirect( $this->core->get_signature_page_url() . '?sig=' . urlencode( $token ) );
+            exit;
+        }
+
+        // Défense en profondeur : pour le niveau renforcé, revérifier l'OTP côté
+        // handler avant de sceller (l'affichage ne suffit pas à garantir la vérif).
+        if ( ACDC_Sig_Core::LEVEL_RENFORCE === $request->sig_level && ! $this->core->is_otp_verified( $request->token ) ) {
+            wp_safe_redirect( $this->core->get_signature_page_url() . '?sig=' . urlencode( $token ) . '&sig_error=otp' );
             exit;
         }
 

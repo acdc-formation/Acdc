@@ -52,7 +52,7 @@ body { font-family:helvetica,arial,sans-serif; font-size:9pt; color:#1f2937; }
 </head>
 <body>
 
-<?php $header( 'Analyse du besoin — ' . $e( $d('learner_name') ) ); ?>
+<?php $header( 'Analyse du besoin — ' . $d('learner_name') ); ?>
 
 <?php /* ── Identification ── */ ?>
 <table width="100%" style="border-collapse:collapse;margin-bottom:6pt;">

@@ -3,7 +3,7 @@
  * Plugin Name: ACDC Formation SAAS Organisme de formation
  * Plugin URI: https://acdc-formation.com/
  * Description: Espace de gestion frontal sécurisé pour organisme de formation, réécrit sur base (dernière version du plugin : 3.20.105) avec module UI/Design système : réglage avancé des icônes d’action, taille, couleurs, espacements et choix des pictogrammes.
- * Version: 3.25.109
+ * Version: 3.25.110
  * Requires at least: 6.2
  * Requires PHP: 8.2
  * Author: ACDC Formation
@@ -15,7 +15,7 @@ if ( ! defined( 'ABSPATH' ) ) {
     exit;
 }
 
-define( 'ACDC_OF_SAAS_VERSION', '3.25.109' );
+define( 'ACDC_OF_SAAS_VERSION', '3.25.110' );
 define( 'ACDC_OF_SAAS_FILE', __FILE__ );
 define( 'ACDC_OF_SAAS_DIR', plugin_dir_path( __FILE__ ) );
 define( 'ACDC_OF_SAAS_URL', plugin_dir_url( __FILE__ ) );
@@ -444,6 +444,24 @@ if ( ! function_exists( 'acdc_of_saas_safe_deactivate' ) ) {
                 wp_clear_scheduled_hook( 'acdc_of_surveys_cron_expirations' );
                 wp_clear_scheduled_hook( 'acdc_of_surveys_cron_action_followups' );
                 wp_clear_scheduled_hook( 'acdc_of_learner_portal_cron_maintenance' );
+                wp_clear_scheduled_hook( 'acdc_nad_cron_send_and_relance' );
+                wp_clear_scheduled_hook( 'acdc_of_cron_push_indicators' );
+                wp_clear_scheduled_hook( 'acdc_of_cron_sync_formations' );
+                wp_clear_scheduled_hook( 'acdc_of_absence_alert_cron' );
+                wp_clear_scheduled_hook( 'acdc_of_session_close_cron' );
+                wp_clear_scheduled_hook( 'acdc_of_convocation_cron' );
+                wp_clear_scheduled_hook( 'acdc_of_positioning_test_cron' );
+                wp_clear_scheduled_hook( 'acdc_of_qualiopi_alerts_cron' );
+                wp_clear_scheduled_hook( 'acdc_of_trainer_portal_cron_maintenance' );
+                wp_clear_scheduled_hook( 'acdc_of_qz_cron_dispatches' );
+                wp_clear_scheduled_hook( 'acdc_of_qz_cron_reminders' );
+                wp_clear_scheduled_hook( 'acdc_of_qz_cron_expirations' );
+                wp_clear_scheduled_hook( 'acdc_of_qz_cron_close_inactive_sessions' );
+                wp_clear_scheduled_hook( 'acdc_of_qz_cron_rgpd_purge' );
+                wp_clear_scheduled_hook( 'acdc_of_watch_collect_cron' );
+                wp_clear_scheduled_hook( 'acdc_of_watch_analyze_cron' );
+                wp_clear_scheduled_hook( 'acdc_of_watch_digest_cron' );
+                wp_clear_scheduled_hook( 'acdc_of_watch_reminder_cron' );
             }
             if ( function_exists( 'delete_transient' ) ) {
                 delete_transient( 'acdc_of_saas_runtime_notice' );

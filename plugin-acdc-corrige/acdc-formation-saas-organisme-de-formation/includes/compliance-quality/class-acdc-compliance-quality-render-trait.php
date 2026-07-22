@@ -722,7 +722,9 @@ trait ACDC_Compliance_Quality_Render_Trait {
         <thead><tr><th>Catégorie</th><th>Nb stagiaires</th></tr></thead>
         <tbody>
           <tr><td>Salariés</td><td><?php echo (int) ( $bpf_data['f1_salaries'] ?? 0 ); ?></td></tr>
+          <tr><td>Apprentis</td><td><?php echo (int) ( $bpf_data['f1_apprentis'] ?? 0 ); ?></td></tr>
           <tr><td>Demandeurs d'emploi (France Travail)</td><td><?php echo (int) ( $bpf_data['f1_demandeurs'] ?? 0 ); ?></td></tr>
+          <tr><td>Particuliers à leurs frais</td><td><?php echo (int) ( $bpf_data['f1_particuliers'] ?? 0 ); ?></td></tr>
           <tr><td>Indépendants / Dirigeants</td><td><?php echo (int) ( $bpf_data['f1_independants'] ?? 0 ); ?></td></tr>
           <tr><td>Autres</td><td><?php echo (int) ( $bpf_data['f1_autres'] ?? 0 ); ?></td></tr>
           <tr style="font-weight:700;"><td>Total stagiaires</td><td><?php echo (int) ( $bpf_data['f1_total'] ?? 0 ); ?></td></tr>

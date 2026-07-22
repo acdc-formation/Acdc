@@ -4,6 +4,21 @@ Toutes les modifications notables de ce projet sont documentées ici.
 Format inspiré de [Keep a Changelog](https://keepachangelog.com/fr/1.1.0/).
 L'historique détaillé antérieur est archivé dans [`release-notes/`](release-notes/).
 
+## [3.25.110] — 2026-07-22
+
+### Corrigé (2ᵉ vague d'audit — ~13 bugs)
+- **Fatals** : `normalize_marketing_input_list` (sauvegarde entités marketing) et
+  `learner_portal_get_resource_source_url` (ouverture ressource) — méthodes inexistantes.
+- Colonne SQL `passing_score` → `pass_threshold` (seuil de réussite quiz, 4 sites).
+- BPF Cadre C (`c10`/`c_total`) et F1 (Apprentis/Particuliers) corrigés à l'écran.
+- Moyenne session questionnaire (non-répondants exclus), import CSV marketing (fusion non
+  destructive), refus signature via GET (nonce), apprenant absent bloqué à la signature,
+  OTP revérifié côté serveur, double échappement PDF NAD, fuseau tokens auditeur, hash veille,
+  classification BPF Salarié→C1, déplanification de 19 crons à la désactivation.
+
+### Connu (décision de modèle requise)
+- Échelle de `final_score` (dashboard réussite/progression) ; carte « Taux d'occupation » placeholder.
+
 ## [3.25.109] — 2026-07-22
 
 ### Corrigé

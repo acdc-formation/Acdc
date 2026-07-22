@@ -331,8 +331,9 @@ trait ACDC_Watch_Core_Trait {
       return;
     }
 
-    $url_hash = md5( $data['url'] );
-    $exists   = $wpdb->get_var( $wpdb->prepare(
+    $url_clean = esc_url_raw( $data['url'] );
+    $url_hash  = md5( $url_clean );
+    $exists    = $wpdb->get_var( $wpdb->prepare(
       "SELECT id FROM {$tbl} WHERE MD5(url) = %s LIMIT 1",
       $url_hash
     ) );
@@ -346,7 +347,7 @@ trait ACDC_Watch_Core_Trait {
       'source_type'  => isset( $data['source_type'] ) ? sanitize_key( $data['source_type'] ) : 'rss',
       'watch_axis'   => isset( $data['watch_axis'] ) ? sanitize_key( $data['watch_axis'] ) : '',
       'title'        => isset( $data['title'] ) ? sanitize_text_field( $data['title'] ) : '',
-      'url'          => isset( $data['url'] ) ? esc_url_raw( $data['url'] ) : '',
+      'url'          => $url_clean,
       'summary'      => isset( $data['summary'] ) ? sanitize_textarea_field( $data['summary'] ) : '',
       'published_at' => isset( $data['published_at'] ) ? $data['published_at'] : null,
       'status'       => 'new',

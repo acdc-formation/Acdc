@@ -4214,7 +4214,7 @@ trait ACDC_Quizzes_Core_Trait {
         $score_pct_raw  = null !== $p->total_score_percentage ? (float) $p->total_score_percentage : null;
         $score_pct_disp = null !== $score_pct_raw ? number_format( $score_pct_raw, 1, ',', ' ' ) . ' %' : '—';
         $tbl_qz_quizzes_pass = $this->get_qz_table( 'quizzes' );
-        $passing_score_raw = $wpdb->get_var( $wpdb->prepare( "SELECT passing_score FROM {$tbl_qz_quizzes_pass} WHERE id = %d", (int) $session->quiz_id ) );
+        $passing_score_raw = $wpdb->get_var( $wpdb->prepare( "SELECT pass_threshold FROM {$tbl_qz_quizzes_pass} WHERE id = %d", (int) $session->quiz_id ) );
         $passing_score = ( null !== $passing_score_raw ) ? (float) $passing_score_raw : 70.0;
 
         // Calcul is_passed depuis le participant (ou recalcul si absent)

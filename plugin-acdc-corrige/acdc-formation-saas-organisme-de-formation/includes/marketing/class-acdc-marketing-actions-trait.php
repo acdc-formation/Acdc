@@ -196,10 +196,10 @@ trait ACDC_Marketing_Actions_Trait {
       'trigger_type' => isset( $input['trigger_type'] ) ? sanitize_key( $input['trigger_type'] ) : '',
       'planned_at' => isset( $input['planned_at'] ) ? sanitize_text_field( $input['planned_at'] ) : '',
       'direction' => isset( $input['direction'] ) ? sanitize_key( $input['direction'] ) : '',
-      'list_ids' => $this->normalize_marketing_input_list( isset( $input['list_ids'] ) ? $input['list_ids'] : '' ),
-      'tag_ids' => $this->normalize_marketing_input_list( isset( $input['tag_ids'] ) ? $input['tag_ids'] : '' ),
-      'segment_ids' => $this->normalize_marketing_input_list( isset( $input['segment_ids'] ) ? $input['segment_ids'] : '' ),
-      'block_ids' => $this->normalize_marketing_input_list( isset( $input['block_ids'] ) ? $input['block_ids'] : '' ),
+      'list_ids' => $this->normalize_marketing_csv_array( isset( $input['list_ids'] ) ? $input['list_ids'] : '' ),
+      'tag_ids' => $this->normalize_marketing_csv_array( isset( $input['tag_ids'] ) ? $input['tag_ids'] : '' ),
+      'segment_ids' => $this->normalize_marketing_csv_array( isset( $input['segment_ids'] ) ? $input['segment_ids'] : '' ),
+      'block_ids' => $this->normalize_marketing_csv_array( isset( $input['block_ids'] ) ? $input['block_ids'] : '' ),
       'steps' => isset( $input['steps'] ) ? sanitize_textarea_field( $input['steps'] ) : '',
       'goal' => isset( $input['goal'] ) ? sanitize_text_field( $input['goal'] ) : '',
       'slug' => isset( $input['slug'] ) ? sanitize_title( $input['slug'] ) : '',
@@ -354,27 +354,46 @@ trait ACDC_Marketing_Actions_Trait {
           $statuses = $this->marketing_default_contact_statuses( $contact_type );
           $statuses['marketing'] = 'not_requested';
           $is_existing = isset( $contacts[ $source_key ] );
-          $contacts[ $source_key ] = $this->normalize_marketing_contact_record( array(
-            'source_key' => $source_key,
-            'source_type' => 'import',
-            'source_id' => 0,
-            'name' => trim( ( isset( $data['first_name'] ) ? $data['first_name'] : '' ) . ' ' . ( isset( $data['last_name'] ) ? $data['last_name'] : '' ) ),
-            'email' => $email,
-            'phone' => isset( $data['phone'] ) ? $data['phone'] : '',
-            'company' => isset( $data['company'] ) ? $data['company'] : '',
-            'type' => $contact_type,
-            'enabled' => 1,
-            'statuses' => $statuses,
-            'primary_list_id' => 'list_prospects',
-            'lists' => array( 'list_prospects' ),
-            'tags' => array( 'tag_source_import_csv', 'tag_donnee_a_nettoyer' ),
-            'segments_cache' => array(),
-            'score' => 0,
-            'score_value' => 0,
-            'last_engagement' => '',
-            'created_at' => isset( $contacts[ $source_key ]['created_at'] ) ? $contacts[ $source_key ]['created_at'] : $this->now_mysql(),
-            'updated_at' => $this->now_mysql(),
-          ) );
+          $csv_name = trim( ( isset( $data['first_name'] ) ? $data['first_name'] : '' ) . ' ' . ( isset( $data['last_name'] ) ? $data['last_name'] : '' ) );
+          if ( $is_existing ) {
+            // Ré-import : fusionner uniquement les champs d'identité non vides du CSV,
+            // et préserver listes/étiquettes/score/enabled/liste principale ajoutés manuellement.
+            $existing = $contacts[ $source_key ];
+            if ( '' !== $csv_name ) {
+              $existing['name'] = $csv_name;
+            }
+            if ( isset( $data['phone'] ) && '' !== trim( (string) $data['phone'] ) ) {
+              $existing['phone'] = $data['phone'];
+            }
+            if ( isset( $data['company'] ) && '' !== trim( (string) $data['company'] ) ) {
+              $existing['company'] = $data['company'];
+            }
+            $existing['email'] = $email;
+            $existing['updated_at'] = $this->now_mysql();
+            $contacts[ $source_key ] = $this->normalize_marketing_contact_record( $existing );
+          } else {
+            $contacts[ $source_key ] = $this->normalize_marketing_contact_record( array(
+              'source_key' => $source_key,
+              'source_type' => 'import',
+              'source_id' => 0,
+              'name' => $csv_name,
+              'email' => $email,
+              'phone' => isset( $data['phone'] ) ? $data['phone'] : '',
+              'company' => isset( $data['company'] ) ? $data['company'] : '',
+              'type' => $contact_type,
+              'enabled' => 1,
+              'statuses' => $statuses,
+              'primary_list_id' => 'list_prospects',
+              'lists' => array( 'list_prospects' ),
+              'tags' => array( 'tag_source_import_csv', 'tag_donnee_a_nettoyer' ),
+              'segments_cache' => array(),
+              'score' => 0,
+              'score_value' => 0,
+              'last_engagement' => '',
+              'created_at' => $this->now_mysql(),
+              'updated_at' => $this->now_mysql(),
+            ) );
+          }
           $processed++;
           if ( $is_existing ) {
             $updated++;

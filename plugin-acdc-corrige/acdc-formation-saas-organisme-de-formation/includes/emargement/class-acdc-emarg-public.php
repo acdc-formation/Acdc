@@ -113,7 +113,7 @@ class ACDC_Emarg_Public {
         if ( '' === $token ) { wp_die( 'Lien invalide ou expiré.', 403 ); }
 
         $learner = $this->core->get_learner_by_sign_token( $token );
-        if ( ! $learner || 'signe' === $learner->status ) {
+        if ( ! $learner || in_array( $learner->status, array( 'signe', 'absent' ), true ) ) {
             wp_safe_redirect( $this->core->get_public_url( 'apprenant', $token ) . '&emarg_err=already' );
             exit;
         }
@@ -132,7 +132,6 @@ class ACDC_Emarg_Public {
         }
 
         $late = (int) ( $result['late_minutes'] ?? 0 );
-        $emarg = $this->core->get_by_list_token( '' ); // placeholder
         // Retrouver le list_token pour le retour
         $emarg_row = $wpdb->get_row( $wpdb->prepare(
             "SELECT * FROM {$this->core->table_sessions} WHERE id = %d",
@@ -439,6 +438,10 @@ function initCanvas(canvasId) {
         }
         if ( 'signe' === $learner->status ) {
             echo '<div class="emarg-alert emarg-alert-success">✅ Vous avez déjà signé. Merci !</div>';
+            return;
+        }
+        if ( 'absent' === $learner->status ) {
+            echo '<div class="emarg-alert emarg-alert-error">Vous avez été marqué absent pour cette séance. L\'émargement n\'est pas disponible.</div>';
             return;
         }
 

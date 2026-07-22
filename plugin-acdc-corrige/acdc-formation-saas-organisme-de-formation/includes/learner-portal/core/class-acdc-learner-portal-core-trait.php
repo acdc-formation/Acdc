@@ -579,7 +579,7 @@ trait ACDC_Learner_Portal_Core_Trait {
               p.secure_token, p.token_expires_at, p.invited_at,
               p.total_score, p.total_score_percentage, p.is_passed,
               q.id AS quiz_id, q.title AS quiz_title, q.quiz_purpose,
-              q.duration_seconds, q.passing_score,
+              q.duration_seconds, q.pass_threshold AS passing_score,
               s.id AS session_id, s.expires_at AS session_expires_at
        FROM {$tbl_p} p
        INNER JOIN {$tbl_s} s ON s.id = p.session_id
@@ -623,7 +623,7 @@ trait ACDC_Learner_Portal_Core_Trait {
               p.completed_at, p.total_score, p.total_score_percentage, p.is_passed,
               {$result_col_sql}
               q.id AS quiz_id, q.title AS quiz_title, q.quiz_purpose,
-              q.passing_score
+              q.pass_threshold AS passing_score
        FROM {$tbl_p} p
        INNER JOIN {$tbl_s} s ON s.id = p.session_id
        INNER JOIN {$tbl_q} q ON q.id = s.quiz_id
@@ -665,7 +665,7 @@ trait ACDC_Learner_Portal_Core_Trait {
 
     return $wpdb->get_row( $wpdb->prepare(
       "SELECT p.*, {$result_col_sql}
-              q.title AS quiz_title, q.quiz_purpose, q.passing_score,
+              q.title AS quiz_title, q.quiz_purpose, q.pass_threshold AS passing_score,
               s.id AS session_id_ref
        FROM {$tbl_p} p
        INNER JOIN {$tbl_s} s ON s.id = p.session_id
@@ -1765,6 +1765,28 @@ trait ACDC_Learner_Portal_Core_Trait {
       case 'shared_doc':
         $docs = $this->learner_portal_parse_multiline_urls( $formation ? $formation->shared_docs : '' );
         return isset( $docs[ $doc_index ] ) ? $docs[ $doc_index ] : '';
+      default:
+        return '';
+    }
+  }
+
+  /**
+   * URL source d'une ressource externe (lien/vidéo partagé) de la formation, avec
+   * contrôle d'appartenance par e-mail. Complète get_document_source_url() (jusqu'ici
+   * la méthode était appelée mais absente → fatal à l'ouverture d'une ressource).
+   */
+  private function learner_portal_get_resource_source_url( $account_email, $registration_id, $resource_type, $resource_index = 0 ) {
+    $item = $this->learner_portal_get_access_item( $account_email, $registration_id );
+    if ( ! $item ) {
+      return '';
+    }
+    $formation = ! empty( $item['formation'] ) ? $item['formation'] : null;
+    switch ( $resource_type ) {
+      case 'shared_link':
+      case 'video':
+      case 'link':
+        $links = $this->learner_portal_parse_multiline_urls( $formation ? $formation->shared_links : '' );
+        return isset( $links[ $resource_index ] ) ? (string) $links[ $resource_index ] : '';
       default:
         return '';
     }

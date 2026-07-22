@@ -377,7 +377,7 @@ class ACDC_Audit_Core {
         global $wpdb;
         $row = $wpdb->get_row( $wpdb->prepare(
             "SELECT * FROM {$this->token_table} WHERE token = %s AND is_revoked = 0 AND expires_at > %s",
-            $token, current_time( 'mysql' )
+            $token, current_time( 'mysql', true )
         ) );
         if ( $row ) {
             $wpdb->update( $this->token_table, array(
