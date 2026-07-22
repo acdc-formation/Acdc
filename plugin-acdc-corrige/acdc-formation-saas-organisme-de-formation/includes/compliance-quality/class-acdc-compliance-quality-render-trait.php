@@ -680,6 +680,13 @@ trait ACDC_Compliance_Quality_Render_Trait {
     $company = $this->get_company_profile_options();
     $base_url = is_admin() ? admin_url( 'admin.php?page=acdc-of-dashboard' ) : $this->portal_page_url( array( 'tab' => 'bpf' ) );
     $back_url = add_query_arg( array( 'tab' => 'bpf' ), $base_url );
+    // ACDC 3.25.118 — Période d'exercice convertie JJ/MM/AAAA → AAAA-MM-JJ pour les requêtes par formation
+    $bpf_start_sql = ''; $bpf_end_sql = '';
+    if ( preg_match( '#^(\d{2})/(\d{2})/(\d{4})$#', (string) ( $record['start_date'] ?? '' ), $ms ) ) { $bpf_start_sql = $ms[3] . '-' . $ms[2] . '-' . $ms[1]; }
+    if ( preg_match( '#^(\d{2})/(\d{2})/(\d{4})$#', (string) ( $record['end_date'] ?? '' ), $me ) )   { $bpf_end_sql   = $me[3] . '-' . $me[2] . '-' . $me[1]; }
+    // ACDC 3.25.118 — Helpers de formatage pour les tableaux par formation
+    $bpf_fmt_eur  = function( $v ) { return number_format( (float) str_replace( ',', '.', (string) $v ), 2, ',', ' ' ) . ' €'; };
+    $bpf_fmt_date = function( $d ) { $d = (string) $d; if ( '' === $d || 0 === strpos( $d, '0000' ) ) { return ''; } $ts = strtotime( $d ); return $ts ? date_i18n( 'd/m/Y', $ts ) : $d; };
     ?>
     <section class="acdc-section-head"><div><h2>Bilan Pédagogique et Financier pré-rempli - <?php echo esc_html( $record['year'] ); ?></h2></div></section>
     <div style="padding:0 0 24px;"></div>
@@ -692,8 +699,66 @@ trait ACDC_Compliance_Quality_Render_Trait {
         <details class="acdc-bpf-accordion" <?php echo 0 === $index ? 'open' : ''; ?>>
           <summary><span class="acdc-bpf-toggle"><span class="acdc-bpf-switch on"></span><?php echo esc_html( $formation->title . ' - ' . $formation->modality . ' - ' . $formation->duration ); ?></span><span class="acdc-bpf-chevron"><?php echo $this->render_inline_icon( 'chevron-down', 14 ); ?></span></summary>
           <div class="acdc-bpf-accordion-body">
-            <div class="acdc-panel" style="margin:0 0 18px;"><h4>Liste des actions de formation</h4><div class="acdc-table-wrap"><table class="acdc-table"><thead><tr><th>Commanditaire</th><th>Dates de formation</th><th>Sous-traitance</th><th>Frais pédagogique</th><th>Frais transport / hébergement</th><th>BPF</th><th>Convention</th><th>Facture(s)</th></tr></thead><tbody><tr><td colspan="8"><?php $this->render_empty_table_state( '' ); ?></td></tr></tbody></table></div></div>
-            <div class="acdc-panel"><h4>Liste des formateurs de cette formation</h4><div class="acdc-table-wrap"><table class="acdc-table"><thead><tr><th>Formateur</th><th>Type</th><th>Taux horaire (HT)</th><th>BPF</th></tr></thead><tbody><tr><td colspan="5"><?php $this->render_empty_table_state( '' ); ?></td></tr></tbody></table></div></div>
+            <?php
+            // ACDC 3.25.118 — Liste des actions de formation : peuplée depuis les conventions (registration_contracts) de cette formation sur la période
+            $bpf_actions = $this->get_bpf_formation_actions( (int) $formation->id, $bpf_start_sql, $bpf_end_sql );
+            ?>
+            <div class="acdc-panel" style="margin:0 0 18px;"><h4>Liste des actions de formation</h4><div class="acdc-table-wrap"><table class="acdc-table"><thead><tr><th>Commanditaire</th><th>Dates de formation</th><th>Sous-traitance</th><th>Frais pédagogique</th><th>Frais transport / hébergement</th><th>BPF</th><th>Convention</th><th>Facture(s)</th></tr></thead><tbody>
+              <?php if ( empty( $bpf_actions ) ) : ?>
+                <tr><td colspan="8"><?php $this->render_empty_table_state( 'Aucune action de formation enregistrée pour cette formation sur la période.' ); ?></td></tr>
+              <?php else : foreach ( $bpf_actions as $a ) :
+                // ACDC 3.25.118
+                $commanditaire = trim( (string) ( $a->company_name ?? '' ) );
+                if ( '' === $commanditaire ) { $commanditaire = trim( (string) ( $a->commanditaire_type ?? '' ) ); }
+                if ( '' === $commanditaire ) { $commanditaire = '—'; }
+                $d_start = $bpf_fmt_date( $a->start_date ?? '' );
+                $d_end   = $bpf_fmt_date( $a->end_date ?? '' );
+                $dates   = $d_start;
+                if ( '' !== $d_end && $d_end !== $d_start ) { $dates = ( '' !== $d_start ? $d_start . ' → ' : '' ) . $d_end; }
+                if ( '' === $dates ) { $dates = '—'; }
+                $frais_ped = ( isset( $a->price_ht ) && '' !== trim( (string) $a->price_ht ) ) ? $bpf_fmt_eur( $a->price_ht ) : '—';
+                $frais_tr  = ( (int) ( $a->transport_fees_enabled ?? 0 ) ? (float) str_replace( ',', '.', (string) ( $a->transport_fees_amount_ht ?? 0 ) ) : 0 )
+                           + ( (int) ( $a->meal_fees_enabled ?? 0 )      ? (float) str_replace( ',', '.', (string) ( $a->meal_fees_amount_ht ?? 0 ) ) : 0 );
+                $frais_tr_txt = $frais_tr > 0 ? $bpf_fmt_eur( $frais_tr ) : '—';
+                $bpf_flag  = ( (int) ( $formation->include_bpf ?? 0 ) === 1 ) ? 'Oui' : 'Non';
+                $conv_url  = trim( (string) ( $a->signed_document_url ?? '' ) );
+                if ( '' === $conv_url ) { $conv_url = trim( (string) ( $a->document_url ?? '' ) ); }
+              ?>
+                <tr>
+                  <td><?php echo esc_html( $commanditaire ); ?></td>
+                  <td><?php echo esc_html( $dates ); ?></td>
+                  <td>—</td>
+                  <td><?php echo esc_html( $frais_ped ); ?></td>
+                  <td><?php echo esc_html( $frais_tr_txt ); ?></td>
+                  <td><?php echo esc_html( $bpf_flag ); ?></td>
+                  <td><?php if ( '' !== $conv_url ) : ?><a href="<?php echo esc_url( $conv_url ); ?>" target="_blank" rel="noopener">Voir</a><?php else : ?>—<?php endif; ?></td>
+                  <td>—</td>
+                </tr>
+              <?php endforeach; endif; ?>
+            </tbody></table></div></div>
+            <?php
+            // ACDC 3.25.118 — Liste des formateurs : peuplée depuis les sessions (trainer_id) de cette formation sur la période
+            $bpf_trainers = $this->get_bpf_formation_trainers( (int) $formation->id, $bpf_start_sql, $bpf_end_sql, (string) ( $formation->title ?? '' ), (string) ( $formation->code ?? '' ) );
+            ?>
+            <div class="acdc-panel"><h4>Liste des formateurs de cette formation</h4><div class="acdc-table-wrap"><table class="acdc-table"><thead><tr><th>Formateur</th><th>Type</th><th>Taux horaire (HT)</th><th>BPF</th></tr></thead><tbody>
+              <?php if ( empty( $bpf_trainers ) ) : ?>
+                <tr><td colspan="4"><?php $this->render_empty_table_state( 'Aucun formateur rattaché aux sessions de cette formation sur la période.' ); ?></td></tr>
+              <?php else : foreach ( $bpf_trainers as $t ) :
+                // ACDC 3.25.118
+                $t_name = trim( (string) ( $t->first_name ?? '' ) . ' ' . (string) ( $t->last_name ?? '' ) );
+                if ( '' === $t_name ) { $t_name = '—'; }
+                $t_type = ( (int) ( $t->is_self_trainer ?? 0 ) === 1 ) ? 'Interne (salarié)' : 'Externe (sous-traitant)';
+                $t_taux = ( (int) ( $t->is_self_trainer ?? 0 ) === 0 && null !== $t->taux_ht ) ? $bpf_fmt_eur( $t->taux_ht ) . '/h' : '—';
+                $t_bpf  = ( (int) ( $formation->include_bpf ?? 0 ) === 1 ) ? 'Oui' : 'Non';
+              ?>
+                <tr>
+                  <td><?php echo esc_html( $t_name ); ?></td>
+                  <td><?php echo esc_html( $t_type ); ?></td>
+                  <td><?php echo esc_html( $t_taux ); ?></td>
+                  <td><?php echo esc_html( $t_bpf ); ?></td>
+                </tr>
+              <?php endforeach; endif; ?>
+            </tbody></table></div></div>
           </div>
         </details>
       <?php endforeach; ?>

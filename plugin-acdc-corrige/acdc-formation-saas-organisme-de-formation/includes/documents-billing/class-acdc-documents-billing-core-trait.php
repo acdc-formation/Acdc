@@ -492,6 +492,31 @@ trait ACDC_Documents_Billing_Core_Trait {
     );
   }
 
+  /* ---------------------------------------------------------------
+   * ACDC 3.25.118 — Passage automatique en retard des factures impayées
+   * Callback du cron quotidien `acdc_of_invoices_overdue_cron` (récurrence daily,
+   * planté dans maybe_repair_runtime_state, câblé dans plugin.php).
+   * Passe en `en_retard` les factures status IN ('emise','envoyee') dont la
+   * due_date est strictement antérieure à aujourd'hui (comparaison en heure WP,
+   * PAS NOW()). Idempotent (ne retouche pas payee/litige/avoir/en_retard).
+   * --------------------------------------------------------------- */
+  public function process_invoices_overdue_cron() {
+    if ( $this->is_documents_billing_demo_enabled() ) { return; } // ACDC 3.25.118 — garde démo.
+    if ( empty( $this->invoice_table ) ) { return; }
+    global $wpdb;
+    $today = wp_date( 'Y-m-d' ); // Date « aujourd'hui » en fuseau WordPress.
+    $now   = current_time( 'mysql' );
+    $wpdb->query( $wpdb->prepare(
+      "UPDATE {$this->invoice_table}
+         SET status = 'en_retard', updated_at = %s
+       WHERE status IN ( 'emise', 'envoyee' )
+         AND due_date IS NOT NULL
+         AND due_date < %s",
+      $now,
+      $today
+    ) );
+  }
+
   private function get_invoice_status_key( $status ) {
     $map = array(
       'emise'     => 'draft',

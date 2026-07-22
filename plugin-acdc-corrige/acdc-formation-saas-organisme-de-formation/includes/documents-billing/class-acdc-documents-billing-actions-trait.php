@@ -594,6 +594,131 @@ trait ACDC_Documents_Billing_Actions_Trait {
     exit;
   }
 
+  /* ---------------------------------------------------------------
+   * ACDC 3.25.118 — Relancer une facture impayée
+   * Action : admin_post_acdc_relance_invoice (POST + nonce)
+   * Calqué sur handle_mark_invoice_paid()/handle_send_invoice_email().
+   * Colonnes écrites : relance_count (+1), last_relance_at, updated_at.
+   * Envoie un e-mail de relance via acdc_send_transactional_email().
+   * --------------------------------------------------------------- */
+  public function handle_relance_invoice() {
+    if ( ! current_user_can( 'manage_options' ) ) { wp_die( 'Accès refusé.' ); } // ACDC 3.25.118
+    $invoice_id = isset( $_POST['invoice_id'] ) ? absint( $_POST['invoice_id'] ) : 0;
+    if ( ! $invoice_id || ! check_admin_referer( 'acdc_relance_invoice_' . $invoice_id ) ) { wp_die( 'Action invalide.' ); }
+    if ( $this->is_documents_billing_demo_enabled() ) {
+      $this->redirect_to_portal( 'invoices_credit_notes', 'Activez la facturation réelle dans les Réglages avant de relancer des factures.', 'error' );
+    }
+    global $wpdb;
+    $inv = $this->get_invoice( $invoice_id );
+    if ( ! $inv ) { $this->redirect_to_portal( 'invoices_credit_notes', 'Facture introuvable.', 'error' ); }
+    $scope = (string) $inv->scope;
+
+    /* Une relance ne concerne qu'une facture émise/envoyée/en retard (impayée). */
+    if ( ! in_array( (string) $inv->status, array( 'emise', 'envoyee', 'en_retard' ), true ) ) {
+      $redirect = $this->portal_page_url( array( 'tab' => 'invoices_credit_notes', 'scope' => $scope, 'invoice_action' => 'view', 'invoice_id' => $invoice_id ) );
+      wp_safe_redirect( add_query_arg( array( 'notice' => rawurlencode( 'Relance impossible : cette facture n\'est pas en attente de paiement.' ), 'notice_type' => 'error' ), $redirect ) );
+      exit;
+    }
+
+    $email = sanitize_email( (string) $inv->apprenant_email );
+    if ( ! $email || ! is_email( $email ) ) {
+      $redirect = $this->portal_page_url( array( 'tab' => 'invoices_credit_notes', 'scope' => $scope, 'invoice_action' => 'view', 'invoice_id' => $invoice_id ) );
+      wp_safe_redirect( add_query_arg( array( 'notice' => rawurlencode( 'Relance impossible : aucun email renseigné sur cette facture.' ), 'notice_type' => 'error' ), $redirect ) );
+      exit;
+    }
+
+    $row       = $this->build_invoice_row_from_record( $inv );
+    $branding  = $this->get_branding_options();
+    $org_name  = $branding['company_name'] ?? 'ACDC Formation';
+    $formation = $row['formation'] ?: 'Votre formation';
+    $recipient = $row['apprenant'] ?: $row['client_company'];
+
+    $cta = '';
+    if ( ! empty( $inv->html_url ) ) {
+      $cta = '<p style="text-align:center;margin:28px 0;">'
+        . '<a href="' . esc_url( (string) $inv->html_url ) . '" style="display:inline-block;background:#d6a353;color:#0f2c52;font-weight:800;font-size:16px;text-decoration:none;padding:14px 32px;border-radius:10px;">'
+        . '&#128196;&nbsp; Consulter votre facture'
+        . '</a></p>';
+    }
+
+    $subject = 'Relance — Facture ' . $row['number'] . ' — ' . $org_name;
+
+    $sent = $this->acdc_send_transactional_email( $email, $subject, array(
+      'title'    => 'Relance de paiement',
+      'intro'    => 'Bonjour ' . esc_html( $recipient ) . ',<br><br>Sauf erreur de notre part, votre facture <strong>' . esc_html( $row['number'] ) . '</strong> pour la formation <strong>' . esc_html( $formation ) . '</strong>'
+        . ( ! empty( $row['due_date'] ) ? ' (échéance du ' . esc_html( $row['due_date'] ) . ')' : '' )
+        . ' demeure impayée à ce jour. Nous vous remercions de bien vouloir procéder à son règlement dans les meilleurs délais.',
+      'cta_html' => $cta,
+      'footer'   => 'Si votre règlement a déjà été effectué, merci de ne pas tenir compte de ce message. Pour toute question, contactez-nous à <a href="mailto:' . esc_attr( $branding['email'] ?? '' ) . '">' . esc_html( $branding['email'] ?? '' ) . '</a>.',
+    ), array( 'from_name' => $org_name, 'from_email' => $branding['email'] ?? '' ) );
+
+    if ( $sent ) {
+      $now = current_time( 'mysql' );
+      $wpdb->update( $this->invoice_table, array(
+        'relance_count'  => (int) $inv->relance_count + 1,
+        'last_relance_at' => $now,
+        'updated_at'     => $now,
+      ), array( 'id' => $invoice_id ) );
+    }
+
+    $msg  = $sent ? 'Relance envoyée par email.' : 'Relance impossible — vérifiez la configuration email.';
+    $type = $sent ? 'success' : 'error';
+    $redirect = $this->portal_page_url( array( 'tab' => 'invoices_credit_notes', 'scope' => $scope, 'invoice_action' => 'view', 'invoice_id' => $invoice_id ) );
+    wp_safe_redirect( add_query_arg( array( 'notice' => rawurlencode( $msg ), 'notice_type' => $type ), $redirect ) );
+    exit;
+  }
+
+  /* ---------------------------------------------------------------
+   * ACDC 3.25.118 — Émettre un AVOIR persistant sur une facture
+   * Action : admin_post_acdc_emit_credit_note (POST + nonce)
+   * Réserve un numéro AV-{année}- SANS TROU via reserve_next_document_number()
+   * sous verrou GET_LOCK (séquence distincte de FA-). Colonnes écrites :
+   * credit_note_number, credit_note_date (today), credit_note_reason, status='avoir'.
+   * Refuse si un avoir existe déjà (credit_note_number non vide).
+   * --------------------------------------------------------------- */
+  public function handle_emit_credit_note() {
+    if ( ! current_user_can( 'manage_options' ) ) { wp_die( 'Accès refusé.' ); } // ACDC 3.25.118
+    $invoice_id = isset( $_POST['invoice_id'] ) ? absint( $_POST['invoice_id'] ) : 0;
+    if ( ! $invoice_id || ! check_admin_referer( 'acdc_emit_credit_note_' . $invoice_id ) ) { wp_die( 'Action invalide.' ); }
+    if ( $this->is_documents_billing_demo_enabled() ) {
+      $this->redirect_to_portal( 'invoices_credit_notes', 'Activez la facturation réelle dans les Réglages avant d\'émettre des avoirs.', 'error' );
+    }
+    global $wpdb;
+    $inv = $this->get_invoice( $invoice_id );
+    if ( ! $inv ) { $this->redirect_to_portal( 'invoices_credit_notes', 'Facture introuvable.', 'error' ); }
+    $scope = (string) $inv->scope;
+
+    /* Garde anti double-avoir : un numéro d'avoir déjà attribué est définitif. */
+    if ( ! empty( $inv->credit_note_number ) ) {
+      $redirect = $this->portal_page_url( array( 'tab' => 'invoices_credit_notes', 'scope' => $scope, 'invoice_action' => 'view', 'invoice_id' => $invoice_id ) );
+      wp_safe_redirect( add_query_arg( array( 'notice' => rawurlencode( 'Un avoir existe déjà pour cette facture (' . $inv->credit_note_number . ').' ), 'notice_type' => 'info' ), $redirect ) );
+      exit;
+    }
+
+    $reason = isset( $_POST['credit_note_reason'] ) ? sanitize_textarea_field( wp_unslash( $_POST['credit_note_reason'] ) ) : '';
+
+    /* Numérotation atomique de l'avoir : verrou nommé + réservation persistée SANS TROU.
+       Préfixe AV-{année}- => séquence distincte de FA- (compteur monotone dédié). */
+    $lock_name = 'acdc_of_credit_note_num_' . $wpdb->prefix;
+    $has_lock  = (int) $wpdb->get_var( $wpdb->prepare( 'SELECT GET_LOCK(%s, 5)', $lock_name ) );
+    $cn_number = $this->reserve_next_document_number( 'AV-' . (int) wp_date( 'Y' ) . '-', $this->invoice_table );
+    $now       = current_time( 'mysql' );
+    $wpdb->update( $this->invoice_table, array(
+      'credit_note_number' => $cn_number,
+      'credit_note_date'   => wp_date( 'Y-m-d' ),
+      'credit_note_reason' => $reason,
+      'status'             => 'avoir',
+      'updated_at'         => $now,
+    ), array( 'id' => $invoice_id ) );
+    if ( $has_lock ) {
+      $wpdb->query( $wpdb->prepare( 'SELECT RELEASE_LOCK(%s)', $lock_name ) );
+    }
+
+    $redirect = $this->portal_page_url( array( 'tab' => 'invoices_credit_notes', 'scope' => $scope, 'invoice_action' => 'view', 'invoice_id' => $invoice_id ) );
+    wp_safe_redirect( add_query_arg( array( 'notice' => rawurlencode( 'Avoir ' . $cn_number . ' émis.' ), 'notice_type' => 'success' ), $redirect ) );
+    exit;
+  }
+
   public function handle_save_document() {
     $this->require_admin_manager_nonce( 'acdc_save_document' );
 

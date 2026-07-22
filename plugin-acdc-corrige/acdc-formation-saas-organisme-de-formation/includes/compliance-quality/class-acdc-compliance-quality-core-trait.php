@@ -73,6 +73,90 @@ trait ACDC_Compliance_Quality_Core_Trait {
   }
 
 
+  // ACDC 3.25.118 — Détail BPF par formation : actions de formation (conventions) sur la période
+  /**
+   * Retourne les actions de formation (conventions/contrats d'inscription) rattachées à une
+   * formation donnée sur la période d'exercice. Source : table registration_contracts, jointe
+   * aux sociétés commanditaires. Chaque ligne = une action commandée (une convention).
+   *
+   * @param int    $formation_id ID de la formation catalogue.
+   * @param string $start_sql    Début période AAAA-MM-JJ.
+   * @param string $end_sql      Fin période AAAA-MM-JJ.
+   * @return array Objets ligne registration_contracts (+ company_name).
+   */
+  private function get_bpf_formation_actions( $formation_id, $start_sql, $end_sql ) {
+    global $wpdb;
+    $formation_id = (int) $formation_id;
+    if ( $formation_id <= 0 || ! $start_sql || ! $end_sql ) { return array(); }
+    if ( ! property_exists( $this, 'registration_contract_table' ) ) { return array(); }
+    $rc = $this->registration_contract_table;
+    if ( $wpdb->get_var( "SHOW TABLES LIKE '{$rc}'" ) !== $rc ) { return array(); }
+    return (array) $wpdb->get_results( $wpdb->prepare(
+      "SELECT rc.*, c.name AS company_name
+         FROM {$rc} rc
+         LEFT JOIN {$this->company_table} c ON c.id = rc.company_id
+        WHERE rc.formation_id = %d
+          AND COALESCE(rc.start_date, rc.end_date) BETWEEN %s AND %s
+        ORDER BY COALESCE(rc.start_date, rc.end_date) ASC",
+      $formation_id, $start_sql, $end_sql
+    ) );
+  }
+
+
+  // ACDC 3.25.118 — Détail BPF par formation : formateurs intervenant sur les sessions de la période
+  /**
+   * Retourne les formateurs distincts intervenus sur les sessions d'une formation sur la période.
+   * Source : sessions.trainer_id → trainer_table. Le taux horaire HT des formateurs externes est
+   * complété depuis trainer_contracts (matché sur la référence de formation) lorsqu'il est connu ;
+   * sinon laissé à null (affiché « — ») pour ne rien inventer.
+   *
+   * @param int    $formation_id    ID de la formation catalogue.
+   * @param string $start_sql       Début période AAAA-MM-JJ.
+   * @param string $end_sql         Fin période AAAA-MM-JJ.
+   * @param string $formation_title Titre de la formation (pour matcher trainer_contracts.formation_ref).
+   * @param string $formation_code  Code de la formation (idem).
+   * @return array Objets formateur (id, first_name, last_name, is_self_trainer, taux_ht|null).
+   */
+  private function get_bpf_formation_trainers( $formation_id, $start_sql, $end_sql, $formation_title = '', $formation_code = '' ) {
+    global $wpdb;
+    $formation_id = (int) $formation_id;
+    if ( $formation_id <= 0 || ! $start_sql || ! $end_sql ) { return array(); }
+    $trainers = (array) $wpdb->get_results( $wpdb->prepare(
+      "SELECT DISTINCT t.id, t.first_name, t.last_name, t.is_self_trainer
+         FROM {$this->trainer_table} t
+         INNER JOIN {$this->session_table} s ON s.trainer_id = t.id
+        WHERE s.formation_id = %d
+          AND s.is_draft = 0
+          AND COALESCE(s.status,'') NOT IN ('Annulee','Brouillon')
+          AND COALESCE(s.start_date, DATE(s.start_at)) BETWEEN %s AND %s
+        ORDER BY t.last_name ASC, t.first_name ASC",
+      $formation_id, $start_sql, $end_sql
+    ) );
+    $tc = property_exists( $this, 'trainer_contract_table' ) ? $this->trainer_contract_table : $wpdb->prefix . 'acdc_of_trainer_contracts';
+    $tc_exists = $wpdb->get_var( "SHOW TABLES LIKE '{$tc}'" ) === $tc;
+    $ftitle = (string) $formation_title;
+    $fcode  = (string) $formation_code;
+    foreach ( $trainers as $t ) {
+      $t->taux_ht = null; // null = inconnu → affiché « — » (jamais 0 trompeur)
+      if ( 0 === (int) $t->is_self_trainer && $tc_exists ) {
+        $taux = $wpdb->get_var( $wpdb->prepare(
+          "SELECT taux_ht FROM {$tc}
+            WHERE trainer_id = %d AND taux_ht > 0
+              AND COALESCE(date_start, date_end) BETWEEN %s AND %s
+              AND ( formation_ref = %s OR ( %s <> '' AND formation_ref = %s ) OR ( %s <> '' AND formation_ref LIKE %s ) )
+            ORDER BY date_start DESC LIMIT 1",
+          (int) $t->id, $start_sql, $end_sql,
+          $ftitle,
+          $fcode, $fcode,
+          $ftitle, '%' . $wpdb->esc_like( $ftitle ) . '%'
+        ) );
+        if ( null !== $taux ) { $t->taux_ht = (float) $taux; }
+      }
+    }
+    return $trainers;
+  }
+
+
   /**
    * ACDC 3.21.76 — Purge one-shot des titres "BPF ANDREA FORMATION" en BDD.
    */

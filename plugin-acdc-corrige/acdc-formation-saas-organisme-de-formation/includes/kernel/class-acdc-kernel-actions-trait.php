@@ -4197,6 +4197,7 @@ public function handle_purge_plugin_data() {
     wp_clear_scheduled_hook( 'acdc_of_cron_push_indicators' );
     wp_clear_scheduled_hook( 'acdc_of_cron_sync_formations' );
     wp_clear_scheduled_hook( 'acdc_of_absence_alert_cron' );
+    wp_clear_scheduled_hook( 'acdc_of_invoices_overdue_cron' ); // ACDC 3.25.118
     wp_clear_scheduled_hook( 'acdc_of_session_close_cron' );
     wp_clear_scheduled_hook( 'acdc_of_convocation_cron' );
     wp_clear_scheduled_hook( 'acdc_of_positioning_test_cron' );

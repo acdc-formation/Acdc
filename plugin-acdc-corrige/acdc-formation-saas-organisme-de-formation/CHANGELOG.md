@@ -4,6 +4,24 @@ Toutes les modifications notables de ce projet sont documentées ici.
 Format inspiré de [Keep a Changelog](https://keepachangelog.com/fr/1.1.0/).
 L'historique détaillé antérieur est archivé dans [`release-notes/`](release-notes/).
 
+## [3.25.118] — 2026-07-22
+
+### Ajouté (chantiers différés — aval facturation & BPF)
+- **Relance d'impayés** : bouton/handler « Relancer » (e-mail + compteur `relance_count`/`last_relance_at`)
+  sur les factures émises/envoyées/en retard, + **cron quotidien** qui passe automatiquement en
+  `en_retard` les factures dont l'échéance (`due_date`) est dépassée (comparaison en heure WP).
+- **Avoir persistant** : bouton/handler « Émettre un avoir » — numéro `AV-{année}-` **séquentiel sans
+  trou** (verrou + compteur monotone), statut `avoir`, motif, garde anti double-avoir ; le
+  téléchargement utilise le numéro persisté.
+- **BPF — tableaux « Liste des actions / Liste des formateurs »** : désormais **peuplés depuis les
+  vraies données** (conventions/contrats pour les actions ; formateurs des sessions sur la période),
+  avec un **état vide explicite** au lieu d'un placeholder muet. Colonnes conformes aux en-têtes ; les
+  cadres BPF existants (E/F1/C/D) sont inchangés.
+
+_Différé (note de conception livrée, non implémenté pour ne pas risquer la preuve de présence) :
+émargement PAR SÉANCE — nécessite une intervention coordonnée (core + PDF + e-mail + UI portail +
+audit/ZIP) avec `seance_index` rétro-compatible ; à réaliser en un lot validé._
+
 ## [3.25.117] — 2026-07-22
 
 ### Corrigé / ajouté (suite audit workflows)

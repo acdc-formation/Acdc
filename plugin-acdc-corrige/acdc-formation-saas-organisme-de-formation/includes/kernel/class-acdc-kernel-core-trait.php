@@ -393,6 +393,10 @@ private function acdc_send_transactional_email( $to, $subject, $template_args = 
     if ( $this->maybe_schedule_runtime_hook( 'acdc_of_absence_alert_cron', 'daily', 2700 ) ) {
       $repaired[] = 'Planification alerte absences restaurée';
     }
+    // ACDC 3.25.118 — passage automatique des factures impayées en retard (quotidien).
+    if ( $this->maybe_schedule_runtime_hook( 'acdc_of_invoices_overdue_cron', 'daily', 3000 ) ) {
+      $repaired[] = 'Planification passage factures en retard restaurée';
+    }
 
     if ( ! empty( $repaired ) ) {
       if ( method_exists( $this, 'log_error' ) ) {

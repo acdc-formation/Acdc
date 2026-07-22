@@ -565,6 +565,9 @@ class ACDC_Formation_SAAS_Plugin {
     add_action( 'admin_post_acdc_mark_invoice_paid',        array( $this, 'handle_mark_invoice_paid' ) );
     add_action( 'admin_post_acdc_send_invoice_email',       array( $this, 'handle_send_invoice_email' ) );
     add_action( 'admin_post_acdc_download_credit_note_document', array( $this, 'handle_download_credit_note_document' ) );
+    // ACDC 3.25.118 — Aval facturation : relance impayés + émission d'avoir persistant.
+    add_action( 'admin_post_acdc_relance_invoice',          array( $this, 'handle_relance_invoice' ) );
+    add_action( 'admin_post_acdc_emit_credit_note',         array( $this, 'handle_emit_credit_note' ) );
     add_action( 'admin_post_acdc_marketing_save_entity', array( $this, 'handle_marketing_save_entity' ) );
     add_action( 'admin_post_acdc_marketing_delete_entity', array( $this, 'handle_marketing_delete_entity' ) );
     add_action( 'admin_post_acdc_marketing_save_settings', array( $this, 'handle_marketing_save_settings' ) );
@@ -643,6 +646,8 @@ class ACDC_Formation_SAAS_Plugin {
     add_action( 'acdc_of_positioning_test_cron', array( $this, 'process_positioning_test_cron' ) );
     /* ACDC 3.24.12 — R-12 : Cron alerte absences / ruptures de parcours (indicateur 12 Qualiopi). */
     add_action( 'acdc_of_absence_alert_cron', array( $this, 'process_absence_alert_cron' ) );
+    // ACDC 3.25.118 — Cron quotidien : passage automatique des factures impayées en retard.
+    add_action( 'acdc_of_invoices_overdue_cron', array( $this, 'process_invoices_overdue_cron' ) );
     /* ACDC 3.23.11 — Crons veille IA. */
     add_action( 'acdc_of_watch_collect_cron',  array( $this, 'process_watch_collect_cron' ) );
     add_action( 'acdc_of_watch_analyze_cron',  array( $this, 'process_watch_analyze_cron' ) );

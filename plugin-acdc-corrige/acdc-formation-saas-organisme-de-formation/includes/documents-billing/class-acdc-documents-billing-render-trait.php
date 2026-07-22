@@ -833,7 +833,34 @@ trait ACDC_Documents_Billing_Render_Trait {
       <?php if ( 'payee' !== (string) $row['status'] ) : ?>
       <button type="button" class="acdc-button acdc-button-primary" data-acdc-modal-open="acdc-status-invoice-modal">✅ Marquer payée</button>
       <?php endif; ?>
+      <?php // ACDC 3.25.118 — Relancer une facture impayée (emise/envoyee/en_retard). ?>
+      <?php if ( in_array( (string) $row['status'], array( 'emise', 'envoyee', 'en_retard' ), true ) ) : ?>
+      <form method="post" action="<?php echo esc_url( admin_url( 'admin-post.php' ) ); ?>" style="display:inline;">
+        <?php wp_nonce_field( 'acdc_relance_invoice_' . (int) $row['id'] ); ?>
+        <input type="hidden" name="action" value="acdc_relance_invoice">
+        <input type="hidden" name="invoice_id" value="<?php echo esc_attr( (int) $row['id'] ); ?>">
+        <button type="submit" class="acdc-button acdc-button-soft" onclick="return confirm('Envoyer une relance de paiement par e-mail ?');">🔔 Relancer<?php echo ( (int) $row['relance_count'] > 0 ) ? ' (' . (int) $row['relance_count'] . ')' : ''; ?></button>
+      </form>
+      <?php endif; ?>
+      <?php // ACDC 3.25.118 — Télécharger l'avoir déjà émis (numéro persisté). ?>
+      <?php if ( ! empty( $row['credit_note_number'] ) ) : ?>
+      <a href="<?php echo esc_url( $this->secure_admin_post_url( 'acdc_download_credit_note_document', array( 'invoice_id' => (int) $row['id'], 'scope' => $scope ), 'acdc_download_credit_note_document_' . (int) $row['id'] ) ); ?>" class="acdc-button acdc-button-soft">📄 Avoir <?php echo esc_html( $row['credit_note_number'] ); ?></a>
+      <?php endif; ?>
     </div>
+    <?php // ACDC 3.25.118 — Émettre un avoir persistant (si pas déjà d'avoir et statut != 'avoir'). ?>
+    <?php if ( empty( $row['credit_note_number'] ) && 'avoir' !== (string) $row['status'] ) : ?>
+    <div class="acdc-panel acdc-profile-section" style="margin-top:14px;">
+      <h3>Émettre un avoir</h3>
+      <form method="post" action="<?php echo esc_url( admin_url( 'admin-post.php' ) ); ?>">
+        <?php wp_nonce_field( 'acdc_emit_credit_note_' . (int) $row['id'] ); ?>
+        <input type="hidden" name="action" value="acdc_emit_credit_note">
+        <input type="hidden" name="invoice_id" value="<?php echo esc_attr( (int) $row['id'] ); ?>">
+        <p><label for="acdc-cn-reason-<?php echo esc_attr( (int) $row['id'] ); ?>">Motif de l'avoir (facultatif)</label>
+          <textarea id="acdc-cn-reason-<?php echo esc_attr( (int) $row['id'] ); ?>" name="credit_note_reason" rows="3" placeholder="Ex : annulation, geste commercial…"></textarea></p>
+        <p class="acdc-actions-end"><button type="submit" class="acdc-button acdc-button-primary" onclick="return confirm('Émettre un avoir pour cette facture ? Cette action est définitive.');">Émettre un avoir</button></p>
+      </form>
+    </div>
+    <?php endif; ?>
     <?php
       // ACDC 3.25.116 — modales réelles rendues avec le contexte facture courant.
       $this->render_invoice_email_modal( (int) $row['id'], $scope, (string) ( $row['apprenant_email'] ?? '' ) );

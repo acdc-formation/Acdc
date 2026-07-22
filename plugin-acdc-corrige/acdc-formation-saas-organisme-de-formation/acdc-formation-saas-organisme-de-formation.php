@@ -3,7 +3,7 @@
  * Plugin Name: ACDC Formation SAAS Organisme de formation
  * Plugin URI: https://acdc-formation.com/
  * Description: Espace de gestion frontal sécurisé pour organisme de formation, réécrit sur base (dernière version du plugin : 3.20.105) avec module UI/Design système : réglage avancé des icônes d’action, taille, couleurs, espacements et choix des pictogrammes.
- * Version: 3.25.117
+ * Version: 3.25.118
  * Requires at least: 6.2
  * Requires PHP: 8.2
  * Author: ACDC Formation
@@ -15,7 +15,7 @@ if ( ! defined( 'ABSPATH' ) ) {
     exit;
 }
 
-define( 'ACDC_OF_SAAS_VERSION', '3.25.117' );
+define( 'ACDC_OF_SAAS_VERSION', '3.25.118' );
 define( 'ACDC_OF_SAAS_FILE', __FILE__ );
 define( 'ACDC_OF_SAAS_DIR', plugin_dir_path( __FILE__ ) );
 define( 'ACDC_OF_SAAS_URL', plugin_dir_url( __FILE__ ) );
@@ -448,6 +448,7 @@ if ( ! function_exists( 'acdc_of_saas_safe_deactivate' ) ) {
                 wp_clear_scheduled_hook( 'acdc_of_cron_push_indicators' );
                 wp_clear_scheduled_hook( 'acdc_of_cron_sync_formations' );
                 wp_clear_scheduled_hook( 'acdc_of_absence_alert_cron' );
+                wp_clear_scheduled_hook( 'acdc_of_invoices_overdue_cron' ); // ACDC 3.25.118
                 wp_clear_scheduled_hook( 'acdc_of_session_close_cron' );
                 wp_clear_scheduled_hook( 'acdc_of_convocation_cron' );
                 wp_clear_scheduled_hook( 'acdc_of_positioning_test_cron' );
