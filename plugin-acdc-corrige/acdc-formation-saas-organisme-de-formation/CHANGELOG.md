@@ -4,6 +4,16 @@ Toutes les modifications notables de ce projet sont documentées ici.
 Format inspiré de [Keep a Changelog](https://keepachangelog.com/fr/1.1.0/).
 L'historique détaillé antérieur est archivé dans [`release-notes/`](release-notes/).
 
+## [3.25.109] — 2026-07-22
+
+### Corrigé
+- Compatibilité PHP : déclaration de `Requires PHP: 8.2` (en-tête) et `"php": ">=8.2"`
+  (composer) — le plugin utilise des constantes de trait (PHP 8.2+). L'ancien `>=7.4`
+  était erroné (fatal sur PHP < 8.2).
+- `composer.json` : nom de paquet dev corrigé `szepeweb/` → `szepeviktor/phpstan-wordpress`
+  (le paquet erroné faisait échouer `composer install` / la CI).
+- Matrices CI alignées PHP 8.2/8.3 ; phpcs testVersion 8.2-.
+
 ## [3.25.108] — 2026-07-22
 
 ### Ajouté

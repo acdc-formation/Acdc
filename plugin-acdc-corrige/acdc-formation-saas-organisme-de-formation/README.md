@@ -7,7 +7,7 @@ avoirs), conformité qualité (BPF/Cerfa, indicateurs Qualiopi), émargement num
 signature électronique OTP, portails apprenant & formateur, veille réglementaire IA.
 
 - **Version** : 3.25.103
-- **PHP requis** : 7.4+
+- **PHP requis** : 8.2+
 - **WordPress** : 6.2+
 - **Licence** : GPL-2.0-or-later
 - **Text domain** : `acdc-formation-saas`
