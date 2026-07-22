@@ -5,6 +5,11 @@ on:
     branches: [ "**" ]
   pull_request:
 
+# Annule les exécutions obsolètes d'une même branche/PR (économie de runners).
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
 defaults:
   run:
     working-directory: plugin-acdc-corrige/acdc-formation-saas-organisme-de-formation
@@ -14,6 +19,7 @@ jobs:
     name: PHP lint (matrice)
     runs-on: ubuntu-latest
     strategy:
+      fail-fast: false
       matrix:
         php: [ '8.2', '8.3', '8.4' ]
     steps:
@@ -35,11 +41,40 @@ jobs:
           php-version: '8.2'
           tools: composer:v2
           coverage: none
+      - name: Cache des dépendances Composer
+        uses: actions/cache@v4
+        with:
+          path: plugin-acdc-corrige/acdc-formation-saas-organisme-de-formation/vendor
+          key: composer-${{ runner.os }}-${{ hashFiles('plugin-acdc-corrige/acdc-formation-saas-organisme-de-formation/composer.json') }}
+          restore-keys: composer-${{ runner.os }}-
       - name: Installer les dépendances
         run: composer install --no-interaction --prefer-dist --no-progress
       - name: PHPUnit
         run: composer test
-      - name: PHPCS (informatif)
-        run: composer phpcs || true
-      - name: PHPStan (informatif)
-        run: composer phpstan || true
+
+  quality:
+    name: Qualité (PHPCS · PHPStan — informatif)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: shivammathur/setup-php@v2
+        with:
+          php-version: '8.2'
+          tools: composer:v2
+          coverage: none
+      - name: Cache des dépendances Composer
+        uses: actions/cache@v4
+        with:
+          path: plugin-acdc-corrige/acdc-formation-saas-organisme-de-formation/vendor
+          key: composer-${{ runner.os }}-${{ hashFiles('plugin-acdc-corrige/acdc-formation-saas-organisme-de-formation/composer.json') }}
+          restore-keys: composer-${{ runner.os }}-
+      - name: Installer les dépendances
+        run: composer install --no-interaction --prefer-dist --no-progress
+      # Informatif tant que la dette de style/typage n'est pas résorbée :
+      # ces étapes restent visibles mais ne bloquent pas la CI (continue-on-error).
+      - name: PHP_CodeSniffer (WPCS)
+        continue-on-error: true
+        run: composer phpcs
+      - name: PHPStan (analyse statique, niveau 4)
+        continue-on-error: true
+        run: composer phpstan
