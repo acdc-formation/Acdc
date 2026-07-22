@@ -146,6 +146,11 @@ trait ACDC_Sessions_Core_Trait {
         $labels = \ACDC\Support\EmargeStatus::deriveLabels( (bool) $emarg, $counts['total'], $counts['signed'], $counts['absent'] );
         $row->learner_signature_label = $labels['signature'];
         $row->presence_status_label = $labels['presence'];
+        // ACDC 3.25.111 — compteurs bruts d'émargement exposés pour le calcul du
+        // taux d'occupation (présents / inscrits) dans les statistiques formateurs.
+        $row->presence_signed_count = (int) $counts['signed'];
+        $row->presence_absent_count = (int) $counts['absent'];
+        $row->presence_total_count  = (int) $counts['total'];
       }
     }
 

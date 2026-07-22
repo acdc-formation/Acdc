@@ -4,6 +4,18 @@ Toutes les modifications notables de ce projet sont documentées ici.
 Format inspiré de [Keep a Changelog](https://keepachangelog.com/fr/1.1.0/).
 L'historique détaillé antérieur est archivé dans [`release-notes/`](release-notes/).
 
+## [3.25.112] — 2026-07-22
+
+### Corrigé (4ᵉ vague — taux d'occupation + émargement)
+- **Taux d'occupation des séances** : calculé réellement en **présents / inscrits** (agrégé
+  depuis l'émargement de chaque séance) au lieu d'afficher 100 % présents en dur.
+- **Émargement — actions formateur** : « Marquer absent » et « Envoyer lien » depuis la page liste
+  publique (accès par lien/QR) fonctionnent enfin pour le formateur non connecté — routées via le
+  flux public et autorisées par le `list_token` (avec vérification d'appartenance de l'apprenant à
+  la séance) au lieu d'exiger `manage_options` (qui provoquait un `wp_die`).
+- **Émargement — calcul du retard** : `late_minutes` calculé en base de temps homogène (UTC réel via
+  `get_gmt_from_date`) — supprime le retard fantôme/masqué dû au mélange de fuseaux serveur/WordPress.
+
 ## [3.25.111] — 2026-07-22
 
 ### Corrigé (3ᵉ vague d'audit — 14 bugs, dont 5 fatals)

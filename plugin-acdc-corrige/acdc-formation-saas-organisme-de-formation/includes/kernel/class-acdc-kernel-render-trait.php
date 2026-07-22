@@ -10094,7 +10094,14 @@ trait ACDC_Kernel_Render_Trait {
       if ( $start && $end && $end > $start ) {
         $total_seconds += ( $end - $start );
       }
-      $presence_counts['Présent']++;
+      // ACDC 3.25.111 — Taux d'occupation réel = présents / inscrits (agrégé depuis
+      // l'émargement de chaque séance) au lieu de compter chaque séance « Présent » en dur.
+      $signed = isset( $item->presence_signed_count ) ? (int) $item->presence_signed_count : 0;
+      $absent = isset( $item->presence_absent_count ) ? (int) $item->presence_absent_count : 0;
+      $enrolled = isset( $item->presence_total_count ) ? (int) $item->presence_total_count : 0;
+      $presence_counts['Présent']    += $signed;
+      $presence_counts['Absent']     += $absent;
+      $presence_counts['En attente'] += max( 0, $enrolled - $signed - $absent );
     }
 
     ksort( $trainer_names );

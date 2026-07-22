@@ -65,6 +65,10 @@ class ACDC_Emarg_Public {
                 $this->process_trainer_sign( $token );
             } elseif ( 'learner_sign' === $action ) {
                 $this->process_learner_sign( $token );
+            } elseif ( 'mark_absent' === $action ) {
+                $this->process_mark_absent( $token );
+            } elseif ( 'send_learner' === $action ) {
+                $this->process_send_learner_link( $token );
             }
             exit;
         }
@@ -155,6 +159,48 @@ class ACDC_Emarg_Public {
             $this->email->send_learner_email( $learner );
         }
         wp_safe_redirect( wp_get_referer() ?: home_url('/') );
+        exit;
+    }
+
+    /* -----------------------------------------------------------------------
+     * Actions formateur depuis la page liste publique (autorisées par le
+     * list_token — le détenteur du lien gère la présence de CETTE séance —
+     * routées via template_redirect pour contourner le WAF LiteSpeed mobile).
+     * ACDC 3.25.111 : corrige l'impossibilité pour le formateur non connecté
+     * de marquer un absent / renvoyer un lien (handlers admin-post exigeaient
+     * manage_options → wp_die).
+     * -------------------------------------------------------------------- */
+    public function process_mark_absent( $list_token = null ) {
+        if ( null === $list_token ) { $list_token = sanitize_text_field( wp_unslash( $_GET['tok'] ?? '' ) ); }
+        $emarg = $list_token ? $this->core->get_by_list_token( $list_token ) : null;
+        if ( ! $emarg ) { wp_die( 'Lien invalide ou expiré.', 403 ); }
+        $learner_row_id = absint( $_POST['learner_row_id'] ?? 0 );
+        check_admin_referer( 'acdc_emarg_absent_' . $learner_row_id );
+        global $wpdb;
+        $learner = $wpdb->get_row( $wpdb->prepare(
+            "SELECT * FROM {$this->core->table_learners} WHERE id = %d", $learner_row_id
+        ) );
+        if ( $learner && (int) $learner->emarg_session_id === (int) $emarg->id ) {
+            $this->core->mark_absent( $learner_row_id );
+        }
+        wp_safe_redirect( $this->core->get_public_url( 'liste', $list_token ) );
+        exit;
+    }
+
+    public function process_send_learner_link( $list_token = null ) {
+        if ( null === $list_token ) { $list_token = sanitize_text_field( wp_unslash( $_GET['tok'] ?? '' ) ); }
+        $emarg = $list_token ? $this->core->get_by_list_token( $list_token ) : null;
+        if ( ! $emarg ) { wp_die( 'Lien invalide ou expiré.', 403 ); }
+        $learner_row_id = absint( $_POST['learner_row_id'] ?? 0 );
+        check_admin_referer( 'acdc_emarg_send_' . $learner_row_id );
+        global $wpdb;
+        $learner = $wpdb->get_row( $wpdb->prepare(
+            "SELECT * FROM {$this->core->table_learners} WHERE id = %d", $learner_row_id
+        ) );
+        if ( $learner && (int) $learner->emarg_session_id === (int) $emarg->id && '' !== $learner->learner_email ) {
+            $this->email->send_learner_email( $learner );
+        }
+        wp_safe_redirect( $this->core->get_public_url( 'liste', $list_token ) . '&emarg_ok=sent' );
         exit;
     }
 
@@ -391,19 +437,19 @@ function initCanvas(canvasId) {
                         <?php if ( ! $is_signed && ! $is_absent ) : ?>
                         <a href="<?php echo esc_url( $sign_url ); ?>" class="learner-sign-btn">Signer</a>
                         <?php if ( $lr->learner_email ) : ?>
-                        <form method="post" action="<?php echo esc_url( admin_url('admin-post.php') ); ?>" style="margin:0">
+                        <form method="post" action="<?php echo esc_url( $this->core->get_public_url( 'liste', $token ) ); ?>" style="margin:0">
                             <?php wp_nonce_field( 'acdc_emarg_send_' . $lr->id ); ?>
-                            <input type="hidden" name="action" value="acdc_emarg_send_learner_email">
+                            <input type="hidden" name="emarg_action" value="send_learner">
                             <input type="hidden" name="learner_row_id" value="<?php echo esc_attr( $lr->id ); ?>">
                             <button type="submit" class="btn btn-soft btn-sm">✉ Envoyer lien</button>
                         </form>
                         <?php endif; ?>
                         <?php endif; ?>
                         <?php if ( ! $is_absent ) : ?>
-                        <form method="post" action="<?php echo esc_url( admin_url('admin-post.php') ); ?>" style="margin:0"
+                        <form method="post" action="<?php echo esc_url( $this->core->get_public_url( 'liste', $token ) ); ?>" style="margin:0"
                               onsubmit="return confirm('Marquer <?php echo esc_js( $lr->learner_name ); ?> comme absent ?')">
                             <?php wp_nonce_field( 'acdc_emarg_absent_' . $lr->id ); ?>
-                            <input type="hidden" name="action" value="acdc_emarg_mark_absent">
+                            <input type="hidden" name="emarg_action" value="mark_absent">
                             <input type="hidden" name="learner_row_id" value="<?php echo esc_attr( $lr->id ); ?>">
                             <button type="submit" class="btn btn-danger btn-sm">Marquer absent</button>
                         </form>

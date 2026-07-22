@@ -276,14 +276,19 @@ class ACDC_Emarg_Core {
         if ( ! $png_result ) { return false; }
 
         $now = current_time( 'mysql' );
+        // ACDC 3.25.111 — calcul du retard en base de temps HOMOGÈNE (UTC réel) : start_at
+        // est stocké en heure locale WP ; get_gmt_from_date() le convertit en timestamp UTC,
+        // comparé à time() (UTC). Évite le décalage d'offset GMT (retard fantôme ou masqué)
+        // qui survenait en mélangeant strtotime() (fuseau serveur) et current_time('timestamp').
         $late_minutes = 0;
-        if ( $session_start_at && ( $session_ts = strtotime( $session_start_at ) ) ) {
-            $now_ts = current_time( 'timestamp' );
-            if ( $now_ts > $session_ts + 900 ) { // > 15 min
-                $late_minutes = (int) round( ( $now_ts - $session_ts ) / 60 );
+        if ( $session_start_at ) {
+            $session_ts = (int) get_gmt_from_date( $session_start_at, 'U' );
+            if ( $session_ts > 0 ) {
+                $now_ts = time();
+                if ( $now_ts > $session_ts + 900 ) { // > 15 min
+                    $late_minutes = (int) round( ( $now_ts - $session_ts ) / 60 );
+                }
             }
-        } else {
-            $late_minutes = 0;
         }
 
         global $wpdb;
