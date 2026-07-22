@@ -4,6 +4,20 @@ Toutes les modifications notables de ce projet sont documentées ici.
 Format inspiré de [Keep a Changelog](https://keepachangelog.com/fr/1.1.0/).
 L'historique détaillé antérieur est archivé dans [`release-notes/`](release-notes/).
 
+## [3.25.114] — 2026-07-22
+
+### Finalisation
+- **Numérotation devis/factures sans trou** — un numéro n'est plus jamais réutilisé après suppression
+  d'un document : compteur monotone persistant par année (`acdc_of_document_number_counters`) combiné
+  au maximum présent en base. Répond à l'exigence de numérotation chronologique continue.
+- **Désinstallation** — nettoyage des options ajoutées par les vagues de correction
+  (`acdc_emarg_db_version`, `acdc_of_document_number_counters`, `acdc_of_watch_deleted_default_ids`,
+  `acdc_of_watch_sources`, `acdc_of_questionnaire_settings`).
+
+_Note : les contrôles d'animation « live » d'un quiz (terminer la session / exclure un participant /
+afficher les résultats) restent disponibles côté serveur mais sans bouton dédié — à câbler lors d'une
+session de test en conditions réelles._
+
 ## [3.25.113] — 2026-07-22
 
 ### Corrigé (5ᵉ vague — 2ᵉ passe d'audit approfondie, 19 correctifs)

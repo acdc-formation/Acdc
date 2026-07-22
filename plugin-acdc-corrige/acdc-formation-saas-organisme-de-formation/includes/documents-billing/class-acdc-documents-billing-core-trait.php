@@ -142,16 +142,31 @@ trait ACDC_Documents_Billing_Core_Trait {
     return $new_id;
   }
 
-  private function get_quote_next_number( $scope = 'action' ) {
+  /**
+   * ACDC 3.25.114 — Numéro séquentiel SANS TROU (pas de réutilisation après suppression).
+   * Combine le MAX présent en base (rétrocompatibilité) avec un compteur persistant monotone
+   * par préfixe (année). Exigence de numérotation chronologique continue (factures/avoirs).
+   * À appeler sous le verrou GET_LOCK déjà en place chez les appelants.
+   */
+  private function reserve_next_document_number( $prefix, $table ) {
     global $wpdb;
-    $year   = (int) wp_date( 'Y' );
-    $prefix = 'DE-' . $year . '-';
-    $max    = (int) $wpdb->get_var( $wpdb->prepare(
-      "SELECT MAX(CAST(SUBSTRING(number, %d) AS UNSIGNED)) FROM {$this->quote_table} WHERE number LIKE %s",
+    $db_max = (int) $wpdb->get_var( $wpdb->prepare(
+      "SELECT MAX(CAST(SUBSTRING(number, %d) AS UNSIGNED)) FROM {$table} WHERE number LIKE %s",
       strlen( $prefix ) + 1,
       $prefix . '%'
     ) );
-    return $prefix . ( $max + 1 );
+    $counters = get_option( 'acdc_of_document_number_counters', array() );
+    if ( ! is_array( $counters ) ) { $counters = array(); }
+    $stored = isset( $counters[ $prefix ] ) ? (int) $counters[ $prefix ] : 0;
+    $next   = max( $db_max, $stored ) + 1;
+    $counters[ $prefix ] = $next;
+    update_option( 'acdc_of_document_number_counters', $counters, false );
+    return $prefix . $next;
+  }
+
+  private function get_quote_next_number( $scope = 'action' ) {
+    $prefix = 'DE-' . (int) wp_date( 'Y' ) . '-';
+    return $this->reserve_next_document_number( $prefix, $this->quote_table );
   }
 
   private function get_quote_status_labels() {
@@ -443,15 +458,8 @@ trait ACDC_Documents_Billing_Core_Trait {
   }
 
   private function get_invoice_next_number() {
-    global $wpdb;
-    $year   = (int) wp_date( 'Y' );
-    $prefix = 'FA-' . $year . '-';
-    $max    = (int) $wpdb->get_var( $wpdb->prepare(
-      "SELECT MAX(CAST(SUBSTRING(number, %d) AS UNSIGNED)) FROM {$this->invoice_table} WHERE number LIKE %s",
-      strlen( $prefix ) + 1,
-      $prefix . '%'
-    ) );
-    return $prefix . ( $max + 1 );
+    $prefix = 'FA-' . (int) wp_date( 'Y' ) . '-';
+    return $this->reserve_next_document_number( $prefix, $this->invoice_table );
   }
 
   private function get_invoice_status_labels() {

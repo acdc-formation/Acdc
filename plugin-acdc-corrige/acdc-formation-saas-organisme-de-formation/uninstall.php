@@ -71,6 +71,12 @@ $options = array(
     'acdc_of_data_protection_level',
     'acdc_of_purge_allowed_in_production',
     'acdc_of_backup_retention_count',
+    // ACDC 3.25.114 — options ajoutées par les vagues de correction.
+    'acdc_emarg_db_version',
+    'acdc_of_document_number_counters',
+    'acdc_of_watch_deleted_default_ids',
+    'acdc_of_watch_sources',
+    'acdc_of_questionnaire_settings',
 );
 
 foreach ( $options as $option_name ) {
