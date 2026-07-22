@@ -4,6 +4,14 @@ Toutes les modifications notables de ce projet sont documentées ici.
 Format inspiré de [Keep a Changelog](https://keepachangelog.com/fr/1.1.0/).
 L'historique détaillé antérieur est archivé dans [`release-notes/`](release-notes/).
 
+## [3.25.115] — 2026-07-22
+
+### Corrigé (régression détectée par la revue finale)
+- **Numérotation devis/factures** : la 3.25.114 réservait le numéro DEUX fois par document (aperçu +
+  insertion sous verrou), ce qui sautait un numéro à chaque création. Séparation d'un aperçu en
+  **lecture seule** (`preview_next_document_number`) et d'une **réservation persistée unique** sous
+  verrou (`reserve_next_document_number`) → numérotation réellement continue, sans trou ni doublon.
+
 ## [3.25.114] — 2026-07-22
 
 ### Finalisation
