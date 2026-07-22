@@ -61,8 +61,19 @@ class ACDC_Emarg_PDF {
         $session_id = absint( $session_id );
         if ( ! $session_id ) { return false; }
 
-        $emarg = $this->core->get_by_session_id( $session_id );
-        if ( ! $emarg || 'signe' !== $emarg->trainer_status ) { return false; }
+        // Émargement par séance : on récupère toutes les feuilles signées de la session.
+        // - 0 feuille signée              → false (identique à aujourd'hui : non signé).
+        // - 1 seule feuille signée        → chemin legacy, sortie STRICTEMENT identique.
+        // - plusieurs feuilles signées    → PDF multi-pages (une feuille par séance).
+        $all_sheets    = $this->core->get_all_by_session_id( $session_id );
+        $signed_sheets = array();
+        foreach ( (array) $all_sheets as $sh ) {
+            if ( 'signe' === $sh->trainer_status ) { $signed_sheets[] = $sh; }
+        }
+        if ( empty( $signed_sheets ) ) { return false; }
+
+        // Feuille primaire (index le plus bas) pour le chemin mono-séance legacy.
+        $emarg = $signed_sheets[0];
 
         global $wpdb;
         $session_table   = $wpdb->prefix . 'acdc_of_sessions';
@@ -121,8 +132,6 @@ class ACDC_Emarg_PDF {
           }
         }
 
-        $learners = $this->core->get_learners_for_emarg( $emarg->id );
-
         $profile  = get_option( 'acdc_of_company_profile', array() );
         $branding = get_option( 'acdc_of_branding', array() );
         $org_name = ! empty( $profile['enterprise'] ) ? $profile['enterprise'] : ( ! empty( $branding['company_name'] ) ? $branding['company_name'] : get_bloginfo('name') );
@@ -133,14 +142,42 @@ class ACDC_Emarg_PDF {
             ! empty( $profile['city'] )        ? $profile['city']        : ( $branding['city']        ?? '' ),
         ) ) ) );
 
-        $pages = $this->build_pages( $emarg, $session, $learners, $org_name, $org_nda, $org_addr );
-        return $this->render_to_string( $pages );
+        $n = count( $signed_sheets );
+
+        // Chemin mono-séance (une seule feuille signée) : sortie STRICTEMENT identique
+        // à l'existant — aucun bandeau séance, aucune surcharge de date.
+        if ( 1 === $n ) {
+            $learners = $this->core->get_learners_for_emarg( $emarg->id );
+            $pages    = $this->build_pages( $emarg, $session, $learners, $org_name, $org_nda, $org_addr );
+            return $this->render_to_string( $pages );
+        }
+
+        // Chemin multi-séances : une page (ou plus) par feuille signée, avec bandeau
+        // « Séance k/N — date ». La date de séance provient des métadonnées de la feuille
+        // si disponibles, sinon de la session.
+        $all_pages = array();
+        foreach ( $signed_sheets as $k => $sheet ) {
+            $sess_for_sheet = clone $session;
+            if ( ! empty( $sheet->seance_start_at ) ) {
+                $sess_for_sheet->start_at = $sheet->seance_start_at;
+                $sess_for_sheet->end_at   = ! empty( $sheet->seance_end_at ) ? $sheet->seance_end_at : $sess_for_sheet->end_at;
+            }
+            $seance_label = ! empty( $sheet->seance_label )
+                ? $sheet->seance_label
+                : sprintf( 'Séance %d/%d', (int) $k + 1, $n );
+            $learners  = $this->core->get_learners_for_emarg( $sheet->id );
+            $all_pages = array_merge(
+                $all_pages,
+                $this->build_pages( $sheet, $sess_for_sheet, $learners, $org_name, $org_nda, $org_addr, $seance_label )
+            );
+        }
+        return $this->render_to_string( $all_pages );
     }
 
     /* -----------------------------------------------------------------------
      * Construction des pages
      * -------------------------------------------------------------------- */
-    private function build_pages( $emarg, $session, $learners, $org_name, $org_nda, $org_addr ) {
+    private function build_pages( $emarg, $session, $learners, $org_name, $org_nda, $org_addr, $seance_label = '' ) {
         $lines = array();
         $pw = self::PW;
         $ph = self::PH;
@@ -162,6 +199,16 @@ class ACDC_Emarg_PDF {
         $lines[] = array( 'type' => 'text', 'text' => $gen_date, 'font' => 'Helvetica', 'size' => 8, 'color' => '#aabbd0', 'x' => $ml + $cw - 160, 'y' => $header_y + 20 );
 
         $y = $header_y - 20;
+
+        /* ---- Bandeau séance (uniquement en multi-séances) ----
+         * Rendu SEULEMENT si $seance_label est fourni : le cas mono-séance
+         * (label vide) ne pousse aucune ligne → mise en page identique à l'existant. */
+        if ( '' !== (string) $seance_label ) {
+            $seance_bar_h = 16.0;
+            $lines[] = array( 'type' => 'rect', 'x' => $ml, 'y' => $y - $seance_bar_h + 12, 'width' => $cw, 'height' => $seance_bar_h, 'fill_color' => self::GOLD );
+            $lines[] = array( 'type' => 'text', 'text' => $this->truncate( (string) $seance_label, 90 ), 'font' => 'Helvetica-Bold', 'size' => 9, 'color' => self::MARINE, 'x' => $ml + 6, 'y' => $y );
+            $y -= ( $seance_bar_h + 8 );
+        }
 
         /* ---- Section organisme ---- */
         if ( $org_nda || $org_addr ) {

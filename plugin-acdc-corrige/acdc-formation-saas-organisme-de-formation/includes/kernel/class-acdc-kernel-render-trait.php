@@ -10179,17 +10179,25 @@ trait ACDC_Kernel_Render_Trait {
 
     <div class="acdc-panel"><div class="acdc-table-wrap"><table class="acdc-table"><thead><tr><th>Apprenant/Groupe</th><th>Formation</th><th>Formateur</th><th>Type</th><th>Format</th><th>Méthode d’émargement</th><th>Date et heures de la séance</th><th>Lieu</th><th>Signature formateur</th><th>Présence(s) apprenant(s)</th><th></th></tr></thead><tbody>
       <?php
-      // Anti N+1 : préchargement de l'émargement de toutes les séances de la page (2 requêtes).
-      $emarg_by_session_k = array();
-      $emarg_lrns_by_id_k = array();
+      // Anti N+1 : préchargement de l'émargement de toutes les séances de la page.
+      // $emarg_by_session_k = feuille primaire (index 0) par session — INCHANGÉ, utilisé
+      // par le rendu mono-séance existant. $emarg_all_by_session_k = TOUTES les feuilles
+      // par session (émargement par séance). Les apprenants sont préchargés pour toutes
+      // les feuilles (surensemble : le cas mono reste couvert à l'identique).
+      $emarg_by_session_k     = array();
+      $emarg_all_by_session_k = array();
+      $emarg_lrns_by_id_k     = array();
       if ( ! empty( $items ) && class_exists( 'ACDC_Emargement' ) ) {
           $emarg_core_k = ACDC_Emargement::get_instance()->core;
           $sess_ids_k = array();
           foreach ( $items as $item ) { $sess_ids_k[] = (int) $item->id; }
-          $emarg_by_session_k = $emarg_core_k->get_by_session_ids( $sess_ids_k );
-          if ( ! empty( $emarg_by_session_k ) ) {
-              $emarg_ids_k = array();
-              foreach ( $emarg_by_session_k as $em_k ) { $emarg_ids_k[] = (int) $em_k->id; }
+          $emarg_by_session_k     = $emarg_core_k->get_by_session_ids( $sess_ids_k );
+          $emarg_all_by_session_k = $emarg_core_k->get_all_by_session_ids( $sess_ids_k );
+          $emarg_ids_k = array();
+          foreach ( $emarg_all_by_session_k as $sheets_all_k ) {
+              foreach ( $sheets_all_k as $em_k ) { $emarg_ids_k[] = (int) $em_k->id; }
+          }
+          if ( ! empty( $emarg_ids_k ) ) {
               $emarg_lrns_by_id_k = $emarg_core_k->get_learners_for_emarg_ids( $emarg_ids_k );
           }
       }
@@ -10204,6 +10212,21 @@ trait ACDC_Kernel_Render_Trait {
           }
         } elseif ( ! empty( $item->start_date ) ) {
           $date_label = mysql2date( 'd/m/Y', $item->start_date );
+        }
+        // Émargement par séance : nombre de créneaux planifiés (schedule_json).
+        // 0 ou 1 créneau → rendu mono-séance STRICTEMENT identique à l'existant.
+        $slots_k = array();
+        if ( ! empty( $item->schedule_json ) ) {
+          $decoded_slots_k = json_decode( $item->schedule_json, true );
+          if ( is_array( $decoded_slots_k ) ) { $slots_k = array_values( $decoded_slots_k ); }
+        }
+        $n_seances_k = max( 1, count( $slots_k ) );
+        // Feuilles indexées par seance_index pour cette session (multi-séances).
+        $sheets_by_idx_k = array();
+        if ( isset( $emarg_all_by_session_k[ (int) $item->id ] ) ) {
+          foreach ( $emarg_all_by_session_k[ (int) $item->id ] as $sh_k ) {
+            $sheets_by_idx_k[ (int) $sh_k->seance_index ] = $sh_k;
+          }
         }
       ?>
       <tr>
@@ -10220,6 +10243,7 @@ trait ACDC_Kernel_Render_Trait {
         $t_status = $emarg_ses ? $emarg_ses->trainer_status : 'none';
         ?>
         <td>
+          <?php if ( $n_seances_k <= 1 ) : /* ===== MONO-SÉANCE : rendu identique à l'existant ===== */ ?>
           <?php if ( 'signe' === $t_status ) : ?>
             <div style="text-align:center">
               <span class="acdc-status-pill acdc-status-pill-success">Signé</span>
@@ -10240,8 +10264,44 @@ trait ACDC_Kernel_Render_Trait {
           <?php else : ?>
             <span class="acdc-status-pill" style="background:#cfe2ff;color:#084298">En attente</span>
           <?php endif; ?>
+          <?php else : /* ===== MULTI-SÉANCES : une sous-ligne par créneau ===== */ ?>
+          <?php for ( $si_k = 0; $si_k < $n_seances_k; $si_k++ ) :
+            $sheet_k = isset( $sheets_by_idx_k[ $si_k ] ) ? $sheets_by_idx_k[ $si_k ] : null;
+            $st_k    = $sheet_k ? $sheet_k->trainer_status : 'none';
+            $sdate_k = '';
+            if ( isset( $slots_k[ $si_k ] ) ) {
+              $slot_k  = (array) $slots_k[ $si_k ];
+              $sraw_k  = ! empty( $slot_k['start_at'] ) ? $slot_k['start_at'] : ( ! empty( $slot_k['start_date'] ) ? $slot_k['start_date'] : '' );
+              if ( $sraw_k ) { $sdate_k = mysql2date( 'd/m/Y', $sraw_k ); }
+            }
+          ?>
+            <div style="margin-bottom:6px;padding-bottom:6px;<?php echo ( $si_k < $n_seances_k - 1 ) ? 'border-bottom:1px solid #eef1f5' : ''; ?>">
+              <div style="font-size:10px;font-weight:700;color:#1a2744;margin-bottom:3px">Séance <?php echo (int) ( $si_k + 1 ); ?>/<?php echo (int) $n_seances_k; ?><?php echo $sdate_k ? ' — ' . esc_html( $sdate_k ) : ''; ?></div>
+              <?php if ( 'signe' === $st_k ) : ?>
+                <span class="acdc-status-pill acdc-status-pill-success">Signé</span>
+                <?php if ( $sheet_k->trainer_signed_at ) : ?>
+                <span style="font-size:10px;color:#4b5d76;margin-left:4px"><?php echo esc_html( wp_date( 'H\\hi', strtotime( $sheet_k->trainer_signed_at ) ) ); ?></span>
+                <?php endif; ?>
+                <?php if ( $sheet_k->trainer_sig_url ) : ?>
+                <img src="<?php echo esc_url( $sheet_k->trainer_sig_url ); ?>" style="max-width:70px;max-height:30px;display:block;margin:3px 0 0;border:1px solid #e2e6ea;border-radius:4px" alt="Signature">
+                <?php endif; ?>
+              <?php elseif ( 'none' === $st_k || ! $sheet_k ) : ?>
+                <form method="post" action="<?php echo esc_url( admin_url('admin-post.php') ); ?>" style="margin:0">
+                  <?php wp_nonce_field( 'acdc_emarg_send_trainer_' . (int) $item->id . '_' . (int) $si_k ); ?>
+                  <input type="hidden" name="action" value="acdc_emarg_send_trainer">
+                  <input type="hidden" name="session_id" value="<?php echo esc_attr( $item->id ); ?>">
+                  <input type="hidden" name="seance_index" value="<?php echo esc_attr( $si_k ); ?>">
+                  <button type="submit" class="acdc-button acdc-button-soft acdc-button-sm" style="font-size:11px;padding:3px 9px">✉ Envoyer</button>
+                </form>
+              <?php else : ?>
+                <span class="acdc-status-pill" style="background:#cfe2ff;color:#084298">En attente</span>
+              <?php endif; ?>
+            </div>
+          <?php endfor; ?>
+          <?php endif; ?>
         </td>
         <td>
+          <?php if ( $n_seances_k <= 1 ) : /* ===== MONO-SÉANCE : rendu identique à l'existant ===== */ ?>
           <?php
           if ( $emarg_ses ) :
             $emarg_learners = isset( $emarg_lrns_by_id_k[ (int) $emarg_ses->id ] ) ? $emarg_lrns_by_id_k[ (int) $emarg_ses->id ] : array();
@@ -10267,6 +10327,41 @@ trait ACDC_Kernel_Render_Trait {
           <?php endforeach; ?>
           <?php else : ?>
           <a href="<?php echo esc_url( $view_url ); ?>" class="acdc-trainer-sign-link"><?php echo esc_html( ! empty( $item->learner_signature_label ) ? $item->learner_signature_label : 'Voir détails' ); ?></a>
+          <?php endif; ?>
+          <?php else : /* ===== MULTI-SÉANCES : présence par séance ===== */ ?>
+          <?php for ( $si2_k = 0; $si2_k < $n_seances_k; $si2_k++ ) :
+            $sheet2_k = isset( $sheets_by_idx_k[ $si2_k ] ) ? $sheets_by_idx_k[ $si2_k ] : null;
+          ?>
+            <div style="margin-bottom:6px;padding-bottom:6px;<?php echo ( $si2_k < $n_seances_k - 1 ) ? 'border-bottom:1px solid #eef1f5' : ''; ?>">
+              <div style="font-size:10px;font-weight:700;color:#1a2744;margin-bottom:3px">Séance <?php echo (int) ( $si2_k + 1 ); ?>/<?php echo (int) $n_seances_k; ?></div>
+              <?php
+              if ( $sheet2_k ) :
+                $emarg_learners2 = isset( $emarg_lrns_by_id_k[ (int) $sheet2_k->id ] ) ? $emarg_lrns_by_id_k[ (int) $sheet2_k->id ] : array();
+                foreach ( $emarg_learners2 as $el2 ) :
+                  $is_signed2 = 'signe' === $el2->status;
+                  $is_absent2 = 'absent' === $el2->status;
+                  $is_late2   = $is_signed2 && (int) $el2->late_minutes > 0;
+                  if ( $is_absent2 ) { $pill_bg2 = '#f8d7da'; $pill_c2 = '#721c24'; $pill_txt2 = 'Absent'; }
+                  elseif ( $is_late2 ) { $pill_bg2 = '#fff3cd'; $pill_c2 = '#856404'; $pill_txt2 = 'Retard ' . $el2->late_minutes . 'min'; }
+                  elseif ( $is_signed2 ) { $pill_bg2 = '#d4edda'; $pill_c2 = '#155724'; $pill_txt2 = 'Présent'; }
+                  else { $pill_bg2 = '#e2e3e5'; $pill_c2 = '#383d41'; $pill_txt2 = 'En attente'; }
+              ?>
+              <div style="margin-bottom:3px">
+                <span style="font-size:11px;font-weight:600;color:#1a2744"><?php echo esc_html( $el2->learner_name ); ?></span>
+                <span style="display:inline-block;padding:1px 7px;border-radius:10px;font-size:11px;font-weight:700;background:<?php echo esc_attr($pill_bg2); ?>;color:<?php echo esc_attr($pill_c2); ?>;margin-left:4px"><?php echo esc_html( $pill_txt2 ); ?></span>
+                <?php if ( $is_signed2 && $el2->signed_at ) : ?>
+                <span style="font-size:10px;color:#6b7280;margin-left:4px"><?php echo esc_html( wp_date('H\\hi', strtotime($el2->signed_at)) ); ?></span>
+                <?php endif; ?>
+                <?php if ( $is_signed2 && $el2->sig_url ) : ?>
+                <img src="<?php echo esc_url($el2->sig_url); ?>" style="max-width:60px;max-height:26px;vertical-align:middle;margin-left:4px;border:1px solid #e2e6ea;border-radius:3px" alt="">
+                <?php endif; ?>
+              </div>
+              <?php endforeach; ?>
+              <?php else : ?>
+              <span style="font-size:11px;color:#9ba8b5">Séance non déclenchée</span>
+              <?php endif; ?>
+            </div>
+          <?php endfor; ?>
           <?php endif; ?>
         </td>
         <td class="acdc-trainer-eye-col"><a class="acdc-icon-link" href="<?php echo esc_url( $view_url ); ?>"><?php echo $this->render_inline_icon( 'eye', 25 ); ?></a></td>

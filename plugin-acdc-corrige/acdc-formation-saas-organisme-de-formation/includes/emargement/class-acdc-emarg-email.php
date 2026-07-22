@@ -56,6 +56,17 @@ class ACDC_Emarg_Email {
             $date_label = wp_date( 'd/m/Y à H\hi', strtotime( $session->start_at ) );
         }
 
+        // Émargement par séance : n'ajoute un contexte séance QUE pour les créneaux >= 1.
+        // Le cas mono-séance (seance_index = 0) reste STRICTEMENT identique à l'existant.
+        if ( ! empty( $emarg_session->seance_index ) && (int) $emarg_session->seance_index > 0 ) {
+            if ( ! empty( $emarg_session->seance_label ) ) {
+                $session_label = $session_label . ' — ' . $emarg_session->seance_label;
+            }
+            if ( ! empty( $emarg_session->seance_start_at ) ) {
+                $date_label = wp_date( 'd/m/Y à H\hi', strtotime( $emarg_session->seance_start_at ) );
+            }
+        }
+
         $qr_url  = 'https://api.qrserver.com/v1/create-qr-code/?size=200x200&margin=10&data=' . rawurlencode( $sign_url );
 
         $body = '<p>Bonjour <strong>' . esc_html( $emarg_session->trainer_name ) . '</strong>,</p>'

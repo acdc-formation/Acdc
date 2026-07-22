@@ -198,6 +198,9 @@ class ACDC_Audit_Zip {
         if ( ! class_exists( 'ACDC_Emargement' ) ) { return false; }
         $emarg = ACDC_Emargement::get_instance();
         if ( ! $emarg || ! isset( $emarg->pdf ) ) { return false; }
+        // Accès « toutes séances » par session : get_pdf_content() agrège désormais
+        // toutes les feuilles signées de la session en un PDF multi-pages (une page-set
+        // par séance). Pour une session mono-séance, la sortie reste identique.
         return $emarg->pdf->get_pdf_content( $session_id );
     }
 

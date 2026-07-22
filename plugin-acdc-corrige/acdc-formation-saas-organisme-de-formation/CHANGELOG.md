@@ -4,6 +4,26 @@ Toutes les modifications notables de ce projet sont documentées ici.
 Format inspiré de [Keep a Changelog](https://keepachangelog.com/fr/1.1.0/).
 L'historique détaillé antérieur est archivé dans [`release-notes/`](release-notes/).
 
+## [3.25.119] — 2026-07-22
+
+### Ajouté — Émargement PAR SÉANCE (multi-créneaux)
+Une session à plusieurs créneaux (`schedule_json`) peut désormais avoir **une feuille d'émargement
+signable par séance** (au lieu d'une signature globale unique). Implémentation **strictement additive
+et rétro-compatible** :
+- Schéma : colonnes `seance_index` (DEFAULT 0) + `seance_label`/`seance_start_at`/`seance_end_at`
+  ajoutées de façon portable (MySQL/MariaDB) ; les feuilles existantes deviennent `seance_index = 0`.
+- Les sessions **mono-séance** (la grande majorité) et les feuilles existantes conservent un
+  comportement **identique** (UI, e-mail, PDF, audit) — le multi-séance n'est qu'une surcouche
+  activée quand `schedule_json` contient plusieurs créneaux.
+- PDF d'émargement : multi-pages « Séance k/N » quand plusieurs feuilles sont signées ; sortie
+  strictement identique pour une seule feuille.
+- UI portail : éclatement en sous-lignes/boutons par séance uniquement pour les sessions
+  multi-créneaux.
+
+> ⚠️ **À valider sur une session multi-séances de test avant usage en production.** Les sessions
+> mono-séance ne sont pas affectées. Limitation connue : le tableau d'audit reflète la séance
+> d'index 0 (le PDF consolidé par session couvre, lui, toutes les séances).
+
 ## [3.25.118] — 2026-07-22
 
 ### Ajouté (chantiers différés — aval facturation & BPF)

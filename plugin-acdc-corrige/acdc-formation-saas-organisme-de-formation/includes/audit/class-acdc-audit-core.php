@@ -141,7 +141,7 @@ class ACDC_Audit_Core {
                                 es.trainer_sig_url, es.trainer_signed_at, es.list_token
                          FROM {$st} s
                          LEFT JOIN {$ft} f ON f.id = s.formation_id
-                         LEFT JOIN {$est} es ON es.session_id = s.id
+                         LEFT JOIN {$est} es ON es.session_id = s.id AND es.seance_index = 0
                          WHERE COALESCE(s.is_draft,0) = 0
                            AND COALESCE(s.status,'') NOT IN ('Brouillon','Annulée')";
         if ( $formation_id ) $sessions_sql .= $wpdb->prepare( " AND s.formation_id = %d", $formation_id );

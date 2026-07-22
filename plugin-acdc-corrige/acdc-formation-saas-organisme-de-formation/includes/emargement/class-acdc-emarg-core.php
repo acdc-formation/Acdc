@@ -32,6 +32,10 @@ class ACDC_Emarg_Core {
         $sql_sessions = "CREATE TABLE {$this->table_sessions} (
           id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
           session_id BIGINT UNSIGNED NOT NULL,
+          seance_index INT NOT NULL DEFAULT 0,
+          seance_label VARCHAR(190) DEFAULT '',
+          seance_start_at DATETIME DEFAULT NULL,
+          seance_end_at DATETIME DEFAULT NULL,
           trainer_token VARCHAR(64) NOT NULL DEFAULT '',
           list_token VARCHAR(64) NOT NULL DEFAULT '',
           trainer_id BIGINT UNSIGNED DEFAULT NULL,
@@ -59,6 +63,7 @@ class ACDC_Emarg_Core {
           id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
           emarg_session_id BIGINT UNSIGNED NOT NULL,
           session_id BIGINT UNSIGNED NOT NULL,
+          seance_index INT NOT NULL DEFAULT 0,
           learner_id BIGINT UNSIGNED DEFAULT NULL,
           learner_name VARCHAR(190) DEFAULT '',
           learner_email VARCHAR(190) DEFAULT '',
@@ -93,6 +98,14 @@ class ACDC_Emarg_Core {
         $this->maybe_add_column( $this->table_sessions, 'trainer_ip', "VARCHAR(64) DEFAULT '' AFTER trainer_sig_path" );
         $this->maybe_add_column( $this->table_sessions, 'trainer_ua', 'TEXT AFTER trainer_ip' );
         $this->maybe_add_column( $this->table_learners, 'learner_ua', 'TEXT AFTER ip' );
+
+        // ACDC — Émargement par séance (multi-créneaux). Colonnes additives, DEFAULT 0/NULL :
+        // les feuilles existantes deviennent seance_index=0 → comportement mono-séance inchangé.
+        $this->maybe_add_column( $this->table_sessions, 'seance_index', 'INT NOT NULL DEFAULT 0 AFTER session_id' );
+        $this->maybe_add_column( $this->table_sessions, 'seance_label', "VARCHAR(190) DEFAULT '' AFTER seance_index" );
+        $this->maybe_add_column( $this->table_sessions, 'seance_start_at', 'DATETIME NULL AFTER seance_label' );
+        $this->maybe_add_column( $this->table_sessions, 'seance_end_at', 'DATETIME NULL AFTER seance_start_at' );
+        $this->maybe_add_column( $this->table_learners, 'seance_index', 'INT NOT NULL DEFAULT 0 AFTER session_id' );
     }
 
     /**
@@ -131,15 +144,37 @@ class ACDC_Emarg_Core {
     /* -----------------------------------------------------------------------
      * Créer une session d'émargement
      * -------------------------------------------------------------------- */
-    public function create_emarg_session( $session_id, $trainer_id, $trainer_name, $trainer_email, $learners ) {
+    /**
+     * Crée une feuille d'émargement pour une séance (créneau) d'une session.
+     *
+     * SIGNATURE ÉTENDUE, rétro-compatible : $seance_index et $seance_meta ont une
+     * valeur par défaut. Appelée sans ces arguments, le comportement est STRICTEMENT
+     * identique à l'origine (feuille unique de la session, seance_index = 0).
+     *
+     * La déduplication porte sur le couple (session_id, seance_index) : une session
+     * mono-créneau ne peut donc avoir qu'une feuille d'index 0 — comme aujourd'hui.
+     *
+     * @param int    $session_id
+     * @param int    $trainer_id
+     * @param string $trainer_name
+     * @param string $trainer_email
+     * @param array  $learners
+     * @param int    $seance_index Index du créneau (0 = première/unique séance).
+     * @param array  $seance_meta  ['label' => string, 'start_at' => 'Y-m-d H:i:s', 'end_at' => 'Y-m-d H:i:s'].
+     * @return int|false ID de la feuille d'émargement, ou false.
+     */
+    public function create_emarg_session( $session_id, $trainer_id, $trainer_name, $trainer_email, $learners, $seance_index = 0, $seance_meta = array() ) {
         global $wpdb;
-        $session_id = absint( $session_id );
+        $session_id   = absint( $session_id );
+        $seance_index = max( 0, (int) $seance_index );
         if ( ! $session_id ) { return false; }
 
-        // Vérifier si une session d'émargement existe déjà
+        // Vérifier si une feuille d'émargement existe déjà pour CE créneau.
+        // Dédup sur (session_id, seance_index) : identique au cas mono-séance pour l'index 0.
         $existing = $wpdb->get_row( $wpdb->prepare(
-            "SELECT * FROM {$this->table_sessions} WHERE session_id = %d LIMIT 1",
-            $session_id
+            "SELECT * FROM {$this->table_sessions} WHERE session_id = %d AND seance_index = %d LIMIT 1",
+            $session_id,
+            $seance_index
         ) );
         if ( $existing ) { return (int) $existing->id; }
 
@@ -147,17 +182,21 @@ class ACDC_Emarg_Core {
         $expires = gmdate( 'Y-m-d H:i:s', current_time( 'timestamp' ) + self::TOKEN_TTL_HOURS * 3600 );
 
         $wpdb->insert( $this->table_sessions, array(
-            'session_id'    => $session_id,
-            'trainer_token' => $this->generate_token(),
-            'list_token'    => $this->generate_token(),
-            'trainer_id'    => $trainer_id ?: null,
-            'trainer_name'  => $trainer_name,
-            'trainer_email' => $trainer_email,
-            'trainer_status'=> 'pending',
-            'status'        => 'pending',
-            'expires_at'    => $expires,
-            'created_at'    => $now,
-            'updated_at'    => $now,
+            'session_id'      => $session_id,
+            'seance_index'    => $seance_index,
+            'seance_label'    => isset( $seance_meta['label'] ) ? sanitize_text_field( $seance_meta['label'] ) : '',
+            'seance_start_at' => ! empty( $seance_meta['start_at'] ) ? $seance_meta['start_at'] : null,
+            'seance_end_at'   => ! empty( $seance_meta['end_at'] ) ? $seance_meta['end_at'] : null,
+            'trainer_token'   => $this->generate_token(),
+            'list_token'      => $this->generate_token(),
+            'trainer_id'      => $trainer_id ?: null,
+            'trainer_name'    => $trainer_name,
+            'trainer_email'   => $trainer_email,
+            'trainer_status'  => 'pending',
+            'status'          => 'pending',
+            'expires_at'      => $expires,
+            'created_at'      => $now,
+            'updated_at'      => $now,
         ) );
         $emarg_id = (int) $wpdb->insert_id;
         if ( ! $emarg_id ) { return false; }
@@ -167,6 +206,7 @@ class ACDC_Emarg_Core {
             $wpdb->insert( $this->table_learners, array(
                 'emarg_session_id' => $emarg_id,
                 'session_id'       => $session_id,
+                'seance_index'     => $seance_index,
                 'learner_id'       => ! empty( $learner['id'] ) ? absint( $learner['id'] ) : null,
                 'learner_name'     => sanitize_text_field( $learner['name'] ),
                 'learner_email'    => sanitize_email( $learner['email'] ?? '' ),
@@ -178,6 +218,65 @@ class ACDC_Emarg_Core {
         }
 
         return $emarg_id;
+    }
+
+    /**
+     * Crée (si besoin) une feuille d'émargement par créneau à partir de schedule_json.
+     *
+     * L'index 0 est créé EXACTEMENT comme aujourd'hui (create_emarg_session sans surcouche).
+     * Idempotent : réutilise les feuilles déjà présentes (dédup sur session_id + index).
+     *
+     * @param int   $session_id
+     * @param int   $trainer_id
+     * @param string $trainer_name
+     * @param string $trainer_email
+     * @param array $learners
+     * @param array $slots  Tableau décodé de schedule_json ([{start_at,end_at,start_date,end_date}, ...]).
+     * @return int[] Liste des emarg_id créés/retrouvés, indexés par seance_index.
+     */
+    public function ensure_emarg_sheets_for_session( $session_id, $trainer_id, $trainer_name, $trainer_email, $learners, $slots = array() ) {
+        $session_id = absint( $session_id );
+        if ( ! $session_id ) { return array(); }
+
+        $slots = is_array( $slots ) ? array_values( $slots ) : array();
+        // Au moins une séance (index 0) — cas mono/legacy identique à aujourd'hui.
+        $count = max( 1, count( $slots ) );
+
+        $ids = array();
+        for ( $i = 0; $i < $count; $i++ ) {
+            $meta = isset( $slots[ $i ] ) ? $this->slot_to_meta( $slots[ $i ], $i, $count ) : array();
+            $ids[ $i ] = $this->create_emarg_session( $session_id, $trainer_id, $trainer_name, $trainer_email, $learners, $i, $meta );
+        }
+        return $ids;
+    }
+
+    /**
+     * Convertit un créneau schedule_json en métadonnées de séance (label + dates).
+     *
+     * @param array $slot
+     * @param int   $index
+     * @param int   $total
+     * @return array
+     */
+    public function slot_to_meta( $slot, $index = 0, $total = 1 ) {
+        $slot = (array) $slot;
+        $start = '';
+        if ( ! empty( $slot['start_at'] ) ) {
+            $start = (string) $slot['start_at'];
+        } elseif ( ! empty( $slot['start_date'] ) ) {
+            $start = (string) $slot['start_date'] . ' 09:00:00';
+        }
+        $end = '';
+        if ( ! empty( $slot['end_at'] ) ) {
+            $end = (string) $slot['end_at'];
+        } elseif ( ! empty( $slot['end_date'] ) ) {
+            $end = (string) $slot['end_date'] . ' 17:00:00';
+        }
+        $label = sprintf( 'Séance %d/%d', (int) $index + 1, (int) $total );
+        if ( $start ) {
+            $label .= ' — ' . date_i18n( 'd/m/Y', strtotime( $start ) );
+        }
+        return array( 'label' => $label, 'start_at' => $start ?: null, 'end_at' => $end ?: null );
     }
 
     /* -----------------------------------------------------------------------
@@ -209,10 +308,44 @@ class ACDC_Emarg_Core {
         ) );
     }
 
-    public function get_by_session_id( $session_id ) {
+    /**
+     * Retourne UNE feuille d'émargement d'une session.
+     *
+     * Rétro-compat : sans $seance_index, retourne la feuille de la séance d'index le
+     * plus bas (0 = feuille primaire/legacy). Pour une session mono-séance (une seule
+     * feuille, seance_index = 0), le résultat est identique à l'ancien comportement.
+     *
+     * @param int      $session_id
+     * @param int|null $seance_index Si fourni, cible précisément ce créneau.
+     * @return object|null
+     */
+    public function get_by_session_id( $session_id, $seance_index = null ) {
         global $wpdb;
+        if ( null !== $seance_index ) {
+            return $wpdb->get_row( $wpdb->prepare(
+                "SELECT * FROM {$this->table_sessions} WHERE session_id = %d AND seance_index = %d ORDER BY id DESC LIMIT 1",
+                absint( $session_id ),
+                max( 0, (int) $seance_index )
+            ) );
+        }
+        // Priorité à la séance d'index le plus bas (feuille primaire) puis à l'id le
+        // plus récent — pour une feuille unique, identique à « ORDER BY id DESC ».
         return $wpdb->get_row( $wpdb->prepare(
-            "SELECT * FROM {$this->table_sessions} WHERE session_id = %d ORDER BY id DESC LIMIT 1",
+            "SELECT * FROM {$this->table_sessions} WHERE session_id = %d ORDER BY seance_index ASC, id DESC LIMIT 1",
+            absint( $session_id )
+        ) );
+    }
+
+    /**
+     * Retourne TOUTES les feuilles d'une session, ordonnées par séance.
+     *
+     * @param int $session_id
+     * @return object[]
+     */
+    public function get_all_by_session_id( $session_id ) {
+        global $wpdb;
+        return $wpdb->get_results( $wpdb->prepare(
+            "SELECT * FROM {$this->table_sessions} WHERE session_id = %d ORDER BY seance_index ASC, id ASC",
             absint( $session_id )
         ) );
     }
@@ -226,10 +359,15 @@ class ACDC_Emarg_Core {
     }
 
     /**
-     * Anti N+1 : précharge les fiches d'émargement de plusieurs séances en une requête.
+     * Anti N+1 : précharge UNE fiche représentative d'émargement par session.
+     *
+     * Rétro-compat stricte : retourne [session_id => fiche primaire], soit la feuille
+     * de séance d'index le plus bas (0). Pour une session mono-séance (une seule feuille),
+     * le résultat est identique à l'ancien comportement — les appelants existants
+     * (kernel/sessions render, sessions core) restent inchangés.
      *
      * @param int[] $session_ids
-     * @return array [session_id => fiche] (la plus récente par séance, comme get_by_session_id).
+     * @return array [session_id => fiche primaire (seance_index le plus bas)]
      */
     public function get_by_session_ids( $session_ids ) {
         global $wpdb;
@@ -238,14 +376,40 @@ class ACDC_Emarg_Core {
             return array();
         }
         $ph   = implode( ',', array_fill( 0, count( $ids ), '%d' ) );
+        // Tri : seance_index DESC puis id ASC. En écrasant dans la boucle, la dernière
+        // valeur retenue par session est celle de l'index le plus bas (feuille primaire).
+        // Pour une feuille unique (mono-séance), le comportement est inchangé.
         $rows = $wpdb->get_results( $wpdb->prepare(
-            "SELECT * FROM {$this->table_sessions} WHERE session_id IN ($ph) ORDER BY id ASC",
+            "SELECT * FROM {$this->table_sessions} WHERE session_id IN ($ph) ORDER BY seance_index DESC, id ASC",
             $ids
         ) );
         $map = array();
         foreach ( (array) $rows as $r ) {
-            // id croissant → la dernière valeur conservée a l'id le plus grand = la plus récente.
             $map[ (int) $r->session_id ] = $r;
+        }
+        return $map;
+    }
+
+    /**
+     * Anti N+1 : précharge TOUTES les feuilles d'émargement de plusieurs sessions.
+     *
+     * @param int[] $session_ids
+     * @return array [session_id => [feuilles ordonnées par seance_index]]
+     */
+    public function get_all_by_session_ids( $session_ids ) {
+        global $wpdb;
+        $ids = array_values( array_unique( array_filter( array_map( 'absint', (array) $session_ids ) ) ) );
+        if ( empty( $ids ) ) {
+            return array();
+        }
+        $ph   = implode( ',', array_fill( 0, count( $ids ), '%d' ) );
+        $rows = $wpdb->get_results( $wpdb->prepare(
+            "SELECT * FROM {$this->table_sessions} WHERE session_id IN ($ph) ORDER BY seance_index ASC, id ASC",
+            $ids
+        ) );
+        $map = array();
+        foreach ( (array) $rows as $r ) {
+            $map[ (int) $r->session_id ][] = $r;
         }
         return $map;
     }

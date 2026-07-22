@@ -26,7 +26,7 @@ foreach ( $emarg_manifest as $file => $class ) {
 class ACDC_Emargement {
 
     /** Version du schéma d'émargement. À incrémenter à chaque changement de structure. */
-    const DB_VERSION   = '3.25.113';
+    const DB_VERSION   = '3.25.116';
     const OPTION_DB_VER = 'acdc_emarg_db_version';
 
     private static $instance = null;
@@ -94,13 +94,26 @@ class ACDC_Emargement {
      * -------------------------------------------------------------------- */
     public function handle_send_trainer() {
         if ( ! current_user_can( 'manage_options' ) ) { wp_die(); }
-        $session_id = absint( $_POST['session_id'] ?? 0 );
-        check_admin_referer( 'acdc_emarg_send_trainer_' . $session_id );
+        $session_id   = absint( $_POST['session_id'] ?? 0 );
+        // Émargement par séance : index optionnel (défaut 0 = séance primaire/legacy).
+        $seance_index = isset( $_POST['seance_index'] ) ? max( 0, (int) $_POST['seance_index'] ) : 0;
+
+        // Nonce rétro-compatible : l'index 0 conserve EXACTEMENT le jeton existant
+        // (formulaires mono-séance déjà en production) ; les créneaux >= 1 utilisent
+        // un jeton suffixé par l'index.
+        if ( $seance_index > 0 ) {
+            check_admin_referer( 'acdc_emarg_send_trainer_' . $session_id . '_' . $seance_index );
+        } else {
+            check_admin_referer( 'acdc_emarg_send_trainer_' . $session_id );
+        }
 
         global $wpdb;
 
-        // Récupérer ou créer la session d'émargement
-        $emarg = $this->core->get_by_session_id( $session_id );
+        // Récupérer ou créer la feuille d'émargement de la séance ciblée.
+        // Pour l'index 0 sans paramètre explicite, on garde l'appel legacy (priorité index 0).
+        $emarg = $seance_index > 0
+            ? $this->core->get_by_session_id( $session_id, $seance_index )
+            : $this->core->get_by_session_id( $session_id );
         if ( ! $emarg ) {
             // Charger les données de la session
             $session_table  = $wpdb->prefix . 'acdc_of_sessions';
@@ -154,7 +167,21 @@ class ACDC_Emargement {
                 }
             }
 
-            $emarg_id = $this->core->create_emarg_session( $session_id, $trainer_id, $trainer_name, $trainer_email, $learners );
+            // Métadonnées de la séance ciblée depuis schedule_json (si multi-créneaux).
+            // Pour l'index 0 d'une session mono-créneau, $seance_meta reste vide →
+            // create_emarg_session se comporte comme aujourd'hui.
+            $seance_meta = array();
+            if ( ! empty( $session->schedule_json ) ) {
+                $slots = json_decode( $session->schedule_json, true );
+                if ( is_array( $slots ) ) {
+                    $slots = array_values( $slots );
+                    if ( isset( $slots[ $seance_index ] ) ) {
+                        $seance_meta = $this->core->slot_to_meta( $slots[ $seance_index ], $seance_index, max( 1, count( $slots ) ) );
+                    }
+                }
+            }
+
+            $emarg_id = $this->core->create_emarg_session( $session_id, $trainer_id, $trainer_name, $trainer_email, $learners, $seance_index, $seance_meta );
             if ( ! $emarg_id ) {
                 wp_safe_redirect( add_query_arg( 'emarg_err', 'create', wp_get_referer() ?: admin_url() ) );
                 exit;
