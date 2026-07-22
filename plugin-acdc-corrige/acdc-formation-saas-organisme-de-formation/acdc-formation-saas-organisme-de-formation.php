@@ -3,7 +3,7 @@
  * Plugin Name: ACDC Formation SAAS Organisme de formation
  * Plugin URI: https://acdc-formation.com/
  * Description: Espace de gestion frontal sécurisé pour organisme de formation, réécrit sur base (dernière version du plugin : 3.20.105) avec module UI/Design système : réglage avancé des icônes d’action, taille, couleurs, espacements et choix des pictogrammes.
- * Version: 3.25.102
+ * Version: 3.25.103
  * Author: ACDC Formation
  * Text Domain: acdc-formation-saas
  * Domain Path: /languages
@@ -13,7 +13,7 @@ if ( ! defined( 'ABSPATH' ) ) {
     exit;
 }
 
-define( 'ACDC_OF_SAAS_VERSION', '3.25.102' );
+define( 'ACDC_OF_SAAS_VERSION', '3.25.103' );
 define( 'ACDC_OF_SAAS_FILE', __FILE__ );
 define( 'ACDC_OF_SAAS_DIR', plugin_dir_path( __FILE__ ) );
 define( 'ACDC_OF_SAAS_URL', plugin_dir_url( __FILE__ ) );
@@ -46,9 +46,10 @@ if ( ! function_exists( 'acdc_of_saas_purge_all_caches' ) ) {
         }
         $done = true;
 
-        if ( function_exists( 'wp_cache_flush' ) ) {
-            wp_cache_flush();
-        }
+        /* Perf : NE PAS vider tout l'object cache (wp_cache_flush = FLUSHALL Redis/Memcached
+           partagé) à chaque écriture — effondrait le taux de hit de tout le site. Le plugin
+           gère ses propres transients au fil de l'eau ; seules les caches de page HTML publiques
+           sont purgées ci-dessous. */
 
         if ( function_exists( 'do_action' ) ) {
             do_action( 'litespeed_purge_all' );

@@ -44,7 +44,12 @@ trait ACDC_Trainer_Portal_Core_Trait {
   }
 
   private function trainer_portal_get_client_ip() {
-    $candidates = array( 'HTTP_X_FORWARDED_FOR', 'HTTP_X_REAL_IP', 'REMOTE_ADDR' );
+    // Sécurité : REMOTE_ADDR est la seule source non falsifiable par le client. Les en-têtes
+    // X-Forwarded-For / X-Real-IP ne sont pris en compte que si un proxy de confiance est
+    // explicitement déclaré (constante ACDC_TRUSTED_PROXY), sinon ils sont ignorés.
+    $candidates = ( defined( 'ACDC_TRUSTED_PROXY' ) && ACDC_TRUSTED_PROXY )
+      ? array( 'HTTP_X_FORWARDED_FOR', 'HTTP_X_REAL_IP', 'REMOTE_ADDR' )
+      : array( 'REMOTE_ADDR' );
     foreach ( $candidates as $key ) {
       if ( ! empty( $_SERVER[ $key ] ) ) {
         $ip = is_array( $_SERVER[ $key ] ) ? reset( $_SERVER[ $key ] ) : $_SERVER[ $key ];

@@ -1,0 +1,61 @@
+<?xml version="1.0"?>
+<ruleset name="ACDC Formation SAAS">
+    <description>Standards de code pour le plugin ACDC Formation SAAS (WordPress).</description>
+
+    <file>.</file>
+
+    <!-- Exclusions -->
+    <exclude-pattern>/vendor/*</exclude-pattern>
+    <exclude-pattern>/node_modules/*</exclude-pattern>
+    <exclude-pattern>/assets/js/vendor/*</exclude-pattern>
+    <exclude-pattern>/tests/*</exclude-pattern>
+    <exclude-pattern>/release-notes/*</exclude-pattern>
+    <exclude-pattern>*.min.js</exclude-pattern>
+
+    <arg name="extensions" value="php"/>
+    <arg name="colors"/>
+    <arg value="sp"/>
+    <arg name="parallel" value="8"/>
+
+    <!-- Cible PHP minimale -->
+    <config name="testVersion" value="7.4-"/>
+    <config name="minimum_wp_version" value="6.2"/>
+
+    <!-- Règles WordPress (inclut la sécurité : escaping, nonces, sanitisation) -->
+    <rule ref="WordPress-Core"/>
+    <rule ref="WordPress-Extra"/>
+    <rule ref="WordPress.Security"/>
+    <rule ref="PHPCompatibilityWP"/>
+
+    <!-- Préfixes et text-domain du plugin -->
+    <rule ref="WordPress.NamingConventions.PrefixAllGlobals">
+        <properties>
+            <property name="prefixes" type="array">
+                <element value="acdc"/>
+                <element value="ACDC"/>
+                <element value="ACDC_OF_SAAS"/>
+            </property>
+        </properties>
+    </rule>
+    <rule ref="WordPress.WP.I18n">
+        <properties>
+            <property name="text_domain" type="array">
+                <element value="acdc-formation-saas"/>
+            </property>
+        </properties>
+    </rule>
+
+    <!-- Assouplissements pragmatiques (à resserrer progressivement) -->
+    <rule ref="Generic.Files.LineLength">
+        <properties>
+            <property name="lineLimit" value="200"/>
+            <property name="absoluteLineLimit" value="0"/>
+        </properties>
+    </rule>
+    <rule ref="Squiz.Commenting.FunctionComment">
+        <severity>0</severity>
+    </rule>
+    <rule ref="Squiz.Commenting.FileComment">
+        <severity>0</severity>
+    </rule>
+</ruleset>

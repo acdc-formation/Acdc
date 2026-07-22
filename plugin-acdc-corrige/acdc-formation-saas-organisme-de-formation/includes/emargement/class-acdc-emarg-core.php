@@ -75,7 +75,8 @@ class ACDC_Emarg_Core {
           KEY emarg_session_id (emarg_session_id),
           KEY session_id (session_id),
           KEY learner_id (learner_id),
-          KEY status (status)
+          KEY status (status),
+          KEY is_absent (is_absent)
         ) {$charset};";
 
         require_once ABSPATH . 'wp-admin/includes/upgrade.php';
@@ -301,7 +302,10 @@ class ACDC_Emarg_Core {
         $dir  = trailingslashit( $upload_dir['basedir'] ) . 'acdc-emargement/';
         wp_mkdir_p( $dir );
 
-        $filename = $type . '-' . $record_id . '-' . time() . '.' . $ext;
+        // RGPD : nom de fichier non devinable (jeton aléatoire) pour empêcher l'énumération
+        // des signatures manuscrites par URL (l'ancien format type-id-timestamp était prévisible).
+        $rand     = function_exists( 'wp_generate_password' ) ? wp_generate_password( 20, false, false ) : bin2hex( random_bytes( 10 ) );
+        $filename = $type . '-' . $record_id . '-' . time() . '-' . $rand . '.' . $ext;
         $path     = $dir . $filename;
         $url      = trailingslashit( $upload_dir['baseurl'] ) . 'acdc-emargement/' . $filename;
 

@@ -1156,7 +1156,10 @@ private function acdc_send_transactional_email( $to, $subject, $template_args = 
       KEY company_id (company_id),
       KEY session_id (session_id),
       KEY prospect_id (prospect_id),
-      KEY email (email)
+      KEY email (email),
+      KEY status (status),
+      KEY updated_at (updated_at),
+      KEY session_status (session_id, status)
     ) {$charset_collate};";
 
     $sql_needs = "CREATE TABLE {$this->need_table} (

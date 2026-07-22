@@ -167,7 +167,7 @@ class ACDC_Emarg_Public {
 <html lang="fr">
 <head>
 <meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1">
+<meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Émargement — ACDC Formation</title>
 <style>
 *{box-sizing:border-box;margin:0;padding:0}

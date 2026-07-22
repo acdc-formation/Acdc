@@ -1,0 +1,522 @@
+<style>
+  :root {
+    --paper: #FAF8F4;
+    --surface: #FFFFFF;
+    --surface-2: #F4F0E9;
+    --ink: #14243B;
+    --ink-soft: #3A4C63;
+    --muted: #63718A;
+    --hairline: #E4DCCE;
+    --hairline-2: #EDE7DB;
+    --gold: #B08828;
+    --gold-bright: #C5A253;
+    --gold-wash: #F6EFDF;
+    --p0: #B23A3A; --p0-bg: #F7E6E4;
+    --p1: #B0701A; --p1-bg: #F8EEDC;
+    --p2: #35648F; --p2-bg: #E5EDF5;
+    --p3: #5E6E62; --p3-bg: #E9EDE8;
+    --good: #2E7D4F;
+    --shadow: 0 1px 2px rgba(20,36,59,.05), 0 8px 24px -12px rgba(20,36,59,.14);
+    --font-sans: ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+    --font-mono: ui-monospace, "SF Mono", SFMono-Regular, Menlo, Consolas, "Liberation Mono", monospace;
+    --maxw: 1080px;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --paper: #0E1826; --surface: #16233A; --surface-2: #1C2C46;
+      --ink: #EAF0F8; --ink-soft: #C4D2E4; --muted: #8B9BB4;
+      --hairline: #26374F; --hairline-2: #223148;
+      --gold: #D9B25A; --gold-bright: #E3C273; --gold-wash: #23314A;
+      --p0: #E88A8A; --p0-bg: #3A2528; --p1: #E0B269; --p1-bg: #3A3122;
+      --p2: #8FB8DE; --p2-bg: #22344A; --p3: #A8B8AC; --p3-bg: #263127;
+      --good: #77C79A;
+      --shadow: 0 1px 2px rgba(0,0,0,.3), 0 10px 30px -14px rgba(0,0,0,.5);
+    }
+  }
+  :root[data-theme="light"] {
+    --paper: #FAF8F4; --surface: #FFFFFF; --surface-2: #F4F0E9;
+    --ink: #14243B; --ink-soft: #3A4C63; --muted: #63718A;
+    --hairline: #E4DCCE; --hairline-2: #EDE7DB; --gold: #B08828; --gold-bright: #C5A253; --gold-wash: #F6EFDF;
+    --p0:#B23A3A;--p0-bg:#F7E6E4;--p1:#B0701A;--p1-bg:#F8EEDC;--p2:#35648F;--p2-bg:#E5EDF5;--p3:#5E6E62;--p3-bg:#E9EDE8;--good:#2E7D4F;
+    --shadow: 0 1px 2px rgba(20,36,59,.05), 0 8px 24px -12px rgba(20,36,59,.14);
+  }
+  :root[data-theme="dark"] {
+    --paper: #0E1826; --surface: #16233A; --surface-2: #1C2C46;
+    --ink: #EAF0F8; --ink-soft: #C4D2E4; --muted: #8B9BB4;
+    --hairline: #26374F; --hairline-2: #223148; --gold: #D9B25A; --gold-bright: #E3C273; --gold-wash: #23314A;
+    --p0:#E88A8A;--p0-bg:#3A2528;--p1:#E0B269;--p1-bg:#3A3122;--p2:#8FB8DE;--p2-bg:#22344A;--p3:#A8B8AC;--p3-bg:#263127;--good:#77C79A;
+    --shadow: 0 1px 2px rgba(0,0,0,.3), 0 10px 30px -14px rgba(0,0,0,.5);
+  }
+
+  * { box-sizing: border-box; }
+  body {
+    margin: 0; background: var(--paper); color: var(--ink);
+    font-family: var(--font-sans); line-height: 1.6;
+    -webkit-font-smoothing: antialiased; font-size: 16.5px;
+  }
+  .wrap { max-width: var(--maxw); margin: 0 auto; padding: 0 24px; }
+  a { color: inherit; }
+
+  /* Header */
+  .topbar {
+    position: sticky; top: 0; z-index: 20;
+    background: color-mix(in srgb, var(--paper) 88%, transparent);
+    backdrop-filter: blur(10px);
+    border-bottom: 1px solid var(--hairline);
+  }
+  .topbar .wrap { display: flex; align-items: center; justify-content: space-between; height: 58px; gap: 16px; }
+  .brand { display: flex; align-items: center; gap: 11px; font-weight: 700; letter-spacing: -.01em; }
+  .brand .mark {
+    width: 26px; height: 26px; border-radius: 7px; flex: none;
+    background: linear-gradient(135deg, var(--gold-bright), var(--gold));
+    display: grid; place-items: center; color: #1b1408; font-weight: 800; font-size: 13px;
+    font-family: var(--font-mono);
+  }
+  .brand small { color: var(--muted); font-weight: 500; font-size: 13px; }
+  .theme-toggle {
+    font: inherit; font-size: 13px; cursor: pointer; color: var(--ink-soft);
+    background: var(--surface); border: 1px solid var(--hairline); border-radius: 8px;
+    padding: 7px 12px; display: inline-flex; align-items: center; gap: 7px;
+  }
+  .theme-toggle:hover { border-color: var(--gold); }
+  .theme-toggle:focus-visible { outline: 2px solid var(--gold); outline-offset: 2px; }
+
+  /* Hero */
+  .hero { padding: 66px 0 40px; border-bottom: 1px solid var(--hairline); position: relative; }
+  .eyebrow {
+    font-family: var(--font-mono); font-size: 12px; letter-spacing: .16em;
+    text-transform: uppercase; color: var(--gold); margin: 0 0 20px; font-weight: 600;
+    display: flex; align-items: center; gap: 12px;
+  }
+  .eyebrow::after { content: ""; height: 1px; flex: 1; background: linear-gradient(90deg, var(--gold), transparent); opacity: .5; }
+  h1.title {
+    font-size: clamp(2.1rem, 5.4vw, 3.5rem); line-height: 1.04; letter-spacing: -.03em;
+    font-weight: 800; margin: 0 0 20px; text-wrap: balance; max-width: 16ch;
+  }
+  h1.title em { font-style: normal; color: var(--gold); }
+  .lede { font-size: 1.16rem; color: var(--ink-soft); max-width: 60ch; margin: 0 0 28px; }
+  .meta-row { display: flex; flex-wrap: wrap; gap: 10px 26px; font-family: var(--font-mono); font-size: 12.5px; color: var(--muted); }
+  .meta-row b { color: var(--ink); font-weight: 600; }
+
+  /* Section scaffolding */
+  section { padding: 52px 0; border-bottom: 1px solid var(--hairline); }
+  .sec-head { display: flex; align-items: baseline; gap: 14px; margin: 0 0 26px; flex-wrap: wrap; }
+  .sec-num { font-family: var(--font-mono); font-size: 13px; color: var(--gold); font-weight: 600; }
+  h2 { font-size: clamp(1.5rem, 3vw, 2rem); letter-spacing: -.02em; margin: 0; font-weight: 750; text-wrap: balance; }
+  .sec-sub { color: var(--muted); font-size: .98rem; margin: 6px 0 0; max-width: 68ch; }
+
+  /* Scorecard */
+  .score-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 14px; }
+  .score-card {
+    background: var(--surface); border: 1px solid var(--hairline); border-radius: 14px;
+    padding: 20px; box-shadow: var(--shadow); position: relative; overflow: hidden;
+  }
+  .score-card::before { content:""; position:absolute; inset:0 auto 0 0; width:3px; background: var(--edge, var(--gold)); }
+  .score-card h3 { margin: 0 0 3px; font-size: 1.02rem; letter-spacing: -.01em; }
+  .score-card .dim-role { font-family: var(--font-mono); font-size: 11px; text-transform: uppercase; letter-spacing: .12em; color: var(--muted); }
+  .stars { margin: 12px 0 10px; font-size: 1.05rem; letter-spacing: 2px; color: var(--gold-bright); }
+  .stars .off { color: var(--hairline); }
+  .score-card p { margin: 0; font-size: .9rem; color: var(--ink-soft); line-height: 1.5; }
+
+  /* Priority + effort chips */
+  .chip {
+    font-family: var(--font-mono); font-size: 11px; font-weight: 700; letter-spacing: .04em;
+    padding: 2px 8px; border-radius: 999px; display: inline-block; white-space: nowrap;
+  }
+  .p0 { color: var(--p0); background: var(--p0-bg); }
+  .p1 { color: var(--p1); background: var(--p1-bg); }
+  .p2 { color: var(--p2); background: var(--p2-bg); }
+  .p3 { color: var(--p3); background: var(--p3-bg); }
+  .eff { font-family: var(--font-mono); font-size: 11px; color: var(--muted); border: 1px solid var(--hairline); border-radius: 6px; padding: 1px 7px; }
+
+  /* Top chantiers */
+  .chantiers { list-style: none; margin: 0; padding: 0; display: grid; gap: 2px; }
+  .chantiers li {
+    display: grid; grid-template-columns: 44px 1fr; gap: 16px; align-items: start;
+    padding: 15px 4px; border-bottom: 1px solid var(--hairline-2);
+  }
+  .chantiers li:last-child { border-bottom: 0; }
+  .chantiers .idx { font-family: var(--font-mono); font-size: 1.15rem; font-weight: 700; color: var(--gold); font-variant-numeric: tabular-nums; }
+  .chantiers .ct-body strong { display: block; font-size: 1.02rem; letter-spacing: -.01em; margin-bottom: 2px; }
+  .chantiers .ct-body span { color: var(--muted); font-size: .9rem; }
+
+  /* Quick wins */
+  .qw-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(280px,1fr)); gap: 10px; }
+  .qw {
+    display: flex; gap: 11px; align-items: flex-start; background: var(--surface);
+    border: 1px solid var(--hairline); border-radius: 11px; padding: 13px 15px; box-shadow: var(--shadow);
+  }
+  .qw .tick { color: var(--good); font-weight: 800; flex: none; margin-top: 1px; }
+  .qw span { font-size: .92rem; }
+  .qw code { font-family: var(--font-mono); font-size: .82em; color: var(--gold); background: var(--gold-wash); padding: 1px 5px; border-radius: 4px; }
+
+  /* Dimension blocks */
+  .dim { margin-top: 34px; }
+  .dim:first-of-type { margin-top: 0; }
+  .dim-head { display: flex; align-items: baseline; gap: 12px; flex-wrap: wrap; margin-bottom: 4px; }
+  .dim-head h3 { font-size: 1.24rem; margin: 0; letter-spacing: -.015em; }
+  .dim-head .stars { margin: 0; font-size: .92rem; }
+  .dim-note { color: var(--muted); font-size: .92rem; margin: 0 0 16px; max-width: 74ch; }
+  .dim-note b { color: var(--ink-soft); font-weight: 600; }
+
+  .table-scroll { overflow-x: auto; border: 1px solid var(--hairline); border-radius: 12px; box-shadow: var(--shadow); background: var(--surface); }
+  table { border-collapse: collapse; width: 100%; font-size: .92rem; min-width: 560px; }
+  thead th {
+    text-align: left; font-family: var(--font-mono); font-size: 10.5px; text-transform: uppercase; letter-spacing: .1em;
+    color: var(--muted); font-weight: 600; padding: 11px 14px; border-bottom: 1px solid var(--hairline); background: var(--surface-2);
+    position: sticky; top: 0;
+  }
+  tbody td { padding: 12px 14px; border-bottom: 1px solid var(--hairline-2); vertical-align: top; }
+  tbody tr:last-child td { border-bottom: 0; }
+  tbody tr:hover { background: color-mix(in srgb, var(--gold-wash) 55%, transparent); }
+  td.c-id { font-family: var(--font-mono); font-size: .82rem; color: var(--muted); white-space: nowrap; font-weight: 600; }
+  td.c-item { color: var(--ink); }
+  td.c-item code { font-family: var(--font-mono); font-size: .82em; color: var(--gold); }
+  td.c-p, td.c-e { white-space: nowrap; }
+
+  /* Waves / roadmap */
+  .waves { display: grid; gap: 14px; }
+  .wave {
+    background: var(--surface); border: 1px solid var(--hairline); border-radius: 14px; padding: 20px 22px;
+    box-shadow: var(--shadow); position: relative; border-left: 3px solid var(--wc, var(--gold));
+  }
+  .wave h4 { margin: 0 0 4px; font-size: 1.08rem; letter-spacing: -.01em; display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+  .wave .tag { font-family: var(--font-mono); font-size: 11px; color: var(--muted); font-weight: 600; }
+  .wave p { margin: 6px 0 0; font-size: .93rem; color: var(--ink-soft); }
+  .wave .tag-when { margin-left: auto; font-size: 11px; color: var(--muted); font-family: var(--font-mono); }
+
+  .phase-list { counter-reset: ph; display: grid; gap: 12px; }
+  .phase {
+    display: grid; grid-template-columns: 56px 1fr; gap: 18px; align-items: start;
+    background: var(--surface); border: 1px solid var(--hairline); border-radius: 14px; padding: 20px 22px; box-shadow: var(--shadow);
+  }
+  .phase .ph-badge {
+    font-family: var(--font-mono); font-weight: 700; font-size: 12px; text-align: center;
+    color: var(--gold); border: 1px solid var(--gold); border-radius: 8px; padding: 8px 0; line-height: 1.2;
+  }
+  .phase h4 { margin: 0 0 5px; font-size: 1.05rem; letter-spacing: -.01em; }
+  .phase p { margin: 0; font-size: .92rem; color: var(--ink-soft); }
+  .phase code, .wave code { font-family: var(--font-mono); font-size: .82em; color: var(--gold); }
+
+  /* Metrics */
+  .metrics { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px,1fr)); gap: 1px; background: var(--hairline); border: 1px solid var(--hairline); border-radius: 14px; overflow: hidden; }
+  .metric { background: var(--surface); padding: 18px 16px; }
+  .metric .num { font-family: var(--font-mono); font-size: 1.5rem; font-weight: 700; letter-spacing: -.02em; font-variant-numeric: tabular-nums; color: var(--ink); }
+  .metric .num.warn { color: var(--p0); }
+  .metric .lbl { font-size: .8rem; color: var(--muted); margin-top: 3px; line-height: 1.35; }
+
+  footer { padding: 40px 0 64px; }
+  footer p { color: var(--muted); font-size: .86rem; margin: 0; max-width: 70ch; }
+  .legend { display: flex; flex-wrap: wrap; gap: 8px 14px; margin: 0 0 22px; font-size: .82rem; color: var(--muted); align-items: center; }
+  .legend .chip { font-size: 10px; }
+
+  @media (max-width: 640px) {
+    .chantiers li { grid-template-columns: 32px 1fr; gap: 12px; }
+    .phase { grid-template-columns: 1fr; }
+    section { padding: 42px 0; }
+  }
+  @media (prefers-reduced-motion: reduce) { * { transition: none !important; scroll-behavior: auto !important; } }
+</style>
+
+<div class="topbar">
+  <div class="wrap">
+    <div class="brand"><span class="mark">A</span> ACDC&nbsp;Formation <small>· Audit premium</small></div>
+    <button class="theme-toggle" id="tt" aria-label="Changer de thème clair/sombre">
+      <span id="tt-ico">◐</span> <span id="tt-lbl">Thème</span>
+    </button>
+  </div>
+</div>
+
+<header class="hero">
+  <div class="wrap">
+    <p class="eyebrow">Rapport d'améliorations · v3.25.102</p>
+    <h1 class="title">Du plugin fonctionnel au produit <em>ultra premium</em>.</h1>
+    <p class="lede">Analyse exhaustive de l'ERP ACDC Formation sur six dimensions. Un produit riche, proche des leaders du marché — dont la marche vers le « premium » ne se joue pas sur les fonctionnalités, mais sur les <b>fondations</b> : architecture, performance, valeur probante, accessibilité et outillage qualité.</p>
+    <div class="meta-row">
+      <span><b>120</b> fichiers PHP</span>
+      <span><b>~125 600</b> lignes</span>
+      <span><b>~61</b> tables</span>
+      <span><b>6</b> dimensions</span>
+      <span><b>90+</b> améliorations identifiées</span>
+    </div>
+  </div>
+</header>
+
+<main class="wrap">
+
+  <!-- SCORECARD -->
+  <section id="score">
+    <div class="sec-head"><span class="sec-num">01</span><h2>Diagnostic de maturité</h2></div>
+    <p class="sec-sub" style="margin-bottom:24px">Note actuelle par dimension sur une cible « ultra premium ». Le produit est mûr ; les fondations techniques sont le principal levier.</p>
+    <div class="score-grid">
+      <div class="score-card" style="--edge:var(--good)">
+        <div class="dim-role">Produit</div><h3>Fonctionnalités</h3>
+        <div class="stars">★★★★<span class="off">★</span></div>
+        <p>ERP complet, proche de Digiforma/Dendreo. Manquent l'e-invoicing 2026, le LMS/SCORM et le multi-tenant.</p>
+      </div>
+      <div class="score-card" style="--edge:var(--p1)">
+        <div class="dim-role">Sécurité</div><h3>Sécurité & RGPD</h3>
+        <div class="stars">★★★<span class="off">★★</span></div>
+        <p>Bonne hygiène anti-bug. Lacunes structurelles : permissions binaires, valeur probante, chiffrement.</p>
+      </div>
+      <div class="score-card" style="--edge:var(--p1)">
+        <div class="dim-role">Expérience</div><h3>UX / UI / A11y</h3>
+        <div class="stars">★★★<span class="off">★★</span></div>
+        <p>Design-system + inspecteur (atout rare). Accessibilité réglementaire à risque : zoom, contrastes.</p>
+      </div>
+      <div class="score-card" style="--edge:var(--p0)">
+        <div class="dim-role">Fondations</div><h3>Architecture</h3>
+        <div class="stars">★★<span class="off">★★★</span></div>
+        <p>God Object de 68 traits, méthode de 1 618 lignes, 0 namespace. La cible propre existe déjà (Signature/Audit).</p>
+      </div>
+      <div class="score-card" style="--edge:var(--p0)">
+        <div class="dim-role">Échelle</div><h3>Performance</h3>
+        <div class="stars">★★<span class="off">★★★</span></div>
+        <p>Purge cache globale par écriture, N+1 émargement, listes non paginées. Risques à 10 k+ apprenants.</p>
+      </div>
+      <div class="score-card" style="--edge:var(--p0)">
+        <div class="dim-role">Process</div><h3>Qualité / DX</h3>
+        <div class="stars">★<span class="off">★★★★</span></div>
+        <p>Zéro test, CI, Composer, PHPStan, .pot. Tout est manuel — cause racine des régressions en cascade.</p>
+      </div>
+    </div>
+  </section>
+
+  <!-- TOP 10 -->
+  <section id="top">
+    <div class="sec-head"><span class="sec-num">02</span><h2>Les 10 chantiers structurants</h2></div>
+    <p class="sec-sub" style="margin-bottom:22px">Transverses, classés par valeur. Ils portent l'essentiel du passage au premium.</p>
+    <ol class="chantiers">
+      <li><span class="idx">01</span><div class="ct-body"><strong>Socle qualité automatisé</strong><span>Composer + PSR-4 + PHPStan + PHPCS (WPCS) + PHPUnit + CI GitHub Actions — le filet qui stoppe les régressions.</span></div></li>
+      <li><span class="idx">02</span><div class="ct-body"><strong>Purge de cache ciblée</strong><span>Retirer le <code>wp_cache_flush()</code> global déclenché à chaque écriture. Quick win P0, effort S.</span></div></li>
+      <li><span class="idx">03</span><div class="ct-body"><strong>Pagination + fin du N+1 émargement</strong><span>~400 requêtes/page aujourd'hui ; scalabilité à 10 k+ apprenants.</span></div></li>
+      <li><span class="idx">04</span><div class="ct-body"><strong>Valeur probante des signatures</strong><span>Scellement SHA-256 + horodatage qualifié (RFC 3161) + piste d'audit inviolable.</span></div></li>
+      <li><span class="idx">05</span><div class="ct-body"><strong>Permissions métier</strong><span>Capacités WordPress dédiées et rôles gradués, au lieu de <code>manage_options</code> partout (201 occ.).</span></div></li>
+      <li><span class="idx">06</span><div class="ct-body"><strong>Accessibilité réglementaire RGAA</strong><span>Zoom émargement, contrastes du doré, focus-trap des modales. Obligation légale pour un OF.</span></div></li>
+      <li><span class="idx">07</span><div class="ct-body"><strong>Facturation électronique 2026</strong><span>Factur-X + Chorus Pro/PDP + export FEC + numérotation inaltérable.</span></div></li>
+      <li><span class="idx">08</span><div class="ct-body"><strong>Refonte structurante</strong><span>Découper les méga-traits, séparer vue/logique (templates) et introduire une couche Repository.</span></div></li>
+      <li><span class="idx">09</span><div class="ct-body"><strong>Conformité RGPD by design</strong><span>Chiffrement des données sensibles (dont « handicap », art. 9) + purge de rétention automatique.</span></div></li>
+      <li><span class="idx">10</span><div class="ct-body"><strong>Fondation SaaS</strong><span>Multi-tenant, marque blanche, plans & feature-flags — si l'objectif est la commercialisation.</span></div></li>
+    </ol>
+  </section>
+
+  <!-- QUICK WINS -->
+  <section id="qw">
+    <div class="sec-head"><span class="sec-num">03</span><h2>Quick wins immédiats</h2></div>
+    <p class="sec-sub" style="margin-bottom:22px">Effort faible (S), ROI élevé — à lancer sans attendre les grands chantiers.</p>
+    <div class="qw-grid">
+      <div class="qw"><span class="tick">✓</span><span>Retirer la purge globale de cache à chaque écriture <code>plugin.php:75</code></span></div>
+      <div class="qw"><span class="tick">✓</span><span>Ajouter les index manquants (<code>status</code>, <code>is_absent</code>, composites)</span></div>
+      <div class="qw"><span class="tick">✓</span><span>Lazy-load jsPDF + html2canvas (560 Ko) au clic « Exporter »</span></div>
+      <div class="qw"><span class="tick">✓</span><span><code>.htaccess deny</code> sur <code>uploads/acdc-emargement/</code> (fuite RGPD)</span></div>
+      <div class="qw"><span class="tick">✓</span><span>Ne plus faire confiance à <code>X-Forwarded-For</code></span></div>
+      <div class="qw"><span class="tick">✓</span><span>Débloquer le zoom (<code>maximum-scale=1</code>) sur l'émargement</span></div>
+      <div class="qw"><span class="tick">✓</span><span>Générer le <code>.pot</code> (<code>wp i18n make-pot</code>)</span></div>
+      <div class="qw"><span class="tick">✓</span><span>Ajouter <code>composer.json</code> + <code>phpcs.xml</code> + PHPStan n3</span></div>
+      <div class="qw"><span class="tick">✓</span><span>Sortir les 85 <code>RELEASE-NOTES</code> → un <code>CHANGELOG.md</code></span></div>
+    </div>
+  </section>
+
+  <!-- DIMENSIONS -->
+  <section id="dims">
+    <div class="sec-head"><span class="sec-num">04</span><h2>Améliorations par dimension</h2></div>
+    <div class="legend">
+      <span>Priorité :</span>
+      <span class="chip p0">P0 critique</span>
+      <span class="chip p1">P1 élevé</span>
+      <span class="chip p2">P2 moyen</span>
+      <span class="chip p3">P3 confort</span>
+      <span style="margin-left:8px">Effort : <span class="eff">S</span> <span class="eff">M</span> <span class="eff">L</span> <span class="eff">XL</span></span>
+    </div>
+
+    <!-- ARCHI -->
+    <div class="dim">
+      <div class="dim-head"><h3>Architecture & code</h3><span class="stars">★★<span class="off">★★★</span></span></div>
+      <p class="dim-note"><b>68 traits</b> dans une classe · <b>~2 200</b> méthodes · <b>371</b> hooks au boot · <b>2 253</b> accès <code>$wpdb</code> · <b>8 322</b> <code>echo</code> · <b>0</b> namespace · plus grosse méthode <b>1 618 lignes</b>.</p>
+      <div class="table-scroll"><table>
+        <thead><tr><th>#</th><th>Amélioration</th><th>Prio</th><th>Effort</th></tr></thead>
+        <tbody>
+          <tr><td class="c-id">A1</td><td class="c-item">Éclater le God Object en modules-services autonomes (injection de dépendances)</td><td class="c-p"><span class="chip p0">P0</span></td><td class="c-e"><span class="eff">XL</span></td></tr>
+          <tr><td class="c-id">A2</td><td class="c-item">Autoloader PSR-4 + Composer (remplacer ~30 <code>require_once</code>, chargement paresseux)</td><td><span class="chip p0">P0</span></td><td><span class="eff">L</span></td></tr>
+          <tr><td class="c-id">A3</td><td class="c-item">Adopter les namespaces PHP (0 aujourd'hui)</td><td><span class="chip p0">P0</span></td><td><span class="eff">L</span></td></tr>
+          <tr><td class="c-id">A4</td><td class="c-item">Découper fichiers/méthodes monstrueux (méthode de 1 618 l.)</td><td><span class="chip p1">P1</span></td><td><span class="eff">XL</span></td></tr>
+          <tr><td class="c-id">A5</td><td class="c-item">Séparer logique/présentation : moteur de templates (8 322 <code>echo</code>)</td><td><span class="chip p1">P1</span></td><td><span class="eff">XL</span></td></tr>
+          <tr><td class="c-id">A6</td><td class="c-item">Couche Repository/DTO au lieu de <code>$wpdb</code> partout</td><td><span class="chip p1">P1</span></td><td><span class="eff">XL</span></td></tr>
+          <tr><td class="c-id">A7</td><td class="c-item">Migrations de schéma centralisées (vs 36 <code>ALTER TABLE</code> runtime)</td><td><span class="chip p1">P1</span></td><td><span class="eff">L</span></td></tr>
+          <tr><td class="c-id">A8</td><td class="c-item">Hooks conditionnés au contexte (admin/front/REST/cron)</td><td><span class="chip p2">P2</span></td><td><span class="eff">M</span></td></tr>
+          <tr><td class="c-id">A9</td><td class="c-item">Conteneur d'injection (remplacer les singletons)</td><td><span class="chip p2">P2</span></td><td><span class="eff">M</span></td></tr>
+          <tr><td class="c-id">A10</td><td class="c-item">Centraliser les 129 options ; versionner les libs front (jspdf…)</td><td><span class="chip p2">P2</span></td><td><span class="eff">M</span></td></tr>
+        </tbody>
+      </table></div>
+    </div>
+
+    <!-- PERF -->
+    <div class="dim">
+      <div class="dim-head"><h3>Performance & scalabilité</h3><span class="stars">★★<span class="off">★★★</span></span></div>
+      <p class="dim-note"><b>261</b> <code>SELECT *</code> · chargement <b>eager</b> de tous les modules · <b>0</b> object cache applicatif · quiz live en <b>polling</b>.</p>
+      <div class="table-scroll"><table>
+        <thead><tr><th>#</th><th>Amélioration</th><th>Prio</th><th>Effort</th></tr></thead>
+        <tbody>
+          <tr><td class="c-id">P1</td><td class="c-item">Purge de TOUS les caches à chaque écriture → invalidation ciblée</td><td><span class="chip p0">P0</span></td><td><span class="eff">S</span></td></tr>
+          <tr><td class="c-id">P2</td><td class="c-item">N+1 émargement (~400 req/page) → préchargement <code>WHERE IN(...)</code></td><td><span class="chip p0">P0</span></td><td><span class="eff">M</span></td></tr>
+          <tr><td class="c-id">P3</td><td class="c-item">Listes non paginées (tables entières) → <code>LIMIT/OFFSET</code> + <code>COUNT</code></td><td><span class="chip p0">P0</span></td><td><span class="eff">L</span></td></tr>
+          <tr><td class="c-id">P4</td><td class="c-item">Crons synchrones sans batch → lots + file <code>async-dispatcher</code></td><td><span class="chip p0">P0</span></td><td><span class="eff">L</span></td></tr>
+          <tr><td class="c-id">P5</td><td class="c-item">Index manquants (<code>status</code>, <code>is_absent</code>, composites)</td><td><span class="chip p1">P1</span></td><td><span class="eff">S</span></td></tr>
+          <tr><td class="c-id">P6</td><td class="c-item"><code>SELECT *</code> sur tables <code>LONGTEXT</code> → colonnes ciblées</td><td><span class="chip p1">P1</span></td><td><span class="eff">M</span></td></tr>
+          <tr><td class="c-id">P7</td><td class="c-item">Object cache inexploité + désactivé en admin → cacher les référentiels</td><td><span class="chip p1">P1</span></td><td><span class="eff">M</span></td></tr>
+          <tr><td class="c-id">P8</td><td class="c-item">Bundle front monolithique → chargement par contexte</td><td><span class="chip p1">P1</span></td><td><span class="eff">M</span></td></tr>
+          <tr><td class="c-id">P9</td><td class="c-item">jsPDF (364 Ko) + html2canvas (199 Ko) → lazy-load au clic</td><td><span class="chip p1">P1</span></td><td><span class="eff">S</span></td></tr>
+          <tr><td class="c-id">P10-12</td><td class="c-item">Cache document mPDF · exports streaming · chargement modules paresseux</td><td><span class="chip p1">P1</span></td><td><span class="eff">M-L</span></td></tr>
+        </tbody>
+      </table></div>
+    </div>
+
+    <!-- SECU -->
+    <div class="dim">
+      <div class="dim-head"><h3>Sécurité, RGPD & valeur probante</h3><span class="stars">★★★<span class="off">★★</span></span></div>
+      <p class="dim-note"><b>201</b> contrôles <code>manage_options</code> · <b>0</b> capacité métier · signatures <b>sans hash</b> · données sensibles <b>en clair</b> · <b>0</b> en-tête de sécurité HTTP.</p>
+      <div class="table-scroll"><table>
+        <thead><tr><th>#</th><th>Amélioration</th><th>Prio</th><th>Effort</th></tr></thead>
+        <tbody>
+          <tr><td class="c-id">S1</td><td class="c-item">Scellement SHA-256 du document signé (intégrité prouvable)</td><td><span class="chip p0">P0</span></td><td><span class="eff">M</span></td></tr>
+          <tr><td class="c-id">S2</td><td class="c-item">Capacités WordPress métier vs <code>manage_options</code></td><td><span class="chip p1">P1</span></td><td><span class="eff">XL</span></td></tr>
+          <tr><td class="c-id">S3</td><td class="c-item">Rôles distincts formateur/commercial/qualité/admin</td><td><span class="chip p1">P1</span></td><td><span class="eff">L</span></td></tr>
+          <tr><td class="c-id">S4</td><td class="c-item">Lier la session portail à IP/User-Agent (anti-vol cookie)</td><td><span class="chip p1">P1</span></td><td><span class="eff">M</span></td></tr>
+          <tr><td class="c-id">S5</td><td class="c-item">Ne pas faire confiance à <code>X-Forwarded-For</code></td><td><span class="chip p1">P1</span></td><td><span class="eff">S</span></td></tr>
+          <tr><td class="c-id">S6</td><td class="c-item">2FA sur portails (brique OTP déjà présente)</td><td><span class="chip p1">P1</span></td><td><span class="eff">L</span></td></tr>
+          <tr><td class="c-id">S7</td><td class="c-item">Chiffrement au repos des données sensibles (santé art. 9)</td><td><span class="chip p1">P1</span></td><td><span class="eff">L</span></td></tr>
+          <tr><td class="c-id">S8</td><td class="c-item">Purge automatique de rétention RGPD (aucun cron)</td><td><span class="chip p1">P1</span></td><td><span class="eff">L</span></td></tr>
+          <tr><td class="c-id">S9-10</td><td class="c-item">Horodatage qualifié eIDAS · piste d'audit inviolable (chaînage hash)</td><td><span class="chip p1">P1</span></td><td><span class="eff">M-L</span></td></tr>
+          <tr><td class="c-id">S11-13</td><td class="c-item">Nonce émargement · <code>.htaccess</code> signatures · en-têtes HTTP (CSP…)</td><td><span class="chip p1">P1</span></td><td><span class="eff">S-M</span></td></tr>
+          <tr><td class="c-id">S14-16</td><td class="c-item">Outils RGPD natifs WP · AEAD secrets · politique MDP + anti-DoS</td><td><span class="chip p2">P2</span></td><td><span class="eff">M</span></td></tr>
+        </tbody>
+      </table></div>
+    </div>
+
+    <!-- UX -->
+    <div class="dim">
+      <div class="dim-head"><h3>UX / UI / Accessibilité</h3><span class="stars">★★★<span class="off">★★</span></span></div>
+      <p class="dim-note">Atout : design-tokens + <b>inspecteur de design system</b>. Mais <b>~489</b> <code>!important</code>, <b>pas de mode sombre</b>, et émargement/signature <b>hors design system</b>.</p>
+      <div class="table-scroll"><table>
+        <thead><tr><th>#</th><th>Amélioration</th><th>Prio</th><th>Effort</th></tr></thead>
+        <tbody>
+          <tr><td class="c-id">U1</td><td class="c-item">Débloquer le zoom émargement (<code>maximum-scale=1</code>) — WCAG 1.4.4</td><td><span class="chip p0">P0</span></td><td><span class="eff">S</span></td></tr>
+          <tr><td class="c-id">U2</td><td class="c-item">Contrastes : doré texte ≈ 2,3:1 → <code>--primary-ink</code> foncé</td><td><span class="chip p0">P0</span></td><td><span class="eff">M</span></td></tr>
+          <tr><td class="c-id">U3</td><td class="c-item">Focus-trap dans les modales — WCAG 2.4.3</td><td><span class="chip p0">P0</span></td><td><span class="eff">M</span></td></tr>
+          <tr><td class="c-id">U4</td><td class="c-item">Ré-habiller émargement + signature au design system</td><td><span class="chip p0">P0</span></td><td><span class="eff">L</span></td></tr>
+          <tr><td class="c-id">U5-6</td><td class="c-item">Échelle de tokens complète · mode sombre</td><td><span class="chip p1">P1</span></td><td><span class="eff">M-L</span></td></tr>
+          <tr><td class="c-id">U7</td><td class="c-item">Skip link, <code>.sr-only</code>, ARIA icônes, <code>reduced-motion</code></td><td><span class="chip p1">P1</span></td><td><span class="eff">S-M</span></td></tr>
+          <tr><td class="c-id">U8</td><td class="c-item">Navigation portail repliable sur mobile</td><td><span class="chip p1">P1</span></td><td><span class="eff">M</span></td></tr>
+          <tr><td class="c-id">U9</td><td class="c-item">Live quiz : polling 1500 ms → SSE / back-off</td><td><span class="chip p1">P1</span></td><td><span class="eff">L</span></td></tr>
+          <tr><td class="c-id">U10</td><td class="c-item">États de chargement / squelettes / <code>aria-busy</code></td><td><span class="chip p1">P1</span></td><td><span class="eff">M</span></td></tr>
+          <tr><td class="c-id">U11-15</td><td class="c-item">Unifier tokens · signature Pointer Events · build front · empty states · micro-interactions</td><td><span class="chip p2">P2</span></td><td><span class="eff">S-L</span></td></tr>
+        </tbody>
+      </table></div>
+    </div>
+
+    <!-- QUALITE -->
+    <div class="dim">
+      <div class="dim-head"><h3>Qualité, outillage & i18n</h3><span class="stars">★<span class="off">★★★★</span></span></div>
+      <p class="dim-note"><b>Aucun</b> composer/npm/phpunit/phpcs/phpstan/CI/README/LICENSE/.pot · i18n <b>façade</b> (~2 300 chaînes en dur) · <b>85</b> notes de version · versioning non-semver.</p>
+      <div class="table-scroll"><table>
+        <thead><tr><th>#</th><th>Amélioration</th><th>Prio</th><th>Effort</th></tr></thead>
+        <tbody>
+          <tr><td class="c-id">Q1</td><td class="c-item">Suite PHPUnit (logique métier : HT/TVA, scoring, tokens)</td><td><span class="chip p0">P0</span></td><td><span class="eff">XL</span></td></tr>
+          <tr><td class="c-id">Q2</td><td class="c-item">Composer + autoload + outils dev</td><td><span class="chip p0">P0</span></td><td><span class="eff">M</span></td></tr>
+          <tr><td class="c-id">Q3</td><td class="c-item">Générer le <code>.pot</code> puis enrober les chaînes en dur</td><td><span class="chip p0">P0</span></td><td><span class="eff">S-L</span></td></tr>
+          <tr><td class="c-id">Q4</td><td class="c-item">PHP_CodeSniffer + WordPress Coding Standards</td><td><span class="chip p1">P1</span></td><td><span class="eff">S-M</span></td></tr>
+          <tr><td class="c-id">Q5</td><td class="c-item">PHPStan + <code>phpstan-wordpress</code> (capture les fatals avant runtime)</td><td><span class="chip p1">P1</span></td><td><span class="eff">S-M</span></td></tr>
+          <tr><td class="c-id">Q6</td><td class="c-item">CI/CD GitHub Actions (lint + phpstan + tests + plugin-check)</td><td><span class="chip p1">P1</span></td><td><span class="eff">M</span></td></tr>
+          <tr><td class="c-id">Q7</td><td class="c-item">Semver strict + <code>CHANGELOG.md</code> consolidé</td><td><span class="chip p1">P1</span></td><td><span class="eff">M</span></td></tr>
+          <tr><td class="c-id">Q8-10</td><td class="c-item">Updater self-hosted · build assets · README/readme.txt/LICENSE + doc hooks</td><td><span class="chip p2">P2</span></td><td><span class="eff">M-L</span></td></tr>
+        </tbody>
+      </table></div>
+    </div>
+  </section>
+
+  <!-- PRODUIT / VAGUES -->
+  <section id="produit">
+    <div class="sec-head"><span class="sec-num">05</span><h2>Feuille de route produit</h2></div>
+    <p class="sec-sub" style="margin-bottom:22px">Quatre vagues pour combler les écarts vs Digiforma/Dendreo tout en capitalisant sur les atouts uniques (veille IA, quiz live).</p>
+    <div class="waves">
+      <div class="wave" style="--wc:var(--p0)">
+        <h4>Vague 1 — Rattrapage réglementaire 2026 <span class="tag">· non négociable</span></h4>
+        <p>Facture électronique <b>Factur-X</b> · connecteur <b>Chorus Pro / PDP</b> · export <b>FEC</b> · numérotation inaltérable <code>UNIQUE(number)</code> · <b>Stripe</b> (paiement en ligne) · renfort preuve d'identité apprenant.</p>
+      </div>
+      <div class="wave" style="--wc:var(--gold)">
+        <h4>Vague 2 — Fondation SaaS premium <span class="tag">· commercialisation</span></h4>
+        <p><b>Multi-tenant</b> · plans & <b>feature-flags</b> · <b>facturation SaaS récurrente</b> · <b>marque blanche</b> · onboarding self-service · back-office super-admin multi-OF.</p>
+      </div>
+      <div class="wave" style="--wc:var(--p2)">
+        <h4>Vague 3 — Différenciation LMS & IA <span class="tag">· avantage marché</span></h4>
+        <p>Player <b>SCORM / xAPI</b> · parcours e-learning · assiduité distancielle · <b>visio native</b> Zoom/Teams · <b>générateur IA</b> de programmes/quiz · assistant Qualiopi 32/32 · certificats vérifiables.</p>
+      </div>
+      <div class="wave" style="--wc:var(--good)">
+        <h4>Vague 4 — Pilotage & écosystème <span class="tag">· extensibilité</span></h4>
+        <p><b>API REST publique</b> + OAuth · webhooks + app <b>Zapier/Make</b> · sync calendrier 2 sens · connecteur compta <b>Pennylane/Sage</b> · prévisionnel CA · <b>PWA mobile</b> + push.</p>
+      </div>
+    </div>
+  </section>
+
+  <!-- ROADMAP CONSOLIDÉE -->
+  <section id="roadmap">
+    <div class="sec-head"><span class="sec-num">06</span><h2>Feuille de route consolidée</h2></div>
+    <p class="sec-sub" style="margin-bottom:22px">Séquençage transverse aux six dimensions, du filet de sécurité immédiat à la plateforme SaaS.</p>
+    <div class="phase-list">
+      <div class="phase">
+        <div class="ph-badge">PH·0<br><span style="font-weight:400">2-4 sem.</span></div>
+        <div><h4>Quick wins & filet de sécurité</h4><p>Purge cache ciblée · index manquants · lazy-load jsPDF · <code>.htaccess</code> émargement · <code>X-Forwarded-For</code> · zoom RGAA · <code>.pot</code> · <b>Composer + PHPCS + PHPStan</b> · sortir les 85 notes.</p></div>
+      </div>
+      <div class="phase">
+        <div class="ph-badge">PH·1<br><span style="font-weight:400">1-2 trim.</span></div>
+        <div><h4>Socle technique & conformité</h4><p>CI + tests PHPUnit sur la logique critique · pagination + N+1 · crons asynchrones · <b>scellement + audit inviolable</b> · capacités & rôles · en-têtes HTTP + nonce émargement · <b>accessibilité RGAA</b> · <b>Factur-X + FEC</b>.</p></div>
+      </div>
+      <div class="phase">
+        <div class="ph-badge">PH·2<br><span style="font-weight:400">2-3 trim.</span></div>
+        <div><h4>Refonte structurante & montée en gamme</h4><p>God Object → modules-services + repository + templates · namespaces/PSR-4 · chiffrement + purge RGPD · horodatage eIDAS · mode sombre + design system unifié + live quiz temps réel · <b>Stripe + connecteurs + API publique</b>.</p></div>
+      </div>
+      <div class="phase">
+        <div class="ph-badge">PH·3<br><span style="font-weight:400">ambition</span></div>
+        <div><h4>Plateforme SaaS premium</h4><p>Multi-tenant + marque blanche + plans/feature-flags + facturation SaaS · LMS SCORM/xAPI + e-learning + PWA · pilotage décisionnel + écosystème d'intégrations.</p></div>
+      </div>
+    </div>
+  </section>
+
+  <!-- METRICS -->
+  <section id="metrics">
+    <div class="sec-head"><span class="sec-num">07</span><h2>Métriques clés relevées</h2></div>
+    <div class="metrics">
+      <div class="metric"><div class="num">125 600</div><div class="lbl">lignes de PHP</div></div>
+      <div class="metric"><div class="num warn">68</div><div class="lbl">traits dans 1 classe</div></div>
+      <div class="metric"><div class="num warn">1 618</div><div class="lbl">lignes · plus grosse méthode</div></div>
+      <div class="metric"><div class="num">2 253</div><div class="lbl">accès <code style="font-size:.85em">$wpdb</code> directs</div></div>
+      <div class="metric"><div class="num warn">0</div><div class="lbl">namespace PHP</div></div>
+      <div class="metric"><div class="num warn">0</div><div class="lbl">test · CI · Composer · .pot</div></div>
+      <div class="metric"><div class="num">371</div><div class="lbl">hooks au démarrage</div></div>
+      <div class="metric"><div class="num">129</div><div class="lbl">options de config</div></div>
+      <div class="metric"><div class="num warn">261</div><div class="lbl"><code style="font-size:.85em">SELECT *</code></div></div>
+      <div class="metric"><div class="num warn">85</div><div class="lbl">fichiers de notes de version</div></div>
+      <div class="metric"><div class="num">~489</div><div class="lbl"><code style="font-size:.85em">!important</code> en CSS</div></div>
+      <div class="metric"><div class="num">~2 300</div><div class="lbl">chaînes FR non traduisibles</div></div>
+    </div>
+  </section>
+
+  <footer>
+    <p>Rapport de synthèse ACDC Formation SAAS v3.25.102 · analyse sur 6 dimensions (architecture, performance, sécurité/RGPD, UX/UI, produit, qualité). Chaque item est traçable à un <code style="font-family:var(--font-mono);font-size:.85em;color:var(--gold)">fichier:ligne</code> dans le rapport détaillé accompagnant cette présentation.</p>
+  </footer>
+</main>
+
+<script>
+  (function () {
+    var root = document.documentElement, btn = document.getElementById('tt'),
+        lbl = document.getElementById('tt-lbl'), ico = document.getElementById('tt-ico');
+    function apply(t){ root.setAttribute('data-theme', t);
+      lbl.textContent = (t === 'dark') ? 'Clair' : 'Sombre';
+      ico.textContent = (t === 'dark') ? '☀' : '☾'; }
+    var mq = window.matchMedia('(prefers-color-scheme: dark)');
+    apply(mq.matches ? 'dark' : 'light');
+    btn.addEventListener('click', function(){
+      apply(root.getAttribute('data-theme') === 'dark' ? 'light' : 'dark');
+    });
+  })();
+</script>
