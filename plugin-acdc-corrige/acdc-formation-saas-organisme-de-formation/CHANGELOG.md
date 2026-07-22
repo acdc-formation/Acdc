@@ -4,6 +4,23 @@ Toutes les modifications notables de ce projet sont documentées ici.
 Format inspiré de [Keep a Changelog](https://keepachangelog.com/fr/1.1.0/).
 L'historique détaillé antérieur est archivé dans [`release-notes/`](release-notes/).
 
+## [3.25.111] — 2026-07-22
+
+### Corrigé (3ᵉ vague d'audit — 14 bugs, dont 5 fatals)
+- **Fatal** `wrap_pdf_text()` → `pdf_wrap_text()` : attestation de fin de formation (téléchargement + envoi auto) réparée.
+- **Fatal** export « détails QCM » attestation de fin de formation : 3 méthodes inexistantes remplacées par un export CSV/Excel inline (aligné sur l'export positionnement).
+- **Fatal** signature d'émargement apprenant : condition SQL `expires_at` (colonne absente de la table apprenants) supprimée — les apprenants peuvent de nouveau signer.
+- **Fatal** tableau de bord apprenant : colonne SQL `q.duration_seconds` inexistante supprimée (crash `count(null)` sous PHP 8).
+- **Fatal** téléchargement résultat d'évaluation : `render_simple_pdf_output()` → `render_simple_pdf()`.
+- **Fatal** éditeur de quiz avec `quiz_id` invalide : `render_qz_inline_notice()` remplacé par une notice inline.
+- **Avoir** : base HT alignée sur le sous-total avec frais (transport/repas/lignes annexes) — la TVA de l'avoir n'est plus surévaluée.
+- **Évaluations** : le score final (`final_score`) est désormais calculé et persisté en **pourcentage 0-100** à la clôture de session (participants « terminé » + `responded_at`) — le tableau de performance des évaluations n'affiche plus tout en échec.
+- **Indicateurs REST** : total d'heures calculé via `TIMESTAMPDIFF(start_at, end_at)` (la colonne `duration_minutes` n'existe pas sur les sessions) — ne renvoie plus 0.
+- **Marketing** : l'édition d'identité (nom/type/e-mail/tél/société) d'un contact lié à une table métier n'est plus annulée au rechargement (fusion non destructive).
+- **Veille** : une source par défaut supprimée n'est plus ré-injectée au rechargement (mémorisation des suppressions).
+- **Quiz** : versionnage AJAX réparé (`create_qz_new_version` → `create_qz_quiz_new_version`).
+- **Quiz async** : score brut (`total_score`) désormais persisté — le PDF de résultat et l'export CSV n'affichent plus « 0 pts ».
+
 ## [3.25.110] — 2026-07-22
 
 ### Corrigé (2ᵉ vague d'audit — ~13 bugs)

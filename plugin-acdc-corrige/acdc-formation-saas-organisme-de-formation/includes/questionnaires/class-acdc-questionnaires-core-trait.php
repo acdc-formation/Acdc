@@ -7825,10 +7825,61 @@ private function maybe_auto_create_questionnaire_actions_from_response( $session
     if ( 'en_cours' === $status ) { $data['started_at'] = $this->now_mysql(); }
     if ( $set_end ) { $data['ended_at'] = $this->now_mysql(); }
     $wpdb->update( $this->questionnaire_session_table, $data, array( 'id' => $session_id ) );
+    if ( $set_end ) {
+      $finished_session = $this->get_questionnaire_session( $session_id );
+      if ( $finished_session ) { $this->finalize_scored_questionnaire_session_participants( $finished_session ); }
+    }
     $redirect_args = array( 'action' => 'animate', 'item_id' => $session_id, 'notice' => rawurlencode( 'Session mise à jour.' ), 'notice_type' => 'success' );
     if ( ! empty( $_POST['source_type'] ) ) { $redirect_args['source_type'] = sanitize_text_field( wp_unslash( $_POST['source_type'] ) ); }
     if ( ! empty( $_POST['source_id'] ) ) { $redirect_args['source_id'] = absint( wp_unslash( $_POST['source_id'] ) ); }
     wp_safe_redirect( add_query_arg( $redirect_args, admin_url( 'admin.php?page=acdc-of-questionnaire-sessions' ) ) ); exit;
+  }
+
+
+  /**
+   * Finalise les participants d'une session évaluée (évaluation / test de positionnement / quiz live)
+   * à la clôture de session : calcule et persiste final_score en POURCENTAGE (0-100), marque le
+   * participant « termine » et renseigne responded_at/finished_at.
+   *
+   * Les enquêtes de satisfaction sont exclues : leur final_score (moyenne de notes 1-5) est déjà
+   * calculé au fil de l'eau lors de la soumission et s'affiche sur une échelle « /N ».
+   */
+  private function finalize_scored_questionnaire_session_participants( $session ) {
+    global $wpdb;
+    if ( ! $session || $this->is_survey_questionnaire_source_type( (string) $session->source_type ) ) {
+      return;
+    }
+    $source = $this->get_questionnaire_source_data( $session->source_type, $session->source_id );
+    $questions = ( $source && ! empty( $source['questions'] ) && is_array( $source['questions'] ) ) ? array_values( $source['questions'] ) : array();
+    $scored_total = 0;
+    foreach ( $questions as $question ) {
+      foreach ( $this->parse_question_choices( $question ) as $choice ) {
+        if ( ! empty( $choice['is_correct'] ) ) { $scored_total++; break; }
+      }
+    }
+    $participants = $this->get_questionnaire_session_participants( (int) $session->id );
+    foreach ( (array) $participants as $participant ) {
+      if ( in_array( (string) ( $participant->participant_status ?? '' ), array( 'repondu', 'termine' ), true ) ) {
+        continue;
+      }
+      $answered = (int) $wpdb->get_var( $wpdb->prepare( "SELECT COUNT(*) FROM {$this->questionnaire_answer_table} WHERE session_id = %d AND participant_id = %d", (int) $session->id, (int) $participant->id ) );
+      if ( $answered < 1 ) {
+        continue;
+      }
+      $correct = (int) $wpdb->get_var( $wpdb->prepare( "SELECT COALESCE(SUM(points_awarded),0) FROM {$this->questionnaire_answer_table} WHERE session_id = %d AND participant_id = %d", (int) $session->id, (int) $participant->id ) );
+      $final_score = $scored_total > 0 ? round( ( $correct / $scored_total ) * 100, 2 ) : null;
+      $update = array( 'participant_status' => 'termine', 'final_score' => $final_score );
+      $formats = array( '%s', '%f' );
+      if ( empty( $participant->responded_at ) ) {
+        $update['responded_at'] = $this->now_mysql();
+        $formats[] = '%s';
+      }
+      if ( property_exists( $participant, 'finished_at' ) && empty( $participant->finished_at ) ) {
+        $update['finished_at'] = $this->now_mysql();
+        $formats[] = '%s';
+      }
+      $wpdb->update( $this->questionnaire_participant_table, $update, array( 'id' => (int) $participant->id ), $formats, array( '%d' ) );
+    }
   }
 
 

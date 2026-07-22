@@ -621,7 +621,15 @@ ACDC-Formation",
           'updated_at' => $this->now_mysql(),
         );
       } else {
-        $stored[ $key ] = array_merge( $stored[ $key ], $row );
+        // ACDC 3.25.110 — Fusion NON destructive : les champs d'identité déjà saisis
+        // (non vides) dans le contact marketing priment sur la source métier ; on ne
+        // complète depuis la BDD que les champs vides/absents. Évite l'annulation
+        // silencieuse d'une édition (nom/type/e-mail/tél/société) au rechargement.
+        foreach ( $row as $field => $value ) {
+          if ( ! isset( $stored[ $key ][ $field ] ) || '' === (string) $stored[ $key ][ $field ] ) {
+            $stored[ $key ][ $field ] = $value;
+          }
+        }
       }
       $stored[ $key ] = $this->normalize_marketing_contact_record( $stored[ $key ] );
     }

@@ -43,7 +43,7 @@ trait ACDC_Quizzes_Render_Editor_Trait {
     public function render_qz_editor_screen( $quiz_id, $purpose ) {
         $quiz = $this->get_qz_quiz( $quiz_id );
         if ( ! $quiz ) {
-            $this->render_qz_inline_notice( __( "Quiz introuvable.", 'acdc-formation-saas' ), 'error' );
+            echo '<div class="acdc-qz-notice acdc-qz-notice-error"><p>' . esc_html__( 'Quiz introuvable.', 'acdc-formation-saas' ) . '</p></div>';
             return;
         }
 

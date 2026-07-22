@@ -138,7 +138,7 @@ trait ACDC_Evaluations_Actions_Trait {
       exit;
     }
     $pages = $this->build_evaluation_result_pdf_pages( $registration, $context );
-    $this->render_simple_pdf_output( $pages, $filename, $mode );
+    $this->render_simple_pdf( $pages, $filename, $mode );
   }
 
   public function handle_update_evaluation_result_document() {

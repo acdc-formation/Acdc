@@ -3437,7 +3437,7 @@ trait ACDC_Quizzes_Actions_Trait {
         $quiz_id = isset( $_POST['quiz_id'] ) ? absint( wp_unslash( $_POST['quiz_id'] ) ) : 0;
         $quiz = $this->get_qz_quiz( $quiz_id );
         if ( ! $quiz ) { wp_send_json_error( array( 'message' => __( 'Quiz introuvable.', 'acdc-formation-saas' ) ) ); }
-        $new_id = method_exists( $this, 'create_qz_new_version' ) ? $this->create_qz_new_version( $quiz_id ) : 0;
+        $new_id = method_exists( $this, 'create_qz_quiz_new_version' ) ? $this->create_qz_quiz_new_version( $quiz_id ) : 0;
         $redirect = $new_id ? $this->qz_admin_url( (string) $quiz->quiz_purpose, array( 'view' => self::ACDC_OF_QZ_VIEW_EDIT, 'quiz_id' => $new_id ) ) : '';
         $new_id ? wp_send_json_success( array( 'redirect' => $redirect, 'message' => __( 'Nouvelle version créée.', 'acdc-formation-saas' ) ) )
                 : wp_send_json_error( array( 'message' => __( 'Erreur lors de la création de version.', 'acdc-formation-saas' ) ) );

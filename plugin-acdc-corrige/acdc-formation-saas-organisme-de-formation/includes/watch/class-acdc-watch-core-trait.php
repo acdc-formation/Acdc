@@ -110,16 +110,25 @@ trait ACDC_Watch_Core_Trait {
   private function get_ia_watch_sources() {
     $saved   = get_option( 'acdc_of_watch_sources', array() );
     $default = $this->get_ia_default_watch_sources();
+    // ACDC 3.25.110 — ids de sources par défaut explicitement supprimées par l'utilisateur :
+    // elles ne doivent JAMAIS être ré-injectées par la fusion ci-dessous.
+    $deleted_defaults = array_flip( (array) get_option( 'acdc_of_watch_deleted_default_ids', array() ) );
     if ( empty( $saved ) ) {
-      return $default;
+      if ( empty( $deleted_defaults ) ) {
+        return $default;
+      }
+      return array_values( array_filter( $default, static function ( $d ) use ( $deleted_defaults ) {
+        return ! isset( $deleted_defaults[ $d['id'] ] );
+      } ) );
     }
-    // Fusionner : les sources sauvegardées priment ; les nouvelles defaults sont ajoutées
+    // Fusionner : les sources sauvegardées priment ; les nouvelles defaults sont ajoutées,
+    // sauf celles que l'utilisateur a supprimées.
     $saved_ids = array();
     foreach ( $saved as $s ) {
       $saved_ids[ $s['id'] ] = true;
     }
     foreach ( $default as $d ) {
-      if ( empty( $saved_ids[ $d['id'] ] ) ) {
+      if ( empty( $saved_ids[ $d['id'] ] ) && ! isset( $deleted_defaults[ $d['id'] ] ) ) {
         $saved[] = $d;
       }
     }

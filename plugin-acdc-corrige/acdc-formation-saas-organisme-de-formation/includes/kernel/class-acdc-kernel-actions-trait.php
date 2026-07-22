@@ -577,13 +577,48 @@ trait ACDC_Kernel_Actions_Trait {
   if ( ! $registration ) {
     wp_die( esc_html( 'Document introuvable.' ) );
   }
+  $context = $this->get_end_training_certificate_context( $registration );
   $filename = ! empty( $_POST['export_filename'] ) ? sanitize_file_name( wp_unslash( $_POST['export_filename'] ) ) : 'details-qcm';
+  if ( '' === $filename ) { $filename = 'details-qcm'; }
   $type = ! empty( $_POST['export_type'] ) ? sanitize_key( wp_unslash( $_POST['export_type'] ) ) : 'excel';
-  $rows = $this->get_positioning_question_rows_for_registration( $registration );
-  if ( 'csv' === $type ) {
-    $this->stream_csv_export( $filename . '.csv', $rows );
+  $rows = array();
+  $rows[] = array( 'Ordre', 'Question', 'Type', 'Options / consignes', 'Apprenant', 'Formation', 'Résultat' );
+  foreach ( (array) $context['questions_details'] as $question ) {
+    $rows[] = array(
+      (string) $question['number'],
+      (string) $question['label'],
+      (string) $question['type'],
+      (string) $question['options'],
+      (string) $context['learner_name'],
+      (string) $context['formation_title'],
+      (string) $context['result_label'],
+    );
   }
-  $this->stream_excel_export( $filename . '.xlsx', $rows );
+  while ( ob_get_level() ) { ob_end_clean(); }
+  nocache_headers();
+  if ( 'csv' === $type ) {
+    header( 'Content-Type: text/csv; charset=utf-8' );
+    header( 'Content-Disposition: attachment; filename="' . $filename . '.csv"' );
+    $output = fopen( 'php://output', 'w' );
+    foreach ( $rows as $row ) {
+      fputcsv( $output, $row, ';' );
+    }
+    fclose( $output );
+    exit;
+  }
+  header( 'Content-Type: application/vnd.ms-excel; charset=utf-8' );
+  header( 'Content-Disposition: attachment; filename="' . $filename . '.xls"' );
+  echo "<html><head><meta charset='utf-8'></head><body><table border='1'>";
+  foreach ( $rows as $index => $row ) {
+    echo '<tr>';
+    foreach ( $row as $cell ) {
+      $tag = 0 === $index ? 'th' : 'td';
+      echo '<' . $tag . '>' . esc_html( (string) $cell ) . '</' . $tag . '>';
+    }
+    echo '</tr>';
+  }
+  echo "</table></body></html>";
+  exit;
 }public function handle_download_end_training_certificate_document() {
   if ( ! is_user_logged_in() || ! $this->is_admin_manager() ) {
     wp_die( esc_html( 'Accès refusé.' ) );
@@ -5228,7 +5263,7 @@ public function handle_purge_plugin_data() {
     $total_apprenants  = (int) $wpdb->get_var( "SELECT COUNT(DISTINCT l.id) FROM {$this->learner_table} l INNER JOIN {$this->session_table} s ON s.id = l.session_id INNER JOIN {$this->formation_table} f ON f.id = s.formation_id WHERE f.is_active = 1" );
 
     // Heures : SUM(duration en minutes × nb séances réalisées) → converti en heures
-    $heures_raw = (float) $wpdb->get_var( "SELECT SUM(s.duration_minutes) FROM {$this->session_table} s INNER JOIN {$this->formation_table} f ON f.id = s.formation_id WHERE f.is_active = 1 AND s.status NOT IN ('Annulée','Brouillon')" );
+    $heures_raw = (float) $wpdb->get_var( "SELECT SUM(TIMESTAMPDIFF(MINUTE, s.start_at, s.end_at)) FROM {$this->session_table} s INNER JOIN {$this->formation_table} f ON f.id = s.formation_id WHERE f.is_active = 1 AND s.status NOT IN ('Annulée','Brouillon') AND s.start_at IS NOT NULL AND s.end_at IS NOT NULL" );
     $total_heures = round( $heures_raw / 60, 1 );
 
     $taux_sat_row  = $wpdb->get_row( "SELECT AVG(taux_satisfaction) AS v, COUNT(*) AS n FROM {$this->formation_table} WHERE is_active = 1 AND taux_satisfaction > 0" );

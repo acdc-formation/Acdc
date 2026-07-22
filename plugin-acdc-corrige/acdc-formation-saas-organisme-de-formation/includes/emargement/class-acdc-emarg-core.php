@@ -173,9 +173,8 @@ class ACDC_Emarg_Core {
     public function get_learner_by_sign_token( $token ) {
         global $wpdb;
         return $wpdb->get_row( $wpdb->prepare(
-            "SELECT * FROM {$this->table_learners} WHERE sign_token = %s AND ( expires_at IS NULL OR expires_at > %s ) LIMIT 1",
-            sanitize_text_field( $token ),
-            current_time( 'mysql' )
+            "SELECT * FROM {$this->table_learners} WHERE sign_token = %s LIMIT 1",
+            sanitize_text_field( $token )
         ) );
     }
 

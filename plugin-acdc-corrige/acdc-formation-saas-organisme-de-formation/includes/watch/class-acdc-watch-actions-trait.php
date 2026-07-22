@@ -223,6 +223,22 @@ trait ACDC_Watch_Actions_Trait {
 
     update_option( 'acdc_of_watch_sources', $sources );
 
+    // ACDC 3.25.110 — Mémoriser les sources PAR DÉFAUT supprimées par l'utilisateur, afin
+    // qu'elles ne soient pas ré-injectées par get_ia_watch_sources() au rechargement.
+    if ( method_exists( $this, 'get_ia_default_watch_sources' ) ) {
+      $kept_ids = array();
+      foreach ( $sources as $s ) {
+        $kept_ids[ $s['id'] ] = true;
+      }
+      $deleted_defaults = array();
+      foreach ( (array) $this->get_ia_default_watch_sources() as $d ) {
+        if ( empty( $kept_ids[ $d['id'] ] ) ) {
+          $deleted_defaults[] = $d['id'];
+        }
+      }
+      update_option( 'acdc_of_watch_deleted_default_ids', array_values( array_unique( $deleted_defaults ) ) );
+    }
+
     $redirect_url = $this->portal_page_url( array( 'tab' => 'watch_ia', 'watch_sub' => 'sources', 'notice' => rawurlencode( 'Sources sauvegardées.' ), 'notice_type' => 'success' ) );
     wp_safe_redirect( $redirect_url );
     exit;

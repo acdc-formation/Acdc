@@ -325,7 +325,10 @@ trait ACDC_Documents_Billing_Actions_Trait {
           'due_date'        => '',
           'designation'     => $row['designation'] ?? '',
           'quantity'        => $row['quantity_number'] ?? '1,00',
-          'tarif_ht_value'  => $row['tarif_ht_value'] ?? '0',
+          // ACDC 3.25.110 — base HT de l'avoir = sous-total HT AVEC frais (tarif_ht_number),
+          // cohérent avec la facture d'origine. Utiliser tarif_ht_value (tarif de base seul)
+          // gonflait la TVA de l'avoir du montant des frais (transport/repas/lignes annexes).
+          'tarif_ht_value'  => $row['tarif_ht_number'] ?? ( $row['tarif_ht_value'] ?? '0' ),
           'vat_rate'        => $row['vat_rate'] ?? '20,00',
           'tarif_ttc_value' => $row['tarif_ttc_value'] ?? '0',
           'payment_methods' => $row['payment_methods'] ?? '',

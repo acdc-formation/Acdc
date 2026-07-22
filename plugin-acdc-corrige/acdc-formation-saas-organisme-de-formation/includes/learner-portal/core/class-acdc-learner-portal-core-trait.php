@@ -574,12 +574,12 @@ trait ACDC_Learner_Portal_Core_Trait {
     if ( ! $tbl_p || ! $tbl_s || ! $tbl_q ) {
       return array();
     }
-    return $wpdb->get_results( $wpdb->prepare(
+    return (array) $wpdb->get_results( $wpdb->prepare(
       "SELECT p.id AS participant_id, p.status AS participant_status,
               p.secure_token, p.token_expires_at, p.invited_at,
               p.total_score, p.total_score_percentage, p.is_passed,
               q.id AS quiz_id, q.title AS quiz_title, q.quiz_purpose,
-              q.duration_seconds, q.pass_threshold AS passing_score,
+              q.pass_threshold AS passing_score,
               s.id AS session_id, s.expires_at AS session_expires_at
        FROM {$tbl_p} p
        INNER JOIN {$tbl_s} s ON s.id = p.session_id

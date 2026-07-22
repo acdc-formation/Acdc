@@ -2849,6 +2849,12 @@ trait ACDC_Quizzes_Core_Trait {
         if ( null !== $score ) {
             $update['total_score_percentage'] = (float) $score;
         }
+        // ACDC 3.25.110 — persister aussi le score brut (points) pour les passations async,
+        // sinon le PDF de résultat et l'export CSV affichent « 0 pts ».
+        $tbl_pa = $this->get_qz_table( 'player_answers' );
+        if ( $tbl_pa ) {
+            $update['total_score'] = (float) $wpdb->get_var( $wpdb->prepare( "SELECT COALESCE(SUM(score_earned),0) FROM {$tbl_pa} WHERE participant_id = %d", (int) $participant_id ) );
+        }
         $wpdb->update( $tbl, $update, array( 'id' => (int) $participant_id ) );
     }
 

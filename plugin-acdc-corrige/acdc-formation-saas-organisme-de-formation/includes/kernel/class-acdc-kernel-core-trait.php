@@ -7965,7 +7965,7 @@ dbDelta( $sql_companies );
   $draw_field( 'Soit une durée de :', $context['duration'] );
   $draw_field( 'Type de formation :', $context['formation_title'] );
   $y -= 6;
-  $lines = $this->wrap_pdf_text( 'Type d’action de formation conformément à l’art. L6313-1 du code du travail : Action de formation (action concourant au développement des compétences qui entre dans le champ d’application des dispositions relatives à la formation professionnelle).', 92, 8.8 );
+  $lines = $this->pdf_wrap_text( 'Type d’action de formation conformément à l’art. L6313-1 du code du travail : Action de formation (action concourant au développement des compétences qui entre dans le champ d’application des dispositions relatives à la formation professionnelle).', 92 );
   foreach ( $lines as $i => $line ) {
     $page[] = array( 'text' => $line, 'x' => $left, 'y' => $y - ( $i * 11 ), 'size' => 8.8, 'font' => 'Helvetica', 'color' => $ink );
   }
