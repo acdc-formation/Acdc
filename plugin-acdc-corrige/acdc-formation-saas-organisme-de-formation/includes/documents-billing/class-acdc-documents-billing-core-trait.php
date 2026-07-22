@@ -191,9 +191,10 @@ trait ACDC_Documents_Billing_Core_Trait {
         }
       }
     }
-    $sous_total_ht = $tarif_ht + $transport + $meal + $extra_total;
-    $tva_amount    = round( $sous_total_ht * $vat_rate / 100, 2 );
-    $total_ttc     = round( $sous_total_ht + $tva_amount, 2 );
+    $__totals      = \ACDC\Support\Money::invoiceTotals( $tarif_ht, $transport, $meal, $extra_total, $vat_rate );
+    $sous_total_ht = $__totals['ht'];
+    $tva_amount    = $__totals['tva'];
+    $total_ttc     = $__totals['ttc'];
 
     $payment_methods = ! empty( $q->payment_methods ) ? (string) $q->payment_methods
       : "Règlement par virement bancaire à l'édition de la facture. En cas de retard, pénalités au taux légal majoré et indemnité forfaitaire de 40 € pour frais de recouvrement.";
@@ -491,9 +492,10 @@ trait ACDC_Documents_Billing_Core_Trait {
         foreach ( $decoded as $el ) { $extra_total += (float) ( $el['total_ht'] ?? 0 ); }
       }
     }
-    $sous_total_ht = $tarif_ht + $transport + $meal + $extra_total;
-    $tva_amount    = round( $sous_total_ht * $vat_rate / 100, 2 );
-    $total_ttc     = round( $sous_total_ht + $tva_amount, 2 );
+    $__totals      = \ACDC\Support\Money::invoiceTotals( $tarif_ht, $transport, $meal, $extra_total, $vat_rate );
+    $sous_total_ht = $__totals['ht'];
+    $tva_amount    = $__totals['tva'];
+    $total_ttc     = $__totals['ttc'];
     $status_labels = $this->get_invoice_status_labels();
     return array(
       'id'                  => (int) $inv->id,

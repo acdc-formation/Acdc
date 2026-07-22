@@ -364,19 +364,8 @@ trait ACDC_Quizzes_Engine_Trait {
      * - Réponse fausse : 0 pts
      */
     public function qz_calculate_kahoot_score( $is_correct, $response_time_ms, $time_limit_seconds ) {
-        if ( ! $is_correct ) {
-            return 0;
-        }
-        $time_limit_seconds = (int) $time_limit_seconds;
-        if ( $time_limit_seconds <= 0 ) {
-            return 1000;
-        }
-        $response_seconds = max( 0.0, ( (int) $response_time_ms ) / 1000.0 );
-        if ( $response_seconds >= $time_limit_seconds ) {
-            return 500;
-        }
-        $ratio = $response_seconds / (float) $time_limit_seconds;
-        return (int) round( 1000 - ( 500 * $ratio ) );
+        // Logique pure déportée dans \ACDC\Support\QuizScore (couverte par PHPUnit).
+        return \ACDC\Support\QuizScore::kahoot( $is_correct, $response_time_ms, $time_limit_seconds );
     }
 
     /**

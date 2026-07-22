@@ -4,6 +4,21 @@ Toutes les modifications notables de ce projet sont documentées ici.
 Format inspiré de [Keep a Changelog](https://keepachangelog.com/fr/1.1.0/).
 L'historique détaillé antérieur est archivé dans [`release-notes/`](release-notes/).
 
+## [3.25.104] — 2026-07-22
+
+### Ajouté
+- Bibliothèque de logique pure testable `src/` (`ACDC\Support\Money`, `QuizScore`, `DocumentSeal`),
+  autoloadée sans dépendance à `composer install`.
+- Suite PHPUnit (`tests/`, `phpunit.xml.dist`) — 22 tests / 45 assertions, couvrant les
+  scénarios des bugs H1 (facturation) et H2 (triche quiz).
+- Scellement SHA-256 des signatures électroniques : empreinte du document source et du PDF
+  signé calculée, stockée (`doc_sha256`, `signed_pdf_sha256`) et journalisée (valeur probante).
+
+### Corrigé
+- Anti-triche quiz renforcé : le bornage `min(client, serveur)` du temps de réponse était
+  inefficace (`min(0, écoulé)=0`) ; le temps serveur est désormais autoritatif.
+- Calcul HT/TVA/TTC devis et facture unifié via `Money` (source unique, verrouille le correctif H1).
+
 ## [3.25.103] — 2026-07-22
 
 ### Sécurité

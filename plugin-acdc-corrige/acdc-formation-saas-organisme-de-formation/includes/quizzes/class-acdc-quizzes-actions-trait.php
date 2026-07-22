@@ -2734,15 +2734,14 @@ trait ACDC_Quizzes_Actions_Trait {
             sort( $correct_ids ); $sorted_resp = $answer_ids; sort( $sorted_resp );
             $is_correct = ( ! empty( $correct_ids ) && $sorted_resp === $correct_ids ) ? 1 : 0;
         }
-        // Sécurité : borner le response_ms client par le temps écoulé côté serveur
+        // Sécurité anti-triche : le temps serveur (non falsifiable) est autoritatif dès
+        // qu'il est connu. Un min(client, serveur) serait inefficace (response_ms=0 → 0).
+        // Voir \ACDC\Support\QuizScore::clampResponseMs (couvert par PHPUnit).
         $server_elapsed_ms = 0;
         if ( ! empty( $session->current_question_started_at ) ) {
             $server_elapsed_ms = max( 0, ( time() - strtotime( $session->current_question_started_at ) ) * 1000 );
         }
-        if ( $server_elapsed_ms > 0 ) {
-            $response_ms = min( (int) $response_ms, (int) $server_elapsed_ms );
-        }
-        $response_ms = max( 0, (int) $response_ms );
+        $response_ms = \ACDC\Support\QuizScore::clampResponseMs( $response_ms, $server_elapsed_ms );
         $score = ( null === $is_correct ) ? 0 : $this->qz_calculate_kahoot_score(
             (bool) $is_correct, $response_ms, (int) $question->time_limit
         );

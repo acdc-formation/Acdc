@@ -419,16 +419,23 @@ class ACDC_Sig_Public {
         $signed_doc_url  = $pdf_result['url']  ?? '';
         $signed_doc_path = $pdf_result['path'] ?? '';
 
+        // Scellement à valeur probante : empreinte SHA-256 du document source présenté au
+        // signataire et du PDF signé généré. Toute altération ultérieure devient détectable.
+        $doc_sha256        = \ACDC\Support\DocumentSeal::hashFile( (string) $request->doc_path );
+        $signed_pdf_sha256 = \ACDC\Support\DocumentSeal::hashFile( (string) $signed_doc_path );
+
         $wpdb->update(
             $this->core->table_requests,
             array(
-                'status'          => 'signe',
-                'signed_at'       => current_time( 'mysql' ),
-                'signed_doc_url'  => $signed_doc_url,
-                'signed_doc_path' => $signed_doc_path,
-                'signer_ip'       => $ip,
-                'signer_ua'       => $ua,
-                'updated_at'      => current_time( 'mysql' ),
+                'status'            => 'signe',
+                'signed_at'         => current_time( 'mysql' ),
+                'signed_doc_url'    => $signed_doc_url,
+                'signed_doc_path'   => $signed_doc_path,
+                'doc_sha256'        => $doc_sha256,
+                'signed_pdf_sha256' => $signed_pdf_sha256,
+                'signer_ip'         => $ip,
+                'signer_ua'         => $ua,
+                'updated_at'        => current_time( 'mysql' ),
             ),
             array( 'id' => $request->id )
         );
@@ -437,6 +444,9 @@ class ACDC_Sig_Public {
         if ( ACDC_Sig_Core::LEVEL_RENFORCE === $request->sig_level ) {
             $details .= ' Identité vérifiée par OTP e-mail.';
             $this->core->clear_otp_verified( $request->token );
+        }
+        if ( '' !== $doc_sha256 ) {
+            $details .= ' Empreinte SHA-256 du document : ' . $doc_sha256 . '.';
         }
         $this->core->log_event( $request->id, 'signed', $details, $ip, $ua );
 

@@ -98,6 +98,8 @@ class ACDC_Sig_Core {
             signed_doc_path TEXT,
             audit_pdf_url   TEXT,
             audit_pdf_path  TEXT,
+            doc_sha256        CHAR(64) NOT NULL DEFAULT '',
+            signed_pdf_sha256 CHAR(64) NOT NULL DEFAULT '',
             status        VARCHAR(30) NOT NULL DEFAULT 'en_attente',
             expires_at    DATETIME DEFAULT NULL,
             signed_at     DATETIME DEFAULT NULL,

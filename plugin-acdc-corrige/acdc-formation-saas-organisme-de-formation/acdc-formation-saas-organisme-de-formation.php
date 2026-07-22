@@ -3,7 +3,7 @@
  * Plugin Name: ACDC Formation SAAS Organisme de formation
  * Plugin URI: https://acdc-formation.com/
  * Description: Espace de gestion frontal sécurisé pour organisme de formation, réécrit sur base (dernière version du plugin : 3.20.105) avec module UI/Design système : réglage avancé des icônes d’action, taille, couleurs, espacements et choix des pictogrammes.
- * Version: 3.25.103
+ * Version: 3.25.104
  * Author: ACDC Formation
  * Text Domain: acdc-formation-saas
  * Domain Path: /languages
@@ -13,10 +13,28 @@ if ( ! defined( 'ABSPATH' ) ) {
     exit;
 }
 
-define( 'ACDC_OF_SAAS_VERSION', '3.25.103' );
+define( 'ACDC_OF_SAAS_VERSION', '3.25.104' );
 define( 'ACDC_OF_SAAS_FILE', __FILE__ );
 define( 'ACDC_OF_SAAS_DIR', plugin_dir_path( __FILE__ ) );
 define( 'ACDC_OF_SAAS_URL', plugin_dir_url( __FILE__ ) );
+
+/* Bibliothèque de logique pure et testable (namespace ACDC\, couverte par PHPUnit).
+   Autoload Composer si présent, sinon autoloader PSR-4 minimal (aucune dépendance
+   à `composer install` en production). */
+if ( file_exists( ACDC_OF_SAAS_DIR . 'vendor/autoload.php' ) ) {
+	require_once ACDC_OF_SAAS_DIR . 'vendor/autoload.php';
+}
+spl_autoload_register(
+	function ( $class ) {
+		if ( 0 !== strpos( $class, 'ACDC\\' ) ) {
+			return;
+		}
+		$file = ACDC_OF_SAAS_DIR . 'src/' . str_replace( '\\', '/', substr( $class, 5 ) ) . '.php';
+		if ( file_exists( $file ) ) {
+			require_once $file;
+		}
+	}
+);
 
 /* C08 (audit 3.25.90) — Chargement effectif des traductions. Le text domain et 238
    appels __() existaient déjà mais aucune traduction n'était chargée. Accroché sur
