@@ -3,7 +3,7 @@
  * Plugin Name: ACDC Formation SAAS Organisme de formation
  * Plugin URI: https://acdc-formation.com/
  * Description: Espace de gestion frontal sécurisé pour organisme de formation, réécrit sur base (dernière version du plugin : 3.20.105) avec module UI/Design système : réglage avancé des icônes d’action, taille, couleurs, espacements et choix des pictogrammes.
- * Version: 3.25.105
+ * Version: 3.25.106
  * Author: ACDC Formation
  * Text Domain: acdc-formation-saas
  * Domain Path: /languages
@@ -13,7 +13,7 @@ if ( ! defined( 'ABSPATH' ) ) {
     exit;
 }
 
-define( 'ACDC_OF_SAAS_VERSION', '3.25.105' );
+define( 'ACDC_OF_SAAS_VERSION', '3.25.106' );
 define( 'ACDC_OF_SAAS_FILE', __FILE__ );
 define( 'ACDC_OF_SAAS_DIR', plugin_dir_path( __FILE__ ) );
 define( 'ACDC_OF_SAAS_URL', plugin_dir_url( __FILE__ ) );
@@ -90,6 +90,35 @@ if ( ! function_exists( 'acdc_of_saas_maybe_disable_cache_headers' ) ) {
     }
 }
 add_action( 'send_headers', 'acdc_of_saas_maybe_disable_cache_headers', 1 );
+
+if ( ! function_exists( 'acdc_of_saas_send_security_headers' ) ) {
+    /**
+     * Durcissement HTTP des pages publiques de document (signature ?sig=, émargement
+     * ?acdc_emarg=) : anti-clickjacking, anti MIME-sniffing, pas de fuite de référent.
+     * HSTS opt-in via la constante ACDC_ENABLE_HSTS (HTTPS uniquement).
+     */
+    function acdc_of_saas_send_security_headers() {
+        if ( headers_sent() ) {
+            return;
+        }
+        if ( ! isset( $_GET['sig'] ) && ! isset( $_GET['acdc_emarg'] ) ) {
+            return;
+        }
+        if ( ! class_exists( '\\ACDC\\Support\\SecurityHeaders' ) ) {
+            return;
+        }
+        $enable_hsts = defined( 'ACDC_ENABLE_HSTS' ) && ACDC_ENABLE_HSTS;
+        $headers     = \ACDC\Support\SecurityHeaders::forPublicDocument( is_ssl(), $enable_hsts );
+        /** Permet d'ajuster/désactiver les en-têtes de sécurité des pages publiques. */
+        $headers = apply_filters( 'acdc_of_saas_public_security_headers', $headers );
+        foreach ( (array) $headers as $name => $value ) {
+            if ( '' !== (string) $value ) {
+                header( $name . ': ' . $value );
+            }
+        }
+    }
+}
+add_action( 'send_headers', 'acdc_of_saas_send_security_headers', 1 );
 
 if ( ! function_exists( 'acdc_of_saas_maybe_purge_after_plugin_request' ) ) {
     function acdc_of_saas_maybe_purge_after_plugin_request() {

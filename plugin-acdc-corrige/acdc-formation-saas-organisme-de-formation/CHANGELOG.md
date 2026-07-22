@@ -4,6 +4,15 @@ Toutes les modifications notables de ce projet sont documentées ici.
 Format inspiré de [Keep a Changelog](https://keepachangelog.com/fr/1.1.0/).
 L'historique détaillé antérieur est archivé dans [`release-notes/`](release-notes/).
 
+## [3.25.106] — 2026-07-22
+
+### Sécurité
+- En-têtes de sécurité HTTP sur les pages publiques de document (signature, émargement) :
+  CSP `frame-ancestors 'self'` (anti-clickjacking), `X-Frame-Options`, `nosniff`,
+  `Referrer-Policy: no-referrer` ; HSTS opt-in (`ACDC_ENABLE_HSTS`). Filtre
+  `acdc_of_saas_public_security_headers`. `ACDC\Support\SecurityHeaders` + 5 tests
+  (suite : 36 tests / 74 assertions).
+
 ## [3.25.105] — 2026-07-22
 
 ### Performance
