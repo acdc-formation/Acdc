@@ -4,6 +4,43 @@ Toutes les modifications notables de ce projet sont documentées ici.
 Format inspiré de [Keep a Changelog](https://keepachangelog.com/fr/1.1.0/).
 L'historique détaillé antérieur est archivé dans [`release-notes/`](release-notes/).
 
+## [3.25.116] — 2026-07-22
+
+### Corrigé (6ᵉ vague — audit des workflows métier & tâches planifiées, ~18 correctifs)
+Conformité / documents :
+- **Attestations** : un apprenant marqué **absent** à l'émargement ne reçoit plus son certificat de
+  réalisation ni son attestation de fin de formation (envois automatiques filtrés sur l'émargement).
+- **Convocation** : l'envoi automatique persiste désormais l'URL du PDF sur le dossier → la
+  convocation devient visible au portail apprenant (auparavant « bientôt disponible » en permanence).
+- **Suppression de dossier** : le contrat/convention lié n'est plus laissé orphelin (le DELETE ciblait
+  une colonne `registration_id` inexistante ; corrigé vers `id = autofill_contract_id`, 2 emplacements).
+- **Émargement** : `mark_absent` réévalue la complétion de la feuille (statut `completed` atteint même
+  quand la dernière action est un « marquer absent »).
+
+Indicateurs / pilotage Qualiopi :
+- **Actions Qualiopi** (amélioration continue) : les compteurs « à traiter / traitées » lisaient des
+  clés inexistantes (`to_process`/`closed`) → toujours 0. Corrigé vers `a_traiter`/`traitee`.
+- **Taux de réussite éval.** (dashboard) : KPI jamais alimenté (clé `success_rate` inexistante) →
+  calcul réel du pass-rate (≥ 70 %).
+- **Taux de bonnes réponses / progression** : double normalisation supprimée (`final_score` déjà en %
+  n'est plus re-divisé par le nombre de questions → plus de plafonnement à 100 %).
+
+CRM / facturation :
+- **Conversion devis→facture** : garde anti double-conversion (un 2ᵉ clic redirige vers la facture
+  existante au lieu de créer un doublon numéroté).
+- **Entonnoir CRM** : le prospect avance à « Devis envoyé » à l'envoi du devis ; la fiche prospect
+  affiche ses **vrais** devis en mode réel (au lieu des données de démonstration).
+- **Lead REST** : `profile_type` normalisé en libellés canoniques (Particulier/Salarié/Indépendant/
+  Entreprise) attendus par le CRM.
+
+Tâches planifiées (WP-Cron) :
+- 4 crons (NAD, indicateurs, sync formations, alertes absence) désormais aussi armés sur `init`
+  (auparavant sur le hook `wp`, front-office uniquement → non auto-réparants).
+- Purge des données et désinstallation déprogramment désormais **les 24** tâches cron (au lieu de 5/6)
+  → plus de tâches orphelines s'exécutant contre des tables vidées.
+- Récurrence `weekly` déclarée (auto-suffisance) ; crons convocation/positionnement comparés en
+  dates calendaires homogènes (plus de décalage de fuseau d'un jour aux bornes J-X).
+
 ## [3.25.115] — 2026-07-22
 
 ### Corrigé (régression détectée par la revue finale)

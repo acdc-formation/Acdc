@@ -4186,11 +4186,31 @@ public function handle_purge_plugin_data() {
   }
 
   if ( function_exists( 'wp_clear_scheduled_hook' ) ) {
+    // ACDC 3.25.115 — déprogrammer TOUS les crons (aligné sur la désactivation).
+    wp_clear_scheduled_hook( 'acdc_sig_cron_relances' );
     wp_clear_scheduled_hook( 'acdc_of_surveys_cron_dispatches' );
     wp_clear_scheduled_hook( 'acdc_of_surveys_cron_reminders' );
     wp_clear_scheduled_hook( 'acdc_of_surveys_cron_expirations' );
     wp_clear_scheduled_hook( 'acdc_of_surveys_cron_action_followups' );
-    wp_clear_scheduled_hook( 'acdc_sig_cron_relances' );
+    wp_clear_scheduled_hook( 'acdc_of_learner_portal_cron_maintenance' );
+    wp_clear_scheduled_hook( 'acdc_nad_cron_send_and_relance' );
+    wp_clear_scheduled_hook( 'acdc_of_cron_push_indicators' );
+    wp_clear_scheduled_hook( 'acdc_of_cron_sync_formations' );
+    wp_clear_scheduled_hook( 'acdc_of_absence_alert_cron' );
+    wp_clear_scheduled_hook( 'acdc_of_session_close_cron' );
+    wp_clear_scheduled_hook( 'acdc_of_convocation_cron' );
+    wp_clear_scheduled_hook( 'acdc_of_positioning_test_cron' );
+    wp_clear_scheduled_hook( 'acdc_of_qualiopi_alerts_cron' );
+    wp_clear_scheduled_hook( 'acdc_of_trainer_portal_cron_maintenance' );
+    wp_clear_scheduled_hook( 'acdc_of_qz_cron_dispatches' );
+    wp_clear_scheduled_hook( 'acdc_of_qz_cron_reminders' );
+    wp_clear_scheduled_hook( 'acdc_of_qz_cron_expirations' );
+    wp_clear_scheduled_hook( 'acdc_of_qz_cron_close_inactive_sessions' );
+    wp_clear_scheduled_hook( 'acdc_of_qz_cron_rgpd_purge' );
+    wp_clear_scheduled_hook( 'acdc_of_watch_collect_cron' );
+    wp_clear_scheduled_hook( 'acdc_of_watch_analyze_cron' );
+    wp_clear_scheduled_hook( 'acdc_of_watch_digest_cron' );
+    wp_clear_scheduled_hook( 'acdc_of_watch_reminder_cron' );
   }
 
   $agent_users = get_users( array(
@@ -5141,6 +5161,17 @@ public function handle_purge_plugin_data() {
     // Source réelle du formulaire (ex: "Recommandation d'un partenaire")
     $real_source = ! empty( $body['source'] ) ? sanitize_text_field( wp_unslash( (string) $body['source'] ) ) : $source;
 
+    // ACDC 3.25.115 — libellés canoniques attendus par le CRM.
+    $profile_type_labels = array(
+      'particulier' => 'Particulier',
+      'salarie'     => 'Salarié',
+      'independant' => 'Indépendant',
+      'entreprise'  => 'Entreprise',
+    );
+    if ( isset( $profile_type_labels[ $profile_type ] ) ) {
+      $profile_type = $profile_type_labels[ $profile_type ];
+    }
+
     $data = array(
       'profile_type'          => $profile_type,
       'first_name'            => sanitize_text_field( (string) ( $body['prenom'] ?? '' ) ),
@@ -5732,7 +5763,11 @@ public function handle_purge_plugin_data() {
 
     // Suppression en cascade
 
-    $wpdb->delete( $this->registration_contract_table, array( 'registration_id' => $rid ) );
+    // ACDC 3.25.115 — la table contrats n'a pas de registration_id : supprimer par id = autofill_contract_id.
+    $reg = $wpdb->get_row( $wpdb->prepare( "SELECT autofill_contract_id FROM {$this->training_registration_table} WHERE id = %d", $rid ) );
+    if ( $reg && ! empty( $reg->autofill_contract_id ) ) {
+      $wpdb->delete( $this->registration_contract_table, array( 'id' => (int) $reg->autofill_contract_id ) );
+    }
     $wpdb->delete( $this->need_analysis_table, array( 'dossier_id' => $rid ) );
     $wpdb->delete( $this->training_registration_table, array( 'id' => $rid ) );
 

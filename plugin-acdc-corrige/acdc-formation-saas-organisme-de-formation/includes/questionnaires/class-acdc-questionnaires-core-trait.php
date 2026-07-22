@@ -5069,8 +5069,9 @@ private function maybe_auto_create_questionnaire_actions_from_response( $session
         'response_rate'      => isset( $session_stats['response_rate'] ) ? $session_stats['response_rate'] : null,
         'average_score'      => isset( $session_stats['average_score'] ) ? $session_stats['average_score'] : null,
         'actions_total'      => (int) $action_stats['total'],
-        'actions_to_process' => (int) $action_stats['to_process'],
-        'actions_closed'     => (int) $action_stats['closed'],
+        // ACDC 3.25.115 — clés réelles du provider (a_traiter/traitee), sinon indicateur toujours 0.
+        'actions_to_process' => (int) $action_stats['a_traiter'],
+        'actions_closed'     => (int) $action_stats['traitee'],
         'proof_status'       => $proof_status,
         'proof_count'        => $proof_count,
       );
@@ -5081,8 +5082,9 @@ private function maybe_auto_create_questionnaire_actions_from_response( $session
       $overall['responses']          += (int) $session_stats['responses'];
       $overall['alerts']             += (int) $session_stats['alerts'];
       $overall['actions_total']      += (int) $action_stats['total'];
-      $overall['actions_to_process'] += (int) $action_stats['to_process'];
-      $overall['actions_closed']     += (int) $action_stats['closed'];
+      // ACDC 3.25.115 — clés réelles du provider (a_traiter/traitee), sinon indicateur toujours 0.
+      $overall['actions_to_process'] += (int) $action_stats['a_traiter'];
+      $overall['actions_closed']     += (int) $action_stats['traitee'];
       if ( (int) $action_stats['total'] > 0 ) {
         $overall['linked_actions_types']++;
       }

@@ -1050,6 +1050,24 @@
     $commanditaire_type = $this->is_individual_prospect_profile( $profile_type ) ? 'Particulier' : 'Entreprise';
     $rows = array();
 
+    // ACDC 3.25.115 — en mode réel, lire les vrais devis du prospect.
+    if ( method_exists( $this, 'is_documents_billing_demo_enabled' ) && ! $this->is_documents_billing_demo_enabled() ) {
+      global $wpdb;
+      $real_rows = $wpdb->get_results( $wpdb->prepare(
+        "SELECT * FROM {$this->quote_table} WHERE source_prospect_id = %d ORDER BY id DESC LIMIT 10",
+        (int) $prospect->id
+      ) );
+      if ( is_array( $real_rows ) ) {
+        foreach ( $real_rows as $real_row ) {
+          // L'appelant lit formation_full puis formation ; la table réelle expose formation_title.
+          if ( empty( $real_row->formation_full ) && ! empty( $real_row->formation_title ) ) {
+            $real_row->formation_full = (string) $real_row->formation_title;
+          }
+        }
+      }
+      return is_array( $real_rows ) ? $real_rows : array();
+    }
+
     foreach ( (array) $this->get_mock_quotes_data( 'action' ) as $row ) {
       $matches = false;
 

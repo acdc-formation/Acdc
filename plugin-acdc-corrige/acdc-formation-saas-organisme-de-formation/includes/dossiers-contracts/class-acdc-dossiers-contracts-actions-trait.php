@@ -369,7 +369,11 @@ public function handle_delete_training_file( $nonce_already_verified = false ) {
     check_admin_referer( 'acdc_delete_training_file_' . $registration_id );
   }
   global $wpdb;
-  $wpdb->delete( $this->registration_contract_table, array( 'registration_id' => $registration_id ) );
+  // ACDC 3.25.115 — la table contrats n'a pas de registration_id : supprimer par id = autofill_contract_id.
+  $reg = $wpdb->get_row( $wpdb->prepare( "SELECT autofill_contract_id FROM {$this->training_registration_table} WHERE id = %d", (int) $registration_id ) );
+  if ( $reg && ! empty( $reg->autofill_contract_id ) ) {
+    $wpdb->delete( $this->registration_contract_table, array( 'id' => (int) $reg->autofill_contract_id ) );
+  }
   $wpdb->delete( $this->need_analysis_table, array( 'dossier_id' => $registration_id ) );
   $wpdb->delete( $this->training_registration_table, array( 'id' => $registration_id ) );
   if ( is_admin() ) {

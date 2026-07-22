@@ -286,7 +286,9 @@ trait ACDC_Sessions_Actions_Trait {
       return;
     }
 
-    $now_ts = current_time( 'timestamp' );
+    // ACDC 3.25.115 — base calendaire homogène (même fuseau/heure que $start_ts) plutôt que
+    // de comparer current_time('timestamp') (heure locale WP) à strtotime() (fuseau serveur).
+    $today_ts = strtotime( current_time( 'Y-m-d' ) . ' 08:00:00' );
 
     // Séances actives avec convocation_enabled = 1 et date de début future ou aujourd'hui
     $sessions = $wpdb->get_results(
@@ -314,7 +316,8 @@ trait ACDC_Sessions_Actions_Trait {
       }
 
       $start_ts   = strtotime( $start_date . ' 08:00:00' );
-      $days_until = (int) floor( ( $start_ts - $now_ts ) / DAY_IN_SECONDS );
+      // ACDC 3.25.115 — écart en jours calendaires (même base 08:00:00 que $today_ts).
+      $days_until = (int) floor( ( $start_ts - $today_ts ) / DAY_IN_SECONDS );
 
       if ( $days_until < 0 ) {
         continue;
@@ -401,6 +404,49 @@ trait ACDC_Sessions_Actions_Trait {
               'email_audience'      => 'apprenant',
             )
           );
+
+          // ACDC 3.25.115 — persister l'URL de convocation pour l'affichage portail.
+          // Reproduit le schéma de _auto_send_completion_certificate_for_session :
+          // génération du PDF via build_training_convocation_pdf_pages + sauvegarde fichier,
+          // puis écriture de l'URL/chemin sur le dossier (training_registration).
+          if ( ! empty( $session->formation_id )
+               && method_exists( $this, 'get_training_convocation_context' )
+               && method_exists( $this, 'build_training_convocation_pdf_pages' )
+               && method_exists( $this, '_build_simple_pdf_string' ) ) {
+            $conv_reg = $wpdb->get_row( $wpdb->prepare(
+              "SELECT * FROM {$this->training_registration_table} WHERE learner_id = %d AND formation_id = %d AND is_draft = 0 ORDER BY id DESC LIMIT 1",
+              (int) $learner->id,
+              (int) $session->formation_id
+            ) );
+            if ( $conv_reg && empty( $conv_reg->convocation_document_url ) ) {
+              $conv_context = $this->get_training_convocation_context( $conv_reg );
+              $conv_pages   = $this->build_training_convocation_pdf_pages( $conv_reg, $conv_context );
+              $conv_pdf     = $this->_build_simple_pdf_string( $conv_pages );
+              if ( ! empty( $conv_pdf ) ) {
+                $conv_upload_dir = wp_upload_dir();
+                $conv_subdir     = $conv_upload_dir['basedir'] . '/acdc-convocations';
+                if ( ! file_exists( $conv_subdir ) ) {
+                  wp_mkdir_p( $conv_subdir );
+                }
+                $conv_filename = sanitize_file_name( 'convocation-' . (int) $conv_reg->id . '.pdf' );
+                $conv_filepath = $conv_subdir . '/' . $conv_filename;
+                if ( file_put_contents( $conv_filepath, $conv_pdf ) !== false ) {
+                  $conv_fileurl = $conv_upload_dir['baseurl'] . '/acdc-convocations/' . $conv_filename;
+                  $wpdb->update(
+                    $this->training_registration_table,
+                    array(
+                      'convocation_document_url'  => esc_url_raw( $conv_fileurl ),
+                      'convocation_document_path' => sanitize_text_field( $conv_filepath ),
+                      'updated_at'                => current_time( 'mysql' ),
+                    ),
+                    array( 'id' => (int) $conv_reg->id ),
+                    array( '%s', '%s', '%s' ),
+                    array( '%d' )
+                  );
+                }
+              }
+            }
+          }
 
         } elseif ( $send_reminder ) {
           $body_html  = '<p style="font-size:19px;line-height:1.7;margin:0 0 20px;">Votre formation <strong>' . esc_html( $formation_title ) . '</strong> commence demain, le <strong>' . esc_html( ucfirst( $date_formatted ) ) . '</strong>.</p>';
@@ -756,6 +802,25 @@ trait ACDC_Sessions_Actions_Trait {
       return;
     }
 
+    // ACDC 3.25.115 — ne pas délivrer d'attestation à un apprenant marqué absent à l'émargement.
+    $absent_learner_ids = array();
+    if ( class_exists( 'ACDC_Emargement' ) && method_exists( 'ACDC_Emargement', 'get_instance' ) ) {
+      $emarg_instance = ACDC_Emargement::get_instance();
+      if ( $emarg_instance && isset( $emarg_instance->core ) && ! empty( $emarg_instance->core->table_learners ) ) {
+        $emarg_learner_table = $emarg_instance->core->table_learners;
+        $absent_ids = $wpdb->get_col( $wpdb->prepare(
+          "SELECT learner_id FROM {$emarg_learner_table} WHERE session_id = %d AND is_absent = 1",
+          $session_id
+        ) );
+        foreach ( (array) $absent_ids as $absent_id ) {
+          $absent_id = (int) $absent_id;
+          if ( $absent_id > 0 ) {
+            $absent_learner_ids[ $absent_id ] = true;
+          }
+        }
+      }
+    }
+
     $portal_page_id = (int) get_option( 'acdc_of_learner_portal_page_id', 0 );
     $portal_url     = $portal_page_id ? get_permalink( $portal_page_id ) : home_url( '/' );
     $sent_count     = 0;
@@ -768,6 +833,11 @@ trait ACDC_Sessions_Actions_Trait {
       }
 
       $learner_id = (int) $learner->id;
+
+      // ACDC 3.25.115 — ne pas délivrer d'attestation à un apprenant marqué absent à l'émargement.
+      if ( isset( $absent_learner_ids[ $learner_id ] ) ) {
+        continue;
+      }
 
       // Trouver la training_registration liée (learner_id + formation_id)
       $registration = $wpdb->get_row( $wpdb->prepare(
@@ -880,6 +950,17 @@ trait ACDC_Sessions_Actions_Trait {
     if ( ! $formation || empty( $formation->end_documents_enabled ) ) { return; }
     $learners = $wpdb->get_results( $wpdb->prepare( "SELECT id, first_name, last_name, usage_last_name, email FROM {$this->learner_table} WHERE session_id = %d AND email != '' AND email IS NOT NULL", $session_id ) );
     if ( empty( $learners ) ) { return; }
+    // ACDC 3.25.115 — ne pas délivrer d'attestation de fin de formation à un apprenant
+    // marqué absent à l'émargement (cohérent avec le certificat de réalisation).
+    $absent_learner_ids = array();
+    if ( class_exists( 'ACDC_Emargement' ) && method_exists( 'ACDC_Emargement', 'get_instance' ) ) {
+      $emarg_instance = ACDC_Emargement::get_instance();
+      if ( $emarg_instance && isset( $emarg_instance->core ) && ! empty( $emarg_instance->core->table_learners ) ) {
+        $emarg_learner_table = $emarg_instance->core->table_learners;
+        $absent_ids = $wpdb->get_col( $wpdb->prepare( "SELECT learner_id FROM {$emarg_learner_table} WHERE session_id = %d AND is_absent = 1", $session_id ) );
+        foreach ( (array) $absent_ids as $aid ) { $absent_learner_ids[ (int) $aid ] = true; }
+      }
+    }
     $portal_page_id = (int) get_option( 'acdc_of_learner_portal_page_id', 0 );
     $portal_url     = $portal_page_id ? get_permalink( $portal_page_id ) : home_url( '/' );
     $upload_dir     = wp_upload_dir();
@@ -888,6 +969,7 @@ trait ACDC_Sessions_Actions_Trait {
       $email = sanitize_email( (string) $learner->email );
       if ( ! $email || ! is_email( $email ) ) { continue; }
       $learner_id   = (int) $learner->id;
+      if ( isset( $absent_learner_ids[ $learner_id ] ) ) { continue; }
       $registration = $wpdb->get_row( $wpdb->prepare( "SELECT * FROM {$this->training_registration_table} WHERE learner_id = %d AND formation_id = %d AND is_draft = 0 ORDER BY id DESC LIMIT 1", $learner_id, $formation_id ) );
       if ( ! $registration ) { continue; }
       $cert_url  = ! empty( $registration->end_training_certificate_document_url )  ? (string) $registration->end_training_certificate_document_url  : '';
@@ -940,7 +1022,9 @@ trait ACDC_Sessions_Actions_Trait {
       return;
     }
 
-    $now_ts = current_time( 'timestamp' );
+    // ACDC 3.25.115 — base calendaire homogène (même fuseau/heure que $start_ts) plutôt que
+    // de comparer current_time('timestamp') (heure locale WP) à strtotime() (fuseau serveur).
+    $today_ts = strtotime( current_time( 'Y-m-d' ) . ' 08:00:00' );
 
     $sessions = $wpdb->get_results(
       "SELECT s.*, f.title AS formation_title, f.positioning_test_enabled
@@ -968,7 +1052,8 @@ trait ACDC_Sessions_Actions_Trait {
       }
 
       $start_ts   = strtotime( $start_date . ' 08:00:00' );
-      $days_until = (int) floor( ( $start_ts - $now_ts ) / DAY_IN_SECONDS );
+      // ACDC 3.25.115 — écart en jours calendaires (même base 08:00:00 que $today_ts).
+      $days_until = (int) floor( ( $start_ts - $today_ts ) / DAY_IN_SECONDS );
 
       // Fenêtre : 0 à 2 jours avant le début (inclut aujourd'hui et dans 48h)
       if ( $days_until < 0 || $days_until > 2 ) {

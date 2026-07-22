@@ -252,6 +252,13 @@ private function acdc_send_transactional_email( $to, $subject, $template_args = 
         'display'  => 'Mensuel (ACDC)',
       );
     }
+    // ACDC 3.25.115 — déclarer weekly (auto-suffisance si un filtre la retire).
+    if ( ! isset( $schedules['weekly'] ) ) {
+      $schedules['weekly'] = array(
+        'interval' => 7 * DAY_IN_SECONDS,
+        'display'  => 'Une fois par semaine (ACDC)',
+      );
+    }
     return $schedules;
   }
 
@@ -371,6 +378,20 @@ private function acdc_send_transactional_email( $to, $subject, $template_args = 
     }
     if ( $this->maybe_schedule_runtime_hook( 'acdc_of_watch_reminder_cron', 'monthly', 0 ) ) {
       $repaired[] = 'Planification rappel veille restaurée';
+    }
+
+    // ACDC 3.25.115 — armer aussi sur init (hook wp = front-only, non auto-réparant).
+    if ( $this->maybe_schedule_runtime_hook( 'acdc_nad_cron_send_and_relance', 'twicedaily', 1800 ) ) {
+      $repaired[] = 'Planification envoi/relance analyses du besoin restaurée';
+    }
+    if ( $this->maybe_schedule_runtime_hook( 'acdc_of_cron_push_indicators', 'daily', 2100 ) ) {
+      $repaired[] = 'Planification push indicateurs SAAS restaurée';
+    }
+    if ( $this->maybe_schedule_runtime_hook( 'acdc_of_cron_sync_formations', 'daily', 2400 ) ) {
+      $repaired[] = 'Planification sync formations Manager restaurée';
+    }
+    if ( $this->maybe_schedule_runtime_hook( 'acdc_of_absence_alert_cron', 'daily', 2700 ) ) {
+      $repaired[] = 'Planification alerte absences restaurée';
     }
 
     if ( ! empty( $repaired ) ) {

@@ -3579,7 +3579,16 @@ trait ACDC_Kernel_Render_Trait {
     /* Stats taux de r&#233;ussite &#233;valuations */
     $eval_rows  = $this->get_questionnaire_session_summary_rows( array( 'source_type' => 'evaluation' ) );
     $eval_stats = $this->get_questionnaire_session_stats_from_rows( $eval_rows );
-    $success_rate = isset( $eval_stats['success_rate'] ) ? $eval_stats['success_rate'] : null;
+    // ACDC 3.25.115 — taux de réussite réel (pass-rate évaluations), la clé success_rate n'existait pas.
+    $eval_pass_row = $wpdb->get_row(
+      "SELECT COUNT(*) AS total, SUM(CASE WHEN p.final_score IS NOT NULL AND p.final_score >= 70 THEN 1 ELSE 0 END) AS reussi
+       FROM {$this->questionnaire_participant_table} p
+       INNER JOIN {$this->questionnaire_session_table} s ON s.id = p.session_id
+       WHERE s.source_type = 'evaluation' AND p.responded_at IS NOT NULL"
+    );
+    $success_rate = ( $eval_pass_row && (int) $eval_pass_row->total > 0 )
+      ? (int) round( ( (int) $eval_pass_row->reussi / (int) $eval_pass_row->total ) * 100 )
+      : null;
 
     /* Sessions &#224; venir (4 max) */
     $today = current_time( 'Y-m-d' );
@@ -10351,8 +10360,14 @@ trait ACDC_Kernel_Render_Trait {
         }
         $source = $source_cache[ $source_key ];
         $total_questions = ! empty( $source['questions'] ) && is_array( $source['questions'] ) ? count( $source['questions'] ) : 0;
-        $raw_score = '' !== (string) $entry->final_score ? (float) $entry->final_score : (float) $this->get_questionnaire_session_participant_score( (int) $entry->questionnaire_session_id, (int) $entry->participant_id );
-        $percentage = $total_questions > 0 ? max( 0, min( 100, round( ( $raw_score / $total_questions ) * 100, 1 ) ) ) : null;
+        $has_final_score = '' !== (string) $entry->final_score;
+        $raw_score = $has_final_score ? (float) $entry->final_score : (float) $this->get_questionnaire_session_participant_score( (int) $entry->questionnaire_session_id, (int) $entry->participant_id );
+        // ACDC 3.25.115 — final_score déjà en % : pas de re-normalisation ; seul le fallback score brut se normalise sur total_questions.
+        if ( $has_final_score ) {
+          $percentage = max( 0, min( 100, round( $raw_score, 1 ) ) );
+        } else {
+          $percentage = $total_questions > 0 ? max( 0, min( 100, round( ( $raw_score / $total_questions ) * 100, 1 ) ) ) : null;
+        }
 
         if ( 'positioning_test' === $entry->source_type && null !== $percentage ) {
           $positioning_percentages[] = $percentage;

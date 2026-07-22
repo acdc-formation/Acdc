@@ -360,10 +360,29 @@ class ACDC_Emarg_Core {
      * -------------------------------------------------------------------- */
     public function mark_absent( $learner_row_id ) {
         global $wpdb;
+        $now = current_time( 'mysql' );
         $wpdb->update( $this->table_learners,
-            array( 'status' => 'absent', 'is_absent' => 1, 'updated_at' => current_time( 'mysql' ) ),
+            array( 'status' => 'absent', 'is_absent' => 1, 'updated_at' => $now ),
             array( 'id' => absint( $learner_row_id ) )
         );
+
+        // ACDC 3.25.115 — réévaluer la complétion après un marquage absent.
+        $emarg_row = $wpdb->get_row( $wpdb->prepare(
+            "SELECT emarg_session_id FROM {$this->table_learners} WHERE id = %d",
+            absint( $learner_row_id )
+        ) );
+        if ( $emarg_row ) {
+            $pending = $wpdb->get_var( $wpdb->prepare(
+                "SELECT COUNT(*) FROM {$this->table_learners} WHERE emarg_session_id = %d AND status = 'pending'",
+                (int) $emarg_row->emarg_session_id
+            ) );
+            if ( 0 === (int) $pending ) {
+                $wpdb->update( $this->table_sessions,
+                    array( 'status' => 'completed', 'updated_at' => $now ),
+                    array( 'id' => (int) $emarg_row->emarg_session_id )
+                );
+            }
+        }
     }
 
     /* -----------------------------------------------------------------------

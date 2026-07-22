@@ -154,6 +154,10 @@ trait ACDC_Documents_Billing_Actions_Trait {
         'sent_at'   => current_time( 'mysql' ),
         'updated_at' => current_time( 'mysql' ),
       ), array( 'id' => $quote_id ) );
+      // ACDC 3.25.115 — avancer le prospect à « Devis envoyé ».
+      if ( ! empty( $quote->source_prospect_id ) && method_exists( $this, 'maybe_advance_prospect_status' ) ) {
+        $this->maybe_advance_prospect_status( (int) $quote->source_prospect_id, 'Devis envoyé' );
+      }
     }
 
     $msg = $sent ? 'Devis envoyé par email.' : 'Envoi impossible — vérifiez la configuration email.';
@@ -355,6 +359,19 @@ trait ACDC_Documents_Billing_Actions_Trait {
     if ( ! $quote_id || ! check_admin_referer( 'acdc_convert_quote_to_invoice_' . $quote_id ) ) { wp_die( 'Action invalide.' ); }
     if ( $this->is_documents_billing_demo_enabled() ) {
       $this->redirect_to_portal( 'invoices_credit_notes', 'Activez la facturation réelle dans les Réglages avant de créer des factures.', 'error' );
+    }
+    global $wpdb;
+    // ACDC 3.25.115 — garde anti double-conversion (évite 2 factures pour un même devis).
+    $existing_invoice_id = (int) $wpdb->get_var( $wpdb->prepare(
+      "SELECT id FROM {$this->invoice_table} WHERE quote_id = %d LIMIT 1",
+      $quote_id
+    ) );
+    if ( $existing_invoice_id ) {
+      $existing = $this->get_invoice( $existing_invoice_id );
+      $scope    = $existing ? (string) $existing->scope : 'action';
+      $redirect = $this->portal_page_url( array( 'tab' => 'invoices_credit_notes', 'scope' => $scope, 'invoice_action' => 'view', 'invoice_id' => $existing_invoice_id ) );
+      wp_safe_redirect( add_query_arg( array( 'notice' => rawurlencode( 'Une facture existe déjà pour ce devis.' ), 'notice_type' => 'info' ), $redirect ) );
+      exit;
     }
     $invoice_id = $this->convert_quote_to_invoice( $quote_id );
     if ( ! $invoice_id ) {

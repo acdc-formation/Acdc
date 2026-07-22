@@ -1083,7 +1083,7 @@ public function render_quality_compliance_shortcode( $atts = array() ) {
       'responses' => (int) ( $stats['responses'] ?? 0 ),
       'response_rate' => isset( $stats['response_rate'] ) ? $stats['response_rate'] : null,
       'alerts' => (int) ( $stats['alerts'] ?? 0 ),
-      'actions' => (int) ( $actions['to_process'] ?? 0 ),
+      'actions' => (int) ( $actions['a_traiter'] ?? 0 ),
       'average_score' => isset( $stats['average_score'] ) ? $stats['average_score'] : null,
     );
   }
