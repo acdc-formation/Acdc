@@ -115,11 +115,14 @@ trait ACDC_Settings_Catalog_Programme_PDF_Trait {
 		$duree = '';
 		if ( $duree_raw ) {
 			if ( preg_match( '/^(\\d{1,3}):(\\d{2})$/', $duree_raw, $m ) ) {
-				$total_h = (int) $m[1];
-				if ( $jours_count > 0 && $total_h > 0 ) {
-					$duree = $jours_count . ' jour' . ( $jours_count > 1 ? 's' : '' ) . ' / ' . $total_h . 'h';
-				} elseif ( $total_h > 0 ) {
-					$duree = $total_h . 'h';
+				// ACDC 3.25.113 — intégrer les minutes de la durée HH:MM (perdues auparavant).
+				$total_h      = (int) $m[1];
+				$mins         = isset( $m[2] ) ? (int) $m[2] : 0;
+				$heures_label = $total_h . 'h' . ( $mins ? sprintf( '%02d', $mins ) : '' );
+				if ( $jours_count > 0 && ( $total_h > 0 || $mins > 0 ) ) {
+					$duree = $jours_count . ' jour' . ( $jours_count > 1 ? 's' : '' ) . ' / ' . $heures_label;
+				} elseif ( $total_h > 0 || $mins > 0 ) {
+					$duree = $heures_label;
 				}
 			} else {
 				$duree = $duree_raw;

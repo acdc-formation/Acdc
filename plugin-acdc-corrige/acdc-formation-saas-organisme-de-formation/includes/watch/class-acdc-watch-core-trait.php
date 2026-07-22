@@ -332,6 +332,39 @@ trait ACDC_Watch_Core_Trait {
    * Insertion dédoublonnée
    * ----------------------------------------------------------------------- */
 
+  /**
+   * ACDC 3.25.112 — Normalise une URL de veille pour une déduplication cohérente :
+   * schéma + hôte en minuscules, slash final retiré, ancre supprimée, et paramètres
+   * de tracking (utm_*, fbclid, gclid, mc_cid/mc_eid) filtrés + tri des paramètres restants.
+   */
+  private function _normalize_watch_url( $url ) {
+    $url = esc_url_raw( (string) $url );
+    if ( '' === $url ) {
+      return '';
+    }
+    $parts = wp_parse_url( $url );
+    if ( ! $parts || empty( $parts['host'] ) ) {
+      return $url;
+    }
+    $scheme = isset( $parts['scheme'] ) ? strtolower( $parts['scheme'] ) : 'https';
+    $host   = strtolower( $parts['host'] );
+    $path   = isset( $parts['path'] ) ? rtrim( $parts['path'], '/' ) : '';
+    $query  = '';
+    if ( ! empty( $parts['query'] ) ) {
+      parse_str( $parts['query'], $q );
+      foreach ( array_keys( $q ) as $k ) {
+        if ( 0 === strpos( (string) $k, 'utm_' ) || in_array( $k, array( 'fbclid', 'gclid', 'mc_cid', 'mc_eid' ), true ) ) {
+          unset( $q[ $k ] );
+        }
+      }
+      if ( ! empty( $q ) ) {
+        ksort( $q );
+        $query = '?' . http_build_query( $q );
+      }
+    }
+    return $scheme . '://' . $host . $path . $query;
+  }
+
   private function _insert_watch_item_if_new( $data ) {
     global $wpdb;
     $tbl = $this->get_watch_items_table();
@@ -340,7 +373,10 @@ trait ACDC_Watch_Core_Trait {
       return;
     }
 
-    $url_clean = esc_url_raw( $data['url'] );
+    $url_clean = $this->_normalize_watch_url( $data['url'] );
+    if ( '' === $url_clean ) {
+      return;
+    }
     $url_hash  = md5( $url_clean );
     $exists    = $wpdb->get_var( $wpdb->prepare(
       "SELECT id FROM {$tbl} WHERE MD5(url) = %s LIMIT 1",

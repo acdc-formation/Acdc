@@ -41,6 +41,8 @@ class ACDC_Emarg_Core {
           trainer_signed_at DATETIME DEFAULT NULL,
           trainer_sig_url TEXT,
           trainer_sig_path TEXT,
+          trainer_ip VARCHAR(64) DEFAULT '',
+          trainer_ua TEXT,
           status VARCHAR(30) DEFAULT 'pending',
           expires_at DATETIME DEFAULT NULL,
           created_at DATETIME NOT NULL,
@@ -68,6 +70,7 @@ class ACDC_Emarg_Core {
           late_minutes INT DEFAULT 0,
           is_absent TINYINT(1) DEFAULT 0,
           ip VARCHAR(64) DEFAULT '',
+          learner_ua TEXT,
           created_at DATETIME NOT NULL,
           updated_at DATETIME NOT NULL,
           PRIMARY KEY (id),
@@ -83,11 +86,39 @@ class ACDC_Emarg_Core {
         dbDelta( $sql_sessions );
         dbDelta( $sql_learners );
 
-        // Colonnes ajoutées après la création initiale (rétrocompatibilité)
+        // Colonnes ajoutées après la création initiale (rétrocompatibilité).
+        // NB : on n'utilise PAS « ADD COLUMN IF NOT EXISTS » (extension MariaDB
+        // uniquement, rejetée par MySQL avec une erreur de syntaxe). On teste
+        // d'abord l'existence de la colonne via SHOW COLUMNS, portable MySQL/MariaDB.
+        $this->maybe_add_column( $this->table_sessions, 'trainer_ip', "VARCHAR(64) DEFAULT '' AFTER trainer_sig_path" );
+        $this->maybe_add_column( $this->table_sessions, 'trainer_ua', 'TEXT AFTER trainer_ip' );
+        $this->maybe_add_column( $this->table_learners, 'learner_ua', 'TEXT AFTER ip' );
+    }
+
+    /**
+     * Ajoute une colonne à une table si elle n'existe pas déjà.
+     *
+     * Équivalent portable de « ALTER TABLE ... ADD COLUMN IF NOT EXISTS »
+     * (qui n'existe que sous MariaDB). Compatible MySQL et MariaDB.
+     *
+     * @param string $table      Nom complet de la table (avec préfixe).
+     * @param string $column     Nom de la colonne.
+     * @param string $definition Définition SQL de la colonne (type, défaut, position...).
+     * @return bool True si la colonne a été ajoutée, false sinon.
+     */
+    private function maybe_add_column( $table, $column, $definition ) {
         global $wpdb;
-        $wpdb->query( "ALTER TABLE {$this->table_sessions} ADD COLUMN IF NOT EXISTS trainer_ip VARCHAR(64) DEFAULT '' AFTER trainer_sig_path" );
-        $wpdb->query( "ALTER TABLE {$this->table_sessions} ADD COLUMN IF NOT EXISTS trainer_ua TEXT AFTER trainer_ip" );
-        $wpdb->query( "ALTER TABLE {$this->table_learners} ADD COLUMN IF NOT EXISTS learner_ua TEXT AFTER ip" );
+        if ( empty( $table ) || empty( $column ) || empty( $definition ) ) {
+            return false;
+        }
+        $exists = $wpdb->get_results( $wpdb->prepare(
+            "SHOW COLUMNS FROM {$table} LIKE %s",
+            $column
+        ) );
+        if ( ! empty( $exists ) ) {
+            return false;
+        }
+        return false !== $wpdb->query( "ALTER TABLE {$table} ADD COLUMN {$column} {$definition}" );
     }
 
     /* -----------------------------------------------------------------------

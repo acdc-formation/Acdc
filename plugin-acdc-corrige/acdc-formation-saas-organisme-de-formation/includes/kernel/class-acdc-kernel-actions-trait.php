@@ -4429,7 +4429,8 @@ public function handle_purge_plugin_data() {
     if ( ! $analysis ) {
       wp_send_json_error( array( 'message' => 'Formulaire introuvable ou lien invalide.' ) );
     }
-    if ( ! empty( $analysis->token_expire_at ) && strtotime( $analysis->token_expire_at ) < time() ) {
+    // ACDC 3.25.113 — comparer en heure WP (token stocké en local).
+    if ( ! empty( $analysis->token_expire_at ) && strtotime( $analysis->token_expire_at ) < current_time( 'timestamp' ) ) {
       wp_send_json_error( array( 'message' => 'Ce lien a expiré. Contactez votre organisme de formation.' ) );
     }
     if ( 'traite' === $analysis->statut ) {

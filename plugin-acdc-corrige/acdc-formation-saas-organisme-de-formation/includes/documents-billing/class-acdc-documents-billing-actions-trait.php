@@ -559,7 +559,7 @@ trait ACDC_Documents_Billing_Actions_Trait {
     }
     // Vérifier qu'une demande n'est pas déjà active
     if ( ! empty( $quote->signature_request_id ) && (int) $quote->signature_request_id > 0 ) {
-      $this->redirect_to_portal( 'quotes', 'Une demande de signature existe d\xc3\xa9j\xc3\xa0 pour ce devis.', 'error' );
+      $this->redirect_to_portal( 'quotes', 'Une demande de signature existe déjà pour ce devis.', 'error' );
       return;
     }
     // Vérifier l'adresse e-mail du destinataire
@@ -569,7 +569,7 @@ trait ACDC_Documents_Billing_Actions_Trait {
       return;
     }
     if ( ! class_exists( 'ACDC_Sig_Core' ) || ! class_exists( 'ACDC_Sig_Email' ) ) {
-      $this->redirect_to_portal( 'quotes', 'Le module de signature \xc3\xa9lectronique n\'est pas disponible.', 'error' );
+      $this->redirect_to_portal( 'quotes', 'Le module de signature électronique n\'est pas disponible.', 'error' );
       return;
     }
     // Générer ou récupérer le HTML du devis comme doc signable
@@ -581,7 +581,7 @@ trait ACDC_Documents_Billing_Actions_Trait {
       }
     }
     if ( '' === $doc_url ) {
-      $this->redirect_to_portal( 'quotes', 'Impossible de g\xc3\xa9n\xc3\xa9rer le document du devis avant signature.', 'error' );
+      $this->redirect_to_portal( 'quotes', 'Impossible de générer le document du devis avant signature.', 'error' );
       return;
     }
     $upload_dir = wp_upload_dir();
@@ -607,7 +607,7 @@ trait ACDC_Documents_Billing_Actions_Trait {
       ) ),
     ) );
     if ( ! $request_id ) {
-      $this->redirect_to_portal( 'quotes', 'La demande de signature n\'a pas pu \xc3\xaatre cr\xc3\xa9\xc3\xa9e.', 'error' );
+      $this->redirect_to_portal( 'quotes', 'La demande de signature n\'a pas pu être créée.', 'error' );
       return;
     }
     $sig_email = new ACDC_Sig_Email( $sig_core );
@@ -617,7 +617,7 @@ trait ACDC_Documents_Billing_Actions_Trait {
       'signature_status'     => 'envoyée',
       'status'               => 'a_signer',
     ), array( 'id' => $quote_id ), array( '%d', '%s', '%s' ), array( '%d' ) );
-    $this->redirect_to_portal( 'quotes', 'Demande de signature envoy\xc3\xa9e \xc3\xa0 ' . $signer_email . '.', 'success' );
+    $this->redirect_to_portal( 'quotes', 'Demande de signature envoyée à ' . $signer_email . '.', 'success' );
   }
 
   /**

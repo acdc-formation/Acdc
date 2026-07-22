@@ -4,6 +4,29 @@ Toutes les modifications notables de ce projet sont documentées ici.
 Format inspiré de [Keep a Changelog](https://keepachangelog.com/fr/1.1.0/).
 L'historique détaillé antérieur est archivé dans [`release-notes/`](release-notes/).
 
+## [3.25.113] — 2026-07-22
+
+### Corrigé (5ᵉ vague — 2ᵉ passe d'audit approfondie, 19 correctifs)
+Fatals / bloquants :
+- **Émargement (MySQL)** : `ALTER TABLE … ADD COLUMN IF NOT EXISTS` (extension MariaDB) rejeté par MySQL → colonnes `trainer_ip`/`trainer_ua`/`learner_ua` jamais créées → l'enregistrement de signature échouait. Remplacé par un test `SHOW COLUMNS` + `ALTER` portable, colonnes ajoutées aux `CREATE TABLE`, et garde de version sur `init` (plus de migration à chaque requête).
+- **Actions Qualiopi** : colonne `priority_level` écrite mais absente du schéma → action jamais créée + erreur SQL sur filtre. Migration ajoutée.
+- **Quiz — cycle de vie** : 3 boutons morts (Activer / Repasser en brouillon / Verrouiller) — migration WAF incomplète, handlers `wp_ajax` manquants. Ajoutés.
+- **Quiz — archivage** : écrivait dans la table legacy `acdc_of_quizzes` (sans colonne `status`) → archivage sans effet. Corrigé vers la table du module + `archived_at`.
+- **Quiz — anti-triche live (hors-UTC)** : le temps serveur mélangeait heure murale WP et UTC → anti-triche contourné (offset +) ou tous les scores faux (offset −). Base de temps homogène.
+
+Cohérence / données :
+- **Convention (PDF juridique)** : délai de rétractation, clause de litiges et articles additionnels saisis par contrat étaient ignorés (valeurs globales affichées à la place). Priorité rétablie aux valeurs du contrat.
+- **Avoir/dates/tokens** : uniformisation des comparaisons de temps en heure WP (fenêtre de rappel J-2, expiration tokens NAD et participant, badge « délai dépassé », chrono live).
+- **Signature** : verrou atomique anti double-signature (`WHERE status <> 'signe'`) avant génération du PDF.
+- **Quiz — moyenne** : les scores légitimes à 0 ne sont plus exclus (moyenne gonflée).
+- **Programme PDF** : les minutes de la durée (`HH:MM`) ne sont plus perdues (« 7h30 » au lieu de « 7h »).
+
+Sécurité / robustesse :
+- **Questionnaire** : nonce vérifié sur `handle_join_questionnaire_session` (writer public).
+- **Veille** : normalisation d'URL (retrait `utm_*`/`fbclid`/`gclid`, slash final, ancre) avant déduplication.
+- **Marketing** : import CSV dédoublonné par e-mail contre les fiches métier (plus de doublons `import:`).
+- **i18n** : 7 chaînes d'interface à l'échappement cassé (`\xc3\xa9` affiché littéralement) corrigées + 2 comparaisons de statut mortes nettoyées.
+
 ## [3.25.112] — 2026-07-22
 
 ### Corrigé (4ᵉ vague — taux d'occupation + émargement)

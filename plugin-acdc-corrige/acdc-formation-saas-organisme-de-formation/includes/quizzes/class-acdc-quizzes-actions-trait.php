@@ -80,6 +80,11 @@ trait ACDC_Quizzes_Actions_Trait {
         add_action( 'wp_ajax_acdc_of_qz_archive_quiz',           array( $this, 'ajax_front_qz_archive_quiz' ) );
         add_action( 'wp_ajax_acdc_of_qz_duplicate_quiz_direct',  array( $this, 'ajax_front_qz_duplicate_quiz' ) );
         add_action( 'wp_ajax_acdc_of_qz_create_new_version',     array( $this, 'ajax_front_qz_create_new_version' ) );
+        // ACDC 3.25.113 — Migration WAF complétée : les actions cycle de vie (activate/unpublish/lock)
+        // sont postées par quizzes-editor.js via admin-ajax.php et exigent donc un handler wp_ajax.
+        add_action( 'wp_ajax_acdc_of_qz_activate_quiz',          array( $this, 'ajax_front_qz_activate_quiz' ) );
+        add_action( 'wp_ajax_acdc_of_qz_unpublish_quiz',         array( $this, 'ajax_front_qz_unpublish_quiz' ) );
+        add_action( 'wp_ajax_acdc_of_qz_lock_quiz',              array( $this, 'ajax_front_qz_lock_quiz' ) );
         add_action( 'wp_ajax_acdc_of_qz_get_formation_sessions',    array( $this, 'ajax_acdc_of_qz_get_formation_sessions' ) );
         add_action( 'wp_ajax_acdc_of_qz_get_live_launch_sessions',  array( $this, 'ajax_acdc_of_qz_get_live_launch_sessions' ) );
         // hotfix48 — Recherche d'apprenants pour la modale d'envoi
@@ -1376,6 +1381,51 @@ trait ACDC_Quizzes_Actions_Trait {
         }
         wp_safe_redirect( add_query_arg( 'acdc_qz_notice', 'feature_pending', $referer ) );
         exit;
+    }
+
+    /* ACDC 3.25.113 — Wrappers AJAX du cycle de vie quiz (postés via admin-ajax.php par
+       quizzes-editor.js). Réutilisent la logique métier des méthodes core et répondent en JSON. */
+    public function ajax_front_qz_activate_quiz() {
+        $this->qz_check_ajax_request( 'acdc_of_qz_activate_quiz', '_acdc_qz_nonce' );
+        $quiz_id = isset( $_POST['quiz_id'] ) ? absint( wp_unslash( $_POST['quiz_id'] ) ) : 0;
+        $quiz = $this->get_qz_quiz( $quiz_id );
+        if ( ! $quiz ) { wp_send_json_error( array( 'message' => __( 'Quiz introuvable.', 'acdc-formation-saas' ) ) ); }
+        $result = $this->activate_qz_quiz( $quiz_id );
+        if ( empty( $result['success'] ) ) {
+            $message = __( 'Activation impossible : ', 'acdc-formation-saas' ) . implode( ' • ', (array) ( $result['errors'] ?? array() ) );
+            wp_send_json_error( array( 'message' => $message ) );
+        }
+        $redirect = $this->qz_admin_url( (string) $quiz->quiz_purpose, array( 'view' => self::ACDC_OF_QZ_VIEW_EDIT, 'quiz_id' => $quiz_id ) );
+        wp_send_json_success( array( 'redirect' => $redirect, 'message' => __( 'Quiz activé.', 'acdc-formation-saas' ) ) );
+    }
+
+    public function ajax_front_qz_unpublish_quiz() {
+        $this->qz_check_ajax_request( 'acdc_of_qz_unpublish_quiz', '_acdc_qz_nonce' );
+        $quiz_id = isset( $_POST['quiz_id'] ) ? absint( wp_unslash( $_POST['quiz_id'] ) ) : 0;
+        $quiz = $this->get_qz_quiz( $quiz_id );
+        if ( ! $quiz ) { wp_send_json_error( array( 'message' => __( 'Quiz introuvable.', 'acdc-formation-saas' ) ) ); }
+        if ( (int) $quiz->is_locked === 1 ) {
+            wp_send_json_error( array( 'message' => __( 'Ce quiz est verrouillé : la dépublication est impossible. Pour modifier, créez une nouvelle version.', 'acdc-formation-saas' ) ) );
+        }
+        $ok = $this->unpublish_qz_quiz( $quiz_id );
+        if ( ! $ok ) {
+            wp_send_json_error( array( 'message' => __( 'Dépublication impossible.', 'acdc-formation-saas' ) ) );
+        }
+        $redirect = $this->qz_admin_url( (string) $quiz->quiz_purpose, array( 'view' => self::ACDC_OF_QZ_VIEW_EDIT, 'quiz_id' => $quiz_id ) );
+        wp_send_json_success( array( 'redirect' => $redirect, 'message' => __( 'Quiz repassé en brouillon.', 'acdc-formation-saas' ) ) );
+    }
+
+    public function ajax_front_qz_lock_quiz() {
+        $this->qz_check_ajax_request( 'acdc_of_qz_lock_quiz', '_acdc_qz_nonce' );
+        $quiz_id = isset( $_POST['quiz_id'] ) ? absint( wp_unslash( $_POST['quiz_id'] ) ) : 0;
+        $quiz = $this->get_qz_quiz( $quiz_id );
+        if ( ! $quiz ) { wp_send_json_error( array( 'message' => __( 'Quiz introuvable.', 'acdc-formation-saas' ) ) ); }
+        if ( self::ACDC_OF_QZ_STATUS_ACTIVE !== $quiz->status ) {
+            wp_send_json_error( array( 'message' => __( "Le verrouillage manuel n'est possible que sur un quiz actif. Activez-le d'abord.", 'acdc-formation-saas' ) ) );
+        }
+        $ok = $this->lock_qz_quiz_on_first_use( $quiz_id, 'manual_lock' );
+        $redirect = $this->qz_admin_url( (string) $quiz->quiz_purpose, array( 'view' => self::ACDC_OF_QZ_VIEW_EDIT, 'quiz_id' => $quiz_id ) );
+        wp_send_json_success( array( 'redirect' => $redirect, 'message' => $ok ? __( 'Quiz verrouillé.', 'acdc-formation-saas' ) : __( 'Ce quiz était déjà verrouillé.', 'acdc-formation-saas' ) ) );
     }
 
     private function qz_stub_ajax() {
@@ -2739,7 +2789,10 @@ trait ACDC_Quizzes_Actions_Trait {
         // Voir \ACDC\Support\QuizScore::clampResponseMs (couvert par PHPUnit).
         $server_elapsed_ms = 0;
         if ( ! empty( $session->current_question_started_at ) ) {
-            $server_elapsed_ms = max( 0, ( time() - strtotime( $session->current_question_started_at ) ) * 1000 );
+            // ACDC 3.25.113 — base de temps homogène : current_question_started_at est écrit en
+            // heure murale locale WP (current_time('mysql')), donc comparer avec current_time('timestamp')
+            // et NON time() (UTC). Sinon l'anti-triche est contourné (offset+) ou tous les scores faux (offset-).
+            $server_elapsed_ms = max( 0, ( current_time( 'timestamp' ) - strtotime( $session->current_question_started_at ) ) * 1000 );
         }
         $response_ms = \ACDC\Support\QuizScore::clampResponseMs( $response_ms, $server_elapsed_ms );
         $score = ( null === $is_correct ) ? 0 : $this->qz_calculate_kahoot_score(
@@ -2848,13 +2901,22 @@ trait ACDC_Quizzes_Actions_Trait {
         }
 
         // 1. Séances qui débutent dans les 48 prochaines heures
+        // ACDC 3.25.113 — bornes calculées en heure murale WP (current_time('mysql')) au lieu de
+        // NOW()/DATE_ADD(NOW()) : start_at est stocké en heure locale WP, or NOW() renvoie l'heure
+        // du serveur MySQL (souvent UTC, non synchronisée) → fenêtre décalée de l'offset GMT.
+        $now_wp   = current_time( 'mysql' );
+        $in_48h   = gmdate( 'Y-m-d H:i:s', current_time( 'timestamp' ) + 48 * HOUR_IN_SECONDS );
         $upcoming = $wpdb->get_results(
-            "SELECT id, formation_id
+            $wpdb->prepare(
+                "SELECT id, formation_id
              FROM {$tbl_of_sessions}
-             WHERE COALESCE(start_at, CONCAT(start_date, ' 09:00:00')) >= NOW()
-               AND COALESCE(start_at, CONCAT(start_date, ' 09:00:00')) <= DATE_ADD(NOW(), INTERVAL 48 HOUR)
+             WHERE COALESCE(start_at, CONCAT(start_date, ' 09:00:00')) >= %s
+               AND COALESCE(start_at, CONCAT(start_date, ' 09:00:00')) <= %s
                AND COALESCE(is_draft, 0) = 0
-               AND COALESCE(status, '') NOT IN ('Brouillon', 'Annulée', 'Terminée')"
+               AND COALESCE(status, '') NOT IN ('Brouillon', 'Annulée', 'Terminée')",
+                $now_wp,
+                $in_48h
+            )
         );
 
         if ( empty( $upcoming ) ) {
@@ -3416,7 +3478,9 @@ trait ACDC_Quizzes_Actions_Trait {
         $quiz = $this->get_qz_quiz( $quiz_id );
         if ( ! $quiz ) { wp_send_json_error( array( 'message' => __( 'Quiz introuvable.', 'acdc-formation-saas' ) ) ); }
         global $wpdb;
-        $wpdb->update( $this->quiz_table, array( 'status' => 'archived', 'updated_at' => current_time( 'mysql' ) ), array( 'id' => $quiz_id ) );
+        // ACDC 3.25.113 — archivage sur la table du MODULE quiz (acdc_of_qz_quizzes, qui possède
+        // status/archived_at), pas la table legacy $this->quiz_table (acdc_of_quizzes, sans status).
+        $wpdb->update( $this->get_qz_table( 'quizzes' ), array( 'status' => 'archived', 'archived_at' => current_time( 'mysql' ), 'updated_at' => current_time( 'mysql' ) ), array( 'id' => $quiz_id ) );
         $redirect = $this->qz_admin_url( (string) $quiz->quiz_purpose );
         wp_send_json_success( array( 'redirect' => $redirect, 'message' => __( 'Quiz archivé.', 'acdc-formation-saas' ) ) );
     }

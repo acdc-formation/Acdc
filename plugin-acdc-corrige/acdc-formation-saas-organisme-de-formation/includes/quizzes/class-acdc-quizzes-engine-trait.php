@@ -422,8 +422,9 @@ trait ACDC_Quizzes_Engine_Trait {
             'current_q_num' => $current_q_num,
             'total_q'       => $total_q,
             'current_q_started_at'      => $session->current_question_started_at,
+            // ACDC 3.25.113 — base temps WP homogène.
             'current_q_elapsed_seconds' => $session->current_question_started_at
-                ? max( 0, time() - strtotime( $session->current_question_started_at ) )
+                ? max( 0, current_time( 'timestamp' ) - strtotime( $session->current_question_started_at ) )
                 : 0,
             'participants'  => array_map( function( $p ) use ( $tab_switch_map ) {
                 return array(

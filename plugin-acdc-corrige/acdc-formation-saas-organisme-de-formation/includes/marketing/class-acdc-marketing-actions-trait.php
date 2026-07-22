@@ -305,6 +305,20 @@ trait ACDC_Marketing_Actions_Trait {
     }
     $file = isset( $upload['file'] ) ? $upload['file'] : '';
     $contacts = $this->get_marketing_store( 'contacts', array() );
+    // ACDC 3.25.112 — Déduplication à l'import par e-mail contre les fiches métier
+    // (prospects/apprenants/entreprises/financeurs/formateurs/contacts) ET le store
+    // existant : un e-mail déjà connu enrichit la fiche existante au lieu de créer un
+    // doublon « import: ».
+    $base_records = $this->get_marketing_base_records();
+    $email_to_key = array();
+    foreach ( $base_records as $bk => $brec ) {
+      $bem = strtolower( trim( (string) ( $brec['email'] ?? '' ) ) );
+      if ( '' !== $bem && ! isset( $email_to_key[ $bem ] ) ) { $email_to_key[ $bem ] = $bk; }
+    }
+    foreach ( $contacts as $ck => $crec ) {
+      $cem = strtolower( trim( (string) ( $crec['email'] ?? '' ) ) );
+      if ( '' !== $cem && ! isset( $email_to_key[ $cem ] ) ) { $email_to_key[ $cem ] = $ck; }
+    }
     $processed = 0;
     $created = 0;
     $updated = 0;
@@ -349,7 +363,9 @@ trait ACDC_Marketing_Actions_Trait {
             $skipped++;
             continue;
           }
-          $source_key = 'import:' . md5( strtolower( $email ) );
+          $email_norm = strtolower( trim( $email ) );
+          $source_key = isset( $email_to_key[ $email_norm ] ) ? $email_to_key[ $email_norm ] : 'import:' . md5( $email_norm );
+          $matched_base = isset( $base_records[ $source_key ] ) ? $base_records[ $source_key ] : null;
           $contact_type = isset( $data['type'] ) && isset( $this->marketing_type_labels()[ sanitize_key( $data['type'] ) ] ) ? sanitize_key( $data['type'] ) : 'prospect';
           $statuses = $this->marketing_default_contact_statuses( $contact_type );
           $statuses['marketing'] = 'not_requested';
@@ -374,8 +390,8 @@ trait ACDC_Marketing_Actions_Trait {
           } else {
             $contacts[ $source_key ] = $this->normalize_marketing_contact_record( array(
               'source_key' => $source_key,
-              'source_type' => 'import',
-              'source_id' => 0,
+              'source_type' => $matched_base ? (string) $matched_base['source_type'] : 'import',
+              'source_id' => $matched_base ? (int) $matched_base['source_id'] : 0,
               'name' => $csv_name,
               'email' => $email,
               'phone' => isset( $data['phone'] ) ? $data['phone'] : '',

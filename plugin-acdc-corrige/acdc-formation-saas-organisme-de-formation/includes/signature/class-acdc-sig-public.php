@@ -425,6 +425,34 @@ class ACDC_Sig_Public {
 
         $ua = sanitize_text_field( $_SERVER['HTTP_USER_AGENT'] ?? '' );
 
+        // ACDC 3.25.113 — verrou atomique anti double-signature (TOCTOU).
+        // On pose le statut « signe » (+ horodatage / identité signataire) via un UPDATE
+        // conditionnel `WHERE status <> 'signe'` AVANT toute génération de PDF. Deux
+        // soumissions concurrentes du même token : une seule verra rows_affected >= 1 ;
+        // la perdante s'arrête proprement sans régénérer ni réécrire quoi que ce soit.
+        $now     = current_time( 'mysql' );
+        $claimed = $wpdb->query(
+            $wpdb->prepare(
+                "UPDATE {$this->core->table_requests}
+                    SET status = 'signe', signed_at = %s, signer_ip = %s, signer_ua = %s, updated_at = %s
+                  WHERE id = %d AND status <> 'signe'",
+                $now,
+                $ip,
+                $ua,
+                $now,
+                $request->id
+            )
+        );
+
+        // ACDC 3.25.113 — verrou atomique anti double-signature (TOCTOU).
+        // Aucune ligne affectée => une autre requête a déjà scellé la demande entre la
+        // garde initiale (~l.414) et ici : on redirige comme la garde initiale, sans
+        // régénérer le PDF ni réécrire les empreintes.
+        if ( $claimed < 1 ) {
+            wp_safe_redirect( $this->core->get_signature_page_url() . '?sig=' . urlencode( $token ) );
+            exit;
+        }
+
         $sig_img_path  = $this->pdf->save_signature_image( $sig_data, $request->id );
 
         $pdf_result      = $this->pdf->generate_audit_pdf( $request, $sig_img_path );
@@ -436,17 +464,16 @@ class ACDC_Sig_Public {
         $doc_sha256        = \ACDC\Support\DocumentSeal::hashFile( (string) $request->doc_path );
         $signed_pdf_sha256 = \ACDC\Support\DocumentSeal::hashFile( (string) $signed_doc_path );
 
+        // ACDC 3.25.113 — verrou atomique anti double-signature (TOCTOU).
+        // Le statut a déjà été verrouillé ci-dessus ; on complète seulement les colonnes
+        // dérivées du PDF (URL/chemin + empreintes) pour la ligne dont nous détenons le verrou.
         $wpdb->update(
             $this->core->table_requests,
             array(
-                'status'            => 'signe',
-                'signed_at'         => current_time( 'mysql' ),
                 'signed_doc_url'    => $signed_doc_url,
                 'signed_doc_path'   => $signed_doc_path,
                 'doc_sha256'        => $doc_sha256,
                 'signed_pdf_sha256' => $signed_pdf_sha256,
-                'signer_ip'         => $ip,
-                'signer_ua'         => $ua,
                 'updated_at'        => current_time( 'mysql' ),
             ),
             array( 'id' => $request->id )

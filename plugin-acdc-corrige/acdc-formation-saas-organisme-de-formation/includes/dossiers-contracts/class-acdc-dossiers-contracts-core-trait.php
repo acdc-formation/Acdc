@@ -1344,7 +1344,7 @@ trait ACDC_Dossiers_Contracts_Core_Trait {
     $sent_at = ! empty( $contract->signature_sent_at ) ? $contract->signature_sent_at : '';
     $is_overdue = false;
     if ( in_array( $sig_status, array( 'pending', 'sent', 'envoyée' ), true ) && $sent_at ) {
-      $is_overdue = ( time() - strtotime( $sent_at ) ) > ( 7 * DAY_IN_SECONDS );
+      $is_overdue = ( current_time( 'timestamp' ) - strtotime( $sent_at ) ) > ( 7 * DAY_IN_SECONDS ); // ACDC 3.25.113 — base temps WP homogène.
     }
 
     // Badge principal
@@ -1908,10 +1908,17 @@ private function build_contract_pdf_pages( $context ) {
   $article5_tail = $normalize( ! empty( $contract->financial_provisions ) ? $contract->financial_provisions : ( $params['financial_provisions'] ?? '' ), "En cas de financement par un tiers (OPCO, Pôle emploi, CPF...), l'Apprenant reste personnellement responsable du règlement de la totalité du prix si le financeur refuse ou interrompt sa prise en charge. Dans le cas d'une subrogation de paiement par un financeur, celle-ci devra nous être communiquée par écrit avant le début de la formation. En cas de refus par le financeur de la subrogation et/ou du règlement de la formation ou d'une partie de la formation, le solde de la prestation sera dû par le bénéficiaire à réception de facture." );
   $article6 = $normalize( ! empty( $contract->payment_terms ) ? $contract->payment_terms : ( $params['payment_terms'] ?? '' ), "Ce prix couvre l'intégralité des frais pédagogiques engagés par l'Organisme. Le règlement est exigible à réception de facture. Les modalités sont définies dans les Conditions Générales de Vente annexées." );
   $article7 = $normalize( ! empty( $contract->cancellation_terms ) ? $contract->cancellation_terms : ( $params['cancellation_terms'] ?? '' ), "Toute demande d'annulation ou de report d'une inscription doit être notifiée par écrit, par lettre ou par courriel, et réceptionnée par ACDC - Formation pour être recevable. À défaut, aucune demande ne sera prise en considération. En cas d'annulation imputable au Client, les sommes déjà versées ou facturées demeurent acquises, en tout ou partie, selon la date de notification par rapport à la date prévue de début de la formation. En cas d'abandon en cours de formation par le ou les apprenants désignés, aucune restitution ne sera due au Client, sauf en cas de survenance d'un événement de force majeure dûment caractérisé. Le Prestataire se réserve par ailleurs le droit d'annuler ou de reporter une session de formation en cas de force majeure ou en cas de nombre de participants insuffisant." );
-  $article8 = 'La présente convention prend effet à compter de sa date de signature. Le délai de rétractation est de ' . $normalize( $params['withdrawal_delay_days'] ?? '', '14' ) . ' jours.';
-  $article9 = $normalize( $params['possible_disputes'] ?? '', "Si une contestation ou un différend ne peuvent être réglés à l'amiable, le Tribunal le plus proche géographiquement du siège social du défendeur sera seul compétent pour régler le litige." );
+  // ACDC 3.25.113 — priorité aux valeurs saisies sur le contrat (perte de données doc juridique).
+  $article8 = 'La présente convention prend effet à compter de sa date de signature. Le délai de rétractation est de ' . $normalize( ! empty( $contract->withdrawal_delay_days ) ? $contract->withdrawal_delay_days : ( $params['withdrawal_delay_days'] ?? '' ), '14' ) . ' jours.';
+  $article9 = $normalize( ! empty( $contract->disputes_terms ) ? $contract->disputes_terms : ( $params['possible_disputes'] ?? '' ), "Si une contestation ou un différend ne peuvent être réglés à l'amiable, le Tribunal le plus proche géographiquement du siège social du défendeur sera seul compétent pour régler le litige." );
 
-  $additional_sections = ! empty( $params['additional_sections'] ) && is_array( $params['additional_sections'] ) ? $params['additional_sections'] : array();
+  // ACDC 3.25.113 — priorité aux valeurs saisies sur le contrat (perte de données doc juridique).
+  $contract_additional_sections = ! empty( $contract->additional_sections ) ? json_decode( (string) $contract->additional_sections, true ) : null;
+  if ( is_array( $contract_additional_sections ) && ! empty( $contract_additional_sections ) ) {
+    $additional_sections = $contract_additional_sections;
+  } else {
+    $additional_sections = ! empty( $params['additional_sections'] ) && is_array( $params['additional_sections'] ) ? $params['additional_sections'] : array();
+  }
   $article10 = $normalize( $additional_sections[0]['content'] ?? '', "L'Apprenant s'engage à suivre la formation avec assiduité et ponctualité, à respecter les consignes pédagogiques et organisationnelles données par les formateurs, ainsi que le Règlement Intérieur annexé à la présente convention. L'Apprenant s'interdit toute reproduction, enregistrement ou diffusion non autorisée des supports, outils ou contenus pédagogiques. Toute inexécution de ces obligations pourra entraîner son exclusion immédiate de la formation, sans remboursement ni indemnité, et engager sa responsabilité." );
   $article11 = $normalize( $additional_sections[1]['content'] ?? '', "L'Organisme de formation s'engage à mettre en œuvre les moyens pédagogiques, techniques et humains nécessaires au bon déroulement de la formation, et à délivrer à l'Apprenant, à l'issue de celle-ci, une attestation mentionnant les objectifs, la nature et la durée de l'action suivie." );
   $article12 = $normalize( $additional_sections[2]['content'] ?? '', "Tout manquement de l'Apprenant aux obligations du présent contrat ou au règlement intérieur pourra donner lieu à l'application des sanctions disciplinaires prévues par ce règlement, pouvant aller jusqu'à l'exclusion définitive de la formation, sans remboursement ni indemnité." );

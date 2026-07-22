@@ -1165,7 +1165,7 @@ trait ACDC_Compliance_Quality_Actions_Trait {
   }
 
   public function handle_export_complaints_pdf() {
-    if ( ! current_user_can( 'manage_options' ) ) { wp_die( 'Acces refus\xc3\xa9.' ); }
+    if ( ! current_user_can( 'manage_options' ) ) { wp_die( esc_html( 'Accès refusé.' ) ); }
     check_admin_referer( 'acdc_export_complaints_pdf' );
     $filters = array();
     if ( ! empty( $_GET['status'] ) )    { $filters['status']    = sanitize_text_field( wp_unslash( $_GET['status'] ) ); }

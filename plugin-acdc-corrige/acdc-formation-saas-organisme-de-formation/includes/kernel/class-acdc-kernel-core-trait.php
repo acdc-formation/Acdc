@@ -2226,6 +2226,8 @@ dbDelta( $sql_companies );
     $this->maybe_add_table_column( $this->questionnaire_action_table, 'internal_followup_last_key', 'VARCHAR(60) NULL' );
     $this->maybe_add_table_column( $this->questionnaire_action_table, 'internal_followup_last_sent_at', 'DATETIME NULL' );
     $this->maybe_add_table_column( $this->questionnaire_action_table, 'internal_followup_count', 'INT UNSIGNED NOT NULL DEFAULT 0' );
+    // ACDC 3.25.113 — colonne priority_level (actions Qualiopi) absente du CREATE d'origine.
+    $this->maybe_add_table_column( $this->questionnaire_action_table, 'priority_level', "VARCHAR(50) NOT NULL DEFAULT 'Moyenne'" );
     $this->maybe_add_table_index( $this->questionnaire_action_table, 'target_due_days', 'INDEX target_due_days (target_due_days)' );
     $this->maybe_add_table_index( $this->questionnaire_action_table, 'due_at', 'INDEX due_at (due_at)' );
     $this->maybe_add_table_index( $this->questionnaire_action_table, 'internal_followup_last_sent_at', 'INDEX internal_followup_last_sent_at (internal_followup_last_sent_at)' );

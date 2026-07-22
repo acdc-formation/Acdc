@@ -38,10 +38,10 @@ trait ACDC_Compliance_Quality_Render_Trait {
     foreach ( $ci_records as $r ) {
       $status = strtolower( trim( (string) ( $r['status'] ?? '' ) ) );
       /* "traité", "traite", "clos", "terminé" = fait. "à traiter", "en cours" = ouvert. */
-      $is_done = ( $status === 'traité' || $status === 'traite' || $status === 'trait\xc3\xa9'
+      $is_done = ( $status === 'traité' || $status === 'traite'
         || false !== strpos( $status, 'clos' )
         || false !== strpos( $status, 'termin' )
-        || false !== strpos( $status, 'r\xc3\xa9alis' )
+        || false !== strpos( $status, 'réalis' )
         || false !== strpos( $status, 'realis' ) );
       if ( ! $is_done ) {
         $ci_open++;
@@ -1895,7 +1895,7 @@ trait ACDC_Compliance_Quality_Render_Trait {
                    data-acdc-iconized="1"
                    title="Supprimer la r&eacute;clamation"
                    aria-label="Supprimer"
-                   onclick="return confirm('Supprimer d\xc3\xa9finitivement cette r\xc3\xa9clamation ?');">
+                   onclick="return confirm('Supprimer définitivement cette réclamation ?');">
                   <?php echo $this->render_inline_icon( 'trash-bin', 25 ); ?>
                   <span class="acdc-action-hub-sr screen-reader-text">Supprimer</span>
                 </a>

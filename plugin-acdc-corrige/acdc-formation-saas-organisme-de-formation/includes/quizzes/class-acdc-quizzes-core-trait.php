@@ -2722,7 +2722,8 @@ trait ACDC_Quizzes_Core_Trait {
         if ( 'completed' === $participant->status ) {
             return new WP_Error( 'token_already_used', __( 'Vous avez déjà passé ce quiz.', 'acdc-formation-saas' ) );
         }
-        if ( 'expired' === $participant->status || ( ! empty( $participant->token_expires_at ) && strtotime( $participant->token_expires_at ) < time() ) ) {
+        // ACDC 3.25.113 — comparer en heure WP (token stocké en local).
+        if ( 'expired' === $participant->status || ( ! empty( $participant->token_expires_at ) && strtotime( $participant->token_expires_at ) < current_time( 'timestamp' ) ) ) {
             return new WP_Error( 'token_expired', __( 'Ce lien a expiré. Contactez votre formateur si besoin.', 'acdc-formation-saas' ) );
         }
         if ( 'cancelled' === $participant->status ) {
@@ -4740,7 +4741,8 @@ trait ACDC_Quizzes_Core_Trait {
                 $total_answers   = (int) $stats->total;
                 $correct_answers = (int) $stats->correct;
             }
-            $scores = array_filter( array_map( function($p){ return $p->total_score; }, $participants ) );
+            // ACDC 3.25.113 — conserver les scores 0 (sinon moyenne gonflée).
+            $scores = array_filter( array_map( static function( $p ) { return $p->total_score; }, $participants ), static function( $v ) { return null !== $v && '' !== $v; } );
             if ( ! empty( $scores ) ) {
                 $avg_score = round( array_sum( $scores ) / count( $scores ), 1 );
             }

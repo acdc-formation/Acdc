@@ -5632,7 +5632,8 @@ trait ACDC_Kernel_Render_Trait {
       ) );
       if ( ! $analysis ) {
         $this->render_nad_public_invalid();
-      } elseif ( ! empty( $analysis->token_expire_at ) && strtotime( $analysis->token_expire_at ) < time() ) {
+      // ACDC 3.25.113 — comparer en heure WP (token stocké en local).
+      } elseif ( ! empty( $analysis->token_expire_at ) && strtotime( $analysis->token_expire_at ) < current_time( 'timestamp' ) ) {
         $this->render_nad_public_expired();
       } elseif ( 'traite' === $analysis->statut ) {
         $this->render_nad_public_done( $analysis );

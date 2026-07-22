@@ -25,6 +25,10 @@ foreach ( $emarg_manifest as $file => $class ) {
 
 class ACDC_Emargement {
 
+    /** Version du schéma d'émargement. À incrémenter à chaque changement de structure. */
+    const DB_VERSION   = '3.25.113';
+    const OPTION_DB_VER = 'acdc_emarg_db_version';
+
     private static $instance = null;
 
     /** @var ACDC_Emarg_Core */
@@ -52,7 +56,9 @@ class ACDC_Emargement {
     }
 
     private function register_hooks() {
-        add_action( 'init', array( $this->core, 'install' ), 5 );
+        // Garde de version : install() (dbDelta + ALTER) ne s'exécute que lorsque
+        // le schéma stocké diffère de la version courante, et non à chaque requête.
+        add_action( 'init', array( $this, 'maybe_install' ), 5 );
 
         // Exclusion cache LiteSpeed au plus tôt (avant template_redirect)
         // pour éviter qu'une page avec nonce soit servie depuis le cache
@@ -180,8 +186,21 @@ class ACDC_Emargement {
         $this->pdf->serve_signature_cert( 'learner', $id, $preview );
     }
 
+    /**
+     * Exécute install() uniquement si le schéma stocké n'est pas à jour.
+     * Branché sur `init` : évite de relancer dbDelta/ALTER à chaque requête.
+     */
+    public function maybe_install() {
+        if ( get_option( self::OPTION_DB_VER, '' ) === self::DB_VERSION ) {
+            return;
+        }
+        $this->core->install();
+        update_option( self::OPTION_DB_VER, self::DB_VERSION );
+    }
+
     public static function install() {
         self::get_instance()->core->install();
+        update_option( self::OPTION_DB_VER, self::DB_VERSION );
     }
 
     /* -----------------------------------------------------------------------

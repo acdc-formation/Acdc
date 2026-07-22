@@ -1150,6 +1150,10 @@ trait ACDC_Questionnaires_Actions_Trait {
 
 
   public function handle_join_questionnaire_session() {
+    // ACDC 3.25.113 — Vérification du nonce (déjà émis par le formulaire de join,
+    // render-trait:4024) alignée sur handle_submit_questionnaire_answer : protège
+    // ce writer public (insert/update participant) contre le CSRF.
+    check_admin_referer( 'acdc_front_secure_action' );
     $token = isset( $_POST['session_token'] ) ? sanitize_text_field( wp_unslash( $_POST['session_token'] ) ) : '';
     // Anti-abus : limite la création de participants par IP (seuil large pour absorber
     // une classe entière derrière une IP partagée, tout en bloquant l'automatisation massive).
