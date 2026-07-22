@@ -553,7 +553,9 @@ trait ACDC_Sessions_Actions_Trait {
         // ACDC 3.23.2 — Convocations envoyées → dossier(s) liés passent à convocations_envoyees.
         $formation_id_for_wf = ! empty( $session->formation_id ) ? (int) $session->formation_id : 0;
         if ( $formation_id_for_wf ) {
-          $linked_regs_wf = $wpdb->get_results( $wpdb->prepare( "SELECT id FROM {$this->training_registration_table} WHERE formation_id = %d AND is_draft = 0", $formation_id_for_wf ) );
+          // ACDC 3.25.116 — scoper à LA session (via learner_table.session_id), sinon la clôture
+          // d'une session contamine les dossiers des autres sessions de la même formation.
+          $linked_regs_wf = $wpdb->get_results( $wpdb->prepare( "SELECT id FROM {$this->training_registration_table} WHERE formation_id = %d AND is_draft = 0 AND learner_id IN ( SELECT id FROM {$this->learner_table} WHERE session_id = %d )", $formation_id_for_wf, $session_id ) );
           foreach ( (array) $linked_regs_wf as $lr_wf ) {
             $this->advance_registration_workflow( (int) $lr_wf->id, 'convocations_envoyees' );
           }
@@ -621,10 +623,13 @@ trait ACDC_Sessions_Actions_Trait {
       }
 
       // 5. ACDC 3.23.2 — Session terminée → dossier(s) liés passent à formation_realisee.
+      // ACDC 3.25.116 — scoper à LA session (via learner_table.session_id), sinon la clôture d'une
+      // session pousse « formation réalisée » aux inscrits d'autres sessions de la même formation.
       if ( $formation_id > 0 ) {
         $linked_regs = $wpdb->get_results( $wpdb->prepare(
-          "SELECT id FROM {$this->training_registration_table} WHERE formation_id = %d AND is_draft = 0",
-          $formation_id
+          "SELECT id FROM {$this->training_registration_table} WHERE formation_id = %d AND is_draft = 0 AND learner_id IN ( SELECT id FROM {$this->learner_table} WHERE session_id = %d )",
+          $formation_id,
+          $session_id
         ) );
         foreach ( (array) $linked_regs as $lr ) {
           $this->advance_registration_workflow( (int) $lr->id, 'formation_realisee' );

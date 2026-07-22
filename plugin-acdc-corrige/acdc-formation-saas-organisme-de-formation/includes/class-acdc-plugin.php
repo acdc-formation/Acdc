@@ -561,6 +561,9 @@ class ACDC_Formation_SAAS_Plugin {
     add_action( 'acdc_sig_request_signed', array( $this, 'handle_quote_signed' ), 20, 2 );
     add_action( 'admin_post_acdc_save_invoice',             array( $this, 'handle_save_invoice' ) );
     add_action( 'admin_post_acdc_delete_invoice',           array( $this, 'handle_delete_invoice' ) );
+    // ACDC 3.25.116 — Facturation réelle : marquer payée + envoyer par email.
+    add_action( 'admin_post_acdc_mark_invoice_paid',        array( $this, 'handle_mark_invoice_paid' ) );
+    add_action( 'admin_post_acdc_send_invoice_email',       array( $this, 'handle_send_invoice_email' ) );
     add_action( 'admin_post_acdc_download_credit_note_document', array( $this, 'handle_download_credit_note_document' ) );
     add_action( 'admin_post_acdc_marketing_save_entity', array( $this, 'handle_marketing_save_entity' ) );
     add_action( 'admin_post_acdc_marketing_delete_entity', array( $this, 'handle_marketing_delete_entity' ) );

@@ -443,6 +443,17 @@ trait ACDC_Documents_Billing_Render_Trait {
           $row['tarif_ht_value']      = $prefill_proposal->formation_total > 0
             ? number_format( (float) $prefill_proposal->formation_total, 2, ',', '' )
             : '';
+          /*
+           * ACDC 3.25.116 — Propagation TVA proposition→devis : NON forcée (comportement inchangé).
+           * La table des propositions (wp_acdc_of_proposals) ne comporte AUCUN champ de régime TVA
+           * exploitable (pas de tva_applicable / vat_exempt / formation_tva / vat_rate). Les montants
+           * y sont affichés « net de TVA » et les gabarits (proposal-html/mpdf, render-trait) codent en
+           * dur « TVA non applicable - article 293 B du CGI » : c'est une constante de gabarit, pas une
+           * donnée par-proposition, donc pas une source fiable pour dériver un taux variable.
+           * Le taux du devis reste piloté par le défaut profil ($profile_q['vat_rate_default'], plus haut).
+           * TODO : si un jour la proposition porte un vrai champ TVA (ex. vat_rate / vat_exempt), le
+           *        propager ici : $row['vat_rate'] = <taux proposition, 0 si exonéré>.
+           */
           $row['objectives']          = ! empty( $prefill_proposal->custom_objectives )
             ? wp_strip_all_tags( (string) $prefill_proposal->custom_objectives )
             : '';
@@ -689,51 +700,81 @@ trait ACDC_Documents_Billing_Render_Trait {
     <?php
   }
 
-  private function render_invoice_email_modal() {
+  /**
+   * ACDC 3.25.116 — Modale d'envoi de facture par e-mail, désormais un vrai <form>
+   * postant vers admin_post_acdc_send_invoice_email (nonce + action + invoice_id).
+   * Rendue depuis la vue facture avec le contexte réel. Sans invoice_id valide
+   * (ancien appel « singleton » inerte de la liste), on ne rend rien.
+   */
+  private function render_invoice_email_modal( $invoice_id = 0, $scope = 'action', $email = '' ) {
+    $invoice_id = (int) $invoice_id;
+    if ( $invoice_id <= 0 ) { return; }
     $logo = 'https://acdc-formation.com/wp-content/uploads/2025/06/cropped-cropped-Logo-ACDC-500x500-1.png';
     ?>
     <div class="acdc-modal-shell" id="acdc-send-invoice-email-modal" hidden>
       <div class="acdc-modal-backdrop" data-acdc-modal-close></div>
       <div class="acdc-modal-dialog acdc-modal-dialog-email">
         <div class="acdc-modal-header"><h4>ENVOYER LA FACTURE PAR E-MAIL</h4><button type="button" class="acdc-modal-close" data-acdc-modal-close aria-label="Fermer">×</button></div>
-        <div class="acdc-modal-body acdc-pad-24">
-          <div style="border:1px solid #dce4ec;overflow:hidden;background:#fff;">
-            <div style="max-width:760px;margin:0 auto;background:#fff;color:#20375f;">
-              <div style="padding:30px 20px 14px;text-align:center;background:#f7f9fd;">
-                <img src="<?php echo esc_url( $logo ); ?>" alt="ACDC Formation" style="max-width:130px;height:auto;display:block;margin:0 auto 12px;">
-                <div style="font-size:44px;font-weight:800;color:#203b74;">ACDC Formation</div>
-                <div style="font-size:19px;letter-spacing:.04em;color:#516c9b;">AZUR COMPÉTENCES DÉVELOPPEMENT &amp; CONSEIL</div>
+        <form method="post" action="<?php echo esc_url( admin_url( 'admin-post.php' ) ); ?>">
+          <?php wp_nonce_field( 'acdc_send_invoice_email_' . $invoice_id ); ?>
+          <input type="hidden" name="action" value="acdc_send_invoice_email">
+          <input type="hidden" name="invoice_id" value="<?php echo esc_attr( $invoice_id ); ?>">
+          <div class="acdc-modal-body acdc-pad-24">
+            <?php if ( '' !== (string) $email ) : ?>
+            <p style="margin:0 0 14px;color:#1E4777;">Destinataire : <strong><?php echo esc_html( $email ); ?></strong></p>
+            <?php endif; ?>
+            <div style="border:1px solid #dce4ec;overflow:hidden;background:#fff;">
+              <div style="max-width:760px;margin:0 auto;background:#fff;color:#20375f;">
+                <div style="padding:30px 20px 14px;text-align:center;background:#f7f9fd;">
+                  <img src="<?php echo esc_url( $logo ); ?>" alt="ACDC Formation" style="max-width:130px;height:auto;display:block;margin:0 auto 12px;">
+                  <div style="font-size:44px;font-weight:800;color:#203b74;">ACDC Formation</div>
+                  <div style="font-size:19px;letter-spacing:.04em;color:#516c9b;">AZUR COMPÉTENCES DÉVELOPPEMENT &amp; CONSEIL</div>
+                </div>
+                <div style="padding:34px 42px 12px;font-size:18px;line-height:1.65;">
+                  <p>Bonjour,</p>
+                  <p>Veuillez trouver ci-joint votre facture. Nous vous remercions pour votre confiance.</p>
+                  <p>Si vous avez des questions, vous pouvez nous contacter directement à <strong>contact@acdc-formation.com</strong> ou au <strong>06 78 26 91 10</strong>.</p>
+                  <p>Cordialement,<br><strong>L’équipe ACDC Formation</strong></p>
+                </div>
+                <div style="border-top:1px solid #dfe6f0;padding:22px 24px 30px;text-align:center;color:#64779d;font-size:14px;line-height:1.75;">06 78 26 91 10 · contact@acdc-formation.com · acdcformation.com<br>7 avenue Paul Cézanne — 83310 Cogolin<br>Ce message a été envoyé dans le cadre de votre facture.</div>
               </div>
-              <div style="padding:34px 42px 12px;font-size:18px;line-height:1.65;">
-                <p>Bonjour <strong>David Contal</strong>,</p>
-                <p>Veuillez trouver ci-joint votre facture. Nous vous remercions pour votre confiance.</p>
-                <p>Si vous avez des questions, vous pouvez nous contacter directement à <strong>contact@acdc-formation.com</strong> ou au <strong>06 78 26 91 10</strong>.</p>
-                <p>Cordialement,<br><strong>L’équipe ACDC Formation</strong></p>
-              </div>
-              <div style="border-top:1px solid #dfe6f0;padding:22px 24px 30px;text-align:center;color:#64779d;font-size:14px;line-height:1.75;">06 78 26 91 10 · contact@acdc-formation.com · acdcformation.com<br>7 avenue Paul Cézanne — 83310 Cogolin<br>Ce message a été envoyé dans le cadre de votre facture.</div>
             </div>
+            <p class="acdc-actions-end"><button type="button" class="acdc-button acdc-button-soft" data-acdc-modal-close>Annuler</button><button type="submit" class="acdc-button acdc-button-primary">Envoyer la facture</button></p>
           </div>
-          <p class="acdc-actions-end"><button type="button" class="acdc-button acdc-button-soft" data-acdc-modal-close>Annuler</button><button type="button" class="acdc-button acdc-button-primary">Exécuter l'action</button></p>
-        </div>
+        </form>
       </div>
     </div>
     <?php
   }
 
-  private function render_invoice_status_modal() {
+  /**
+   * ACDC 3.25.116 — Modale de statut facture, désormais un vrai <form> postant vers
+   * admin_post_acdc_mark_invoice_paid (nonce + action + invoice_id). Le bouton
+   * « Marquer payée » n'apparaît que si la facture n'est pas déjà au statut 'payee'.
+   * Sans invoice_id valide (ancien appel « singleton » inerte de la liste), on ne rend rien.
+   */
+  private function render_invoice_status_modal( $invoice_id = 0, $scope = 'action', $status = '' ) {
+    $invoice_id = (int) $invoice_id;
+    if ( $invoice_id <= 0 ) { return; }
+    $already_paid = ( 'payee' === (string) $status );
     ?>
     <div class="acdc-modal-shell" id="acdc-status-invoice-modal" hidden>
       <div class="acdc-modal-backdrop" data-acdc-modal-close></div>
       <div class="acdc-modal-dialog" style="width:min(1080px,92vw)">
         <div class="acdc-modal-header"><h4>MODIFIER LE STATUT</h4><button type="button" class="acdc-modal-close" data-acdc-modal-close aria-label="Fermer">×</button></div>
         <div class="acdc-modal-body acdc-pad-24">
-          <div class="acdc-modal-form-grid">
-            <label>Nouveau statut <span class="acdc-required">*</span></label>
-            <div><select><option>Choisir une option</option><option>Non payée</option><option>Payée</option></select></div>
-            <label>Détails</label>
-            <div><textarea rows="5" placeholder="Détails"></textarea></div>
-          </div>
-          <p class="acdc-actions-end"><button type="button" class="acdc-button acdc-button-soft" data-acdc-modal-close>Annuler</button><button type="button" class="acdc-button acdc-button-primary">Exécuter l'action</button></p>
+          <?php if ( $already_paid ) : ?>
+            <p>Cette facture est déjà marquée <strong>payée</strong>.</p>
+            <p class="acdc-actions-end"><button type="button" class="acdc-button acdc-button-soft" data-acdc-modal-close>Fermer</button></p>
+          <?php else : ?>
+            <form method="post" action="<?php echo esc_url( admin_url( 'admin-post.php' ) ); ?>">
+              <?php wp_nonce_field( 'acdc_mark_invoice_paid_' . $invoice_id ); ?>
+              <input type="hidden" name="action" value="acdc_mark_invoice_paid">
+              <input type="hidden" name="invoice_id" value="<?php echo esc_attr( $invoice_id ); ?>">
+              <p>Confirmez-vous l'encaissement de cette facture ?</p>
+              <p class="acdc-actions-end"><button type="button" class="acdc-button acdc-button-soft" data-acdc-modal-close>Annuler</button><button type="submit" class="acdc-button acdc-button-primary">Marquer payée</button></p>
+            </form>
+          <?php endif; ?>
         </div>
       </div>
     </div>
@@ -784,10 +825,20 @@ trait ACDC_Documents_Billing_Render_Trait {
       <div>Devis d'origine</div><div><?php echo ! empty( $row['quote_id'] ) ? esc_html( '#' . $row['quote_id'] ) : '—'; ?></div>
     </div></div>
     <?php if ( ! $is_demo ) : ?>
+    <?php // ACDC 3.25.116 — actions réelles : envoyer par e-mail + marquer payée (via modales câblées). ?>
     <div class="acdc-form-actions" style="margin-top:14px;">
       <a href="<?php echo esc_url( $delete_url ); ?>" class="acdc-button acdc-button-soft" onclick="return confirm('Supprimer cette facture ?');" style="color:#c0392b;">Supprimer</a>
       <a href="<?php echo esc_url( $preview_invoice_url ); ?>" target="_blank" class="acdc-button acdc-button-primary" rel="noopener">Prévisualiser</a>
+      <button type="button" class="acdc-button acdc-button-soft" data-acdc-modal-open="acdc-send-invoice-email-modal">✉️ Envoyer par e-mail</button>
+      <?php if ( 'payee' !== (string) $row['status'] ) : ?>
+      <button type="button" class="acdc-button acdc-button-primary" data-acdc-modal-open="acdc-status-invoice-modal">✅ Marquer payée</button>
+      <?php endif; ?>
     </div>
+    <?php
+      // ACDC 3.25.116 — modales réelles rendues avec le contexte facture courant.
+      $this->render_invoice_email_modal( (int) $row['id'], $scope, (string) ( $row['apprenant_email'] ?? '' ) );
+      $this->render_invoice_status_modal( (int) $row['id'], $scope, (string) $row['status'] );
+    ?>
     <?php endif; ?>
     <style>.acdc-details-grid{display:grid;grid-template-columns:430px 1fr;gap:18px 26px}.acdc-file-chip{display:inline-flex;align-items:center;gap:10px;padding:12px 14px;border-radius:10px;background:#8ea2c0;color:#0B0706;text-decoration:none;min-width:100%;max-width:820px}.acdc-file-chip:hover{opacity:.92;color:#0B0706}@media(max-width:900px){.acdc-details-grid{grid-template-columns:1fr}}</style>
     <?php

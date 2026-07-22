@@ -474,6 +474,126 @@ trait ACDC_Documents_Billing_Actions_Trait {
     $this->redirect_to_portal( 'invoices_credit_notes', 'Facture supprimée.', 'success', array( 'scope' => $scope ) );
   }
 
+  /* ---------------------------------------------------------------
+   * ACDC 3.25.116 — Marquer une facture comme payée
+   * Action : admin_post_acdc_mark_invoice_paid (POST + nonce)
+   * Colonnes écrites : status='payee', paid_at, updated_at.
+   * --------------------------------------------------------------- */
+  public function handle_mark_invoice_paid() {
+    if ( ! current_user_can( 'manage_options' ) ) { wp_die( 'Accès refusé.' ); } // ACDC 3.25.116
+    $invoice_id = isset( $_POST['invoice_id'] ) ? absint( $_POST['invoice_id'] ) : 0;
+    if ( ! $invoice_id || ! check_admin_referer( 'acdc_mark_invoice_paid_' . $invoice_id ) ) { wp_die( 'Action invalide.' ); }
+    if ( $this->is_documents_billing_demo_enabled() ) {
+      $this->redirect_to_portal( 'invoices_credit_notes', 'Activez la facturation réelle dans les Réglages avant de modifier des factures.', 'error' );
+    }
+    global $wpdb;
+    $inv = $this->get_invoice( $invoice_id );
+    if ( ! $inv ) { $this->redirect_to_portal( 'invoices_credit_notes', 'Facture introuvable.', 'error' ); }
+    $scope = (string) $inv->scope;
+    if ( 'payee' !== (string) $inv->status ) {
+      $now = current_time( 'mysql' );
+      $wpdb->update( $this->invoice_table, array(
+        'status'     => 'payee',
+        'paid_at'    => $now,
+        'updated_at' => $now,
+      ), array( 'id' => $invoice_id ) );
+    }
+    $redirect = $this->portal_page_url( array( 'tab' => 'invoices_credit_notes', 'scope' => $scope, 'invoice_action' => 'view', 'invoice_id' => $invoice_id ) );
+    wp_safe_redirect( add_query_arg( array( 'notice' => rawurlencode( 'Facture marquée payée.' ), 'notice_type' => 'success' ), $redirect ) );
+    exit;
+  }
+
+  /* ---------------------------------------------------------------
+   * ACDC 3.25.116 — Envoyer une facture par e-mail
+   * Action : admin_post_acdc_send_invoice_email (POST + nonce)
+   * Calqué sur handle_send_quote_email(). Colonnes écrites en cas de succès :
+   * status='envoyee' (seulement si la facture était encore 'emise', pour ne pas
+   * rétrograder une facture déjà payée), sent_at, updated_at, html_url.
+   * --------------------------------------------------------------- */
+  public function handle_send_invoice_email() {
+    if ( ! current_user_can( 'manage_options' ) ) { wp_die( 'Accès refusé.' ); } // ACDC 3.25.116
+    $invoice_id = isset( $_POST['invoice_id'] ) ? absint( $_POST['invoice_id'] ) : 0;
+    if ( ! $invoice_id || ! check_admin_referer( 'acdc_send_invoice_email_' . $invoice_id ) ) { wp_die( 'Action invalide.' ); }
+    if ( $this->is_documents_billing_demo_enabled() ) {
+      $this->redirect_to_portal( 'invoices_credit_notes', 'Activez la facturation réelle dans les Réglages avant d\'envoyer des factures.', 'error' );
+    }
+    global $wpdb;
+    $inv = $this->get_invoice( $invoice_id );
+    if ( ! $inv ) { $this->redirect_to_portal( 'invoices_credit_notes', 'Facture introuvable.', 'error' ); }
+
+    $email = sanitize_email( (string) $inv->apprenant_email );
+    if ( ! $email || ! is_email( $email ) ) {
+      $redirect = $this->portal_page_url( array( 'tab' => 'invoices_credit_notes', 'scope' => $inv->scope, 'invoice_action' => 'view', 'invoice_id' => $invoice_id ) );
+      wp_safe_redirect( add_query_arg( array( 'notice' => rawurlencode( 'Envoi impossible : aucun email renseigné sur cette facture.' ), 'notice_type' => 'error' ), $redirect ) );
+      exit;
+    }
+
+    $row = $this->build_invoice_row_from_record( $inv );
+
+    /* Régénérer le HTML de la facture et le stocker : aucune fonction generate_invoice_html
+       n'existe (la colonne invoice.html_url n'est jamais peuplée ailleurs), on reproduit donc
+       ici le pattern de generate_quote_html() pour disposer d'une URL fraîche à envoyer. */
+    $html_url      = '';
+    $document_html = $this->get_invoice_document_html( $row, 'invoice' );
+    if ( '' !== (string) $document_html ) {
+      $upload   = wp_upload_dir();
+      $dir      = trailingslashit( $upload['basedir'] ) . 'acdc-invoices/';
+      $url_base = trailingslashit( $upload['baseurl'] ) . 'acdc-invoices/';
+      wp_mkdir_p( $dir );
+      if ( ! empty( $inv->html_url ) ) {
+        $old_path = str_replace( $url_base, $dir, (string) $inv->html_url );
+        if ( 0 === strpos( $old_path, $dir ) && file_exists( $old_path ) ) {
+          @unlink( $old_path ); // phpcs:ignore WordPress.PHP.NoSilencedErrors.Discouraged
+        }
+      }
+      $filename = 'facture-' . (int) $inv->id . '-' . time() . '.html';
+      if ( false !== file_put_contents( $dir . $filename, $document_html ) ) {
+        $html_url = $url_base . $filename;
+        $wpdb->update( $this->invoice_table, array( 'html_url' => $html_url ), array( 'id' => $invoice_id ) );
+      }
+    }
+
+    $branding  = $this->get_branding_options();
+    $org_name  = $branding['company_name'] ?? 'ACDC Formation';
+    $formation = $row['formation'] ?: 'Votre formation';
+    $recipient = $row['apprenant'] ?: $row['client_company'];
+
+    $cta = '';
+    if ( '' !== $html_url ) {
+      $cta = '<p style="text-align:center;margin:28px 0;">'
+        . '<a href="' . esc_url( $html_url ) . '" style="display:inline-block;background:#d6a353;color:#0f2c52;font-weight:800;font-size:16px;text-decoration:none;padding:14px 32px;border-radius:10px;">'
+        . '&#128196;&nbsp; Consulter votre facture'
+        . '</a></p>'
+        . '<p style="font-size:13px;color:#6b7280;text-align:center;">Ou copiez ce lien : <a href="' . esc_url( $html_url ) . '" style="color:#5579bf;">' . esc_html( $html_url ) . '</a></p>';
+    }
+
+    $subject = 'Votre facture — ' . $row['number'] . ' — ' . $org_name;
+
+    $sent = $this->acdc_send_transactional_email( $email, $subject, array(
+      'title'    => 'Votre facture de formation',
+      'intro'    => 'Bonjour ' . esc_html( $recipient ) . ',<br><br>Veuillez trouver ci-dessous votre facture <strong>' . esc_html( $row['number'] ) . '</strong> pour la formation <strong>' . esc_html( $formation ) . '</strong>.',
+      'cta_html' => $cta,
+      'footer'   => 'Pour toute question, contactez-nous à <a href="mailto:' . esc_attr( $branding['email'] ?? '' ) . '">' . esc_html( $branding['email'] ?? '' ) . '</a>.',
+    ), array( 'from_name' => $org_name, 'from_email' => $branding['email'] ?? '' ) );
+
+    if ( $sent ) {
+      $now  = current_time( 'mysql' );
+      $data = array( 'sent_at' => $now, 'updated_at' => $now );
+      // Ne pas rétrograder une facture déjà payée/en retard/litige : on ne passe à
+      // 'envoyee' que si elle était encore au statut initial 'emise'.
+      if ( 'emise' === (string) $inv->status ) {
+        $data['status'] = 'envoyee';
+      }
+      $wpdb->update( $this->invoice_table, $data, array( 'id' => $invoice_id ) );
+    }
+
+    $msg  = $sent ? 'Facture envoyée par email.' : 'Envoi impossible — vérifiez la configuration email.';
+    $type = $sent ? 'success' : 'error';
+    $redirect = $this->portal_page_url( array( 'tab' => 'invoices_credit_notes', 'scope' => $inv->scope, 'invoice_action' => 'view', 'invoice_id' => $invoice_id ) );
+    wp_safe_redirect( add_query_arg( array( 'notice' => rawurlencode( $msg ), 'notice_type' => $type ), $redirect ) );
+    exit;
+  }
+
   public function handle_save_document() {
     $this->require_admin_manager_nonce( 'acdc_save_document' );
 

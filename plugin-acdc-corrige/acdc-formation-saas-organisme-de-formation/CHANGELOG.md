@@ -4,6 +4,25 @@ Toutes les modifications notables de ce projet sont documentées ici.
 Format inspiré de [Keep a Changelog](https://keepachangelog.com/fr/1.1.0/).
 L'historique détaillé antérieur est archivé dans [`release-notes/`](release-notes/).
 
+## [3.25.117] — 2026-07-22
+
+### Corrigé / ajouté (suite audit workflows)
+- **Statut d'inscription scopé à la session** : la clôture d'une session ne pousse plus « convocations
+  envoyées » / « formation réalisée » aux inscrits des AUTRES sessions de la même formation
+  (avancement limité aux apprenants réellement rattachés à la session via `learner_table.session_id`).
+- **Facturation — encaissement** : nouveau bouton/handler « Marquer payée » (statut `payee` + `paid_at`),
+  sécurisé (capability + nonce + garde mode démo), idempotent.
+- **Facturation — envoi** : nouveau bouton/handler « Envoyer la facture » par e-mail (calqué sur l'envoi
+  de devis : génération du HTML, e-mail transactionnel, statut `envoyee` + `sent_at`). Les deux modales
+  de facture, jusque-là inertes, sont désormais fonctionnelles depuis la vue facture.
+
+### Différé (nécessite conception/test en conditions réelles — signalé, non livré à l'aveugle)
+- Relance automatique d'impayés (cron `en_retard`) et émission d'avoir persistant complet
+  (workflow + numérotation `AV-` séquentielle).
+- Émargement par séance (1 feuille par demi-journée) — changement de schéma à cadrer.
+- Propagation d'un taux de TVA par proposition (aucun champ TVA n'existe aujourd'hui sur les
+  propositions — l'exonération art. 293 B est une constante de gabarit).
+
 ## [3.25.116] — 2026-07-22
 
 ### Corrigé (6ᵉ vague — audit des workflows métier & tâches planifiées, ~18 correctifs)
