@@ -553,6 +553,7 @@ class ACDC_Formation_SAAS_Plugin {
     add_action( 'admin_post_acdc_delete_quote',           array( $this, 'handle_delete_quote' ) );
     add_action( 'admin_post_acdc_set_quote_status',       array( $this, 'handle_set_quote_status' ) );
     add_action( 'admin_post_acdc_download_invoice_document', array( $this, 'handle_download_invoice_document' ) );
+    add_action( 'admin_post_acdc_download_invoice_facturx',  array( $this, 'handle_download_invoice_facturx' ) );
     /* ACDC 3.24.20 — Facturation réelle : convert devis→facture, save, delete. */
     add_action( 'admin_post_acdc_convert_quote_to_invoice', array( $this, 'handle_convert_quote_to_invoice' ) );
     add_action( 'admin_post_acdc_send_quote_for_signature', array( $this, 'handle_send_quote_for_signature' ) );

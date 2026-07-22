@@ -477,6 +477,59 @@ trait ACDC_Documents_Billing_Core_Trait {
     return $map[ $status ] ?? 'draft';
   }
 
+  /**
+   * Génère le XML Factur-X (profil MINIMUM, reconnu par l'administration fiscale) d'une
+   * facture réelle, prêt à être embarqué dans le PDF/A-3 (fichier « factur-x.xml »).
+   *
+   * @param int    $invoice_id
+   * @param string $type_code  380 (facture) ou 381 (avoir).
+   * @return string XML, ou '' si facture introuvable / méthode indisponible.
+   */
+  public function get_invoice_facturx_xml( $invoice_id, $type_code = '380' ) {
+    if ( ! method_exists( $this, 'get_invoice' ) ) { return ''; }
+    $inv = $this->get_invoice( (int) $invoice_id );
+    if ( ! $inv ) { return ''; }
+    $branding        = $this->get_branding_options();
+    $company_profile = get_option( 'acdc_of_company_profile', array() );
+
+    $transport = (float) ( $inv->transport_fees_enabled ? $inv->transport_fees_ht : 0 );
+    $meal      = (float) ( $inv->meal_fees_enabled ? $inv->meal_fees_ht : 0 );
+    $extra     = 0.0;
+    if ( ! empty( $inv->extra_lines_json ) ) {
+      $decoded = json_decode( $inv->extra_lines_json, true );
+      $extra   = \ACDC\Support\Money::extraLinesTotal( is_array( $decoded ) ? $decoded : array() );
+    }
+    $totals = \ACDC\Support\Money::invoiceTotals( (float) $inv->tarif_ht, $transport, $meal, $extra, (float) $inv->vat_rate );
+
+    $vat = '';
+    foreach ( array( 'vat_number', 'vat_intra', 'tva_intra', 'numero_tva' ) as $k ) {
+      if ( ! empty( $branding[ $k ] ) ) { $vat = (string) $branding[ $k ]; break; }
+      if ( is_array( $company_profile ) && ! empty( $company_profile[ $k ] ) ) { $vat = (string) $company_profile[ $k ]; break; }
+    }
+
+    $issue = ! empty( $inv->emission_date ) ? (string) $inv->emission_date : ( ! empty( $inv->created_at ) ? (string) $inv->created_at : '' );
+
+    $data = array(
+      'number'      => (string) $inv->number,
+      'issue_date'  => $issue,
+      'currency'    => 'EUR',
+      'type_code'   => in_array( (string) $type_code, array( '380', '381' ), true ) ? (string) $type_code : '380',
+      'seller'      => array(
+        'name'    => ! empty( $branding['company_name'] ) ? (string) $branding['company_name'] : 'ACDC Formation',
+        'siret'   => ! empty( $branding['siret'] ) ? preg_replace( '/\D/', '', (string) $branding['siret'] ) : '',
+        'vat'     => $vat,
+        'country' => 'FR',
+      ),
+      'buyer'       => array(
+        'name' => $inv->client_company ?: $inv->apprenant_name,
+      ),
+      'tax_basis'   => $totals['ht'],
+      'tax_total'   => $totals['tva'],
+      'grand_total' => $totals['ttc'],
+    );
+    return \ACDC\Support\FacturX::buildMinimumXml( $data );
+  }
+
   private function build_invoice_row_from_record( $inv ) {
     if ( ! $inv ) return array();
     $branding  = $this->get_branding_options();

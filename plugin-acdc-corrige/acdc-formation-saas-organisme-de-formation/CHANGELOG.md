@@ -4,6 +4,14 @@ Toutes les modifications notables de ce projet sont documentées ici.
 Format inspiré de [Keep a Changelog](https://keepachangelog.com/fr/1.1.0/).
 L'historique détaillé antérieur est archivé dans [`release-notes/`](release-notes/).
 
+## [3.25.107] — 2026-07-22
+
+### Ajouté
+- Facturation électronique : génération du XML **Factur-X** (profil MINIMUM, CII UN/CEFACT)
+  d'une facture. `ACDC\Support\FacturX` (pur, 11 tests) + `get_invoice_facturx_xml()` +
+  handler `acdc_download_invoice_facturx` (capacité + nonce) + bouton dans le détail facture.
+  Suite : 47 tests / 98 assertions. (Incorporation PDF/A-3 : étape suivante.)
+
 ## [3.25.106] — 2026-07-22
 
 ### Sécurité

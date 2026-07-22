@@ -262,6 +262,27 @@ trait ACDC_Documents_Billing_Actions_Trait {
     $this->send_html_download_response( 'facture-' . sanitize_file_name( $row['number'] ) . '.html', $html );
   }
 
+  /**
+   * Télécharge le XML Factur-X (profil MINIMUM) d'une facture réelle.
+   */
+  public function handle_download_invoice_facturx() {
+    $this->require_manage_options();
+    $invoice_id = isset( $_GET['invoice_id'] ) ? absint( $_GET['invoice_id'] ) : 0;
+    $this->verify_nonce_or_die( 'acdc_download_invoice_facturx_' . $invoice_id );
+    $xml = method_exists( $this, 'get_invoice_facturx_xml' ) ? $this->get_invoice_facturx_xml( $invoice_id ) : '';
+    if ( '' === $xml ) {
+      wp_die( esc_html( 'Facture introuvable ou Factur-X indisponible (mode démo ?).' ) );
+    }
+    $inv = $this->get_invoice( $invoice_id );
+    $num = $inv ? sanitize_file_name( (string) $inv->number ) : (string) $invoice_id;
+    $this->log_action_event( 'download', 'invoice_facturx', $invoice_id );
+    nocache_headers();
+    header( 'Content-Type: application/xml; charset=UTF-8' );
+    header( 'Content-Disposition: attachment; filename="factur-x-' . $num . '.xml"' );
+    echo $xml; // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped -- XML normé, pas du HTML.
+    exit;
+  }
+
   public function handle_download_credit_note_document() {
     $this->require_manage_options();
     $invoice_id = isset( $_GET['invoice_id'] ) ? absint( $_GET['invoice_id'] ) : 1;
