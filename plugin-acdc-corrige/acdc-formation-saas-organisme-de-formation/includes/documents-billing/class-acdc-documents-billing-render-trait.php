@@ -753,6 +753,7 @@ trait ACDC_Documents_Billing_Render_Trait {
     $back_url = add_query_arg( array( 'tab' => 'invoices_credit_notes', 'scope' => $scope ), $base_url );
     $download_url = $this->secure_admin_post_url( 'acdc_download_invoice_document', array( 'invoice_id' => (int) $row['id'], 'scope' => $scope ), 'acdc_download_invoice_document_' . (int) $row['id'] );
     $facturx_url = $is_demo ? '' : $this->secure_admin_post_url( 'acdc_download_invoice_facturx', array( 'invoice_id' => (int) $row['id'] ), 'acdc_download_invoice_facturx_' . (int) $row['id'] );
+    $facturx_pdf_url = $is_demo ? '' : $this->secure_admin_post_url( 'acdc_download_invoice_facturx_pdf', array( 'invoice_id' => (int) $row['id'] ), 'acdc_download_invoice_facturx_pdf_' . (int) $row['id'] );
     $preview_invoice_url = add_query_arg( array( 'tab' => 'invoices_credit_notes', 'scope' => $scope, 'invoice_action' => 'preview_invoice', 'invoice_id' => (int) $row['id'] ), $base_url );
     $delete_url = $is_demo ? '#' : wp_nonce_url( admin_url( 'admin-post.php?action=acdc_delete_invoice&invoice_id=' . (int) $row['id'] ), 'acdc_delete_invoice_' . (int) $row['id'] );
     ?>
@@ -771,7 +772,7 @@ trait ACDC_Documents_Billing_Render_Trait {
     </div></div>
     <div class="acdc-panel acdc-profile-section"><h3>Facture <?php echo esc_html( $row['number'] ); ?></h3><div class="acdc-details-grid">
       <div>Télécharger</div><div><a href="<?php echo esc_url( $download_url ); ?>" class="acdc-file-chip">📄 Facture <?php echo esc_html( $row['number'] ); ?>.html</a></div>
-      <?php if ( $facturx_url ) : ?><div>Facture électronique</div><div><a href="<?php echo esc_url( $facturx_url ); ?>" class="acdc-file-chip" title="XML Factur-X (profil MINIMUM) à embarquer dans le PDF/A-3">🧾 Factur-X (XML)</a></div><?php endif; ?>
+      <?php if ( $facturx_url ) : ?><div>Facture électronique</div><div><a href="<?php echo esc_url( $facturx_url ); ?>" class="acdc-file-chip" title="XML Factur-X (profil MINIMUM) à embarquer dans le PDF/A-3">🧾 Factur-X (XML)</a><?php if ( $facturx_pdf_url ) : ?> <a href="<?php echo esc_url( $facturx_pdf_url ); ?>" class="acdc-file-chip" title="Facture PDF/A-3 avec le XML Factur-X (profil MINIMUM) embarqué">🧾 Factur-X (PDF/A-3)</a><?php endif; ?></div><?php endif; ?>
       <div>Statut</div><div><span class="acdc-status-badge acdc-status-badge-<?php echo esc_attr( $row['status_key'] ); ?>"><?php echo esc_html( $row['status_label'] ?? $row['status'] ); ?></span></div>
       <div>Date d'émission</div><div><?php echo esc_html( $row['emission_date'] ); ?></div>
       <div>Date d'échéance</div><div><?php echo esc_html( $row['due_date'] ); ?></div>

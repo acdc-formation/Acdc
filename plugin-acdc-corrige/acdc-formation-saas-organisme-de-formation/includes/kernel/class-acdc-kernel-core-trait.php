@@ -2766,7 +2766,11 @@ dbDelta( $sql_companies );
     /* ACDC 3.21.13 — Shortcode formulaire public analyse du besoin. */
     add_shortcode( 'acdc_nad_formulaire', array( $this, 'render_nad_formulaire_shortcode' ) );
   }  private function is_admin_manager() {
-    return current_user_can( 'manage_options' );
+    /* Compat historique : les admins manage_options gardent tout leur accès.
+       Voie ouverte : la capacité pivot « accès ERP » (modèle de capacités métier,
+       remplacement progressif et NON régressif du tout-manage_options). */
+    return current_user_can( 'manage_options' )
+      || current_user_can( \ACDC\Support\Capabilities::PRIMARY );
   }  private function now_mysql() {
     return current_time( 'mysql' );
   }  private function current_date() {

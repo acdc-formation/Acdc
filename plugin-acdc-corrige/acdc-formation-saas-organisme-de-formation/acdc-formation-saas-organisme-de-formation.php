@@ -3,7 +3,7 @@
  * Plugin Name: ACDC Formation SAAS Organisme de formation
  * Plugin URI: https://acdc-formation.com/
  * Description: Espace de gestion frontal sécurisé pour organisme de formation, réécrit sur base (dernière version du plugin : 3.20.105) avec module UI/Design système : réglage avancé des icônes d’action, taille, couleurs, espacements et choix des pictogrammes.
- * Version: 3.25.107
+ * Version: 3.25.108
  * Author: ACDC Formation
  * Text Domain: acdc-formation-saas
  * Domain Path: /languages
@@ -13,7 +13,7 @@ if ( ! defined( 'ABSPATH' ) ) {
     exit;
 }
 
-define( 'ACDC_OF_SAAS_VERSION', '3.25.107' );
+define( 'ACDC_OF_SAAS_VERSION', '3.25.108' );
 define( 'ACDC_OF_SAAS_FILE', __FILE__ );
 define( 'ACDC_OF_SAAS_DIR', plugin_dir_path( __FILE__ ) );
 define( 'ACDC_OF_SAAS_URL', plugin_dir_url( __FILE__ ) );

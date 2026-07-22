@@ -325,6 +325,22 @@ trait ACDC_Trainer_Portal_Core_Trait {
     if ( ! $session ) {
       return null;
     }
+    // Durcissement OPT-IN (anti-vol de cookie) : lie la session à l'empreinte IP/User-Agent.
+    // Activé uniquement si la constante ACDC_PORTAL_STRICT_SESSION est définie et vraie ;
+    // sans elle, le comportement reste strictement inchangé. Les sessions legacy sans
+    // empreinte (ip/ua vides) restent acceptées (cf. SessionFingerprint::matches).
+    if ( defined( 'ACDC_PORTAL_STRICT_SESSION' ) && ACDC_PORTAL_STRICT_SESSION
+      && ! \ACDC\Support\SessionFingerprint::matches(
+        (string) $session->ip_address,
+        (string) $session->user_agent,
+        $this->trainer_portal_get_client_ip(),
+        $this->trainer_portal_get_user_agent()
+      )
+    ) {
+      $this->trainer_portal_revoke_session_by_hash( $hash );
+      $this->trainer_portal_clear_cookie();
+      return null;
+    }
     $expires_ts = $this->trainer_portal_parse_mysql_time( $session->expires_at );
     if ( ! $expires_ts || $expires_ts < current_time( 'timestamp' ) ) {
       $this->trainer_portal_revoke_session_by_hash( $hash );

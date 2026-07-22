@@ -39,10 +39,13 @@
         $prospect = (object) array( 'profile_type' => $prefill_profile );
       }
     }
-    $prospects = $this->get_prospects();
     $search = isset( $_GET['q'] ) ? sanitize_text_field( wp_unslash( $_GET['q'] ) ) : '';
+
+    // Liste complète : sert uniquement au sélecteur du modal « Ajouter RDV », qui doit
+    // permettre de choisir n'importe quel prospect (hors bornage de la pagination).
+    $prospects_all = $this->get_prospects();
     if ( '' !== $search ) {
-      $prospects = array_values( array_filter( $prospects, function( $entry ) use ( $search ) {
+      $prospects_all = array_values( array_filter( $prospects_all, function( $entry ) use ( $search ) {
         $haystack = implode( ' ', array(
           $entry->profile_type,
           isset( $entry->gender ) ? $entry->gender : '',
@@ -63,6 +66,17 @@
         return false !== stripos( $haystack, $search );
       } ) );
     }
+
+    // Liste paginée : alimente le tableau (bornage par page, SQL LIMIT/OFFSET). Sans
+    // ?ppage on affiche la page 1 (25 prospects) puis la navigation sous le tableau.
+    $prospect_page        = isset( $_GET['ppage'] ) ? absint( wp_unslash( $_GET['ppage'] ) ) : 1;
+    $prospect_filters     = array();
+    if ( '' !== $search ) {
+      $prospect_filters['search'] = $search;
+    }
+    $prospect_page_result = $this->get_prospects_page( $prospect_page, 25, $prospect_filters );
+    $prospects            = $prospect_page_result['items'];
+    $prospect_pagination  = $prospect_page_result['pagination'];
     $new_prospect_url = is_admin() ? admin_url( 'admin.php?page=acdc-of-prospects&action=new' ) : $this->portal_page_url( array( 'tab' => 'prospects', 'action' => 'new' ) );
     $followup_url = is_admin() ? $this->admin_prospect_followup_url() : $this->portal_page_url( array( 'tab' => 'prospect_followup' ) );
     $page_title = 'Prospect';
@@ -456,6 +470,25 @@
           </tbody>
         </table>
       </div>
+      <?php if ( $prospect_pagination['pages'] > 1 ) : ?>
+        <?php
+        $prospect_prev_url = add_query_arg( 'ppage', max( 1, $prospect_pagination['page'] - 1 ) );
+        $prospect_next_url = add_query_arg( 'ppage', min( $prospect_pagination['pages'], $prospect_pagination['page'] + 1 ) );
+        ?>
+        <nav class="acdc-pagination" aria-label="Pagination des prospects" style="display:flex;align-items:center;justify-content:center;gap:14px;margin-top:16px;flex-wrap:wrap;">
+          <?php if ( $prospect_pagination['has_prev'] ) : ?>
+            <a class="acdc-button acdc-button-soft" href="<?php echo esc_url( $prospect_prev_url ); ?>" rel="prev" aria-label="Page précédente">&lsaquo; Précédent</a>
+          <?php else : ?>
+            <span class="acdc-button acdc-button-soft" aria-disabled="true" style="opacity:.5;cursor:default;">&lsaquo; Précédent</span>
+          <?php endif; ?>
+          <span class="acdc-pagination-status" aria-label="<?php echo esc_attr( sprintf( 'Page %d sur %d', (int) $prospect_pagination['page'], (int) $prospect_pagination['pages'] ) ); ?>">Page <?php echo (int) $prospect_pagination['page']; ?> / <?php echo (int) $prospect_pagination['pages']; ?></span>
+          <?php if ( $prospect_pagination['has_next'] ) : ?>
+            <a class="acdc-button acdc-button-soft" href="<?php echo esc_url( $prospect_next_url ); ?>" rel="next" aria-label="Page suivante">Suivant &rsaquo;</a>
+          <?php else : ?>
+            <span class="acdc-button acdc-button-soft" aria-disabled="true" style="opacity:.5;cursor:default;">Suivant &rsaquo;</span>
+          <?php endif; ?>
+        </nav>
+      <?php endif; ?>
     </div>
 
     <div class="acdc-modal-shell" id="acdc-prospect-list-rdv-modal" hidden>
@@ -473,7 +506,7 @@
               <div data-acdc-quick-rdv-prospect-field>
                 <select name="prospect_id" data-acdc-prospect-list-rdv-select required>
                   <option value="">Sélectionner</option>
-                  <?php foreach ( $prospects as $entry ) : ?>
+                  <?php foreach ( $prospects_all as $entry ) : ?>
                     <option value="<?php echo (int) $entry->id; ?>"><?php echo esc_html( $this->get_prospect_display_name( $entry ) . ' — ' . $this->get_prospect_company_display_name( $entry ) ); ?></option>
                   <?php endforeach; ?>
                 </select>

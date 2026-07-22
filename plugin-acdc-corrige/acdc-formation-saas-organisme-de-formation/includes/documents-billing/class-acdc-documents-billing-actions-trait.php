@@ -283,6 +283,29 @@ trait ACDC_Documents_Billing_Actions_Trait {
     exit;
   }
 
+  /**
+   * Télécharge la facture au format Factur-X : PDF/A-3 avec le XML factur-x.xml embarqué.
+   */
+  public function handle_download_invoice_facturx_pdf() {
+    $this->require_manage_options();
+    $invoice_id = isset( $_GET['invoice_id'] ) ? absint( $_GET['invoice_id'] ) : 0;
+    $this->verify_nonce_or_die( 'acdc_download_invoice_facturx_pdf_' . $invoice_id );
+    $pdf = method_exists( $this, 'build_invoice_facturx_pdf' ) ? $this->build_invoice_facturx_pdf( $invoice_id ) : '';
+    if ( '' === $pdf ) {
+      wp_die( esc_html( 'PDF/A-3 Factur-X indisponible : facture introuvable, librairie mPDF absente ou mode démo.' ) );
+    }
+    $inv = $this->get_invoice( $invoice_id );
+    $num = $inv ? sanitize_file_name( (string) $inv->number ) : (string) $invoice_id;
+    $this->log_action_event( 'download', 'invoice_facturx_pdf', $invoice_id );
+    while ( ob_get_level() ) { ob_end_clean(); }
+    nocache_headers();
+    header( 'Content-Type: application/pdf' );
+    header( 'Content-Disposition: attachment; filename="facture-' . $num . '.pdf"' );
+    header( 'Content-Length: ' . strlen( $pdf ) );
+    echo $pdf; // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped -- Binaire PDF.
+    exit;
+  }
+
   public function handle_download_credit_note_document() {
     $this->require_manage_options();
     $invoice_id = isset( $_GET['invoice_id'] ) ? absint( $_GET['invoice_id'] ) : 1;

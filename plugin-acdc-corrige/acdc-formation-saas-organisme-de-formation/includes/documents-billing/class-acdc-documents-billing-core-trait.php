@@ -530,6 +530,76 @@ trait ACDC_Documents_Billing_Core_Trait {
     return \ACDC\Support\FacturX::buildMinimumXml( $data );
   }
 
+  /**
+   * Construit la facture Factur-X : PDF/A-3 (mPDF) avec le XML « factur-x.xml » embarqué
+   * en pièce jointe et le bloc XMP Factur-X.
+   *
+   * @param int $invoice_id
+   * @return string Binaire PDF, ou '' si indisponible (facture introuvable, mPDF absent, erreur).
+   */
+  public function build_invoice_facturx_pdf( $invoice_id ) {
+    $invoice_id = (int) $invoice_id;
+    if ( ! $invoice_id || ! method_exists( $this, 'get_invoice' ) ) { return ''; }
+    $inv = $this->get_invoice( $invoice_id );
+    if ( ! $inv ) { return ''; }
+
+    /* HTML de la facture (même rendu que le téléchargement classique) + XML Factur-X. */
+    $row  = $this->build_invoice_row_from_record( $inv );
+    $html = $this->get_invoice_document_html( $row, 'invoice' );
+    $xml  = $this->get_invoice_facturx_xml( $invoice_id );
+    if ( '' === (string) $html || '' === (string) $xml ) { return ''; }
+
+    /* Chargement mPDF — même chemin que le kernel (wp-content/acdc-libs). */
+    $autoload = dirname( dirname( dirname( dirname( plugin_dir_path( __FILE__ ) ) ) ) ) . '/acdc-libs/vendor/autoload.php';
+    if ( file_exists( $autoload ) ) { require_once $autoload; }
+    if ( ! class_exists( '\Mpdf\Mpdf' ) ) { return ''; }
+
+    $tmp_xml = '';
+    try {
+      $mpdf = new \Mpdf\Mpdf( array(
+        'format'        => 'A4',
+        'margin_top'    => 14,
+        'margin_bottom' => 14,
+        'margin_left'   => 14,
+        'margin_right'  => 14,
+        'tempDir'       => sys_get_temp_dir(),
+        'PDFA'          => true,
+        'PDFAauto'      => true,
+      ) );
+      $mpdf->SetTitle( 'Facture ' . sanitize_file_name( (string) $inv->number ) );
+
+      /* Pièce jointe PDF/A-3 : mPDF lit le fichier joint depuis un chemin disque. */
+      $tmp_xml = function_exists( 'wp_tempnam' ) ? wp_tempnam( 'factur-x.xml' ) : tempnam( sys_get_temp_dir(), 'fxml' );
+      if ( ! $tmp_xml || false === file_put_contents( $tmp_xml, $xml ) ) { return ''; }
+      $spec = \ACDC\Support\FacturXPdf::associatedFileSpec();
+      $mpdf->SetAssociatedFiles( array( array(
+        'name'           => $spec['name'],
+        'mime'           => $spec['mime'],
+        'description'    => $spec['description'],
+        'AFRelationship' => $spec['relationship'],
+        'path'           => $tmp_xml,
+      ) ) );
+
+      /* Bloc XMP Factur-X (fx:DocumentType, fx:DocumentFileName, fx:Version, fx:ConformanceLevel). */
+      if ( method_exists( $mpdf, 'SetAdditionalXmpRdf' ) ) {
+        $xmp = \ACDC\Support\FacturXPdf::xmpMetadata();
+        /* mPDF ré-enveloppe le fragment dans son propre <rdf:RDF> : on retire la nôtre. */
+        $mpdf->SetAdditionalXmpRdf( trim( (string) preg_replace( '#</?rdf:RDF[^>]*>#', '', $xmp ) ) );
+      }
+      /* NB : si SetAdditionalXmpRdf est absente (mPDF < 8.0), le bloc XMP Factur-X devrait
+         être injecté par post-traitement du binaire PDF — non pris en charge ici. */
+
+      $mpdf->WriteHTML( $html );
+      $pdf = $mpdf->Output( '', 'S' );
+      return is_string( $pdf ) ? $pdf : '';
+    } catch ( \Throwable $e ) {
+      /* Ne jamais casser le flux appelant : fallback géré par l'appelant. */
+      return '';
+    } finally {
+      if ( $tmp_xml && file_exists( $tmp_xml ) ) { @unlink( $tmp_xml ); } // phpcs:ignore WordPress.PHP.NoSilencedErrors.Discouraged
+    }
+  }
+
   private function build_invoice_row_from_record( $inv ) {
     if ( ! $inv ) return array();
     $branding  = $this->get_branding_options();

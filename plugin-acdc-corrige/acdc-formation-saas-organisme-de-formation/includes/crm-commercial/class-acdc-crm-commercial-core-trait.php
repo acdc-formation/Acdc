@@ -25,6 +25,78 @@
   }
 
 
+  /**
+   * Version paginée de la liste des prospects (bornage par page, côté SQL).
+   *
+   * Ne charge que les lignes de la page demandée (LIMIT/OFFSET) au lieu de la table
+   * entière. La recherche plein-texte optionnelle ($filters['search']) est appliquée
+   * à la fois au COUNT(*) et à la sélection, sur les mêmes colonnes que le filtre PHP
+   * historique de la vue.
+   *
+   * @param int   $page     Page demandée (1-indexée).
+   * @param int   $per_page Éléments par page (borné dans [1, 200] par le Paginator).
+   * @param array $filters  Filtres optionnels. Clé supportée : 'search' (chaîne).
+   * @return array{items:array,pagination:array} Items de la page et métadonnées de pagination.
+   */
+  private function get_prospects_page( $page = 1, $per_page = 25, $filters = array() ) {
+    global $wpdb;
+
+    $where      = '';
+    $where_args = array();
+
+    $search = isset( $filters['search'] ) ? trim( (string) $filters['search'] ) : '';
+    if ( '' !== $search ) {
+      $like    = '%' . $wpdb->esc_like( $search ) . '%';
+      $columns = array(
+        'profile_type',
+        'gender',
+        'first_name',
+        'last_name',
+        'signer_first_name',
+        'signer_last_name',
+        'company_name',
+        'siret',
+        'naf_code',
+        'phone',
+        'email',
+        'signer_email',
+        'desired_training',
+        'assigned_to',
+        'source',
+      );
+      $clauses = array();
+      foreach ( $columns as $column ) {
+        $clauses[]    = "{$column} LIKE %s";
+        $where_args[] = $like;
+      }
+      $where = ' WHERE ' . implode( ' OR ', $clauses );
+    }
+
+    if ( ! empty( $where_args ) ) {
+      $total = (int) $wpdb->get_var(
+        $wpdb->prepare( "SELECT COUNT(*) FROM {$this->prospect_table}{$where}", $where_args )
+      );
+    } else {
+      $total = (int) $wpdb->get_var( "SELECT COUNT(*) FROM {$this->prospect_table}" );
+    }
+
+    $pagination = \ACDC\Support\Paginator::normalize( $page, $per_page, $total );
+
+    $query_args = array_merge( $where_args, array( $pagination['per_page'], $pagination['offset'] ) );
+    $items      = $wpdb->get_results(
+      $wpdb->prepare(
+        "SELECT * FROM {$this->prospect_table}{$where} ORDER BY created_at DESC, id DESC LIMIT %d OFFSET %d",
+        $query_args
+      )
+    );
+
+    return array(
+      'items'      => is_array( $items ) ? $items : array(),
+      'pagination' => $pagination,
+    );
+  }
+
+
   private function prospect_has_dashboard_alert( $prospect, $latest_rdv = null ) {
     $alert_status = $this->get_prospect_alert_status( $prospect );
 

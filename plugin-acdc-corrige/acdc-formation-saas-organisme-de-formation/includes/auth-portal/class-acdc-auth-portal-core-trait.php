@@ -74,21 +74,37 @@ private function login_page_url( $args = array() ) {
    */
   public function ensure_acdc_portal_admin_role( $force = false ) {
     $role = get_role( 'acdc_portal_admin' );
-    if ( $role && ! $force ) {
-      return;
+    if ( ! $role || $force ) {
+      $admin = get_role( 'administrator' );
+      $caps  = ( $admin && is_array( $admin->capabilities ) ) ? $admin->capabilities : array();
+      $blacklist = array( 'edit_plugins', 'edit_themes', 'edit_files', 'install_plugins', 'update_plugins', 'delete_plugins', 'install_themes', 'update_themes', 'delete_themes', 'update_core', 'update_languages', 'edit_users', 'create_users', 'delete_users', 'promote_users', 'remove_users', 'list_users', 'manage_network', 'manage_network_users', 'manage_network_plugins', 'manage_network_themes', 'manage_network_options' );
+      foreach ( $blacklist as $cap ) {
+        unset( $caps[ $cap ] );
+      }
+      $caps['read'] = true;
+      $caps['manage_options'] = true;
+      if ( $role ) {
+        remove_role( 'acdc_portal_admin' );
+      }
+      add_role( 'acdc_portal_admin', 'Administrateur ACDC (portail)', $caps );
+      $role = get_role( 'acdc_portal_admin' );
     }
-    $admin = get_role( 'administrator' );
-    $caps  = ( $admin && is_array( $admin->capabilities ) ) ? $admin->capabilities : array();
-    $blacklist = array( 'edit_plugins', 'edit_themes', 'edit_files', 'install_plugins', 'update_plugins', 'delete_plugins', 'install_themes', 'update_themes', 'delete_themes', 'update_core', 'update_languages', 'edit_users', 'create_users', 'delete_users', 'promote_users', 'remove_users', 'list_users', 'manage_network', 'manage_network_users', 'manage_network_plugins', 'manage_network_themes', 'manage_network_options' );
-    foreach ( $blacklist as $cap ) {
-      unset( $caps[ $cap ] );
+
+    /* Modèle de capacités métier (ERP) — remplacement progressif et NON régressif
+       du tout-manage_options. Attribution idempotente (add_cap l'est) de la capacité
+       pivot et des capacités métier au rôle portail ET au rôle administrator natif.
+       On ne retire jamais manage_options : les admins historiques gardent tout accès. */
+    if ( $role instanceof \WP_Role ) {
+      foreach ( \ACDC\Support\Capabilities::map()['acdc_portal_admin'] as $cap ) {
+        $role->add_cap( $cap );
+      }
     }
-    $caps['read'] = true;
-    $caps['manage_options'] = true;
-    if ( $role ) {
-      remove_role( 'acdc_portal_admin' );
+    $admin_role = get_role( 'administrator' );
+    if ( $admin_role instanceof \WP_Role ) {
+      foreach ( \ACDC\Support\Capabilities::map()['administrator'] as $cap ) {
+        $admin_role->add_cap( $cap );
+      }
     }
-    add_role( 'acdc_portal_admin', 'Administrateur ACDC (portail)', $caps );
   }
 
   /**

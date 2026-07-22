@@ -4,6 +4,20 @@ Toutes les modifications notables de ce projet sont documentées ici.
 Format inspiré de [Keep a Changelog](https://keepachangelog.com/fr/1.1.0/).
 L'historique détaillé antérieur est archivé dans [`release-notes/`](release-notes/).
 
+## [3.25.108] — 2026-07-22
+
+### Ajouté
+- **Factur-X PDF/A-3** : `build_invoice_facturx_pdf()` (mPDF, XML embarqué + XMP), handler
+  `acdc_download_invoice_facturx_pdf`, bouton dédié. `ACDC\Support\FacturXPdf` + 8 tests.
+- **Pagination** : `ACDC\Support\Paginator` (13 tests) + `get_prospects_page()` ; liste des
+  prospects paginée (LIMIT/OFFSET) avec navigation accessible.
+- **Capacités métier** : `ACDC\Support\Capabilities` (6 tests), capacité pivot `acdc_of_manage`
+  + 7 caps attribuées aux rôles. `is_admin_manager()` = `manage_options` OU pivot (non régressif).
+- **Sessions portail** : `ACDC\Support\SessionFingerprint` (8 tests), liaison IP(/24)+UA
+  opt-in via `ACDC_PORTAL_STRICT_SESSION` (apprenant + formateur).
+
+Suite PHPUnit : 82 tests / 195 assertions.
+
 ## [3.25.107] — 2026-07-22
 
 ### Ajouté
