@@ -4,6 +4,14 @@ Toutes les modifications notables de ce projet sont documentées ici.
 Format inspiré de [Keep a Changelog](https://keepachangelog.com/fr/1.1.0/).
 L'historique détaillé antérieur est archivé dans [`release-notes/`](release-notes/).
 
+## [3.25.128] — 2026-07-23
+
+### Ajouté — Export comptable CSV (comptable / Tiime)
+Nouvelle brique `ACDC\Support\AccountingExport` : génère un CSV propre et déterministe des factures
+internes (format français « ; » / « , », UTF-8 + BOM Excel), avoirs en négatif, ligne de totaux nets,
+échappement correct. Permet de remettre le détail du CA au comptable ou d'alimenter un outil tiers
+en attendant un connecteur Tiime dédié. Couvert par PHPUnit (`tests/Support/AccountingExportTest.php`).
+
 ## [3.25.127] — 2026-07-23
 
 ### Ajouté — Formules & options activables (socle SaaS)
