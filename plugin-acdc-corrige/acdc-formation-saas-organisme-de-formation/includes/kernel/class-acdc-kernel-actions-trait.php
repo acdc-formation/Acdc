@@ -5668,6 +5668,53 @@ public function handle_purge_plugin_data() {
   }
 
   /* ---------------------------------------------------------------
+   * Encart tableau de bord — rapport de rétention RGPD (lecture seule).
+   * Réservé aux administrateurs ; affiche le dernier rapport du cron.
+   * --------------------------------------------------------------- */
+  public function register_retention_dashboard_widget() {
+    if ( ! function_exists( 'wp_add_dashboard_widget' ) || ! current_user_can( 'manage_options' ) ) {
+      return;
+    }
+    wp_add_dashboard_widget(
+      'acdc_of_retention_widget',
+      'ACDC — Rétention RGPD',
+      array( $this, 'render_retention_dashboard_widget' )
+    );
+  }
+
+  public function render_retention_dashboard_widget() {
+    $report = get_option( 'acdc_of_retention_report', array() );
+    if ( empty( $report ) || empty( $report['categories'] ) || ! is_array( $report['categories'] ) ) {
+      echo '<p>' . esc_html__( 'Aucun rapport de rétention pour le moment. Le scan quotidien s’exécutera automatiquement.', 'acdc-formation-saas-organisme-de-formation' ) . '</p>';
+      return;
+    }
+    echo '<p style="color:#666;margin-top:0;">'
+      . esc_html( sprintf( 'Généré le %s — mode rapport (aucune suppression automatique).', (string) ( $report['generated_at'] ?? '' ) ) )
+      . '</p>';
+    echo '<table style="width:100%;border-collapse:collapse;font-size:13px;">';
+    echo '<thead><tr>'
+      . '<th style="text-align:left;padding:4px 6px;border-bottom:1px solid #e0e0e0;">Catégorie</th>'
+      . '<th style="text-align:right;padding:4px 6px;border-bottom:1px solid #e0e0e0;">Conservation</th>'
+      . '<th style="text-align:right;padding:4px 6px;border-bottom:1px solid #e0e0e0;">Total</th>'
+      . '<th style="text-align:right;padding:4px 6px;border-bottom:1px solid #e0e0e0;">À purger</th>'
+      . '</tr></thead><tbody>';
+    foreach ( $report['categories'] as $cat ) {
+      if ( ! is_array( $cat ) ) {
+        continue;
+      }
+      $purgeable = (int) ( $cat['purgeable'] ?? 0 );
+      echo '<tr>'
+        . '<td style="padding:4px 6px;">' . esc_html( (string) ( $cat['label'] ?? '' ) ) . '</td>'
+        . '<td style="text-align:right;padding:4px 6px;">' . esc_html( (string) ( $cat['years'] ?? '' ) ) . ' ans</td>'
+        . '<td style="text-align:right;padding:4px 6px;">' . esc_html( (string) (int) ( $cat['total'] ?? 0 ) ) . '</td>'
+        . '<td style="text-align:right;padding:4px 6px;font-weight:600;color:' . ( $purgeable > 0 ? '#b32d2e' : '#1a7f37' ) . ';">' . esc_html( (string) $purgeable ) . '</td>'
+        . '</tr>';
+    }
+    echo '</tbody></table>';
+    echo '<p style="color:#666;margin-bottom:0;">' . esc_html__( 'Les données « à purger » ont dépassé leur durée de conservation. La suppression reste une action manuelle et confirmée.', 'acdc-formation-saas-organisme-de-formation' ) . '</p>';
+  }
+
+  /* ---------------------------------------------------------------
    * ACDC 3.24.21 — Exécution cron sync formations Manager → SAAS
    * --------------------------------------------------------------- */
   public function cron_sync_formations_from_manager() {

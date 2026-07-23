@@ -4,6 +4,14 @@ Toutes les modifications notables de ce projet sont documentées ici.
 Format inspiré de [Keep a Changelog](https://keepachangelog.com/fr/1.1.0/).
 L'historique détaillé antérieur est archivé dans [`release-notes/`](release-notes/).
 
+## [3.25.132] — 2026-07-23
+
+### Ajouté — Encart tableau de bord : rétention RGPD (raccordement visible)
+Le rapport de rétention (cron v3.25.130) est désormais **visible** : un encart sur le tableau de bord
+WordPress (réservé aux administrateurs) affiche, par catégorie, la durée de conservation, le total et
+le nombre d'enregistrements ayant dépassé cette durée. Purement informatif (aucune suppression) ;
+sorties échappées.
+
 ## [3.25.131] — 2026-07-23
 
 ### Ajouté — Preuve de signature vérifiable (capstone valeur juridique)
