@@ -4,6 +4,19 @@ Toutes les modifications notables de ce projet sont documentées ici.
 Format inspiré de [Keep a Changelog](https://keepachangelog.com/fr/1.1.0/).
 L'historique détaillé antérieur est archivé dans [`release-notes/`](release-notes/).
 
+## [3.25.121] — 2026-07-23
+
+### Ajouté — Horodatage scellé, prêt pour la qualification eIDAS
+Nouvelle brique `ACDC\Support\Timestamp` : produit un **jeton d'horodatage** qui scelle
+l'empreinte SHA-256 d'un document/écriture et **se scelle lui-même** (toute retouche de l'heure
+casse le sceau → antidatage détectable). Fonctionne immédiatement avec l'horloge serveur
+(horodatage *simple*, `qualified => false`).
+- **Point de branchement officiel** : `Timestamp::create()` applique le filtre WordPress
+  `acdc_timestamp_token`. Le jour où un tiers d'horodatage **qualifié** (RFC 3161 / eIDAS) est
+  contractualisé, il suffit de le brancher sur ce filtre — aucun appelant n'a à changer. Repli
+  automatique sur l'horodatage local tant qu'aucun fournisseur qualifié n'est branché.
+- `verify()`, `isQualified()`, `levelLabel()` ; couvert par PHPUnit (`tests/Support/TimestampTest.php`).
+
 ## [3.25.120] — 2026-07-23
 
 ### Ajouté — Journal d'audit infalsifiable (valeur probante)
