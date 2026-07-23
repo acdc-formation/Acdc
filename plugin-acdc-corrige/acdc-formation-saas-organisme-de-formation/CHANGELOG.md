@@ -4,6 +4,16 @@ Toutes les modifications notables de ce projet sont documentées ici.
 Format inspiré de [Keep a Changelog](https://keepachangelog.com/fr/1.1.0/).
 L'historique détaillé antérieur est archivé dans [`release-notes/`](release-notes/).
 
+## [3.25.125] — 2026-07-23
+
+### Ajouté — Politique de rétention RGPD (base de purge automatique)
+Nouvelle brique `ACDC\Support\Retention` : durées de conservation par catégorie (prospect 3 ans,
+apprenant/évaluation 5 ans, comptable/audit 10 ans — surchargables), calcul de la **date de coupure**
+et détection des enregistrements **à purger** (`isPurgeable`, `partition`). Fondation du ménage
+automatique RGPD (art. 5-1-e). Gère les dates invalides et l'année bissextile. Couvert par PHPUnit
+(`tests/Support/RetentionTest.php`). Le cron de purge s'appuiera sur cette brique dans un incrément
+dédié.
+
 ## [3.25.124] — 2026-07-23
 
 ### Ajouté — Calcul unifié du chiffre d'affaires (statistiques)
