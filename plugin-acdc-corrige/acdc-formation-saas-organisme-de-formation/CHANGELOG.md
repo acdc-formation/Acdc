@@ -4,6 +4,16 @@ Toutes les modifications notables de ce projet sont documentées ici.
 Format inspiré de [Keep a Changelog](https://keepachangelog.com/fr/1.1.0/).
 L'historique détaillé antérieur est archivé dans [`release-notes/`](release-notes/).
 
+## [3.25.126] — 2026-07-23
+
+### Ajouté — Attestations vérifiables (référence + signature)
+Nouvelle brique `ACDC\Support\CertificateCode` : génère une référence d'attestation unique dotée
+d'une **clé de contrôle** (détection des fautes de frappe, façon IBAN) et d'une **signature** courte
+(HMAC) permettant une **vérification d'authenticité par QR code** sur une page publique, sans
+exposer de secret. Fonctionnalité différenciante (certificats infalsifiables, vérifiables par un
+tiers). Couvert par PHPUnit (`tests/Support/CertificateCodeTest.php`). Le raccordement au PDF
+d'attestation + page de vérification suivra.
+
 ## [3.25.125] — 2026-07-23
 
 ### Ajouté — Politique de rétention RGPD (base de purge automatique)
