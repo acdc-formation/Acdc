@@ -4,6 +4,19 @@ Toutes les modifications notables de ce projet sont documentées ici.
 Format inspiré de [Keep a Changelog](https://keepachangelog.com/fr/1.1.0/).
 L'historique détaillé antérieur est archivé dans [`release-notes/`](release-notes/).
 
+## [3.25.120] — 2026-07-23
+
+### Ajouté — Journal d'audit infalsifiable (valeur probante)
+Nouvelle brique de logique pure `ACDC\Support\AuditTrail` : registre en **ajout-seul** dont chaque
+écriture est liée à la précédente par une empreinte SHA-256 chaînée (WORM logique). Toute
+modification, insertion ou suppression a posteriori d'une ligne **casse la chaîne** à partir de ce
+point et devient détectable (`verifyChain()`, `firstTamperedIndex()`).
+- Canonicalisation déterministe (clés triées récursivement, ordre des listes préservé) → empreinte
+  reproductible quel que soit l'ordre d'insertion des données.
+- Sans dépendance à WordPress, couvert par PHPUnit (`tests/Support/AuditTrailTest.php`).
+- Fondation de la piste d'audit inviolable (chantier « Valeur juridique » de la feuille de route
+  premium) — le raccordement au module `includes/audit/` suivra dans un incrément dédié.
+
 ## [3.25.119] — 2026-07-22
 
 ### Ajouté — Émargement PAR SÉANCE (multi-créneaux)
