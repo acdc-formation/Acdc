@@ -4,6 +4,14 @@ Toutes les modifications notables de ce projet sont documentées ici.
 Format inspiré de [Keep a Changelog](https://keepachangelog.com/fr/1.1.0/).
 L'historique détaillé antérieur est archivé dans [`release-notes/`](release-notes/).
 
+## [3.25.123] — 2026-07-23
+
+### Modifié — NDA (numéro de déclaration d'activité) sur les factures
+Le NDA de l'organisme (**93 83 08347 83**) est désormais renseigné par **défaut** dans le profil
+(`activity_declaration_number`). Il apparaît donc automatiquement sur les factures internes
+(mentions « NDA : … » déjà prévues dans les modèles) sans saisie préalable — le défaut était vide.
+Mention légale obligatoire pour un organisme de formation.
+
 ## [3.25.122] — 2026-07-23
 
 ### Ajouté — Validation SIRET/SIREN + identité de l'organisme renseignée

@@ -29,7 +29,7 @@ trait ACDC_Settings_Catalog_Core_Trait {
       'first_name' => '',
       'last_name' => '',
       'vat_number' => '',
-      'activity_declaration_number' => '',
+      'activity_declaration_number' => '93 83 08347 83',
       'inrs_number' => '',
       'draaf_number' => '',
       'apr_number' => '',
