@@ -4,6 +4,14 @@ Toutes les modifications notables de ce projet sont documentées ici.
 Format inspiré de [Keep a Changelog](https://keepachangelog.com/fr/1.1.0/).
 L'historique détaillé antérieur est archivé dans [`release-notes/`](release-notes/).
 
+## [3.25.131] — 2026-07-23
+
+### Ajouté — Preuve de signature vérifiable (capstone valeur juridique)
+Nouvelle brique `ACDC\Support\SignatureProof` : assemble en un objet portable et auto-scellé
+l'empreinte du document signé et son horodatage (DocumentSeal + Timestamp). `verify()` détecte
+toute altération du document, du signataire ou de la date ; prête à recevoir un horodatage qualifié.
+Couvert par PHPUnit (`tests/Support/SignatureProofTest.php`).
+
 ## [3.25.130] — 2026-07-23
 
 ### Ajouté — Rapport de rétention RGPD quotidien (raccordement, non destructif)
