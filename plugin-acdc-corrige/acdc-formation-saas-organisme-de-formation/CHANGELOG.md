@@ -4,6 +4,15 @@ Toutes les modifications notables de ce projet sont documentées ici.
 Format inspiré de [Keep a Changelog](https://keepachangelog.com/fr/1.1.0/).
 L'historique détaillé antérieur est archivé dans [`release-notes/`](release-notes/).
 
+## [3.25.129] — 2026-07-23
+
+### Ajouté — Contexte multi-organismes (fondation SaaS)
+Nouvelle brique `ACDC\Support\Tenant` : normalise un identifiant d'organisme client (tenant) et en
+dérive de façon déterministe les **clés d'options** et **préfixes de tables** isolés — socle de
+l'isolation des données pour une offre multi-clients. Le tenant principal `main` conserve
+**exactement** les clés d'origine (rétro-compatibilité totale avec l'installation mono-organisme
+actuelle). Couvert par PHPUnit (`tests/Support/TenantTest.php`).
+
 ## [3.25.128] — 2026-07-23
 
 ### Ajouté — Export comptable CSV (comptable / Tiime)
