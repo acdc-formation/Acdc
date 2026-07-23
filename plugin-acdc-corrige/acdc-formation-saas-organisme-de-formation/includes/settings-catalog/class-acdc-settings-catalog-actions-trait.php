@@ -331,6 +331,15 @@ public function handle_save_branding() {
       } else {
         $value = (string) absint( $value );
       }
+    } elseif ( 'siret' === $key ) {
+      // Un SIRET valide (clé de Luhn) est mis au format homogène « 405 109 901 00042 » ;
+      // une saisie erronée est conservée telle quelle (sanitisée) pour rester visible/corrigeable.
+      $digits = preg_replace( '/\D/', '', (string) $value );
+      if ( class_exists( '\\ACDC\\Support\\Siret' ) && \ACDC\Support\Siret::isValidSiret( $digits ) ) {
+        $value = \ACDC\Support\Siret::formatSiret( $digits );
+      } else {
+        $value = sanitize_text_field( (string) $value );
+      }
     } elseif ( 'email' === $key ) {
       $value = sanitize_email( $value );
     } elseif ( in_array( $key, $url_keys, true ) ) {

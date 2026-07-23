@@ -4,6 +4,18 @@ Toutes les modifications notables de ce projet sont documentées ici.
 Format inspiré de [Keep a Changelog](https://keepachangelog.com/fr/1.1.0/).
 L'historique détaillé antérieur est archivé dans [`release-notes/`](release-notes/).
 
+## [3.25.133] — 2026-07-23
+
+### Ajouté — Raccordements : validation SIRET + export comptable CSV
+- **Validation SIRET** (`ACDC\Support\Siret`) branchée sur la sauvegarde de l'identité : un SIRET
+  valide (clé de Luhn) est automatiquement mis au format « 405 109 901 00042 » ; une saisie erronée
+  est conservée telle quelle pour rester visible et corrigeable.
+- **Export comptable CSV** (`ACDC\Support\AccountingExport`) : nouveau bouton « Exporter la
+  comptabilité (CSV) » sur l'écran Factures & Avoirs (mode réel). Exporte toutes les factures ;
+  une facture créditée (statut « avoir ») produit deux lignes (facture +, avoir −) pour un CA net
+  correct. Handler `admin_post_acdc_export_accounting_csv` en lecture seule (capacité + nonce,
+  tampons vidés avant envoi).
+
 ## [3.25.132] — 2026-07-23
 
 ### Ajouté — Encart tableau de bord : rétention RGPD (raccordement visible)

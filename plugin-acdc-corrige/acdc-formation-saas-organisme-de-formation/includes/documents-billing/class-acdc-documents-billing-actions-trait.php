@@ -504,6 +504,76 @@ trait ACDC_Documents_Billing_Actions_Trait {
   }
 
   /* ---------------------------------------------------------------
+   * ACDC 3.25.133 — Export comptable CSV de toutes les factures.
+   * Action : admin_post_acdc_export_accounting_csv (GET + nonce)
+   * Lecture seule. Chaque facture donne une ligne (+) ; une facture créditée
+   * (statut « avoir ») ajoute une seconde ligne pour l'avoir (−) → CA net correct.
+   * Sortie via ACDC\Support\AccountingExport (déjà échappée).
+   * --------------------------------------------------------------- */
+  public function handle_export_accounting_csv() {
+    if ( ! current_user_can( 'manage_options' ) ) { wp_die( 'Accès refusé.' ); }
+    if ( ! check_admin_referer( 'acdc_export_accounting_csv' ) ) { wp_die( 'Action invalide.' ); }
+    if ( ! class_exists( '\\ACDC\\Support\\AccountingExport' ) || ! class_exists( '\\ACDC\\Support\\Money' ) ) {
+      wp_die( 'Module d\'export indisponible.' );
+    }
+    global $wpdb;
+
+    $invoices = $wpdb->get_results( "SELECT * FROM {$this->invoice_table} ORDER BY emission_date ASC, id ASC" );
+    $rows     = array();
+    $min_date = '';
+    $max_date = '';
+
+    foreach ( (array) $invoices as $inv ) {
+      $tarif     = (float) $inv->tarif_ht;
+      $transport = (float) ( $inv->transport_fees_enabled ? $inv->transport_fees_ht : 0 );
+      $meal      = (float) ( $inv->meal_fees_enabled ? $inv->meal_fees_ht : 0 );
+      $extra     = 0.0;
+      if ( ! empty( $inv->extra_lines_json ) ) {
+        $decoded = json_decode( (string) $inv->extra_lines_json, true );
+        if ( is_array( $decoded ) ) {
+          foreach ( $decoded as $el ) { $extra += (float) ( $el['total_ht'] ?? 0 ); }
+        }
+      }
+      $vat    = (float) $inv->vat_rate;
+      $totals = \ACDC\Support\Money::invoiceTotals( $tarif, $transport, $meal, $extra, $vat );
+      $client = $inv->client_company ? (string) $inv->client_company : (string) $inv->apprenant_name;
+      $date   = $inv->emission_date ? (string) $inv->emission_date : '';
+
+      $rows[] = array(
+        'number' => (string) $inv->number, 'date' => $date, 'client' => $client,
+        'vat_rate' => $vat, 'ht' => $totals['ht'], 'tva' => $totals['tva'], 'ttc' => $totals['ttc'], 'kind' => 'invoice',
+      );
+
+      // Facture créditée : ligne d'avoir en négatif (net zéro).
+      if ( ! empty( $inv->credit_note_number ) ) {
+        $cn_date = $inv->credit_note_date ? (string) $inv->credit_note_date : $date;
+        $rows[]  = array(
+          'number' => (string) $inv->credit_note_number, 'date' => $cn_date, 'client' => $client,
+          'vat_rate' => $vat, 'ht' => $totals['ht'], 'tva' => $totals['tva'], 'ttc' => $totals['ttc'], 'kind' => 'avoir',
+        );
+      }
+
+      if ( $date ) {
+        if ( '' === $min_date || $date < $min_date ) { $min_date = $date; }
+        if ( '' === $max_date || $date > $max_date ) { $max_date = $date; }
+      }
+    }
+
+    $csv      = \ACDC\Support\AccountingExport::toCsv( $rows );
+    $filename = \ACDC\Support\AccountingExport::filename( $min_date ?: gmdate( 'Y-m-d' ), $max_date ?: gmdate( 'Y-m-d' ) );
+
+    while ( ob_get_level() ) {
+      ob_end_clean();
+    }
+    nocache_headers();
+    header( 'Content-Type: text/csv; charset=UTF-8' );
+    header( 'Content-Disposition: attachment; filename="' . $filename . '"' );
+    header( 'Content-Length: ' . strlen( $csv ) );
+    echo $csv; // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped -- CSV déjà construit/échappé par AccountingExport.
+    exit;
+  }
+
+  /* ---------------------------------------------------------------
    * ACDC 3.25.116 — Envoyer une facture par e-mail
    * Action : admin_post_acdc_send_invoice_email (POST + nonce)
    * Calqué sur handle_send_quote_email(). Colonnes écrites en cas de succès :

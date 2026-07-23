@@ -564,6 +564,8 @@ class ACDC_Formation_SAAS_Plugin {
     // ACDC 3.25.116 — Facturation réelle : marquer payée + envoyer par email.
     add_action( 'admin_post_acdc_mark_invoice_paid',        array( $this, 'handle_mark_invoice_paid' ) );
     add_action( 'admin_post_acdc_send_invoice_email',       array( $this, 'handle_send_invoice_email' ) );
+    // ACDC 3.25.133 — Export comptable CSV de toutes les factures (comptable / Tiime).
+    add_action( 'admin_post_acdc_export_accounting_csv',    array( $this, 'handle_export_accounting_csv' ) );
     add_action( 'admin_post_acdc_download_credit_note_document', array( $this, 'handle_download_credit_note_document' ) );
     // ACDC 3.25.118 — Aval facturation : relance impayés + émission d'avoir persistant.
     add_action( 'admin_post_acdc_relance_invoice',          array( $this, 'handle_relance_invoice' ) );

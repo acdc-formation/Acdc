@@ -627,7 +627,12 @@ trait ACDC_Documents_Billing_Render_Trait {
     </div>
     <?php endif; ?>
     <div class="acdc-mb-18"><a class="acdc-button acdc-button-soft" href="<?php echo esc_url( $back_url ); ?>" style="min-width:44px;padding:10px 14px;">←</a></div>
-    <section class="acdc-section-head"><div><h2>Factures &amp; Avoirs : <?php echo esc_html( $scope_label ); ?></h2></div></section>
+    <section class="acdc-section-head" style="display:flex;justify-content:space-between;align-items:center;gap:12px;flex-wrap:wrap;">
+      <div><h2>Factures &amp; Avoirs : <?php echo esc_html( $scope_label ); ?></h2></div>
+      <?php if ( ! $is_demo && is_admin() ) : ?>
+        <a class="acdc-button acdc-button-soft" href="<?php echo esc_url( $this->secure_admin_post_url( 'acdc_export_accounting_csv', array(), 'acdc_export_accounting_csv' ) ); ?>" title="Exporter toutes les factures au format CSV (comptable / Tiime)">Exporter la comptabilité (CSV)</a>
+      <?php endif; ?>
+    </section>
     <div class="acdc-panel acdc-mb-18">
       <form method="get" action="">
         <?php if ( is_admin() ) : ?><input type="hidden" name="page" value="acdc-of-dashboard"><?php endif; ?>
