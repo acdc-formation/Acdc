@@ -4,6 +4,16 @@ Toutes les modifications notables de ce projet sont documentées ici.
 Format inspiré de [Keep a Changelog](https://keepachangelog.com/fr/1.1.0/).
 L'historique détaillé antérieur est archivé dans [`release-notes/`](release-notes/).
 
+## [3.25.130] — 2026-07-23
+
+### Ajouté — Rapport de rétention RGPD quotidien (raccordement, non destructif)
+Premier **raccordement** de la brique `Retention` au cœur du plugin : un cron quotidien
+`acdc_of_retention_scan_cron` recense, **en lecture seule**, le nombre de prospects ayant dépassé
+la durée de conservation (3 ans) et stocke le résultat dans l'option `acdc_of_retention_report`.
+**Aucune suppression** n'est effectuée (mode rapport) ; la purge effective restera une action
+explicite et confirmée. Handler entièrement protégé (`try/catch`, vérification d'existence de la
+table) : ne peut ni interrompre le site ni perdre de données. Cron nettoyé à la désactivation.
+
 ## [3.25.129] — 2026-07-23
 
 ### Ajouté — Contexte multi-organismes (fondation SaaS)

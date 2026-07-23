@@ -648,6 +648,8 @@ class ACDC_Formation_SAAS_Plugin {
     add_action( 'acdc_of_absence_alert_cron', array( $this, 'process_absence_alert_cron' ) );
     // ACDC 3.25.118 — Cron quotidien : passage automatique des factures impayées en retard.
     add_action( 'acdc_of_invoices_overdue_cron', array( $this, 'process_invoices_overdue_cron' ) );
+    // ACDC 3.25.130 — Cron quotidien : rapport de rétention RGPD (lecture seule, non destructif).
+    add_action( 'acdc_of_retention_scan_cron', array( $this, 'cron_retention_scan' ) );
     /* ACDC 3.23.11 — Crons veille IA. */
     add_action( 'acdc_of_watch_collect_cron',  array( $this, 'process_watch_collect_cron' ) );
     add_action( 'acdc_of_watch_analyze_cron',  array( $this, 'process_watch_analyze_cron' ) );

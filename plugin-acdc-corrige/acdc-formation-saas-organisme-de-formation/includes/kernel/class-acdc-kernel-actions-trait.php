@@ -4198,6 +4198,7 @@ public function handle_purge_plugin_data() {
     wp_clear_scheduled_hook( 'acdc_of_cron_sync_formations' );
     wp_clear_scheduled_hook( 'acdc_of_absence_alert_cron' );
     wp_clear_scheduled_hook( 'acdc_of_invoices_overdue_cron' ); // ACDC 3.25.118
+    wp_clear_scheduled_hook( 'acdc_of_retention_scan_cron' ); // ACDC 3.25.130
     wp_clear_scheduled_hook( 'acdc_of_session_close_cron' );
     wp_clear_scheduled_hook( 'acdc_of_convocation_cron' );
     wp_clear_scheduled_hook( 'acdc_of_positioning_test_cron' );
@@ -5593,6 +5594,76 @@ public function handle_purge_plugin_data() {
     /* Cron alerte absences / ruptures de parcours (1×/jour). */
     if ( ! wp_next_scheduled( 'acdc_of_absence_alert_cron' ) ) {
       wp_schedule_event( time(), 'daily', 'acdc_of_absence_alert_cron' );
+    }
+    /* Cron rapport de rétention RGPD (1×/jour, lecture seule — ne supprime rien). */
+    if ( ! wp_next_scheduled( 'acdc_of_retention_scan_cron' ) ) {
+      $retention_time = strtotime( 'tomorrow 3:30am' );
+      wp_schedule_event( $retention_time ?: time(), 'daily', 'acdc_of_retention_scan_cron' );
+    }
+  }
+
+  /* ---------------------------------------------------------------
+   * Rapport de rétention RGPD (art. 5-1-e) — MODE RAPPORT, non destructif.
+   *
+   * Recense (en lecture seule) le nombre d'enregistrements ayant dépassé leur
+   * durée de conservation, à partir de la brique ACDC\Support\Retention, et stocke
+   * un rapport dans l'option `acdc_of_retention_report`. AUCUNE suppression n'est
+   * effectuée : la purge effective fera l'objet d'une action explicite et confirmée.
+   * Entièrement protégé (try/catch) : ne peut ni planter le site ni perdre de données.
+   * --------------------------------------------------------------- */
+  public function cron_retention_scan() {
+    global $wpdb;
+    try {
+      if ( ! class_exists( '\\ACDC\\Support\\Retention' ) ) {
+        return;
+      }
+      $table = isset( $this->prospect_table ) && $this->prospect_table
+        ? $this->prospect_table
+        : $wpdb->prefix . 'acdc_of_prospects';
+
+      // La table doit exister (installation partielle, autre schéma…).
+      if ( $wpdb->get_var( $wpdb->prepare( 'SHOW TABLES LIKE %s', $table ) ) !== $table ) {
+        return;
+      }
+
+      $reference = gmdate( 'Y-m-d' );
+      $years     = \ACDC\Support\Retention::yearsFor( 'prospect' );
+      $cutoff    = \ACDC\Support\Retention::cutoffDate( $years, $reference );
+      if ( '' === $cutoff ) {
+        return;
+      }
+
+      $total     = (int) $wpdb->get_var( "SELECT COUNT(*) FROM {$table}" );
+      $purgeable = (int) $wpdb->get_var(
+        $wpdb->prepare(
+          "SELECT COUNT(*) FROM {$table} WHERE DATE( COALESCE( updated_at, created_at ) ) <= %s",
+          $cutoff
+        )
+      );
+
+      update_option(
+        'acdc_of_retention_report',
+        array(
+          'generated_at' => current_time( 'mysql' ),
+          'reference'    => $reference,
+          'categories'   => array(
+            'prospect' => array(
+              'label'     => 'Prospects (CRM)',
+              'years'     => $years,
+              'cutoff'    => $cutoff,
+              'total'     => $total,
+              'purgeable' => $purgeable,
+            ),
+          ),
+        ),
+        false
+      );
+    } catch ( \Throwable $e ) {
+      update_option(
+        'acdc_of_retention_report_error',
+        array( 'at' => current_time( 'mysql' ), 'message' => $e->getMessage() ),
+        false
+      );
     }
   }
 
