@@ -4,6 +4,16 @@ Toutes les modifications notables de ce projet sont documentées ici.
 Format inspiré de [Keep a Changelog](https://keepachangelog.com/fr/1.1.0/).
 L'historique détaillé antérieur est archivé dans [`release-notes/`](release-notes/).
 
+## [3.25.127] — 2026-07-23
+
+### Ajouté — Formules & options activables (socle SaaS)
+Nouvelle brique `ACDC\Support\FeaturePlan` : catalogue de **formules** (Solo / Pro / Business), chacune
+associée à un ensemble de **fonctionnalités** activées et de **limites** chiffrées (apprenants,
+sessions, formateurs ; -1 = illimité). API simple `can()`, `limit()`, `withinLimit()`, `features()`.
+Fondation d'une offre commercialisable à plusieurs organismes (feature-flags, marque blanche),
+surchargable via le filtre `acdc_feature_plans`. Aucune décision tarifaire figée. Couvert par PHPUnit
+(`tests/Support/FeaturePlanTest.php`).
+
 ## [3.25.126] — 2026-07-23
 
 ### Ajouté — Attestations vérifiables (référence + signature)
