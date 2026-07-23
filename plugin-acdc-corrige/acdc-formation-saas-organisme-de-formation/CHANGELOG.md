@@ -4,6 +4,16 @@ Toutes les modifications notables de ce projet sont documentées ici.
 Format inspiré de [Keep a Changelog](https://keepachangelog.com/fr/1.1.0/).
 L'historique détaillé antérieur est archivé dans [`release-notes/`](release-notes/).
 
+## [3.25.122] — 2026-07-23
+
+### Ajouté — Validation SIRET/SIREN + identité de l'organisme renseignée
+- Nouvelle brique `ACDC\Support\Siret` : validation (clé de Luhn, exception La Poste), extraction
+  SIREN/NIC et formatage homogène « 405 109 901 00042 » des numéros légaux. Couvert par PHPUnit
+  (`tests/Support/SiretTest.php`).
+- Le SIRET de l'organisme (**405 109 901 00042**, ACDC Formation) est désormais renseigné par
+  **défaut** dans l'identité (`get_branding_defaults`) : il apparaît sur les factures internes et
+  le XML Factur-X sans saisie manuelle préalable (le défaut était vide auparavant).
+
 ## [3.25.121] — 2026-07-23
 
 ### Ajouté — Horodatage scellé, prêt pour la qualification eIDAS

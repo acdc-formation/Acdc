@@ -393,7 +393,7 @@ private function get_branding_defaults() {
     'phone' => '06 78 26 91 10',
     'email' => 'contact@acdc-formation.com',
     'website' => 'https://acdc-formation.com/',
-    'siret' => '',
+    'siret' => '405 109 901 00042',
     'font_family' => 'Rubik, Arial, system-ui, sans-serif',
     'font_weight' => '500',
     'line_height' => '1.5',
