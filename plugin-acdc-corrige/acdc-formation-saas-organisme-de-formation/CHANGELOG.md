@@ -4,6 +4,15 @@ Toutes les modifications notables de ce projet sont documentées ici.
 Format inspiré de [Keep a Changelog](https://keepachangelog.com/fr/1.1.0/).
 L'historique détaillé antérieur est archivé dans [`release-notes/`](release-notes/).
 
+## [3.25.124] — 2026-07-23
+
+### Ajouté — Calcul unifié du chiffre d'affaires (statistiques)
+Nouvelle brique `ACDC\Support\Revenue` : agrégation fiable et testée du CA à partir de lignes de
+facturation homogènes, avec une règle unique et vérifiable (**factures + / avoirs −**). Fournit le
+CA net HT/TVA/TTC (`summarize`), la ventilation par **taux de TVA** (`byVatRate`) et par **période**
+mois/trimestre/année (`byPeriod`). Objectif : que tous les écrans de statistiques reposent sur le
+même calcul, sans divergence. Couvert par PHPUnit (`tests/Support/RevenueTest.php`).
+
 ## [3.25.123] — 2026-07-23
 
 ### Modifié — NDA (numéro de déclaration d'activité) sur les factures
