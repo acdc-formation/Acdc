@@ -4,6 +4,15 @@ Toutes les modifications notables de ce projet sont documentées ici.
 Format inspiré de [Keep a Changelog](https://keepachangelog.com/fr/1.1.0/).
 L'historique détaillé antérieur est archivé dans [`release-notes/`](release-notes/).
 
+## [3.25.134] — 2026-07-24
+
+### Ajouté — Encart « Chiffre d'affaires » sur le tableau de bord (raccordement Revenue)
+Raccordement de `ACDC\Support\Revenue` : un encart admin sur le tableau de bord WordPress affiche le
+**CA de l'année en cours** (HT / TVA / TTC, **net d'avoirs**) et sa **ventilation par mois**, à partir
+des factures internes. Une facture créditée (avoir) est correctement neutralisée. Lecture seule,
+sorties échappées. La construction des lignes comptables est désormais factorisée
+(`build_accounting_rows()`) et partagée avec l'export CSV.
+
 ## [3.25.133] — 2026-07-23
 
 ### Ajouté — Raccordements : validation SIRET + export comptable CSV

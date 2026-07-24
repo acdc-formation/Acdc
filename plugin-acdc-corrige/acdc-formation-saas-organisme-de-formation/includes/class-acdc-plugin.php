@@ -654,6 +654,8 @@ class ACDC_Formation_SAAS_Plugin {
     add_action( 'acdc_of_retention_scan_cron', array( $this, 'cron_retention_scan' ) );
     // ACDC 3.25.132 — Encart tableau de bord : rapport de rétention RGPD (admins).
     add_action( 'wp_dashboard_setup', array( $this, 'register_retention_dashboard_widget' ) );
+    // ACDC 3.25.134 — Encart tableau de bord : chiffre d'affaires (net d'avoirs).
+    add_action( 'wp_dashboard_setup', array( $this, 'register_ca_dashboard_widget' ) );
     /* ACDC 3.23.11 — Crons veille IA. */
     add_action( 'acdc_of_watch_collect_cron',  array( $this, 'process_watch_collect_cron' ) );
     add_action( 'acdc_of_watch_analyze_cron',  array( $this, 'process_watch_analyze_cron' ) );

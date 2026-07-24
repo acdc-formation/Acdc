@@ -516,48 +516,10 @@ trait ACDC_Documents_Billing_Actions_Trait {
     if ( ! class_exists( '\\ACDC\\Support\\AccountingExport' ) || ! class_exists( '\\ACDC\\Support\\Money' ) ) {
       wp_die( 'Module d\'export indisponible.' );
     }
-    global $wpdb;
-
-    $invoices = $wpdb->get_results( "SELECT * FROM {$this->invoice_table} ORDER BY emission_date ASC, id ASC" );
-    $rows     = array();
-    $min_date = '';
-    $max_date = '';
-
-    foreach ( (array) $invoices as $inv ) {
-      $tarif     = (float) $inv->tarif_ht;
-      $transport = (float) ( $inv->transport_fees_enabled ? $inv->transport_fees_ht : 0 );
-      $meal      = (float) ( $inv->meal_fees_enabled ? $inv->meal_fees_ht : 0 );
-      $extra     = 0.0;
-      if ( ! empty( $inv->extra_lines_json ) ) {
-        $decoded = json_decode( (string) $inv->extra_lines_json, true );
-        if ( is_array( $decoded ) ) {
-          foreach ( $decoded as $el ) { $extra += (float) ( $el['total_ht'] ?? 0 ); }
-        }
-      }
-      $vat    = (float) $inv->vat_rate;
-      $totals = \ACDC\Support\Money::invoiceTotals( $tarif, $transport, $meal, $extra, $vat );
-      $client = $inv->client_company ? (string) $inv->client_company : (string) $inv->apprenant_name;
-      $date   = $inv->emission_date ? (string) $inv->emission_date : '';
-
-      $rows[] = array(
-        'number' => (string) $inv->number, 'date' => $date, 'client' => $client,
-        'vat_rate' => $vat, 'ht' => $totals['ht'], 'tva' => $totals['tva'], 'ttc' => $totals['ttc'], 'kind' => 'invoice',
-      );
-
-      // Facture créditée : ligne d'avoir en négatif (net zéro).
-      if ( ! empty( $inv->credit_note_number ) ) {
-        $cn_date = $inv->credit_note_date ? (string) $inv->credit_note_date : $date;
-        $rows[]  = array(
-          'number' => (string) $inv->credit_note_number, 'date' => $cn_date, 'client' => $client,
-          'vat_rate' => $vat, 'ht' => $totals['ht'], 'tva' => $totals['tva'], 'ttc' => $totals['ttc'], 'kind' => 'avoir',
-        );
-      }
-
-      if ( $date ) {
-        if ( '' === $min_date || $date < $min_date ) { $min_date = $date; }
-        if ( '' === $max_date || $date > $max_date ) { $max_date = $date; }
-      }
-    }
+    $collected = $this->build_accounting_rows();
+    $rows      = $collected['rows'];
+    $min_date  = $collected['min'];
+    $max_date  = $collected['max'];
 
     $csv      = \ACDC\Support\AccountingExport::toCsv( $rows );
     $filename = \ACDC\Support\AccountingExport::filename( $min_date ?: gmdate( 'Y-m-d' ), $max_date ?: gmdate( 'Y-m-d' ) );
@@ -571,6 +533,110 @@ trait ACDC_Documents_Billing_Actions_Trait {
     header( 'Content-Length: ' . strlen( $csv ) );
     echo $csv; // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped -- CSV déjà construit/échappé par AccountingExport.
     exit;
+  }
+
+  /* ---------------------------------------------------------------
+   * ACDC 3.25.134 — Construction des lignes comptables (partagé export + encart CA).
+   * Lecture seule. Chaque facture → une ligne (+) ; une facture créditée → une
+   * ligne d'avoir (−). Renvoie { rows, min, max } (dates ISO extrêmes).
+   * --------------------------------------------------------------- */
+  private function build_accounting_rows() {
+    global $wpdb;
+    $rows = array();
+    $min  = '';
+    $max  = '';
+    if ( ! class_exists( '\\ACDC\\Support\\Money' ) ) {
+      return array( 'rows' => $rows, 'min' => $min, 'max' => $max );
+    }
+    $invoices = $wpdb->get_results( "SELECT * FROM {$this->invoice_table} ORDER BY emission_date ASC, id ASC" );
+    foreach ( (array) $invoices as $inv ) {
+      $transport = (float) ( $inv->transport_fees_enabled ? $inv->transport_fees_ht : 0 );
+      $meal      = (float) ( $inv->meal_fees_enabled ? $inv->meal_fees_ht : 0 );
+      $extra     = 0.0;
+      if ( ! empty( $inv->extra_lines_json ) ) {
+        $decoded = json_decode( (string) $inv->extra_lines_json, true );
+        if ( is_array( $decoded ) ) {
+          foreach ( $decoded as $el ) { $extra += (float) ( $el['total_ht'] ?? 0 ); }
+        }
+      }
+      $vat    = (float) $inv->vat_rate;
+      $totals = \ACDC\Support\Money::invoiceTotals( (float) $inv->tarif_ht, $transport, $meal, $extra, $vat );
+      $client = $inv->client_company ? (string) $inv->client_company : (string) $inv->apprenant_name;
+      $date   = $inv->emission_date ? (string) $inv->emission_date : '';
+
+      $rows[] = array(
+        'number' => (string) $inv->number, 'date' => $date, 'client' => $client,
+        'vat_rate' => $vat, 'ht' => $totals['ht'], 'tva' => $totals['tva'], 'ttc' => $totals['ttc'], 'kind' => 'invoice',
+      );
+      if ( ! empty( $inv->credit_note_number ) ) {
+        $cn_date = $inv->credit_note_date ? (string) $inv->credit_note_date : $date;
+        $rows[]  = array(
+          'number' => (string) $inv->credit_note_number, 'date' => $cn_date, 'client' => $client,
+          'vat_rate' => $vat, 'ht' => $totals['ht'], 'tva' => $totals['tva'], 'ttc' => $totals['ttc'], 'kind' => 'avoir',
+        );
+      }
+      if ( $date ) {
+        if ( '' === $min || $date < $min ) { $min = $date; }
+        if ( '' === $max || $date > $max ) { $max = $date; }
+      }
+    }
+    return array( 'rows' => $rows, 'min' => $min, 'max' => $max );
+  }
+
+  /* ---------------------------------------------------------------
+   * ACDC 3.25.134 — Encart tableau de bord : chiffre d'affaires (net d'avoirs).
+   * S'appuie sur ACDC\Support\Revenue. Lecture seule, réservé aux administrateurs.
+   * --------------------------------------------------------------- */
+  public function register_ca_dashboard_widget() {
+    if ( ! function_exists( 'wp_add_dashboard_widget' ) || ! current_user_can( 'manage_options' ) ) {
+      return;
+    }
+    wp_add_dashboard_widget( 'acdc_of_ca_widget', 'ACDC — Chiffre d’affaires', array( $this, 'render_ca_dashboard_widget' ) );
+  }
+
+  public function render_ca_dashboard_widget() {
+    if ( ! class_exists( '\\ACDC\\Support\\Revenue' ) ) {
+      echo '<p>Module de calcul indisponible.</p>';
+      return;
+    }
+    $collected = $this->build_accounting_rows();
+    $all_rows  = $collected['rows'];
+    if ( empty( $all_rows ) ) {
+      echo '<p>' . esc_html__( 'Aucune facture pour le moment.', 'acdc-formation-saas-organisme-de-formation' ) . '</p>';
+      return;
+    }
+    $year      = gmdate( 'Y' );
+    $year_rows = array();
+    foreach ( $all_rows as $r ) {
+      if ( isset( $r['date'] ) && 0 === strpos( (string) $r['date'], $year . '-' ) ) {
+        $year_rows[] = $r;
+      }
+    }
+    $summary = \ACDC\Support\Revenue::summarize( $year_rows );
+    $by_month = \ACDC\Support\Revenue::byPeriod( $year_rows, 'month' );
+
+    $fmt = static function ( $n ) {
+      return number_format( (float) $n, 2, ',', ' ' ) . ' €';
+    };
+
+    echo '<p style="margin-top:0;"><strong>' . esc_html( 'Année ' . $year ) . '</strong> — net d’avoirs</p>';
+    echo '<div style="display:flex;gap:18px;flex-wrap:wrap;margin-bottom:10px;">';
+    echo '<div><div style="color:#666;font-size:12px;">CA HT</div><div style="font-size:20px;font-weight:700;">' . esc_html( $fmt( $summary['ht'] ) ) . '</div></div>';
+    echo '<div><div style="color:#666;font-size:12px;">TVA</div><div style="font-size:20px;font-weight:700;">' . esc_html( $fmt( $summary['tva'] ) ) . '</div></div>';
+    echo '<div><div style="color:#666;font-size:12px;">CA TTC</div><div style="font-size:20px;font-weight:700;">' . esc_html( $fmt( $summary['ttc'] ) ) . '</div></div>';
+    echo '</div>';
+
+    if ( ! empty( $by_month ) ) {
+      echo '<table style="width:100%;border-collapse:collapse;font-size:13px;">';
+      echo '<thead><tr><th style="text-align:left;padding:3px 6px;border-bottom:1px solid #e0e0e0;">Mois</th><th style="text-align:right;padding:3px 6px;border-bottom:1px solid #e0e0e0;">HT</th><th style="text-align:right;padding:3px 6px;border-bottom:1px solid #e0e0e0;">TTC</th></tr></thead><tbody>';
+      foreach ( $by_month as $period => $vals ) {
+        echo '<tr><td style="padding:3px 6px;">' . esc_html( (string) $period ) . '</td>'
+          . '<td style="text-align:right;padding:3px 6px;">' . esc_html( $fmt( $vals['ht'] ) ) . '</td>'
+          . '<td style="text-align:right;padding:3px 6px;">' . esc_html( $fmt( $vals['ttc'] ) ) . '</td></tr>';
+      }
+      echo '</tbody></table>';
+    }
+    echo '<p style="color:#666;margin-bottom:0;">' . esc_html__( 'Basé sur les factures internes (facturation officielle : Tiime).', 'acdc-formation-saas-organisme-de-formation' ) . '</p>';
   }
 
   /* ---------------------------------------------------------------
