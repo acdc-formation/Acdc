@@ -4,6 +4,20 @@ Toutes les modifications notables de ce projet sont documentées ici.
 Format inspiré de [Keep a Changelog](https://keepachangelog.com/fr/1.1.0/).
 L'historique détaillé antérieur est archivé dans [`release-notes/`](release-notes/).
 
+## [3.25.137] — 2026-07-24
+
+### Corrigé — Retours de recette QA (lot 1)
+- **Export comptable CSV invisible** : le bouton « Exporter la comptabilité (CSV) » était masqué
+  hors du back-office WordPress (condition `is_admin()`). Il s'affiche désormais pour tout
+  gestionnaire (`current_user_can('manage_options')`), y compris dans l'extranet.
+- **Gabarit NDA non substitué sur les mentions** : le placeholder
+  « [VOTRE NUMÉRO DE DÉCLARATION D'ACTIVITÉ] » des mentions spéciales (devis/factures/avoirs) est
+  remplacé par le vrai NDA (source : profil organisme, repli « 93 83 08347 83 ») — défauts corrigés
+  ET substitution dynamique des valeurs déjà enregistrées.
+- **Affichage « 0 %% » cassé** : le taux de participation des enquêtes affichait la séquence
+  littérale «   » (chaîne PHP en apostrophes) ; corrigé en espace insécable réel, repli em-dash
+  propre.
+
 ## [3.25.136] — 2026-07-24
 
 ### Ajouté — Preuve d'horodatage scellé à la signature (raccordement Timestamp)

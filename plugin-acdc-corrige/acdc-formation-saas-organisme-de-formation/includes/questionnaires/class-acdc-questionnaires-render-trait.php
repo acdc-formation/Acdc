@@ -1721,7 +1721,7 @@ public function render_quality_compliance_shortcode( $atts = array() ) {
         <div class="acdc-stat-label" style="font-size:11px;font-weight:700;color:#8a6d2a;margin-top:5px;text-transform:uppercase;letter-spacing:.06em;">Score moyen global</div>
       </div>
       <div class="acdc-panel acdc-centered-stat" style="background:linear-gradient(135deg,#fef6e4 0%,#fbf8f7 100%);border:1px solid #f0e6dc;border-radius:12px;padding:14px 16px;text-align:center;">
-        <div class="acdc-stat-number" style="font-size:28px;font-weight:700;color:var(--acdc-text);"><?php echo esc_html( null !== $stats['response_rate'] ? $stats['response_rate'] . '\u00a0%' : '&#8212;' ); ?></div>
+        <div class="acdc-stat-number" style="font-size:28px;font-weight:700;color:var(--acdc-text);"><?php echo esc_html( null !== $stats['response_rate'] ? $stats['response_rate'] . "\u{00A0}%" : "\u{2014}" ); ?></div>
         <div class="acdc-stat-label" style="font-size:11px;font-weight:700;color:#8a6d2a;margin-top:5px;text-transform:uppercase;letter-spacing:.06em;">Taux de participation</div>
       </div>
       <div class="acdc-panel acdc-centered-stat" style="background:linear-gradient(135deg,#fef6e4 0%,#fbf8f7 100%);border:1px solid #f0e6dc;border-radius:12px;padding:14px 16px;text-align:center;">

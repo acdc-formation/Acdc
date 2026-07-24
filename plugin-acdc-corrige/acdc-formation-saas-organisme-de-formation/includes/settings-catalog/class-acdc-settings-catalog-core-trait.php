@@ -202,7 +202,7 @@ trait ACDC_Settings_Catalog_Core_Trait {
         'restart_each_year' => 1,
         'validity_days' => 30,
         'payment_terms' => "Règlement par virement bancaire, à l'édition de la facture.\nEn cas de retard de paiement, des pénalités seront exigibles au taux de 3 fois le taux d'intérêt légal.\nUne indemnité forfaitaire pour frais de recouvrement de 40 € sera due automatiquement (article L441-10 du Code de commerce).\nIBAN FR76 3000 4023 7500 0101 1397 203 - BIC BNPAFRPPXXX",
-        'special_mention' => "Ce devis est valable 30 jours à compter de sa date d'émission.\nLes prix indiqués sont exprimés en euros, hors taxes et toutes taxes comprises (HT et TTC).\nTVA au taux en vigueur.\nOrganisme de formation ACDC Formation, certifié Qualiopi au titre de ses actions de formation.\nDéclaration d'activité enregistrée sous le numéro [VOTRE NUMÉRO DE DÉCLARATION D'ACTIVITÉ] auprès du préfet de région Provence-Alpes-Côte d'Azur.\nNos conditions générales de vente s'appliquent.",
+        'special_mention' => "Ce devis est valable 30 jours à compter de sa date d'émission.\nLes prix indiqués sont exprimés en euros, hors taxes et toutes taxes comprises (HT et TTC).\nTVA au taux en vigueur.\nOrganisme de formation ACDC Formation, certifié Qualiopi au titre de ses actions de formation.\nDéclaration d'activité enregistrée sous le numéro 93 83 08347 83 auprès du préfet de région Provence-Alpes-Côte d'Azur.\nNos conditions générales de vente s'appliquent.",
       ),
       'invoices' => array(
         'prefix' => 'FA-(annee)',
@@ -212,7 +212,7 @@ trait ACDC_Settings_Catalog_Core_Trait {
         'next_number' => '5',
         'restart_each_year' => 1,
         'payment_terms' => "Règlement par virement bancaire, à l'édition de la facture.\nEn cas de retard de paiement, des pénalités seront exigibles au taux de 3 fois le taux d'intérêt légal.\nUne indemnité forfaitaire pour frais de recouvrement de 40 € sera due automatiquement (article L441-10 du Code de commerce).\nIBAN FR76 3000 4023 7500 0101 1397 203 - BIC BNPAFRPPXXX",
-        'special_mention' => "Les prix indiqués sont exprimés en euros, hors taxes et toutes taxes comprises (HT et TTC).\nTVA au taux en vigueur.\nOrganisme de formation ACDC Formation – Déclaration d'activité enregistrée sous le n° [VOTRE NUMÉRO DE DÉCLARATION D'ACTIVITÉ] auprès du préfet de région Provence-Alpes-Côte d'Azur.\nCertifié Qualiopi au titre des actions de formation.",
+        'special_mention' => "Les prix indiqués sont exprimés en euros, hors taxes et toutes taxes comprises (HT et TTC).\nTVA au taux en vigueur.\nOrganisme de formation ACDC Formation – Déclaration d'activité enregistrée sous le n° 93 83 08347 83 auprès du préfet de région Provence-Alpes-Côte d'Azur.\nCertifié Qualiopi au titre des actions de formation.",
       ),
       'credit_notes' => array(
         'prefix' => 'AV-(annee)',
@@ -220,11 +220,33 @@ trait ACDC_Settings_Catalog_Core_Trait {
         'month_tag' => 'Mois',
         'day_tag' => 'Jour',
         'payment_terms' => "L'avoir sera imputé automatiquement sur la prochaine facture.\nEn cas d'impossibilité, le remboursement sera effectué par virement bancaire dans un délai de 30 jours à compter de son émission.",
-        'special_mention' => "Montants exprimés HT et TTC avec application de la TVA au taux en vigueur.\nOrganisme de formation ACDC Formation – Déclaration d'activité enregistrée sous le [VOTRE NUMÉRO DE DÉCLARATION D'ACTIVITÉ] auprès du préfet de région Provence-Alpes-Côte d'Azur.\nCertifié Qualiopi au titre des actions de formation.",
+        'special_mention' => "Montants exprimés HT et TTC avec application de la TVA au taux en vigueur.\nOrganisme de formation ACDC Formation – Déclaration d'activité enregistrée sous le 93 83 08347 83 auprès du préfet de région Provence-Alpes-Côte d'Azur.\nCertifié Qualiopi au titre des actions de formation.",
       ),
     );
-    $stored = get_option( 'acdc_of_billing_settings', array() );
-    return wp_parse_args( $stored, $defaults );
+    $stored   = get_option( 'acdc_of_billing_settings', array() );
+    $settings = wp_parse_args( $stored, $defaults );
+
+    // Substitution du gabarit NDA par le vrai numéro (source unique : profil organisme,
+    // repli sur le NDA officiel). Corrige aussi les mentions déjà enregistrées avec le
+    // placeholder « [VOTRE NUMÉRO DE DÉCLARATION D'ACTIVITÉ] ».
+    $nda = '';
+    if ( method_exists( $this, 'get_company_profile_options' ) ) {
+      $profile = $this->get_company_profile_options();
+      $nda     = isset( $profile['activity_declaration_number'] ) ? trim( (string) $profile['activity_declaration_number'] ) : '';
+    }
+    if ( '' === $nda ) {
+      $nda = '93 83 08347 83';
+    }
+    foreach ( array( 'quotes', 'invoices', 'credit_notes' ) as $scope_key ) {
+      if ( isset( $settings[ $scope_key ]['special_mention'] ) && is_string( $settings[ $scope_key ]['special_mention'] ) ) {
+        $settings[ $scope_key ]['special_mention'] = str_replace(
+          array( "[VOTRE NUMÉRO DE DÉCLARATION D'ACTIVITÉ]", '[VOTRE NUMÉRO DE DÉCLARATION D’ACTIVITÉ]' ),
+          $nda,
+          $settings[ $scope_key ]['special_mention']
+        );
+      }
+    }
+    return $settings;
   }
 
 
