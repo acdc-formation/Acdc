@@ -3975,6 +3975,58 @@ trait ACDC_Kernel_Render_Trait {
           </div>
         </div>
 
+        <?php
+        /* ACDC 3.25.139 — Encarts Chiffre d'affaires + Rétention RGPD (rapatriés sur le tableau de bord ACDC). */
+        $acdc_ca = array( 'ht' => 0.0, 'tva' => 0.0, 'ttc' => 0.0 );
+        if ( class_exists( '\\ACDC\\Support\\Revenue' ) && method_exists( $this, 'build_accounting_rows' ) ) {
+          $__collected = $this->build_accounting_rows();
+          $__year      = gmdate( 'Y' );
+          $__yr        = array();
+          foreach ( $__collected['rows'] as $__r ) {
+            if ( isset( $__r['date'] ) && 0 === strpos( (string) $__r['date'], $__year . '-' ) ) {
+              $__yr[] = $__r;
+            }
+          }
+          $acdc_ca = \ACDC\Support\Revenue::summarize( $__yr );
+        }
+        $acdc_ret = get_option( 'acdc_of_retention_report', array() );
+        $acdc_eur = static function ( $n ) {
+          return number_format( (float) $n, 2, ',', ' ' ) . ' €';
+        };
+        ?>
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px;margin-bottom:16px;">
+          <div class="acdc-db21-panel">
+            <div class="acdc-db21-ph">Chiffre d&#8217;affaires <span style="color:#8a6d2a;">(<?php echo esc_html( gmdate( 'Y' ) ); ?>)</span></div>
+            <div style="padding:12px 14px;">
+              <div style="display:flex;gap:18px;flex-wrap:wrap;">
+                <div><div style="color:#666;font-size:12px;">CA HT</div><div style="font-size:20px;font-weight:700;color:#0f2c52;"><?php echo esc_html( $acdc_eur( $acdc_ca['ht'] ) ); ?></div></div>
+                <div><div style="color:#666;font-size:12px;">TVA</div><div style="font-size:20px;font-weight:700;color:#0f2c52;"><?php echo esc_html( $acdc_eur( $acdc_ca['tva'] ) ); ?></div></div>
+                <div><div style="color:#666;font-size:12px;">CA TTC</div><div style="font-size:20px;font-weight:700;color:#0f2c52;"><?php echo esc_html( $acdc_eur( $acdc_ca['ttc'] ) ); ?></div></div>
+              </div>
+              <div style="color:#8a6d2a;font-size:11px;margin-top:8px;">Net d&#8217;avoirs &#8212; factures internes (facturation officielle : Tiime)</div>
+            </div>
+          </div>
+          <div class="acdc-db21-panel">
+            <div class="acdc-db21-ph">R&#233;tention RGPD</div>
+            <div style="padding:12px 14px;">
+              <?php if ( ! empty( $acdc_ret['categories'] ) && is_array( $acdc_ret['categories'] ) ) : ?>
+                <table style="width:100%;border-collapse:collapse;font-size:13px;">
+                  <?php foreach ( $acdc_ret['categories'] as $__cat ) : ?>
+                    <?php if ( ! is_array( $__cat ) ) { continue; } $__p = (int) ( $__cat['purgeable'] ?? 0 ); ?>
+                    <tr>
+                      <td style="padding:3px 0;"><?php echo esc_html( (string) ( $__cat['label'] ?? '' ) ); ?></td>
+                      <td style="text-align:right;color:#666;"><?php echo esc_html( (string) (int) ( $__cat['total'] ?? 0 ) ); ?> total</td>
+                      <td style="text-align:right;font-weight:600;color:<?php echo $__p > 0 ? '#b32d2e' : '#1a7f37'; ?>;"><?php echo esc_html( $__p ); ?> &#224; purger</td>
+                    </tr>
+                  <?php endforeach; ?>
+                </table>
+              <?php else : ?>
+                <p style="color:#5b6472;margin:0;">Aucun rapport pour le moment. Le scan quotidien s&#8217;ex&#233;cutera automatiquement.</p>
+              <?php endif; ?>
+            </div>
+          </div>
+        </div>
+
         <?php /* Prochaines sessions */ ?>
         <div class="acdc-db21-panel">
           <div class="acdc-db21-ph">

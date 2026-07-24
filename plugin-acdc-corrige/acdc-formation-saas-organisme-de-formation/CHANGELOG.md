@@ -4,6 +4,15 @@ Toutes les modifications notables de ce projet sont documentées ici.
 Format inspiré de [Keep a Changelog](https://keepachangelog.com/fr/1.1.0/).
 L'historique détaillé antérieur est archivé dans [`release-notes/`](release-notes/).
 
+## [3.25.139] — 2026-07-24
+
+### Ajouté — Encarts CA + Rétention RGPD sur le tableau de bord ACDC
+Les deux encarts (auparavant seulement sur le tableau de bord natif WordPress) sont désormais
+**affichés directement sur le tableau de bord ACDC** (là où l'utilisateur travaille), juste avant
+« Prochaines sessions » : Chiffre d'affaires de l'année (HT/TVA/TTC, net d'avoirs) et Rétention RGPD
+(total / à purger par catégorie). Lecture seule, sorties échappées, réutilise `ACDC\Support\Revenue`
+et le rapport de rétention.
+
 ## [3.25.138] — 2026-07-24
 
 ### Corrigé — Identité organisme : SIRET + NDA (recette QA, anomalie 4)
