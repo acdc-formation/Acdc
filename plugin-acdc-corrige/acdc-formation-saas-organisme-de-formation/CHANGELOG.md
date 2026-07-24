@@ -4,6 +4,17 @@ Toutes les modifications notables de ce projet sont documentées ici.
 Format inspiré de [Keep a Changelog](https://keepachangelog.com/fr/1.1.0/).
 L'historique détaillé antérieur est archivé dans [`release-notes/`](release-notes/).
 
+## [3.25.135] — 2026-07-24
+
+### Ajouté — Vérification publique d'authenticité des attestations (raccordement CertificateCode)
+Nouvelle route publique `?acdc_verify=<REFERENCE>&sig=<TOKEN>` (`ACDC\Support\CertificateCode`) :
+- **Public** : affiche si l'attestation est **authentique** (référence bien formée + signature valide vis-à-vis
+  du secret du site) ou non, sur une page autonome dédiée.
+- **Administrateur** (référence sans `sig`) : **génère l'URL vérifiable** à communiquer / encoder en QR
+  (ex. `?acdc_verify=42` → référence `ACDC-2026-000042-XX` + URL signée).
+Rendu autonome, aucune donnée modifiée. L'attestation restant un fichier téléversé, l'injection d'un QR
+dans le document lui-même relève d'une étape ultérieure ; la brique de vérification est opérationnelle.
+
 ## [3.25.134] — 2026-07-24
 
 ### Ajouté — Encart « Chiffre d'affaires » sur le tableau de bord (raccordement Revenue)

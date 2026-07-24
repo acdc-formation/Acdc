@@ -5715,6 +5715,100 @@ public function handle_purge_plugin_data() {
   }
 
   /* ---------------------------------------------------------------
+   * ACDC 3.25.135 — Vérification publique d'authenticité d'une attestation.
+   * Route : ?acdc_verify=<REFERENCE>&sig=<TOKEN>
+   *   - Public : vérifie que la référence est bien formée (clé de contrôle) et que
+   *     la signature correspond au secret du site → attestation authentique ou non.
+   *   - Admin sans `sig` : génère l'URL vérifiable à communiquer (mode génération).
+   * S'appuie sur ACDC\Support\CertificateCode. Rendu autonome, aucune donnée modifiée.
+   * --------------------------------------------------------------- */
+  public function maybe_handle_attestation_verify() {
+    if ( ! isset( $_GET['acdc_verify'] ) ) {
+      return;
+    }
+    if ( ! class_exists( '\\ACDC\\Support\\CertificateCode' ) ) {
+      return;
+    }
+    $reference = sanitize_text_field( wp_unslash( $_GET['acdc_verify'] ) );
+    $sig       = isset( $_GET['sig'] ) ? sanitize_text_field( wp_unslash( $_GET['sig'] ) ) : '';
+    $secret    = wp_salt( 'secure_auth' );
+    $org       = method_exists( $this, 'get_branding_options' ) ? (string) ( $this->get_branding_options()['company_name'] ?? 'ACDC Formation' ) : 'ACDC Formation';
+
+    // Mode génération (administrateur, sans signature fournie) : proposer l'URL vérifiable.
+    if ( '' === $sig && current_user_can( 'manage_options' ) && '' !== $reference ) {
+      $ref   = ctype_digit( $reference )
+        ? \ACDC\Support\CertificateCode::format( (int) gmdate( 'Y' ), (int) $reference )
+        : strtoupper( $reference );
+      $token = \ACDC\Support\CertificateCode::sign( $ref, $secret );
+      $url   = add_query_arg( array( 'acdc_verify' => rawurlencode( $ref ), 'sig' => $token ), home_url( '/' ) );
+      $this->render_attestation_verify_page(
+        'generate',
+        $org,
+        array( 'reference' => $ref, 'url' => $url )
+      );
+      return;
+    }
+
+    $ref_upper   = strtoupper( $reference );
+    $well_formed = \ACDC\Support\CertificateCode::isWellFormed( $ref_upper );
+    $valid       = $well_formed && \ACDC\Support\CertificateCode::verify( $ref_upper, $sig, $secret );
+    $this->render_attestation_verify_page(
+      $valid ? 'valid' : 'invalid',
+      $org,
+      array( 'reference' => $ref_upper )
+    );
+  }
+
+  /**
+   * Rendu autonome de la page de vérification, puis arrêt.
+   *
+   * @param string $state 'valid' | 'invalid' | 'generate'
+   * @param string $org
+   * @param array  $data
+   * @return void
+   */
+  private function render_attestation_verify_page( $state, $org, $data ) {
+    while ( ob_get_level() ) {
+      ob_end_clean();
+    }
+    nocache_headers();
+    header( 'Content-Type: text/html; charset=UTF-8' );
+    status_header( 'invalid' === $state ? 404 : 200 );
+
+    $ref = isset( $data['reference'] ) ? (string) $data['reference'] : '';
+    if ( 'valid' === $state ) {
+      $badge = '#1a7f37'; $icon = '✓';
+      $title = 'Attestation authentique';
+      $msg   = 'Cette attestation a bien été émise par ' . $org . '. Sa référence et sa signature sont valides.';
+    } elseif ( 'generate' === $state ) {
+      $badge = '#2271b1'; $icon = '🔗';
+      $title = 'URL de vérification';
+      $msg   = 'Communiquez cette adresse (ou son QR code) pour permettre la vérification de l’attestation.';
+    } else {
+      $badge = '#b32d2e'; $icon = '✕';
+      $title = 'Attestation non vérifiée';
+      $msg   = 'La référence ou la signature est invalide. Ce document n’a pas pu être authentifié.';
+    }
+
+    echo '<!doctype html><html lang="fr"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">';
+    echo '<title>' . esc_html( $title ) . ' — ' . esc_html( $org ) . '</title></head>';
+    echo '<body style="margin:0;font-family:system-ui,Arial,sans-serif;background:#f4f5f7;color:#1d2327;">';
+    echo '<div style="max-width:560px;margin:8vh auto;padding:28px;background:#fff;border-radius:14px;box-shadow:0 6px 24px rgba(0,0,0,.08);">';
+    echo '<div style="font-size:44px;line-height:1;color:' . esc_attr( $badge ) . ';">' . esc_html( $icon ) . '</div>';
+    echo '<h1 style="margin:10px 0 6px;font-size:22px;">' . esc_html( $title ) . '</h1>';
+    echo '<p style="color:#50575e;">' . esc_html( $msg ) . '</p>';
+    if ( '' !== $ref ) {
+      echo '<p style="margin-top:16px;"><span style="color:#666;">Référence :</span><br><code style="font-size:16px;">' . esc_html( $ref ) . '</code></p>';
+    }
+    if ( 'generate' === $state && ! empty( $data['url'] ) ) {
+      echo '<p style="margin-top:12px;word-break:break-all;"><a href="' . esc_url( $data['url'] ) . '">' . esc_html( $data['url'] ) . '</a></p>';
+    }
+    echo '<p style="margin-top:22px;color:#8c8f94;font-size:12px;">' . esc_html( $org ) . ' — vérification d’authenticité</p>';
+    echo '</div></body></html>';
+    exit;
+  }
+
+  /* ---------------------------------------------------------------
    * ACDC 3.24.21 — Exécution cron sync formations Manager → SAAS
    * --------------------------------------------------------------- */
   public function cron_sync_formations_from_manager() {

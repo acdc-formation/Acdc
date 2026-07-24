@@ -237,6 +237,8 @@ class ACDC_Formation_SAAS_Plugin {
     add_filter( 'template_include', array( $this, 'use_blank_template_for_acdc_pages' ) );
     add_action( 'template_redirect', array( $this, 'maybe_redirect_legacy_pages' ) );
     add_action( 'template_redirect', array( $this, 'handle_programme_pdf_request' ), 1 );
+    // ACDC 3.25.135 — Vérification publique d'authenticité des attestations (?acdc_verify=…).
+    add_action( 'template_redirect', array( $this, 'maybe_handle_attestation_verify' ), 1 );
     add_action( 'template_redirect', array( $this, 'handle_front_trf_actions' ), 2 );
     /* ACDC 3.24.43 — Envoi e-mail direct depuis le front (contourne WAF admin-post.php) */
     add_action( 'template_redirect', array( $this, 'maybe_handle_front_direct_email' ), 5 );
