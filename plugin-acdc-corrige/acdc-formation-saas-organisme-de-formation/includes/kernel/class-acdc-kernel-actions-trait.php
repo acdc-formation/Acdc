@@ -5809,6 +5809,55 @@ public function handle_purge_plugin_data() {
   }
 
   /* ---------------------------------------------------------------
+   * ACDC 3.25.135 — Preuve d'horodatage scellé à la signature.
+   * Écoute `acdc_sig_request_signed` (émis APRÈS la signature) et enregistre un
+   * jeton d'horodatage scellé (ACDC\Support\Timestamp) sur l'empreinte du document
+   * signé, dans le journal d'audit de la signature. Prêt pour l'horodatage qualifié
+   * eIDAS (branchable via le filtre acdc_timestamp_token). Entièrement protégé :
+   * s'exécute après coup et n'interrompt jamais le flux de signature.
+   *
+   * @param int    $request_id
+   * @param object $request
+   * @return void
+   * --------------------------------------------------------------- */
+  public function handle_sig_timestamp_proof( $request_id, $request ) {
+    try {
+      if ( ! class_exists( '\\ACDC\\Support\\Timestamp' ) || ! is_object( $request ) ) {
+        return;
+      }
+      $hash = ! empty( $request->signed_pdf_sha256 )
+        ? (string) $request->signed_pdf_sha256
+        : (string) ( $request->doc_sha256 ?? '' );
+      if ( ! preg_match( '/^[0-9a-f]{64}$/', $hash ) ) {
+        return;
+      }
+      $token = \ACDC\Support\Timestamp::create( $hash );
+      if ( empty( $token ) ) {
+        return;
+      }
+      global $wpdb;
+      $table = $wpdb->prefix . 'acdc_sig_audit';
+      if ( $wpdb->get_var( $wpdb->prepare( 'SHOW TABLES LIKE %s', $table ) ) !== $table ) {
+        return;
+      }
+      $wpdb->insert(
+        $table,
+        array(
+          'request_id' => (int) $request_id,
+          'event'      => 'horodatage_scelle',
+          'details'    => wp_json_encode( $token ),
+          'ip'         => sanitize_text_field( wp_unslash( $_SERVER['REMOTE_ADDR'] ?? '' ) ),
+          'user_agent' => '',
+          'created_at' => gmdate( 'Y-m-d H:i:s' ),
+        )
+      );
+    } catch ( \Throwable $e ) {
+      // Silencieux : la preuve d'horodatage est un plus ; elle ne doit jamais perturber la signature.
+      return;
+    }
+  }
+
+  /* ---------------------------------------------------------------
    * ACDC 3.24.21 — Exécution cron sync formations Manager → SAAS
    * --------------------------------------------------------------- */
   public function cron_sync_formations_from_manager() {

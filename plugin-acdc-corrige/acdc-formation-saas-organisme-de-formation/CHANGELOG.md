@@ -4,6 +4,18 @@ Toutes les modifications notables de ce projet sont documentées ici.
 Format inspiré de [Keep a Changelog](https://keepachangelog.com/fr/1.1.0/).
 L'historique détaillé antérieur est archivé dans [`release-notes/`](release-notes/).
 
+## [3.25.136] — 2026-07-24
+
+### Ajouté — Preuve d'horodatage scellé à la signature (raccordement Timestamp)
+Raccordement de `ACDC\Support\Timestamp` au module de signature : à chaque signature finalisée, un
+**jeton d'horodatage scellé** (sur l'empreinte SHA-256 du document signé) est enregistré dans le
+journal d'audit de la signature (`{prefix}acdc_sig_audit`, événement `horodatage_scelle`). Prêt pour
+l'horodatage **qualifié eIDAS** (branchable via le filtre `acdc_timestamp_token`). **Non intrusif** :
+l'écouteur s'exécute *après* la signature (action `acdc_sig_request_signed`), vérifie l'existence de la
+table et est enveloppé d'un `try/catch` — il ne peut jamais perturber le flux de signature.
+Le module signait déjà l'empreinte du document (`doc_sha256`) et journalisait IP/UA + audit ; cette
+preuve d'horodatage complète le dispositif probant.
+
 ## [3.25.135] — 2026-07-24
 
 ### Ajouté — Vérification publique d'authenticité des attestations (raccordement CertificateCode)

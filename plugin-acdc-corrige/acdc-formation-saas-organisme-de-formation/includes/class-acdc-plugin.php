@@ -561,6 +561,8 @@ class ACDC_Formation_SAAS_Plugin {
     add_action( 'admin_post_acdc_convert_quote_to_invoice', array( $this, 'handle_convert_quote_to_invoice' ) );
     add_action( 'admin_post_acdc_send_quote_for_signature', array( $this, 'handle_send_quote_for_signature' ) );
     add_action( 'acdc_sig_request_signed', array( $this, 'handle_quote_signed' ), 20, 2 );
+    // ACDC 3.25.135 — Preuve d'horodatage scellé enregistrée après signature (non intrusif).
+    add_action( 'acdc_sig_request_signed', array( $this, 'handle_sig_timestamp_proof' ), 30, 2 );
     add_action( 'admin_post_acdc_save_invoice',             array( $this, 'handle_save_invoice' ) );
     add_action( 'admin_post_acdc_delete_invoice',           array( $this, 'handle_delete_invoice' ) );
     // ACDC 3.25.116 — Facturation réelle : marquer payée + envoyer par email.
