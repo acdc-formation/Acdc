@@ -14207,7 +14207,8 @@ public function render_admin_configuration_page() {
               <div class="acdc-form-field"><label>Site web</label><input type="url" name="branding[website]" value="<?php echo esc_attr( $text( 'website', home_url( '/' ) ) ); ?>"></div>
               <div class="acdc-form-field"><label>Téléphone</label><input type="text" name="branding[phone]" value="<?php echo esc_attr( $text( 'phone' ) ); ?>"></div>
               <div class="acdc-form-field"><label>E-mail</label><input type="email" name="branding[email]" value="<?php echo esc_attr( $text( 'email' ) ); ?>"></div>
-              <div class="acdc-form-field"><label>NDA</label><input type="text" name="branding[nda]" value="<?php echo esc_attr( $text( 'nda' ) ); ?>"></div>
+              <div class="acdc-form-field"><label>NDA</label><input type="text" name="branding[nda]" value="<?php echo esc_attr( $text( 'nda', '93 83 08347 83' ) ); ?>"></div>
+              <div class="acdc-form-field"><label>SIRET</label><input type="text" name="branding[siret]" value="<?php echo esc_attr( $text( 'siret', '405 109 901 00042' ) ); ?>" placeholder="405 109 901 00042"></div>
               <div class="acdc-form-field acdc-form-field-full"><label>Adresse</label><input type="text" name="branding[address]" value="<?php echo esc_attr( $text( 'address' ) ); ?>"></div>
               <div class="acdc-form-field"><label>Code postal</label><input type="text" name="branding[postal_code]" value="<?php echo esc_attr( $text( 'postal_code' ) ); ?>"></div>
               <div class="acdc-form-field"><label>Ville</label><input type="text" name="branding[city]" value="<?php echo esc_attr( $text( 'city' ) ); ?>"></div>

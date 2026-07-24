@@ -4,6 +4,18 @@ Toutes les modifications notables de ce projet sont documentées ici.
 Format inspiré de [Keep a Changelog](https://keepachangelog.com/fr/1.1.0/).
 L'historique détaillé antérieur est archivé dans [`release-notes/`](release-notes/).
 
+## [3.25.138] — 2026-07-24
+
+### Corrigé — Identité organisme : SIRET + NDA (recette QA, anomalie 4)
+- **Champ SIRET ajouté** au formulaire « Identité organisme » (il était absent) : `branding[siret]`,
+  pré-rempli « 405 109 901 00042 », avec validation à l'enregistrement (déjà en place).
+- **NDA jamais enregistré** : le champ NDA de l'identité (`branding[nda]`) existait mais n'avait pas
+  de valeur par défaut, donc la sauvegarde l'ignorait (boucle limitée aux clés connues). Ajout de la
+  valeur par défaut « 93 83 08347 83 » → le champ s'enregistre désormais correctement.
+- **NDA/SIRET sur les factures** : repli robuste (profil organisme → identité → numéro officiel) pour
+  que le NDA et le SIRET ne soient jamais vides sur les documents, y compris sur les installations
+  existantes.
+
 ## [3.25.137] — 2026-07-24
 
 ### Corrigé — Retours de recette QA (lot 1)

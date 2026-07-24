@@ -203,8 +203,10 @@ trait ACDC_Documents_Billing_Core_Trait {
     $branding  = $this->get_branding_options();
     $params    = method_exists( $this, 'get_contract_params_options' ) ? $this->get_contract_params_options() : array();
     $company_profile = get_option( 'acdc_of_company_profile', array() );
-    $nda       = ! empty( $company_profile['activity_declaration_number'] ) ? (string) $company_profile['activity_declaration_number'] : '';
-    $siret     = ! empty( $branding['siret'] ) ? (string) $branding['siret'] : '';
+    // NDA : profil organisme → identité (branding) → repli sur le NDA officiel (jamais vide).
+    $nda       = ! empty( $company_profile['activity_declaration_number'] ) ? (string) $company_profile['activity_declaration_number']
+               : ( ! empty( $branding['nda'] ) ? (string) $branding['nda'] : '93 83 08347 83' );
+    $siret     = ! empty( $branding['siret'] ) ? (string) $branding['siret'] : '405 109 901 00042';
     $org_name  = ! empty( $branding['company_name'] ) ? (string) $branding['company_name'] : 'ACDC Formation';
     $org_addr  = trim( ( $branding['address'] ?? '' ) . ', ' . ( $branding['postal_code'] ?? '' ) . ' ' . ( $branding['city'] ?? '' ) );
     $logo_url  = ! empty( $branding['logo_url'] ) ? (string) $branding['logo_url'] : 'https://acdcformation.com/wp-content/uploads/2026/03/Logo-ACDC.png';

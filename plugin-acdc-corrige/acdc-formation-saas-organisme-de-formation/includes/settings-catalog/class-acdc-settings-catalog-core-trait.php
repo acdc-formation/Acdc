@@ -416,6 +416,7 @@ private function get_branding_defaults() {
     'email' => 'contact@acdc-formation.com',
     'website' => 'https://acdc-formation.com/',
     'siret' => '405 109 901 00042',
+    'nda' => '93 83 08347 83',
     'font_family' => 'Rubik, Arial, system-ui, sans-serif',
     'font_weight' => '500',
     'line_height' => '1.5',
