@@ -533,14 +533,43 @@ body a.formation-prereq-trigger:active{
 .acdc-action-hub-btn--cancel{
   color: #8a4a17 !important;
 }
-.acdc-action-hub-sr{
+/* ACDC 3.25.140 — Libellés lecteur d'écran.
+ * Ces libellés sont posés dans des boutons et des liens situés à l'intérieur de
+ * tableaux plus larges que leur conteneur. Sans ancrage local, leur boîte
+ * absolue se rattache au bloc conteneur initial et se retrouve à plusieurs
+ * milliers de pixels sur la droite : la page entière hérite alors d'un
+ * défilement horizontal (466 libellés = 2452 px de scrollWidth sur le suivi
+ * commercial). On ancre donc le libellé dans son parent immédiat, et on masque
+ * par clip-path plutôt que par la propriété clip, dépréciée.
+ */
+.acdc-row-action-icon,
+.acdc-action-icon,
+.acdc-action-icon-base,
+.acdc-row-menu-toggle,
+.acdc-table-action-trigger,
+.acdc-prospect-action-trigger,
+.acdc-action-hub-btn,
+.acdc-icon-link{
+  position: relative;
+}
+:has(> .acdc-action-hub-sr){
+  position: relative;
+}
+.acdc-action-hub-sr,
+.acdc-action-hub-sr.screen-reader-text{
   position: absolute !important;
   width: 1px !important;
   height: 1px !important;
+  max-width: 1px !important;
+  max-height: 1px !important;
+  top: 0 !important;
+  left: 0 !important;
+  right: auto !important;
+  bottom: auto !important;
   padding: 0 !important;
-  margin: -1px !important;
+  margin: 0 !important;
   overflow: hidden !important;
-  clip: rect(0, 0, 0, 0) !important;
+  clip-path: inset(50%) !important;
   white-space: nowrap !important;
   border: 0 !important;
 }
