@@ -1205,6 +1205,85 @@
   }
 
 
+  /**
+   * État de la liste « Suivi commercial » lu depuis l'URL.
+   *
+   * Recherche, tri, statut, page et taille de page transitent par des paramètres
+   * d'URL préfixés fu_ : le rafraîchissement, le partage de lien et le retour
+   * arrière du navigateur restituent exactement la même vue.
+   *
+   * @return array
+   */
+  private function get_prospect_followup_list_state() {
+    $sortable = $this->get_prospect_followup_sortable_columns();
+    $statuses = $this->get_prospect_status_options();
+
+    $search = isset( $_GET['fu_q'] ) ? sanitize_text_field( wp_unslash( $_GET['fu_q'] ) ) : '';
+    $status = isset( $_GET['fu_status'] ) ? sanitize_text_field( wp_unslash( $_GET['fu_status'] ) ) : '';
+    if ( '' !== $status && ! isset( $statuses[ $status ] ) ) {
+      $status = '';
+    }
+
+    $orderby = isset( $_GET['fu_sort'] ) ? sanitize_key( wp_unslash( $_GET['fu_sort'] ) ) : 'created_at';
+    if ( ! isset( $sortable[ $orderby ] ) ) {
+      $orderby = 'created_at';
+    }
+
+    $order = isset( $_GET['fu_dir'] ) ? strtolower( sanitize_key( wp_unslash( $_GET['fu_dir'] ) ) ) : '';
+    if ( ! in_array( $order, array( 'asc', 'desc' ), true ) ) {
+      /* Les dates se lisent du plus récent au plus ancien, les libellés par ordre alphabétique. */
+      $order = in_array( $orderby, array( 'company', 'status' ), true ) ? 'asc' : 'desc';
+    }
+
+    $per_page = isset( $_GET['fu_per'] ) ? absint( wp_unslash( $_GET['fu_per'] ) ) : 0;
+    if ( ! in_array( $per_page, array( 25, 50, 100 ), true ) ) {
+      $per_page = 25;
+    }
+
+    return array(
+      'search'           => $search,
+      'status'           => $status,
+      'orderby'          => $orderby,
+      'order'            => $order,
+      'page'             => max( 1, isset( $_GET['fu_page'] ) ? absint( wp_unslash( $_GET['fu_page'] ) ) : 1 ),
+      'per_page'         => $per_page,
+      'dashboard_alerts' => isset( $_GET['dashboard_alerts'] ) && '1' === (string) wp_unslash( $_GET['dashboard_alerts'] ),
+    );
+  }
+
+
+  /**
+   * URL de la liste « Suivi commercial » portant l'état courant.
+   *
+   * @param array $state     État courant (voir get_prospect_followup_list_state()).
+   * @param array $overrides Paramètres à remplacer ; une valeur null retire le paramètre.
+   * @return string
+   */
+  private function prospect_followup_list_url( $state, $overrides = array() ) {
+    $args = array(
+      'fu_q'             => (string) $state['search'],
+      'fu_status'        => (string) $state['status'],
+      'fu_sort'          => (string) $state['orderby'],
+      'fu_dir'           => (string) $state['order'],
+      'fu_page'          => (int) $state['page'],
+      'fu_per'           => (int) $state['per_page'],
+      'dashboard_alerts' => ! empty( $state['dashboard_alerts'] ) ? '1' : '',
+    );
+    $args = array_merge( $args, (array) $overrides );
+
+    $args = array_filter(
+      $args,
+      static function( $value ) {
+        return null !== $value && '' !== $value;
+      }
+    );
+
+    return is_admin()
+      ? $this->admin_prospect_followup_url( $args )
+      : $this->portal_page_url( array_merge( array( 'tab' => 'prospect_followup' ), $args ) );
+  }
+
+
   private function render_front_prospect_followup_tab( $action, $item_id ) {
     $prospect = $item_id ? $this->get_prospect( $item_id ) : null;
     if ( 'view' === $action && ! $prospect ) {
@@ -1213,11 +1292,30 @@
     }
 
     if ( 'view' !== $action ) {
-      $prospects = $this->get_prospects();
-      $dashboard_alerts = isset( $_GET['dashboard_alerts'] ) && '1' === (string) wp_unslash( $_GET['dashboard_alerts'] );
-      $prospect_rows = array();
+      $fu_state         = $this->get_prospect_followup_list_state();
+      $dashboard_alerts = $fu_state['dashboard_alerts'];
 
-      foreach ( $prospects as $prospect_entry ) {
+      /* Depuis le tableau de bord, la liste est restreinte aux prospects en alerte :
+       * le bornage reste ainsi cohérent d'une page à l'autre. */
+      $fu_include_ids = $dashboard_alerts ? $this->get_prospect_ids_with_dashboard_alert() : null;
+
+      $fu_query = $this->get_prospect_followup_page(
+        array(
+          'page'        => $fu_state['page'],
+          'per_page'    => $fu_state['per_page'],
+          'search'      => $fu_state['search'],
+          'status'      => $fu_state['status'],
+          'orderby'     => $fu_state['orderby'],
+          'order'       => $fu_state['order'],
+          'include_ids' => $fu_include_ids,
+        )
+      );
+
+      $fu_pagination  = $fu_query['pagination'];
+      $fu_state['page'] = (int) $fu_pagination['page'];
+      $prospect_rows  = array();
+
+      foreach ( $fu_query['items'] as $prospect_entry ) {
         $entry_latest_rdv = $this->get_prospect_latest_rdv( $prospect_entry );
         $has_alert = method_exists( $this, 'prospect_has_dashboard_alert' ) ? $this->prospect_has_dashboard_alert( $prospect_entry, $entry_latest_rdv ) : false;
         $prospect_rows[] = array(
@@ -1229,40 +1327,16 @@
         );
       }
 
-      if ( $dashboard_alerts && ! empty( $prospect_rows ) ) {
-        usort(
-          $prospect_rows,
-          static function( $left, $right ) {
-            if ( $left['has_alert'] !== $right['has_alert'] ) {
-              return $left['has_alert'] ? -1 : 1;
-            }
-
-            $left_date = ! empty( $left['entry']->created_at ) ? strtotime( (string) $left['entry']->created_at ) : 0;
-            $right_date = ! empty( $right['entry']->created_at ) ? strtotime( (string) $right['entry']->created_at ) : 0;
-
-            if ( $left_date === $right_date ) {
-              $left_id = ! empty( $left['entry']->id ) ? (int) $left['entry']->id : 0;
-              $right_id = ! empty( $right['entry']->id ) ? (int) $right['entry']->id : 0;
-              return $right_id <=> $left_id;
-            }
-
-            return $right_date <=> $left_date;
-          }
-        );
-      }
-      $activity_counts_map = $this->get_prospect_activity_counts_map();
       $fu_status_options = $this->get_prospect_status_options();
-      $fu_status_counts  = array();
-      foreach ( array_keys( $fu_status_options ) as $fu_sk ) { $fu_status_counts[ $fu_sk ] = 0; }
-      $fu_total_count = 0;
-      if ( ! empty( $prospect_rows ) ) {
-        foreach ( $prospect_rows as $fu_pr ) {
-          $fu_st = ! empty( $fu_pr['entry']->status ) ? (string) $fu_pr['entry']->status : 'À traiter';
-          if ( ! isset( $fu_status_counts[ $fu_st ] ) ) { $fu_status_counts[ $fu_st ] = 0; }
-          $fu_status_counts[ $fu_st ]++;
-          $fu_total_count++;
-        }
-      }
+      $fu_sortable       = $this->get_prospect_followup_sortable_columns();
+      $fu_counts         = $this->get_prospect_followup_status_counts(
+        array(
+          'search'      => $fu_state['search'],
+          'include_ids' => $fu_include_ids,
+        )
+      );
+      $fu_status_counts = $fu_counts['by_status'];
+      $fu_total_count   = (int) $fu_counts['total'];
       ?>
       <section class="acdc-section-head">
         <div>
@@ -1355,7 +1429,8 @@
       <script>
       </script>
       <?php if ( $dashboard_alerts ) :
-        $dashboard_alert_total = 0;
+        /* Le total porte sur l'ensemble des alertes ; le détail décrit la page affichée. */
+        $dashboard_alert_total = is_array( $fu_include_ids ) ? count( $fu_include_ids ) : 0;
         $dashboard_alert_status_counts = array(
           'none'     => 0,
           'upcoming' => 0,
@@ -1363,9 +1438,6 @@
           'done'     => 0,
         );
         foreach ( $prospect_rows as $prospect_row ) {
-          if ( ! empty( $prospect_row['has_alert'] ) ) {
-            $dashboard_alert_total++;
-          }
           $status_key = isset( $prospect_row['alert_status']['code'] ) ? (string) $prospect_row['alert_status']['code'] : 'none';
           if ( ! isset( $dashboard_alert_status_counts[ $status_key ] ) ) {
             $dashboard_alert_status_counts[ $status_key ] = 0;
@@ -1387,7 +1459,7 @@
         <?php echo $this->render_inline_icon( 'bell', 18 ); ?>
         <span><strong><?php echo esc_html( (string) $dashboard_alert_total ); ?></strong> alerte(s) mise(s) en avant depuis le tableau de bord.</span>
         <?php if ( ! empty( $dashboard_alert_parts ) ) : ?>
-          <div class="acdc-followup-dashboard-callout__detail"><?php echo esc_html( implode( ' • ', $dashboard_alert_parts ) ); ?></div>
+          <div class="acdc-followup-dashboard-callout__detail">Sur cette page : <?php echo esc_html( implode( ' • ', $dashboard_alert_parts ) ); ?></div>
         <?php endif; ?>
       </div>
       <?php endif; ?>
@@ -1400,18 +1472,62 @@
         );
         ?>
         <div class="acdc-fu-status-tabs" data-acdc-fu-status-tabs="1">
-          <button type="button" class="acdc-fu-tab is-active" data-fu-filter="__all__">Tous <span class="acdc-fu-tab-count"><?php echo (int) $fu_total_count; ?></span></button>
+          <a class="acdc-fu-tab<?php echo ( '' === $fu_state['status'] ) ? ' is-active' : ''; ?>" href="<?php echo esc_url( $this->prospect_followup_list_url( $fu_state, array( 'fu_status' => null, 'fu_page' => null ) ) ); ?>">Tous <span class="acdc-fu-tab-count"><?php echo (int) $fu_total_count; ?></span></a>
           <?php foreach ( $fu_status_options as $fu_key => $fu_label ) :
             $fu_c   = (int) ( isset( $fu_status_counts[ $fu_key ] ) ? $fu_status_counts[ $fu_key ] : 0 );
             $fu_dot = isset( $fu_dot_colors[ $fu_key ] ) ? $fu_dot_colors[ $fu_key ] : '#64748b';
+            $fu_is_active = ( $fu_state['status'] === $fu_key );
             ?>
-            <button type="button" class="acdc-fu-tab<?php echo ( 0 === $fu_c ) ? ' is-empty' : ''; ?>" data-fu-filter="<?php echo esc_attr( $fu_key ); ?>"><span class="acdc-fu-tab-dot" style="background:<?php echo esc_attr( $fu_dot ); ?>;"></span><?php echo esc_html( $fu_label ); ?> <span class="acdc-fu-tab-count"><?php echo $fu_c; ?></span></button>
+            <a class="acdc-fu-tab<?php echo $fu_is_active ? ' is-active' : ''; ?><?php echo ( 0 === $fu_c ) ? ' is-empty' : ''; ?>" href="<?php echo esc_url( $this->prospect_followup_list_url( $fu_state, array( 'fu_status' => $fu_key, 'fu_page' => null ) ) ); ?>"><span class="acdc-fu-tab-dot" style="background:<?php echo esc_attr( $fu_dot ); ?>;"></span><?php echo esc_html( $fu_label ); ?> <span class="acdc-fu-tab-count"><?php echo $fu_c; ?></span></a>
           <?php endforeach; ?>
         </div>
-        <p class="acdc-fu-status-empty" data-acdc-fu-status-empty="1" style="display:none;color:#64748b;padding:12px 4px;">Aucun prospect pour ce statut.</p>
+        <?php
+        /* Un formulaire GET remplace la chaîne de requête de son action : les paramètres
+         * qui identifient la page (tab, page d'admin, page_id sans permaliens) doivent
+         * donc être réémis en champs cachés. */
+        $fu_form_action = $this->prospect_followup_list_url(
+          $fu_state,
+          array( 'fu_q' => null, 'fu_page' => null, 'fu_per' => null, 'fu_status' => null, 'fu_sort' => null, 'fu_dir' => null, 'dashboard_alerts' => null )
+        );
+        $fu_form_query  = (string) wp_parse_url( $fu_form_action, PHP_URL_QUERY );
+        $fu_form_hidden = array();
+        if ( '' !== $fu_form_query ) {
+          wp_parse_str( $fu_form_query, $fu_form_hidden );
+        }
+        ?>
+        <form class="acdc-fu-toolbar" method="get" action="<?php echo esc_url( $fu_form_action ); ?>" data-acdc-fu-toolbar="1">
+          <?php foreach ( $fu_form_hidden as $fu_hidden_key => $fu_hidden_value ) : ?>
+            <input type="hidden" name="<?php echo esc_attr( $fu_hidden_key ); ?>" value="<?php echo esc_attr( is_scalar( $fu_hidden_value ) ? (string) $fu_hidden_value : '' ); ?>">
+          <?php endforeach; ?>
+          <input type="hidden" name="fu_status" value="<?php echo esc_attr( $fu_state['status'] ); ?>">
+          <input type="hidden" name="fu_sort" value="<?php echo esc_attr( $fu_state['orderby'] ); ?>">
+          <input type="hidden" name="fu_dir" value="<?php echo esc_attr( $fu_state['order'] ); ?>">
+          <?php if ( $dashboard_alerts ) : ?>
+            <input type="hidden" name="dashboard_alerts" value="1">
+          <?php endif; ?>
+          <label class="acdc-fu-toolbar-field">
+            <span class="screen-reader-text">Rechercher une entreprise ou un contact</span>
+            <input type="search" name="fu_q" value="<?php echo esc_attr( $fu_state['search'] ); ?>" placeholder="Rechercher une entreprise ou un contact" data-acdc-fu-search="1">
+          </label>
+          <label class="acdc-fu-toolbar-field acdc-fu-toolbar-perpage">
+            <span>Lignes par page</span>
+            <select name="fu_per" data-acdc-fu-perpage="1">
+              <?php foreach ( array( 25, 50, 100 ) as $fu_per_option ) : ?>
+                <option value="<?php echo (int) $fu_per_option; ?>"<?php selected( (int) $fu_state['per_page'], $fu_per_option ); ?>><?php echo (int) $fu_per_option; ?></option>
+              <?php endforeach; ?>
+            </select>
+          </label>
+          <button type="submit" class="acdc-button acdc-button-soft">Rechercher</button>
+          <?php if ( '' !== $fu_state['search'] ) : ?>
+            <a class="acdc-fu-toolbar-reset" href="<?php echo esc_url( $this->prospect_followup_list_url( $fu_state, array( 'fu_q' => null, 'fu_page' => null ) ) ); ?>">Effacer la recherche</a>
+          <?php endif; ?>
+        </form>
+        <?php if ( empty( $prospect_rows ) ) : ?>
+          <p class="acdc-fu-status-empty" style="color:#64748b;padding:12px 4px;">Aucun prospect ne correspond à cette recherche ou à ce statut.</p>
+        <?php endif; ?>
         <style>
           .acdc-fu-status-tabs{display:flex;flex-wrap:wrap;gap:8px;margin:0 0 16px;}
-          .acdc-fu-status-tabs .acdc-fu-tab{display:inline-flex;align-items:center;gap:7px;font-size:13px;font-weight:500;padding:7px 13px;border-radius:999px;background:#f1efe8;color:#3a3a3a;border:0.5px solid #e2ddd0;cursor:pointer;line-height:1;}
+          .acdc-fu-status-tabs .acdc-fu-tab{display:inline-flex;align-items:center;gap:7px;font-size:13px;font-weight:500;padding:7px 13px;border-radius:999px;background:#f1efe8;color:#3a3a3a;border:0.5px solid #e2ddd0;cursor:pointer;line-height:1;text-decoration:none;}
           .acdc-fu-status-tabs .acdc-fu-tab:hover{background:#ece7da;}
           .acdc-fu-status-tabs .acdc-fu-tab.is-active{background:#8b5b23;color:#fff;border-color:#8b5b23;}
           .acdc-fu-status-tabs .acdc-fu-tab.is-empty{opacity:.5;}
@@ -1419,25 +1535,55 @@
           .acdc-fu-status-tabs .acdc-fu-tab-count{background:#fff;color:#5f5e5a;padding:1px 8px;border-radius:999px;font-size:11px;font-weight:600;}
           .acdc-fu-status-tabs .acdc-fu-tab.is-active .acdc-fu-tab-count{background:rgba(255,255,255,.25);color:#fff;}
           .acdc-fu-status-tabs .acdc-fu-tab.is-active .acdc-fu-tab-dot{display:none;}
+          .acdc-fu-toolbar{display:flex;flex-wrap:wrap;align-items:center;gap:10px;margin:0 0 14px;}
+          .acdc-fu-toolbar-field{display:inline-flex;align-items:center;gap:8px;font-size:13px;color:#5f5e5a;}
+          .acdc-fu-toolbar-field input[type="search"]{min-width:280px;}
+          .acdc-fu-toolbar-perpage select{min-width:80px;}
+          .acdc-fu-toolbar-reset{font-size:13px;color:#8b5b23;}
+          .acdc-fu-sort{display:inline-flex;align-items:center;gap:5px;color:inherit;text-decoration:none;}
+          .acdc-fu-sort:hover{text-decoration:underline;}
+          .acdc-fu-sort-arrow{font-size:10px;opacity:.45;}
+          .acdc-fu-sort.is-sorted .acdc-fu-sort-arrow{opacity:1;color:#8b5b23;}
+          .acdc-fu-pagination{display:flex;flex-wrap:wrap;align-items:center;justify-content:space-between;gap:12px;padding:14px 2px 2px;}
+          .acdc-fu-pagination-pages{display:flex;flex-wrap:wrap;gap:6px;}
+          .acdc-fu-pagination-pages a,.acdc-fu-pagination-pages span{display:inline-flex;align-items:center;justify-content:center;min-width:30px;height:30px;padding:0 9px;border-radius:999px;background:#f1efe8;color:#3a3a3a;text-decoration:none;font-size:13px;}
+          .acdc-fu-pagination-pages a:hover{background:#ece7da;}
+          .acdc-fu-pagination-pages .is-active{background:#8b5b23;color:#fff;}
+          .acdc-fu-pagination-summary{font-size:12px;color:#64748b;}
         </style>
         <div class="acdc-table-wrap">
           <table class="acdc-table acdc-table-prospects acdc-followup-table" data-acdc-table-id="crm-prospects-followup">
             <colgroup>
               <col><col><col><col><col><col><col><col><col><col><col><col>
             </colgroup>
+            <?php
+            /* En-tête triable : le tri est appliqué en SQL, l'état voyage dans l'URL. */
+            $fu_sort_header = function( $sort_key, $label ) use ( $fu_state ) {
+              $is_sorted    = ( $fu_state['orderby'] === $sort_key );
+              $default_dir  = in_array( $sort_key, array( 'company', 'status' ), true ) ? 'asc' : 'desc';
+              $next_dir     = $is_sorted ? ( 'asc' === $fu_state['order'] ? 'desc' : 'asc' ) : $default_dir;
+              $aria_sort    = $is_sorted ? ( 'asc' === $fu_state['order'] ? 'ascending' : 'descending' ) : 'none';
+              $arrow        = $is_sorted ? ( 'asc' === $fu_state['order'] ? '▲' : '▼' ) : '⇅';
+              $url          = $this->prospect_followup_list_url( $fu_state, array( 'fu_sort' => $sort_key, 'fu_dir' => $next_dir, 'fu_page' => null ) );
+              $aria_label   = sprintf( 'Trier par %s, ordre %s', $label, 'asc' === $next_dir ? 'croissant' : 'décroissant' );
+              ?>
+              <th aria-sort="<?php echo esc_attr( $aria_sort ); ?>"><a class="acdc-fu-sort<?php echo $is_sorted ? ' is-sorted' : ''; ?>" href="<?php echo esc_url( $url ); ?>" aria-label="<?php echo esc_attr( $aria_label ); ?>"><?php echo esc_html( $label ); ?><span class="acdc-fu-sort-arrow" aria-hidden="true"><?php echo esc_html( $arrow ); ?></span></a></th>
+              <?php
+            };
+            ?>
             <thead>
               <tr>
                 <th>Profil</th>
-                <th>Entreprise / Contact</th>
+                <?php $fu_sort_header( 'company', 'Entreprise / Contact' ); ?>
                 <th>Formation souhaitée</th>
                 <th>Assigné à</th>
-                <th>Statut</th>
+                <?php $fu_sort_header( 'status', 'Statut' ); ?>
                 <th>Statut d’alerte</th>
-                <th>Prochain RDV</th>
+                <?php $fu_sort_header( 'next_rdv', 'Prochain RDV' ); ?>
                 <th>Source</th>
                 <th>Dernière relance</th>
                 <th>Session</th>
-                <th>Dernière interaction</th>
+                <?php $fu_sort_header( 'last_interaction', 'Dernière interaction' ); ?>
                 <th>Actions</th>
               </tr>
             </thead>
@@ -1471,7 +1617,11 @@
                   <?php echo wp_kses_post( $prospect_row['alert_badge'] ); ?>
                   <div class="acdc-alert-status-cell-note"><?php echo nl2br( esc_html( isset( $prospect_row['alert_status']['hint'] ) ? (string) $prospect_row['alert_status']['hint'] : '' ) ); ?></div>
                 </td>
-                <td><?php echo esc_html( ( $entry_latest_rdv && ! empty( $entry_latest_rdv->rdv_at ) ) ? mysql2date( 'j F Y à H\hi', $entry_latest_rdv->rdv_at ) : '—' ); ?></td>
+                <td><?php
+                  /* Prochain rendez-vous ouvert, c'est-à-dire la valeur sur laquelle porte le tri. */
+                  $fu_next_rdv = ! empty( $entry->acdc_next_rdv_at ) ? (string) $entry->acdc_next_rdv_at : '';
+                  echo esc_html( '' !== $fu_next_rdv ? mysql2date( 'j F Y à H\hi', $fu_next_rdv ) : '—' );
+                ?></td>
                 <td><?php echo esc_html( $entry->source ?: '—' ); ?></td>
                 <td><?php
                   $lf_val = $entry->last_followup ?: '';
@@ -1489,7 +1639,11 @@
                 <td><?php echo esc_html( $entry->session_label ?: '—' ); ?></td>
                 <td>
                   <?php
-                    $fu_act = isset( $activity_counts_map[ (int) $entry->id ] ) ? $activity_counts_map[ (int) $entry->id ] : array( 'count' => 0, 'last_at' => '' );
+                    /* Compteurs agrégés par la requête de liste (un seul JOIN pour toute la page). */
+                    $fu_act = array(
+                      'count'   => isset( $entry->acdc_activity_count ) ? (int) $entry->acdc_activity_count : 0,
+                      'last_at' => ! empty( $entry->acdc_last_activity_at ) ? (string) $entry->acdc_last_activity_at : '',
+                    );
                   ?>
                   <?php if ( ! empty( $fu_act['count'] ) ) : ?>
                     <span class="acdc-fu-interaction-count"><?php echo (int) $fu_act['count']; ?> interaction<?php echo ( (int) $fu_act['count'] > 1 ) ? 's' : ''; ?></span>
@@ -1548,6 +1702,41 @@
             </tbody>
           </table>
         </div>
+        <?php
+        $fu_first_row = $fu_pagination['total'] ? ( (int) $fu_pagination['offset'] + 1 ) : 0;
+        $fu_last_row  = min( (int) $fu_pagination['offset'] + count( $prospect_rows ), (int) $fu_pagination['total'] );
+        /* Fenêtre glissante autour de la page courante : la barre reste lisible au-delà de 10 pages. */
+        $fu_window_start = max( 1, (int) $fu_pagination['page'] - 2 );
+        $fu_window_end   = min( (int) $fu_pagination['pages'], (int) $fu_pagination['page'] + 2 );
+        ?>
+        <nav class="acdc-fu-pagination" aria-label="Pagination du suivi commercial">
+          <div class="acdc-fu-pagination-summary"><?php echo esc_html( sprintf( '%d–%d sur %d prospect(s) — page %d / %d', $fu_first_row, $fu_last_row, (int) $fu_pagination['total'], (int) $fu_pagination['page'], (int) $fu_pagination['pages'] ) ); ?></div>
+          <?php if ( $fu_pagination['pages'] > 1 ) : ?>
+            <div class="acdc-fu-pagination-pages">
+              <?php if ( $fu_pagination['has_prev'] ) : ?>
+                <a href="<?php echo esc_url( $this->prospect_followup_list_url( $fu_state, array( 'fu_page' => (int) $fu_pagination['page'] - 1 ) ) ); ?>" rel="prev" aria-label="Page précédente">&lsaquo;</a>
+              <?php endif; ?>
+              <?php if ( $fu_window_start > 1 ) : ?>
+                <a href="<?php echo esc_url( $this->prospect_followup_list_url( $fu_state, array( 'fu_page' => 1 ) ) ); ?>">1</a>
+                <?php if ( $fu_window_start > 2 ) : ?><span aria-hidden="true">…</span><?php endif; ?>
+              <?php endif; ?>
+              <?php for ( $fu_page_no = $fu_window_start; $fu_page_no <= $fu_window_end; $fu_page_no++ ) : ?>
+                <?php if ( $fu_page_no === (int) $fu_pagination['page'] ) : ?>
+                  <span class="is-active" aria-current="page"><?php echo (int) $fu_page_no; ?></span>
+                <?php else : ?>
+                  <a href="<?php echo esc_url( $this->prospect_followup_list_url( $fu_state, array( 'fu_page' => $fu_page_no ) ) ); ?>"><?php echo (int) $fu_page_no; ?></a>
+                <?php endif; ?>
+              <?php endfor; ?>
+              <?php if ( $fu_window_end < (int) $fu_pagination['pages'] ) : ?>
+                <?php if ( $fu_window_end < (int) $fu_pagination['pages'] - 1 ) : ?><span aria-hidden="true">…</span><?php endif; ?>
+                <a href="<?php echo esc_url( $this->prospect_followup_list_url( $fu_state, array( 'fu_page' => (int) $fu_pagination['pages'] ) ) ); ?>"><?php echo (int) $fu_pagination['pages']; ?></a>
+              <?php endif; ?>
+              <?php if ( $fu_pagination['has_next'] ) : ?>
+                <a href="<?php echo esc_url( $this->prospect_followup_list_url( $fu_state, array( 'fu_page' => (int) $fu_pagination['page'] + 1 ) ) ); ?>" rel="next" aria-label="Page suivante">&rsaquo;</a>
+              <?php endif; ?>
+            </div>
+          <?php endif; ?>
+        </nav>
         <script>
         (function(){
           /* ACDC 3.25.140 — Décalage horizontal de la 2e colonne figée.
@@ -1569,29 +1758,41 @@
           }
         })();
         (function(){
-          var tabs=document.querySelector('[data-acdc-fu-status-tabs]');
-          if(!tabs){return;}
-          var table=document.querySelector('.acdc-followup-table');
-          var empty=document.querySelector('[data-acdc-fu-status-empty]');
-          if(!table){return;}
-          tabs.addEventListener('click',function(e){
-            var btn=e.target.closest('[data-fu-filter]');
-            if(!btn){return;}
-            var filter=btn.getAttribute('data-fu-filter');
-            var all=tabs.querySelectorAll('[data-fu-filter]');
-            for(var i=0;i<all.length;i++){all[i].classList.remove('is-active');}
-            btn.classList.add('is-active');
-            var rows=table.querySelectorAll('tbody > tr');
-            var visible=0;
-            for(var j=0;j<rows.length;j++){
-              var r=rows[j];
-              if(!r.hasAttribute('data-fu-status')){continue;}
-              var match=(filter==='__all__'||r.getAttribute('data-fu-status')===filter);
-              r.style.display=match?'':'none';
-              if(match){visible++;}
+          /* ACDC 3.25.140 — Recherche et taille de page : soumission GET, l'état reste dans l'URL.
+           * La recherche est temporisée de 300 ms pour ne pas recharger à chaque frappe.
+           */
+          var toolbar=document.querySelector('[data-acdc-fu-toolbar]');
+          if(!toolbar){return;}
+          var search=toolbar.querySelector('[data-acdc-fu-search]');
+          var perPage=toolbar.querySelector('[data-acdc-fu-perpage]');
+          var timer=null;
+          function submitToolbar(){
+            /* Toute nouvelle recherche ou taille de page repart de la première page. */
+            var pageField=toolbar.querySelector('input[name="fu_page"]');
+            if(!pageField){
+              pageField=document.createElement('input');
+              pageField.type='hidden';
+              pageField.name='fu_page';
+              toolbar.appendChild(pageField);
             }
-            if(empty){empty.style.display=visible===0?'block':'none';}
-          });
+            pageField.value='1';
+            toolbar.submit();
+          }
+          if(search){
+            search.addEventListener('input',function(){
+              window.clearTimeout(timer);
+              timer=window.setTimeout(submitToolbar,300);
+            });
+            /* Le curseur revient en fin de saisie après le rechargement. */
+            if(search.value){
+              var caret=search.value.length;
+              search.focus();
+              try{search.setSelectionRange(caret,caret);}catch(e){}
+            }
+          }
+          if(perPage){
+            perPage.addEventListener('change',submitToolbar);
+          }
         })();
         </script>
       </div>

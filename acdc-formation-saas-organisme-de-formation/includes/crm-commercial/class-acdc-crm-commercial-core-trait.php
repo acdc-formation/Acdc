@@ -97,6 +97,267 @@
   }
 
 
+  /**
+   * Colonnes de tri autorisées pour la liste « Suivi commercial ».
+   *
+   * La clé est la valeur acceptée en paramètre d'URL, la valeur le libellé affiché.
+   *
+   * @return array<string,string>
+   */
+  private function get_prospect_followup_sortable_columns() {
+    return array(
+      'created_at'       => 'Ajouté le',
+      'company'          => 'Entreprise',
+      'status'           => 'Statut',
+      'last_interaction' => 'Dernière interaction',
+      'next_rdv'         => 'Prochain RDV',
+    );
+  }
+
+
+  /**
+   * Indique si la table des interactions commerciales est disponible.
+   *
+   * Elle est créée par dbDelta mais peut manquer sur une installation ancienne :
+   * les requêtes de liste doivent rester fonctionnelles sans elle.
+   *
+   * @return bool
+   */
+  private function prospect_activity_table_exists() {
+    global $wpdb;
+    static $exists = null;
+
+    if ( null === $exists ) {
+      $table  = $this->prospect_activity_table;
+      $exists = ( $table === $wpdb->get_var( $wpdb->prepare( 'SHOW TABLES LIKE %s', $table ) ) );
+    }
+
+    return $exists;
+  }
+
+
+  /**
+   * Construit la clause WHERE commune de la liste « Suivi commercial ».
+   *
+   * @param array $args Filtres ('search', 'status', 'include_ids').
+   * @return array{sql:string,params:array} Clause SQL (préfixe ' WHERE ' inclus) et arguments préparés.
+   */
+  private function build_prospect_followup_where( $args ) {
+    global $wpdb;
+
+    $clauses = array();
+    $params  = array();
+
+    $search = isset( $args['search'] ) ? trim( (string) $args['search'] ) : '';
+    if ( '' !== $search ) {
+      $like      = '%' . $wpdb->esc_like( $search ) . '%';
+      $clauses[] = "(p.company_name LIKE %s"
+        . " OR p.first_name LIKE %s OR p.last_name LIKE %s"
+        . " OR p.signer_first_name LIKE %s OR p.signer_last_name LIKE %s"
+        . " OR CONCAT_WS(' ', p.first_name, p.last_name) LIKE %s"
+        . " OR CONCAT_WS(' ', p.signer_first_name, p.signer_last_name) LIKE %s)";
+      for ( $i = 0; $i < 7; $i++ ) {
+        $params[] = $like;
+      }
+    }
+
+    $status = isset( $args['status'] ) ? (string) $args['status'] : '';
+    if ( '' !== $status ) {
+      /* Les prospects sans statut sont affichés comme « À traiter » : le filtre doit les inclure. */
+      if ( 'À traiter' === $status ) {
+        $clauses[] = "(p.status = %s OR p.status = '' OR p.status IS NULL)";
+      } else {
+        $clauses[] = 'p.status = %s';
+      }
+      $params[] = $status;
+    }
+
+    if ( isset( $args['include_ids'] ) && is_array( $args['include_ids'] ) ) {
+      $ids = array_values( array_unique( array_map( 'intval', $args['include_ids'] ) ) );
+      if ( empty( $ids ) ) {
+        $clauses[] = '1=0';
+      } else {
+        $clauses[] = 'p.id IN (' . implode( ',', $ids ) . ')';
+      }
+    }
+
+    return array(
+      'sql'    => empty( $clauses ) ? '' : ' WHERE ' . implode( ' AND ', $clauses ),
+      'params' => $params,
+    );
+  }
+
+
+  /**
+   * Page de la liste « Suivi commercial » : bornage, recherche, filtre de statut et tri côté SQL.
+   *
+   * Chaque ligne porte en plus les colonnes agrégées utilisées par la vue :
+   * nombre d'interactions, date de la dernière interaction et prochain rendez-vous ouvert.
+   *
+   * @param array $args page, per_page, search, status, orderby, order, include_ids.
+   * @return array{items:array,pagination:array}
+   */
+  private function get_prospect_followup_page( $args = array() ) {
+    global $wpdb;
+
+    $args = array_merge(
+      array(
+        'page'        => 1,
+        'per_page'    => \ACDC\Support\Paginator::DEFAULT_PER_PAGE,
+        'search'      => '',
+        'status'      => '',
+        'orderby'     => 'created_at',
+        'order'       => 'desc',
+        'include_ids' => null,
+      ),
+      (array) $args
+    );
+
+    $where = $this->build_prospect_followup_where( $args );
+
+    $count_sql = "SELECT COUNT(*) FROM {$this->prospect_table} p{$where['sql']}";
+    $total     = empty( $where['params'] )
+      ? (int) $wpdb->get_var( $count_sql )
+      : (int) $wpdb->get_var( $wpdb->prepare( $count_sql, $where['params'] ) );
+
+    $pagination = \ACDC\Support\Paginator::normalize( $args['page'], $args['per_page'], $total );
+
+    $select_params   = $where['params'];
+    $activity_ready  = $this->prospect_activity_table_exists();
+    $activity_join   = '';
+    $activity_select = ', 0 AS acdc_activity_count, NULL AS acdc_last_activity_at';
+
+    if ( $activity_ready ) {
+      $activity_select = ', COALESCE(a.activity_count, 0) AS acdc_activity_count, a.last_activity_at AS acdc_last_activity_at';
+      $activity_join   = " LEFT JOIN (SELECT prospect_id, COUNT(*) AS activity_count, MAX(occurred_at) AS last_activity_at"
+        . " FROM {$this->prospect_activity_table} GROUP BY prospect_id) a ON a.prospect_id = p.id";
+    }
+
+    /* Prochain rendez-vous ouvert : les rendez-vous annulés portent le marqueur [RDV_ANNULE]
+     * dans leur commentaire, comme dans is_prospect_rdv_cancelled(). */
+    $rdv_join_params = array( current_time( 'mysql' ), '%' . $wpdb->esc_like( '[RDV_ANNULE]' ) . '%' );
+    $rdv_join        = " LEFT JOIN (SELECT prospect_id, MIN(rdv_at) AS next_rdv_at"
+      . " FROM {$this->prospect_rdv_table}"
+      . " WHERE rdv_at >= %s AND (comment_text IS NULL OR comment_text NOT LIKE %s)"
+      . " GROUP BY prospect_id) r ON r.prospect_id = p.id";
+
+    $order     = ( 'asc' === strtolower( (string) $args['order'] ) ) ? 'ASC' : 'DESC';
+    $orderby   = (string) $args['orderby'];
+    switch ( $orderby ) {
+      case 'company':
+        $order_sql = "p.company_name {$order}, p.id DESC";
+        break;
+      case 'status':
+        $order_sql = "p.status {$order}, p.id DESC";
+        break;
+      case 'last_interaction':
+        $order_sql = $activity_ready
+          ? "(a.last_activity_at IS NULL), a.last_activity_at {$order}, p.id DESC"
+          : "p.updated_at {$order}, p.id DESC";
+        break;
+      case 'next_rdv':
+        $order_sql = "(r.next_rdv_at IS NULL), r.next_rdv_at {$order}, p.id DESC";
+        break;
+      default:
+        $order_sql = "p.created_at {$order}, p.id DESC";
+        break;
+    }
+
+    /* Les arguments du JOIN précèdent ceux du WHERE dans l'ordre des placeholders. */
+    $query_params = array_merge( $rdv_join_params, $select_params, array( $pagination['per_page'], $pagination['offset'] ) );
+
+    $items = $wpdb->get_results(
+      $wpdb->prepare(
+        "SELECT p.*, r.next_rdv_at AS acdc_next_rdv_at{$activity_select}"
+        . " FROM {$this->prospect_table} p{$activity_join}{$rdv_join}{$where['sql']}"
+        . " ORDER BY {$order_sql} LIMIT %d OFFSET %d",
+        $query_params
+      )
+    );
+
+    return array(
+      'items'      => is_array( $items ) ? $items : array(),
+      'pagination' => $pagination,
+    );
+  }
+
+
+  /**
+   * Compte les prospects par statut pour les onglets de la liste « Suivi commercial ».
+   *
+   * Le filtre de statut est volontairement ignoré : les onglets doivent afficher le
+   * volume de chaque statut dans le périmètre courant (recherche, alertes).
+   *
+   * @param array $args search, include_ids.
+   * @return array{total:int,by_status:array<string,int>}
+   */
+  private function get_prospect_followup_status_counts( $args = array() ) {
+    global $wpdb;
+
+    $args           = array_merge( array( 'search' => '', 'include_ids' => null ), (array) $args );
+    $args['status'] = '';
+    $where          = $this->build_prospect_followup_where( $args );
+
+    $sql = "SELECT COALESCE(NULLIF(p.status, ''), 'À traiter') AS status_key, COUNT(*) AS total"
+      . " FROM {$this->prospect_table} p{$where['sql']} GROUP BY status_key";
+
+    $rows = empty( $where['params'] )
+      ? $wpdb->get_results( $sql )
+      : $wpdb->get_results( $wpdb->prepare( $sql, $where['params'] ) );
+
+    $by_status = array();
+    $total     = 0;
+    foreach ( (array) $rows as $row ) {
+      $key               = (string) $row->status_key;
+      $count             = (int) $row->total;
+      $by_status[ $key ] = $count;
+      $total            += $count;
+    }
+
+    return array(
+      'total'     => $total,
+      'by_status' => $by_status,
+    );
+  }
+
+
+  /**
+   * Identifiants des prospects portant une alerte tableau de bord (RDV imminent non traité).
+   *
+   * La présélection SQL borne le volume, puis la règle métier existante
+   * (prospect_has_dashboard_alert) tranche pour rester cohérente avec le badge affiché.
+   *
+   * @return array<int>
+   */
+  private function get_prospect_ids_with_dashboard_alert() {
+    global $wpdb;
+
+    $now   = current_time( 'mysql' );
+    $limit = gmdate( 'Y-m-d H:i:s', current_time( 'timestamp' ) + ( 8 * DAY_IN_SECONDS ) );
+
+    $candidates = $wpdb->get_col(
+      $wpdb->prepare(
+        "SELECT DISTINCT prospect_id FROM {$this->prospect_rdv_table}"
+        . " WHERE rdv_at >= %s AND rdv_at <= %s"
+        . " AND (comment_text IS NULL OR comment_text NOT LIKE %s)",
+        $now,
+        $limit,
+        '%' . $wpdb->esc_like( '[RDV_ANNULE]' ) . '%'
+      )
+    );
+
+    $ids = array();
+    foreach ( (array) $candidates as $candidate_id ) {
+      $prospect = $this->get_prospect( (int) $candidate_id );
+      if ( $prospect && $this->prospect_has_dashboard_alert( $prospect ) ) {
+        $ids[] = (int) $candidate_id;
+      }
+    }
+
+    return $ids;
+  }
+
+
   private function prospect_has_dashboard_alert( $prospect, $latest_rdv = null ) {
     $alert_status = $this->get_prospect_alert_status( $prospect );
 
