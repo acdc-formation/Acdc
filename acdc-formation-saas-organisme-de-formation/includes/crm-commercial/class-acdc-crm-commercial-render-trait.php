@@ -2251,6 +2251,20 @@
           return null;
         }
         function getProspectIdFromRow(row, sourceEl){
+          // L'élément cliqué (ex. lien « Ajouter un rendez-vous ») porte déjà
+          // item_id / prospect_id dans son propre href. On le lit en priorité :
+          // le menu déroulant est repositionné dans <body> à l'ouverture, ce qui
+          // détache le lien de sa ligne et empêchait la détection du prospect.
+          if(sourceEl && sourceEl.getAttribute){
+            var selfHref = sourceEl.getAttribute('href') || '';
+            if(selfHref && selfHref.indexOf('javascript:') !== 0){
+              try {
+                var su = new URL(selfHref, window.location.origin);
+                var selfId = su.searchParams.get('item_id') || su.searchParams.get('prospect_id');
+                if(selfId){ return selfId; }
+              } catch(e){}
+            }
+          }
           var actionLinks = row ? row.querySelectorAll('.acdc-prospect-actions a, .acdc-prospect-action-dropdown a') : [];
           for(var i=0;i<actionLinks.length;i++){
             try {
@@ -2491,7 +2505,9 @@
             select.value = prospectId ? String(prospectId) : '';
           }
           if(prospectField){
-            prospectField.style.display = prospectId ? 'none' : '';
+            // Le prospect de la ligne est pré-sélectionné, mais la liste reste
+            // toujours affichée et modifiable (on ne masque plus le champ).
+            prospectField.style.display = '';
           }
           syncProspectListMeetingMode(modal);
           if(modal.parentNode !== document.body){
