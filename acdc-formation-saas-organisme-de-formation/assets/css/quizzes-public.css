@@ -1,0 +1,658 @@
+/**
+ * ACDC Formation SAAS — Page publique de passation de quiz async.
+ * 3.21.03.1 — Design sobre, mobile-first, neutre par rapport au thème.
+ */
+
+.acdc-qz-public-wrapper {
+    max-width: 720px;
+    margin: 32px auto;
+    padding: 0 16px;
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
+    color: #1f2937;
+}
+
+.acdc-qz-public-card {
+    background: #ffffff;
+    border-radius: 18px;
+    padding: 36px 32px;
+    box-shadow: 0 4px 24px rgba(15, 44, 82, 0.06);
+}
+
+.acdc-qz-public-card h1 {
+    margin: 0 0 16px 0;
+    font-size: 28px;
+    font-weight: 700;
+    color: #0f2c52;
+    letter-spacing: -0.5px;
+}
+
+.acdc-qz-public-intro {
+    font-size: 16px;
+    line-height: 1.6;
+    margin: 0 0 16px 0;
+}
+
+.acdc-qz-public-description {
+    margin: 16px 0;
+    padding: 14px 18px;
+    background: #fbf8f7;
+    border-left: 3px solid #d6a353;
+    border-radius: 6px;
+    font-size: 14px;
+    line-height: 1.6;
+    color: #4b5d76;
+}
+
+.acdc-qz-public-meta {
+    list-style: none;
+    margin: 24px 0;
+    padding: 0;
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+    gap: 12px;
+}
+
+.acdc-qz-public-meta li {
+    background: #fbf8f7;
+    padding: 14px 16px;
+    border-radius: 10px;
+    text-align: center;
+}
+
+.acdc-qz-public-meta .meta-label {
+    display: block;
+    font-size: 11px;
+    text-transform: uppercase;
+    letter-spacing: 1px;
+    color: #6b7280;
+    margin-bottom: 4px;
+}
+
+.acdc-qz-public-meta .meta-value {
+    display: block;
+    font-size: 22px;
+    font-weight: 700;
+    color: #0f2c52;
+}
+
+.acdc-qz-public-tips {
+    margin: 24px 0;
+    padding: 16px 20px;
+    background: #f4f8fc;
+    border-radius: 10px;
+    font-size: 14px;
+    color: #4b5d76;
+}
+
+.acdc-qz-public-tips ul {
+    margin: 8px 0 0 0;
+    padding-left: 22px;
+}
+
+.acdc-qz-public-tips li {
+    margin: 4px 0;
+}
+
+.acdc-qz-public-button-primary,
+.acdc-qz-public-button-soft {
+    display: inline-block;
+    padding: 14px 28px;
+    border-radius: 999px;
+    font-weight: 700;
+    font-size: 15px;
+    text-decoration: none;
+    cursor: pointer;
+    border: none;
+    transition: all 0.2s ease;
+}
+
+.acdc-qz-public-button-primary {
+    background: #d6a353;
+    color: #1f2937;
+    margin-top: 16px;
+}
+
+.acdc-qz-public-button-primary:hover {
+    background: #c5953f;
+    transform: translateY(-1px);
+    box-shadow: 0 4px 12px rgba(214, 163, 83, 0.3);
+}
+
+.acdc-qz-public-button-soft {
+    background: #fbf8f7;
+    color: #1e4777;
+}
+
+.acdc-qz-public-button-soft:hover {
+    background: #ede4dc;
+}
+
+/* Erreur / succès */
+.acdc-qz-public-error,
+.acdc-qz-public-success {
+    text-align: center;
+}
+
+.acdc-qz-public-checkmark {
+    font-size: 64px;
+    line-height: 1;
+    color: #1d6e4f;
+    margin-bottom: 16px;
+}
+
+.acdc-qz-public-help {
+    font-size: 14px;
+    color: #6b7280;
+    margin: 16px 0;
+}
+
+.acdc-qz-public-score {
+    margin: 20px 0;
+    padding: 14px 18px;
+    background: #d4f0e2;
+    border-radius: 10px;
+    font-size: 16px;
+    font-weight: 700;
+    color: #1d6e4f;
+}
+
+/* ============================================================
+ * Passation — mode pleine page Kahoot
+ * 3.21.03.1-hotfix5 : layout fullscreen, grilles adaptatives,
+ * image illustrative au-dessus de l'énoncé.
+ * ============================================================ */
+
+.acdc-qz-public-fullscreen {
+    max-width: none;
+    width: 100%;
+    margin: 0;
+    padding: 0;
+    min-height: 100vh;
+    display: flex;
+    flex-direction: column;
+}
+
+.acdc-qz-public-fullscreen .acdc-qz-public-form {
+    flex: 1;
+    background: #ffffff;
+    border-radius: 0;
+    padding: 0;
+    box-shadow: none;
+    display: flex;
+    flex-direction: column;
+    min-height: 100vh;
+}
+
+.acdc-qz-public-passation-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 18px 32px;
+    background: #fff;
+    border-bottom: 1px solid #e5eaf2;
+    box-shadow: 0 2px 8px rgba(15, 44, 82, 0.04);
+    flex-shrink: 0;
+}
+
+.acdc-qz-public-passation-header h2 {
+    margin: 0;
+    font-size: 18px;
+    font-weight: 700;
+    color: #0f2c52;
+}
+
+.acdc-qz-public-progress {
+    font-size: 15px;
+    color: #6b7280;
+    font-weight: 600;
+    background: #fbf8f7;
+    padding: 6px 16px;
+    border-radius: 999px;
+}
+
+.acdc-qz-public-progress span {
+    color: #0f2c52;
+}
+
+/* Section question : pleine hauteur, en colonne */
+.acdc-qz-public-question {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    padding: 24px 32px 20px 32px;
+    gap: 18px;
+    max-width: 1400px;
+    margin: 0 auto;
+    width: 100%;
+    box-sizing: border-box;
+}
+
+.acdc-qz-public-question[hidden] {
+    display: none;
+}
+
+/* Image illustrative au-dessus de l'énoncé */
+.acdc-qz-public-q-media {
+    text-align: center;
+    margin: 0 auto;
+    max-width: 600px;
+    width: 100%;
+}
+
+.acdc-qz-public-q-media img {
+    max-width: 100%;
+    max-height: 280px;
+    width: auto;
+    height: auto;
+    border-radius: 14px;
+    box-shadow: 0 4px 16px rgba(15, 44, 82, 0.08);
+    object-fit: contain;
+}
+
+/* Énoncé centré */
+.acdc-qz-public-q-statement {
+    text-align: center;
+    max-width: 900px;
+    margin: 0 auto;
+}
+
+.acdc-qz-public-q-title {
+    margin: 0;
+    font-size: 26px;
+    font-weight: 700;
+    color: #0f2c52;
+    line-height: 1.35;
+}
+
+.acdc-qz-public-q-description {
+    margin: 12px 0 0 0;
+    font-size: 15px;
+    color: #4b5d76;
+    line-height: 1.6;
+}
+
+.acdc-qz-public-help-inline {
+    margin: 4px 0 0 0;
+    font-size: 13px;
+    color: #6b7280;
+    font-style: italic;
+    text-align: center;
+}
+
+/* ============================================================
+ * Disposition des réponses — adaptatif selon le type de question
+ * ============================================================ */
+
+.acdc-qz-public-answers {
+    margin: 0 auto;
+    width: 100%;
+    max-width: 1200px;
+    flex: 1;
+    display: grid;
+    gap: 14px;
+    align-content: center;
+}
+
+/* Empilé pleine largeur (Vrai/Faux, QCM 2 réponses, textarea) */
+.acdc-qz-layout-stack .acdc-qz-public-answers {
+    grid-template-columns: 1fr;
+}
+
+/* 1x3 : trois colonnes (QCM avec exactement 3 réponses) */
+.acdc-qz-layout-row .acdc-qz-public-answers {
+    grid-template-columns: repeat(3, 1fr);
+}
+
+/* 2x2 : grille standard Kahoot pour 4+ réponses */
+.acdc-qz-layout-grid .acdc-qz-public-answers {
+    grid-template-columns: repeat(2, 1fr);
+    grid-auto-rows: minmax(110px, 1fr);
+}
+
+/* En grille, les tuiles sont plus grandes */
+.acdc-qz-layout-grid .acdc-qz-public-answer,
+.acdc-qz-layout-row .acdc-qz-public-answer {
+    padding: 24px 22px;
+    font-size: 16px;
+    min-height: 96px;
+    align-items: center;
+}
+
+/* Textarea reste pleine largeur */
+.acdc-qz-public-answers textarea {
+    grid-column: 1 / -1;
+}
+
+/* Navigation en bas, sticky */
+.acdc-qz-public-q-nav {
+    display: flex;
+    justify-content: space-between;
+    gap: 12px;
+    padding: 18px 32px;
+    background: #fff;
+    border-top: 1px solid #e5eaf2;
+    box-shadow: 0 -2px 8px rgba(15, 44, 82, 0.04);
+    margin-top: auto;
+    position: sticky;
+    bottom: 0;
+    z-index: 10;
+}
+
+.acdc-qz-public-q-nav button[data-prev-question] {
+    margin-right: auto;
+}
+
+.acdc-qz-public-q-nav button[data-next-question],
+.acdc-qz-public-q-nav button[type="submit"] {
+    margin-left: auto;
+    padding: 14px 36px;
+    font-size: 16px;
+}
+
+/* ============================================================
+ * 3.21.03.1-hotfix4 — Pattern Kahoot pastel
+ * Chaque réponse hérite d'une couleur identitaire selon sa position
+ * dans la liste, cyclée sur 4 modulos : rouge / bleu / jaune / vert.
+ * Sélection signalée par bordure bleu marine ACDC + ombre douce.
+ * ============================================================ */
+
+.acdc-qz-public-answer {
+    display: flex;
+    align-items: flex-start;
+    gap: 14px;
+    padding: 16px 20px;
+    background: #fbf8f7; /* fallback ; sera surchargé par les nth-child */
+    border: 2px solid transparent;
+    border-radius: 14px;
+    cursor: pointer;
+    transition: all 0.18s ease;
+    font-size: 15px;
+    line-height: 1.5;
+    position: relative;
+}
+
+/* Couleurs Kahoot pastel cyclées (4n+1, 4n+2, 4n+3, 4n) */
+.acdc-qz-public-answer:nth-child(4n+1) {
+    background: #feeceb; /* rouge pastel */
+}
+.acdc-qz-public-answer:nth-child(4n+2) {
+    background: #e9f2fa; /* bleu pastel */
+}
+.acdc-qz-public-answer:nth-child(4n+3) {
+    background: #fff4d6; /* jaune pastel */
+}
+.acdc-qz-public-answer:nth-child(4n) {
+    background: #e8f4ec; /* vert pastel */
+}
+
+/* Survol : intensification très légère du fond + ombre douce */
+.acdc-qz-public-answer:hover {
+    transform: translateY(-1px);
+    box-shadow: 0 4px 12px rgba(15, 44, 82, 0.08);
+}
+.acdc-qz-public-answer:nth-child(4n+1):hover {
+    background: #fdd9d6;
+}
+.acdc-qz-public-answer:nth-child(4n+2):hover {
+    background: #d4e7f6;
+}
+.acdc-qz-public-answer:nth-child(4n+3):hover {
+    background: #ffe9b3;
+}
+.acdc-qz-public-answer:nth-child(4n):hover {
+    background: #d2ebda;
+}
+
+/* État sélectionné : bordure bleu marine ACDC + ombre + fond saturé */
+.acdc-qz-public-answer:has(input:checked) {
+    border-color: #0f2c52; /* bleu marine ACDC */
+    box-shadow: 0 4px 14px rgba(15, 44, 82, 0.18);
+    transform: translateY(-1px);
+}
+.acdc-qz-public-answer:nth-child(4n+1):has(input:checked) {
+    background: #fcd5d2;
+}
+.acdc-qz-public-answer:nth-child(4n+2):has(input:checked) {
+    background: #cce0f3;
+}
+.acdc-qz-public-answer:nth-child(4n+3):has(input:checked) {
+    background: #ffe199;
+}
+.acdc-qz-public-answer:nth-child(4n):has(input:checked) {
+    background: #c5e6d2;
+}
+
+/* Radio / checkbox eux-mêmes en bleu marine ACDC quand cochés */
+.acdc-qz-public-answer input[type="radio"],
+.acdc-qz-public-answer input[type="checkbox"] {
+    margin-top: 4px;
+    width: 20px;
+    height: 20px;
+    accent-color: #0f2c52;
+    flex-shrink: 0;
+}
+
+.acdc-qz-public-answer span {
+    flex: 1;
+    color: #1f2937;
+    font-weight: 500;
+}
+
+/* Texte légèrement plus dense quand sélectionné, pour renforcer la lecture */
+.acdc-qz-public-answer:has(input:checked) span {
+    font-weight: 600;
+    color: #0f2c52;
+}
+
+/* Textarea (questions ouvertes) — reste sobre, pas de couleur Kahoot */
+.acdc-qz-public-answers textarea {
+    width: 100%;
+    padding: 14px 18px;
+    border: 2px solid #dce4ec;
+    border-radius: 12px;
+    font-family: inherit;
+    font-size: 15px;
+    line-height: 1.5;
+    resize: vertical;
+    box-sizing: border-box;
+    background: #fafbfc;
+}
+
+.acdc-qz-public-answers textarea:focus {
+    border-color: #0f2c52;
+    background: #fff;
+    outline: none;
+}
+
+.acdc-qz-public-q-nav button[data-next-question],
+.acdc-qz-public-q-nav button[type="submit"] {
+    margin-left: auto;
+    padding: 14px 36px;
+    font-size: 16px;
+}
+
+/* ============================================================
+ * Mobile : bascule en colonne pour les grilles, padding réduit
+ * ============================================================ */
+@media (max-width: 640px) {
+    .acdc-qz-public-wrapper {
+        margin: 0;
+    }
+    .acdc-qz-public-card {
+        padding: 24px 18px;
+        border-radius: 14px;
+    }
+    .acdc-qz-public-card h1 {
+        font-size: 22px;
+    }
+
+    /* Pleine page sur mobile : on conserve le layout pleine page */
+    .acdc-qz-public-fullscreen .acdc-qz-public-form {
+        min-height: 100vh;
+    }
+    .acdc-qz-public-question {
+        padding: 18px 16px 16px 16px;
+        gap: 14px;
+    }
+    .acdc-qz-public-passation-header {
+        padding: 14px 18px;
+    }
+    .acdc-qz-public-passation-header h2 {
+        font-size: 16px;
+        max-width: 60%;
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
+    }
+    .acdc-qz-public-q-title {
+        font-size: 19px;
+    }
+    .acdc-qz-public-q-media img {
+        max-height: 180px;
+    }
+
+    /* Sur mobile, toutes les grilles repassent en empilé pleine largeur */
+    .acdc-qz-layout-grid .acdc-qz-public-answers,
+    .acdc-qz-layout-row .acdc-qz-public-answers {
+        grid-template-columns: 1fr;
+        grid-auto-rows: auto;
+    }
+    .acdc-qz-layout-grid .acdc-qz-public-answer,
+    .acdc-qz-layout-row .acdc-qz-public-answer {
+        min-height: 60px;
+        padding: 16px 18px;
+        font-size: 15px;
+    }
+
+    .acdc-qz-public-q-nav {
+        padding: 14px 18px;
+        flex-direction: row;
+        gap: 10px;
+    }
+    .acdc-qz-public-q-nav button {
+        flex: 1;
+        padding: 12px 18px !important;
+        font-size: 14px !important;
+    }
+}
+
+/* ============================================================
+ * 3.21.03.1-hotfix7 — Question Puzzle (remise en ordre)
+ * Liste verticale d'éléments avec flèches haut/bas pour réordonner.
+ * Mêmes couleurs Kahoot pastel cyclées que les QCM.
+ * ============================================================ */
+
+.acdc-qz-public-puzzle {
+    margin: 0 auto;
+    width: 100%;
+    max-width: 800px;
+}
+
+.acdc-qz-public-puzzle-list {
+    list-style: none;
+    margin: 0;
+    padding: 0;
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+}
+
+.acdc-qz-public-puzzle-item {
+    display: flex;
+    align-items: center;
+    gap: 16px;
+    padding: 16px 20px;
+    background: #fbf8f7;
+    border: 2px solid transparent;
+    border-radius: 14px;
+    transition: all 0.2s ease;
+    font-size: 15px;
+    line-height: 1.5;
+}
+
+/* Couleurs Kahoot pastel cyclées (mêmes valeurs que les QCM) */
+.acdc-qz-public-puzzle-item:nth-child(4n+1) { background: #feeceb; }
+.acdc-qz-public-puzzle-item:nth-child(4n+2) { background: #e9f2fa; }
+.acdc-qz-public-puzzle-item:nth-child(4n+3) { background: #fff4d6; }
+.acdc-qz-public-puzzle-item:nth-child(4n)   { background: #e8f4ec; }
+
+/* Numérotation à gauche : grand chiffre bleu marine */
+.acdc-qz-public-puzzle-position {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 36px;
+    height: 36px;
+    background: #fff;
+    color: #0f2c52;
+    font-weight: 800;
+    font-size: 16px;
+    border-radius: 50%;
+    flex-shrink: 0;
+    box-shadow: 0 2px 6px rgba(15, 44, 82, 0.08);
+}
+
+.acdc-qz-public-puzzle-text {
+    flex: 1;
+    color: #1f2937;
+    font-weight: 500;
+}
+
+/* Boutons de contrôle (haut/bas) à droite */
+.acdc-qz-public-puzzle-controls {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    flex-shrink: 0;
+}
+
+.acdc-qz-public-puzzle-btn {
+    width: 36px;
+    height: 28px;
+    background: #fff;
+    border: 1px solid rgba(15, 44, 82, 0.12);
+    border-radius: 8px;
+    color: #0f2c52;
+    font-size: 14px;
+    font-weight: 700;
+    cursor: pointer;
+    transition: all 0.15s ease;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.acdc-qz-public-puzzle-btn:hover:not(:disabled) {
+    background: #0f2c52;
+    color: #fff;
+    transform: scale(1.05);
+}
+
+.acdc-qz-public-puzzle-btn:disabled {
+    opacity: 0.3;
+    cursor: not-allowed;
+}
+
+/* Animation : un élément qui vient de bouger reçoit un flash visuel */
+.acdc-qz-public-puzzle-item.is-moving {
+    box-shadow: 0 6px 20px rgba(15, 44, 82, 0.18);
+    transform: translateY(-2px);
+}
+
+/* Mobile : flèches plus grandes pour le tactile (44px guideline Apple/Google) */
+@media (max-width: 640px) {
+    .acdc-qz-public-puzzle-item {
+        padding: 14px 16px;
+        gap: 12px;
+    }
+    .acdc-qz-public-puzzle-position {
+        width: 32px;
+        height: 32px;
+        font-size: 15px;
+    }
+    .acdc-qz-public-puzzle-btn {
+        width: 44px;
+        height: 36px;
+        font-size: 16px;
+    }
+}
