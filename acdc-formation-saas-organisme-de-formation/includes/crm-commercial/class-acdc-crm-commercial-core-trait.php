@@ -922,12 +922,77 @@
   }
 
 
+  /**
+   * Clé de comparaison d'une raison sociale ou d'un sigle.
+   *
+   * Neutralise la casse, les accents, la ponctuation et les espaces multiples
+   * afin que « CTI », « c.t.i. » et « C T I » soient reconnus comme identiques.
+   *
+   * @param string $value Valeur brute.
+   * @return string
+   */
+  private function normalize_company_label( $value ) {
+    $value = remove_accents( (string) $value );
+    $value = strtolower( $value );
+    $value = preg_replace( '/[^a-z0-9]+/', ' ', $value );
+
+    return trim( preg_replace( '/\s+/', ' ', (string) $value ) );
+  }
+
+
+  /**
+   * Retire les sigles redondants d'une raison sociale.
+   *
+   * Les imports ont produit des libellés du type « CTI (CTI) (CTI) » : un sigle
+   * n'est conservé que s'il diffère réellement de la raison sociale et des
+   * sigles déjà retenus, après normalisation.
+   *
+   * @param string $name Raison sociale affichée.
+   * @return string
+   */
+  private function dedupe_company_display_name( $name ) {
+    $name = trim( preg_replace( '/\s+/u', ' ', (string) $name ) );
+    if ( '' === $name ) {
+      return '';
+    }
+
+    /* Détache les groupes parenthésés de fin, du dernier au premier. */
+    $suffixes = array();
+    while ( preg_match( '/^(.*\S)\s*\(([^()]*)\)$/u', $name, $matches ) ) {
+      $suffixes[] = trim( $matches[2] );
+      $name       = trim( $matches[1] );
+    }
+
+    /* La comparaison ignore aussi les espaces internes : « C.T.I. » vaut « CTI ». */
+    $compare = function( $value ) {
+      return str_replace( ' ', '', $this->normalize_company_label( $value ) );
+    };
+
+    $kept = array();
+    $seen = array( $compare( $name ) );
+    foreach ( array_reverse( $suffixes ) as $suffix ) {
+      $key = $compare( $suffix );
+      if ( '' === $key || in_array( $key, $seen, true ) ) {
+        continue;
+      }
+      $seen[] = $key;
+      $kept[] = $suffix;
+    }
+
+    foreach ( $kept as $suffix ) {
+      $name .= ' (' . $suffix . ')';
+    }
+
+    return $name;
+  }
+
+
   private function get_prospect_company_display_name( $prospect ) {
     if ( ! $prospect ) {
       return '—';
     }
     if ( ! empty( $prospect->company_name ) ) {
-      return (string) $prospect->company_name;
+      return $this->dedupe_company_display_name( (string) $prospect->company_name );
     }
     $profile = isset( $prospect->profile_type ) ? (string) $prospect->profile_type : '';
     return $profile !== '' ? $profile : 'Particulier';
