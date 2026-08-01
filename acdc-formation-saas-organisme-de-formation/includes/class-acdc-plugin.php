@@ -364,6 +364,7 @@ class ACDC_Formation_SAAS_Plugin {
     add_action( 'admin_post_acdc_save_pre_meeting', array( $this, 'handle_save_pre_meeting' ) );
     add_action( 'admin_post_acdc_delete_pre_meeting', array( $this, 'handle_delete_pre_meeting' ) );
     add_action( 'admin_post_acdc_delete_prospect', array( $this, 'handle_delete_prospect' ) );
+    add_action( 'admin_post_acdc_bulk_prospect_action', array( $this, 'handle_bulk_prospect_action' ) );
     add_action( 'admin_post_acdc_save_group', array( $this, 'handle_save_group' ) );
     add_action( 'admin_post_acdc_delete_group', array( $this, 'handle_delete_group' ) );
     add_action( 'admin_post_acdc_interrupt_group', array( $this, 'handle_interrupt_group' ) );

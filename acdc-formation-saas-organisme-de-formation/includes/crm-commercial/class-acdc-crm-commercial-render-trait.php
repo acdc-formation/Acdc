@@ -334,10 +334,49 @@
       </form>
     </div>
     <div class="acdc-panel">
+      <div class="acdc-bulk-toolbar" data-acdc-bulk-toolbar hidden>
+        <span class="acdc-bulk-count-label"><strong data-acdc-bulk-count>0</strong> prospect(s) sélectionné(s)</span>
+        <label class="acdc-bulk-field">
+          <span>Action groupée</span>
+          <select data-acdc-bulk-action>
+            <option value="">Choisir une action…</option>
+            <option value="status">Changer le statut</option>
+            <option value="assign">Attribuer à</option>
+            <option value="delete">Supprimer</option>
+          </select>
+        </label>
+        <label class="acdc-bulk-field" data-acdc-bulk-status-field hidden>
+          <span>Nouveau statut</span>
+          <select data-acdc-bulk-status>
+            <?php foreach ( $this->get_prospect_status_options() as $status_key => $status_label ) : ?>
+              <option value="<?php echo esc_attr( $status_key ); ?>"><?php echo esc_html( $status_label ); ?></option>
+            <?php endforeach; ?>
+          </select>
+        </label>
+        <label class="acdc-bulk-field" data-acdc-bulk-assign-field hidden>
+          <span>Responsable</span>
+          <select data-acdc-bulk-assign>
+            <?php foreach ( $this->get_assignment_options() as $assign_key => $assign_label ) : ?>
+              <option value="<?php echo esc_attr( $assign_key ); ?>"><?php echo esc_html( '' === $assign_key ? 'Non attribué' : $assign_label ); ?></option>
+            <?php endforeach; ?>
+          </select>
+        </label>
+        <button type="button" class="acdc-button acdc-button-primary" data-acdc-bulk-apply disabled>Appliquer</button>
+      </div>
+      <form method="post" action="<?php echo esc_url( admin_url( 'admin-post.php' ) ); ?>" class="acdc-bulk-form" data-acdc-bulk-form hidden aria-hidden="true">
+        <?php wp_nonce_field( 'acdc_bulk_prospect_action' ); ?>
+        <input type="hidden" name="action" value="acdc_bulk_prospect_action">
+        <?php if ( is_admin() ) : ?><input type="hidden" name="page" value="acdc-of-prospects"><?php endif; ?>
+        <input type="hidden" name="return_tab" value="prospects">
+        <input type="hidden" name="bulk_action" value="" data-acdc-bulk-form-action>
+        <input type="hidden" name="bulk_value" value="" data-acdc-bulk-form-value>
+        <span data-acdc-bulk-ids></span>
+      </form>
       <div class="acdc-table-wrap">
         <table class="acdc-table acdc-table-prospects" data-acdc-table-id="crm-prospects-list">
           <thead>
             <tr>
+              <th class="acdc-prospect-col-check"><input type="checkbox" data-acdc-bulk-select-all aria-label="Tout sélectionner"></th>
               <th>Profil</th>
               <th>Nom / prénom / entreprise</th>
               <th class="acdc-prospect-col-email">E-mail</th>
@@ -374,6 +413,7 @@
               );
               ?>
               <tr>
+                <td class="acdc-prospect-col-check"><input type="checkbox" data-acdc-bulk-checkbox value="<?php echo (int) $entry->id; ?>" aria-label="Sélectionner ce prospect"></td>
                 <td><?php echo esc_html( $entry->profile_type ?: '—' ); ?></td>
                 <td>
                   <strong><?php echo esc_html( $this->get_prospect_display_name( $entry ) ); ?></strong><br>
@@ -465,7 +505,7 @@
               </tr>
             <?php endforeach; ?>
           <?php else : ?>
-            <tr><td colspan="13">Aucun prospect enregistré.</td></tr>
+            <tr><td colspan="12">Aucun prospect enregistré.</td></tr>
           <?php endif; ?>
           </tbody>
         </table>
@@ -574,26 +614,121 @@
       .acdc-prospect-action-dropdown{position:fixed;top:0;left:0;min-width:250px;background:#fff;border:1px solid #dce4ec;border-radius:10px;box-shadow:0 10px 30px rgba(28,44,64,.12);padding:14px 0;z-index:99999;}
       .acdc-prospect-action-item{display:block;padding:12px 26px;color:#1E4777;text-decoration:none;font-size:16px;line-height:1.35;}
       .acdc-prospect-action-item:hover{background:#F6F8FB;color:#1e4777;}
-            .acdc-table-prospects{table-layout:fixed;width:100%;min-width:2290px;}
+            .acdc-table-prospects{table-layout:fixed;width:100%;min-width:2336px;}
       .acdc-table-prospects th,.acdc-table-prospects td{box-sizing:border-box;vertical-align:middle;overflow:hidden;text-overflow:clip;padding-left:12px;padding-right:12px;}
-      .acdc-table-prospects th:nth-child(1),.acdc-table-prospects td:nth-child(1){width:108px;min-width:108px;max-width:108px;white-space:nowrap;}
-      .acdc-table-prospects th:nth-child(2),.acdc-table-prospects td:nth-child(2){width:230px;min-width:230px;max-width:230px;white-space:normal;line-height:1.35;}
+      /* Colonne case à cocher (sélection groupée) — insérée en tête, décale les nth-child suivants de +1. */
+      .acdc-table-prospects th:nth-child(1),.acdc-table-prospects td:nth-child(1){width:46px;min-width:46px;max-width:46px;white-space:nowrap;text-align:center;padding-left:8px;padding-right:8px;}
+      .acdc-table-prospects .acdc-prospect-col-check{text-align:center;}
+      .acdc-table-prospects .acdc-prospect-col-check input[type="checkbox"]{width:17px;height:17px;cursor:pointer;accent-color:#c99a2d;margin:0;}
+      .acdc-table-prospects th:nth-child(2),.acdc-table-prospects td:nth-child(2){width:108px;min-width:108px;max-width:108px;white-space:nowrap;}
+      .acdc-table-prospects th:nth-child(3),.acdc-table-prospects td:nth-child(3){width:230px;min-width:230px;max-width:230px;white-space:normal;line-height:1.35;}
       .acdc-table-prospects .acdc-prospect-col-email{width:210px;min-width:210px;max-width:210px;white-space:nowrap;padding-left:8px;padding-right:10px;}
       .acdc-table-prospects .acdc-prospect-col-phone{width:168px;min-width:168px;max-width:168px;white-space:nowrap;padding-left:8px;padding-right:32px;}
       .acdc-table-prospects .acdc-prospect-col-training{width:235px;min-width:235px;max-width:235px;white-space:normal;line-height:1.35;word-break:normal;overflow-wrap:normal;padding-left:34px;padding-right:12px;}
-      .acdc-table-prospects th:nth-child(7),.acdc-table-prospects td:nth-child(7){width:170px;min-width:170px;max-width:170px;white-space:nowrap;}
-      .acdc-table-prospects th:nth-child(8),.acdc-table-prospects td:nth-child(8){width:178px;min-width:178px;max-width:178px;white-space:nowrap;}
-      .acdc-table-prospects th:nth-child(9),.acdc-table-prospects td:nth-child(9){width:146px;min-width:146px;max-width:146px;white-space:nowrap;}
+      .acdc-table-prospects th:nth-child(8),.acdc-table-prospects td:nth-child(8){width:170px;min-width:170px;max-width:170px;white-space:nowrap;}
+      .acdc-table-prospects th:nth-child(9),.acdc-table-prospects td:nth-child(9){width:178px;min-width:178px;max-width:178px;white-space:nowrap;}
       .acdc-table-prospects th:nth-child(10),.acdc-table-prospects td:nth-child(10){width:146px;min-width:146px;max-width:146px;white-space:nowrap;}
-      .acdc-table-prospects th:nth-child(11),.acdc-table-prospects td:nth-child(11){width:174px;min-width:174px;max-width:174px;white-space:nowrap;}
-      .acdc-table-prospects th:nth-child(12),.acdc-table-prospects td:nth-child(12){width:150px;min-width:150px;max-width:150px;white-space:nowrap;}
-      .acdc-table-prospects th:nth-child(13),.acdc-table-prospects td:nth-child(13){width:151px;min-width:151px;max-width:151px;white-space:nowrap;}
+      .acdc-table-prospects th:nth-child(11),.acdc-table-prospects td:nth-child(11){width:146px;min-width:146px;max-width:146px;white-space:nowrap;}
+      .acdc-table-prospects th:nth-child(12),.acdc-table-prospects td:nth-child(12){width:174px;min-width:174px;max-width:174px;white-space:nowrap;}
+      .acdc-table-prospects th:nth-child(13),.acdc-table-prospects td:nth-child(13){width:150px;min-width:150px;max-width:150px;white-space:nowrap;}
+      .acdc-table-prospects th:nth-child(14),.acdc-table-prospects td:nth-child(14){width:151px;min-width:151px;max-width:151px;white-space:nowrap;}
+      /* Barre d'actions groupées. */
+      .acdc-bulk-toolbar{display:flex;align-items:flex-end;flex-wrap:wrap;gap:16px;padding:14px 16px;margin-bottom:14px;background:#fbf7ef;border:1px solid #e7d8b6;border-radius:12px;}
+      .acdc-bulk-toolbar[hidden]{display:none;}
+      .acdc-bulk-count-label{align-self:center;color:#1E4777;font-size:14px;}
+      .acdc-bulk-count-label strong{font-size:16px;}
+      .acdc-bulk-field{display:flex;flex-direction:column;gap:4px;font-size:12px;color:#4b5d76;}
+      .acdc-bulk-field[hidden]{display:none;}
+      .acdc-bulk-field select{height:40px;min-width:210px;border:1px solid var(--acdc-border,#dce4ec);border-radius:10px;padding:0 12px;color:#1c2c40;background:#fff;}
+      .acdc-bulk-toolbar .acdc-button[disabled]{opacity:.5;cursor:not-allowed;}
       .acdc-table-prospects .acdc-prospect-nowrap{display:inline-block;max-width:100%;white-space:nowrap;word-break:normal;overflow-wrap:normal;overflow:visible;text-overflow:clip;}
       .acdc-table-prospects .acdc-prospect-training-text{display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;max-height:38px;overflow:hidden;white-space:normal;line-height:1.35;word-break:normal;overflow-wrap:break-word;}
       .acdc-table-prospects .acdc-prospect-copy-text{display:inline-block;max-width:100%;white-space:nowrap;overflow:visible;text-overflow:clip;}
       .acdc-table-prospects .acdc-prospect-company-parenthesis{display:inline-block;margin-top:2px;}
       .acdc-table-prospects td:last-child > a:not(.acdc-row-action-icon){display:none !important;}
     </style>
+    <script>
+      /* Actions groupées sur les prospects (sélection par case + tout sélectionner). */
+      (function(){
+        if(window.__acdcProspectBulkActions){ return; }
+        window.__acdcProspectBulkActions = true;
+        function q(sel, root){ return (root || document).querySelector(sel); }
+        function qa(sel, root){ return Array.prototype.slice.call((root || document).querySelectorAll(sel)); }
+        function checkboxes(){ return qa('[data-acdc-bulk-checkbox]'); }
+        function selectedIds(){ return checkboxes().filter(function(c){ return c.checked; }).map(function(c){ return c.value; }); }
+        function refresh(){
+          var boxes = checkboxes();
+          var checked = boxes.filter(function(c){ return c.checked; });
+          var count = checked.length;
+          var countEl = q('[data-acdc-bulk-count]');
+          if(countEl){ countEl.textContent = String(count); }
+          var toolbar = q('[data-acdc-bulk-toolbar]');
+          if(toolbar){ toolbar.hidden = count === 0; }
+          var actionSel = q('[data-acdc-bulk-action]');
+          var applyBtn = q('[data-acdc-bulk-apply]');
+          if(applyBtn){ applyBtn.disabled = count === 0 || !actionSel || !actionSel.value; }
+          var selectAll = q('[data-acdc-bulk-select-all]');
+          if(selectAll){
+            selectAll.checked = boxes.length > 0 && count === boxes.length;
+            selectAll.indeterminate = count > 0 && count < boxes.length;
+          }
+        }
+        document.addEventListener('change', function(e){
+          var t = e.target;
+          if(!t || !t.matches){ return; }
+          if(t.matches('[data-acdc-bulk-select-all]')){
+            var on = t.checked;
+            checkboxes().forEach(function(c){ c.checked = on; });
+            refresh();
+            return;
+          }
+          if(t.matches('[data-acdc-bulk-checkbox]')){ refresh(); return; }
+          if(t.matches('[data-acdc-bulk-action]')){
+            var statusField = q('[data-acdc-bulk-status-field]');
+            var assignField = q('[data-acdc-bulk-assign-field]');
+            if(statusField){ statusField.hidden = t.value !== 'status'; }
+            if(assignField){ assignField.hidden = t.value !== 'assign'; }
+            refresh();
+            return;
+          }
+        });
+        document.addEventListener('click', function(e){
+          var btn = e.target.closest ? e.target.closest('[data-acdc-bulk-apply]') : null;
+          if(!btn){ return; }
+          e.preventDefault();
+          var ids = selectedIds();
+          if(!ids.length){ return; }
+          var actionSel = q('[data-acdc-bulk-action]');
+          var action = actionSel ? actionSel.value : '';
+          if(!action){ return; }
+          var value = '';
+          if(action === 'status'){ var s = q('[data-acdc-bulk-status]'); value = s ? s.value : ''; }
+          else if(action === 'assign'){ var a = q('[data-acdc-bulk-assign]'); value = a ? a.value : ''; }
+          var msg = '';
+          if(action === 'delete'){ msg = 'Supprimer les ' + ids.length + ' prospect(s) sélectionné(s) ? Cette action est irréversible.'; }
+          else if(action === 'status'){ msg = 'Appliquer ce statut aux ' + ids.length + ' prospect(s) sélectionné(s) ?'; }
+          else if(action === 'assign'){ msg = 'Modifier le responsable des ' + ids.length + ' prospect(s) sélectionné(s) ?'; }
+          if(msg && !window.confirm(msg)){ return; }
+          var form = q('[data-acdc-bulk-form]');
+          if(!form){ return; }
+          var idsWrap = q('[data-acdc-bulk-ids]', form);
+          if(idsWrap){
+            idsWrap.innerHTML = '';
+            ids.forEach(function(id){
+              var inp = document.createElement('input');
+              inp.type = 'hidden';
+              inp.name = 'prospect_ids[]';
+              inp.value = id;
+              idsWrap.appendChild(inp);
+            });
+          }
+          var af = q('[data-acdc-bulk-form-action]', form); if(af){ af.value = action; }
+          var vf = q('[data-acdc-bulk-form-value]', form); if(vf){ vf.value = value; }
+          form.submit();
+        });
+        if(document.readyState === 'loading'){ document.addEventListener('DOMContentLoaded', refresh); } else { refresh(); }
+      })();
+    </script>
     <script>
       (function(){
         /* ACDC 3.20.61 — table de correspondance des types Prospects vers

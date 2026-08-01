@@ -406,6 +406,111 @@ public function handle_quick_update_prospect_field() {
   );
 }
 
+/**
+ * Actions groupées sur les prospects (sélection multiple depuis la liste) :
+ * suppression, changement de statut ou attribution d'un responsable.
+ */
+public function handle_bulk_prospect_action() {
+  if ( ! current_user_can( 'manage_options' ) ) {
+    wp_die( esc_html( 'Accès refusé.' ) );
+  }
+  check_admin_referer( 'acdc_bulk_prospect_action' );
+
+  $ids = array();
+  if ( isset( $_POST['prospect_ids'] ) && is_array( $_POST['prospect_ids'] ) ) {
+    $ids = array_values( array_unique( array_filter( array_map( 'absint', (array) wp_unslash( $_POST['prospect_ids'] ) ) ) ) );
+  }
+  $bulk_action = isset( $_POST['bulk_action'] ) ? sanitize_key( wp_unslash( $_POST['bulk_action'] ) ) : '';
+  $bulk_value  = isset( $_POST['bulk_value'] ) ? sanitize_text_field( wp_unslash( $_POST['bulk_value'] ) ) : '';
+  $is_admin_page = is_admin() && isset( $_REQUEST['page'] ) && 'acdc-of-prospects' === $_REQUEST['page'];
+
+  $redirect = function ( $message, $type ) use ( $is_admin_page ) {
+    if ( $is_admin_page ) {
+      wp_safe_redirect( admin_url( 'admin.php?page=acdc-of-prospects&notice=' . rawurlencode( $message ) . '&notice_type=' . $type ) );
+      exit;
+    }
+    $this->redirect_to_portal( 'prospects', $message, $type );
+  };
+
+  if ( empty( $ids ) ) {
+    $redirect( 'Aucun prospect sélectionné.', 'error' );
+  }
+  if ( '' === $bulk_action ) {
+    $redirect( 'Aucune action groupée sélectionnée.', 'error' );
+  }
+
+  global $wpdb;
+  $now = current_time( 'mysql' );
+
+  if ( 'delete' === $bulk_action ) {
+    $deleted = 0;
+    $skipped = 0;
+    foreach ( $ids as $pid ) {
+      $convention_count = (int) $wpdb->get_var( $wpdb->prepare(
+        "SELECT COUNT(*) FROM {$this->registration_contract_table} WHERE source_prospect_id = %d",
+        $pid
+      ) );
+      if ( $convention_count ) {
+        $skipped++;
+        continue;
+      }
+      $wpdb->delete( $this->prospect_rdv_table, array( 'prospect_id' => $pid ) );
+      $wpdb->delete( $this->prospect_table, array( 'id' => $pid ) );
+      $deleted++;
+    }
+    $message = sprintf( '%d prospect(s) supprimé(s).', $deleted );
+    if ( $skipped ) {
+      $message .= ' ' . sprintf( '%d ignoré(s) car lié(s) à une convention ou un contrat.', $skipped );
+    }
+    $redirect( $message, $deleted > 0 ? 'success' : 'error' );
+  }
+
+  if ( 'status' === $bulk_action ) {
+    $allowed = $this->get_prospect_status_options();
+    if ( ! array_key_exists( $bulk_value, $allowed ) ) {
+      $redirect( 'Statut invalide.', 'error' );
+    }
+    $updated = 0;
+    foreach ( $ids as $pid ) {
+      $result = $wpdb->update(
+        $this->prospect_table,
+        array( 'status' => $bulk_value, 'updated_at' => $now ),
+        array( 'id' => $pid ),
+        array( '%s', '%s' ),
+        array( '%d' )
+      );
+      if ( false !== $result ) {
+        $updated++;
+      }
+    }
+    $redirect( sprintf( 'Statut « %s » appliqué à %d prospect(s).', $allowed[ $bulk_value ], $updated ), 'success' );
+  }
+
+  if ( 'assign' === $bulk_action ) {
+    $allowed = $this->get_assignment_options();
+    if ( '' !== $bulk_value && ! array_key_exists( $bulk_value, $allowed ) ) {
+      $redirect( 'Responsable invalide.', 'error' );
+    }
+    $updated = 0;
+    foreach ( $ids as $pid ) {
+      $result = $wpdb->update(
+        $this->prospect_table,
+        array( 'assigned_to' => $bulk_value, 'updated_at' => $now ),
+        array( 'id' => $pid ),
+        array( '%s', '%s' ),
+        array( '%d' )
+      );
+      if ( false !== $result ) {
+        $updated++;
+      }
+    }
+    $label = ( '' !== $bulk_value && isset( $allowed[ $bulk_value ] ) ) ? $allowed[ $bulk_value ] : 'Non attribué';
+    $redirect( sprintf( '« %s » attribué à %d prospect(s).', $label, $updated ), 'success' );
+  }
+
+  $redirect( 'Action groupée inconnue.', 'error' );
+}
+
 
 /* =========================================================
    * CASCADE — Propagation après sauvegarde d'un prospect
