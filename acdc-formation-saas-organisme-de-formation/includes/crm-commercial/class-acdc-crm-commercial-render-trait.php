@@ -1306,6 +1306,28 @@
         .acdc-followup-table thead th:nth-child(10),
         .acdc-followup-table thead th:nth-child(11){white-space:normal;}
         .acdc-followup-table thead th:nth-child(12){white-space:nowrap;}
+        /* ACDC 3.25.140 — Colonnes d'identité figées pendant le défilement horizontal.
+         * Le tableau est plus large que son conteneur : sans cela, « Profil » et
+         * « Entreprise / Contact » sortent de l'écran et les lignes deviennent
+         * impossibles à rattacher à un prospect. L'offset de la 2e colonne est
+         * recalculé en JS car les largeurs sont redimensionnables par l'utilisateur.
+         */
+        .acdc-followup-table th:nth-child(1),
+        .acdc-followup-table td:nth-child(1),
+        .acdc-followup-table th:nth-child(2),
+        .acdc-followup-table td:nth-child(2){position:sticky;z-index:2;}
+        .acdc-followup-table th:nth-child(1),
+        .acdc-followup-table td:nth-child(1){left:0;}
+        .acdc-followup-table th:nth-child(2),
+        .acdc-followup-table td:nth-child(2){left:var(--acdc-fu-sticky-offset,80px);}
+        .acdc-followup-table tbody td:nth-child(1),
+        .acdc-followup-table tbody td:nth-child(2){background:#ffffff;}
+        .acdc-followup-table thead th:nth-child(1),
+        .acdc-followup-table thead th:nth-child(2){z-index:3;background:var(--acdc-soft-bg,#fbf8f7);}
+        .acdc-followup-table th:nth-child(2),
+        .acdc-followup-table td:nth-child(2){box-shadow:6px 0 8px -6px rgba(12,45,82,.22);}
+        .acdc-followup-table tbody tr.acdc-followup-row-alert > td:nth-child(1),
+        .acdc-followup-table tbody tr.acdc-followup-row-alert > td:nth-child(2){background:#f6e6e9 !important;}
         .acdc-fu-interaction-count{display:inline-block;font-size:11px;font-weight:600;color:#8b5b23;background:#faf2e2;border:0.5px solid #e9d4a6;padding:2px 8px;border-radius:999px;}
         .acdc-fu-interaction-date{display:block;margin-top:4px;font-size:12px;color:#64748b;}
         .acdc-followup-actions{display:flex;align-items:center;gap:var(--acdc-action-icon-gap, 12px);white-space:nowrap;position:relative;}
@@ -1527,6 +1549,25 @@
           </table>
         </div>
         <script>
+        (function(){
+          /* ACDC 3.25.140 — Décalage horizontal de la 2e colonne figée.
+           * Les largeurs de colonnes sont redimensionnables : on relit la largeur
+           * réelle de la colonne « Profil » plutôt que de figer une valeur en CSS.
+           */
+          var stickyTable=document.querySelector('.acdc-followup-table');
+          if(!stickyTable){return;}
+          var firstHeader=stickyTable.querySelector('thead th:first-child');
+          if(!firstHeader){return;}
+          function syncStickyOffset(){
+            var width=Math.round(firstHeader.getBoundingClientRect().width);
+            if(width>0){stickyTable.style.setProperty('--acdc-fu-sticky-offset',width+'px');}
+          }
+          syncStickyOffset();
+          window.addEventListener('resize',syncStickyOffset);
+          if(window.ResizeObserver){
+            new window.ResizeObserver(syncStickyOffset).observe(firstHeader);
+          }
+        })();
         (function(){
           var tabs=document.querySelector('[data-acdc-fu-status-tabs]');
           if(!tabs){return;}
