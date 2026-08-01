@@ -1,0 +1,311 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Règlement intérieur - ACDC-Formation</title>
+  <style>
+    :root {
+      --navy: #0C2D52;
+      --gold: #C5A253;
+      --ink: #1f2937;
+      --muted: #6b7280;
+      --line: #d7dde6;
+      --paper: #ffffff;
+      --soft: #f8fafc;
+    }
+
+    @page {
+      size: A4 portrait;
+      margin: 0;
+    }
+
+    * { box-sizing: border-box; }
+
+    body {
+      margin: 0;
+      background: #eef2f6;
+      font-family: Rubik, Arial, Helvetica, sans-serif;
+      color: var(--ink);
+    }
+
+    .page {
+      width: 210mm;
+      min-height: 297mm;
+      margin: 0 auto 12px;
+      background: var(--paper);
+      box-shadow: 0 10px 30px rgba(12,45,82,0.08);
+      position: relative;
+      padding: 11mm 12.5mm 18mm;
+      overflow: hidden;
+      page-break-after: always;
+    }
+
+    .page:last-child {
+      page-break-after: auto;
+    }
+
+    .header {
+      display: flex;
+      justify-content: space-between;
+      align-items: flex-start;
+      gap: 8mm;
+      border-bottom: 1.5px solid var(--gold);
+      padding-bottom: 3.5mm;
+      margin-bottom: 6mm;
+    }
+
+    .brand {
+      display: flex;
+      align-items: center;
+      gap: 4mm;
+      min-width: 0;
+    }
+
+    .brand img {
+      height: 16mm;
+      width: auto;
+      object-fit: contain;
+      flex-shrink: 0;
+    }
+
+    .brand-text strong {
+      display: block;
+      color: var(--navy);
+      font-size: 13.6pt;
+      line-height: 1.08;
+      font-weight: 700;
+    }
+
+    .brand-text span {
+      display: block;
+      margin-top: 0.8mm;
+      color: var(--gold);
+      font-size: 7.7pt;
+      font-weight: 500;
+      letter-spacing: 0.01em;
+    }
+
+    .company {
+      text-align: right;
+      font-size: 8pt;
+      line-height: 1.32;
+      color: #374151;
+      max-width: 64mm;
+    }
+
+    h1 {
+      margin: 0 0 2mm;
+      color: var(--navy);
+      font-size: 15.6pt;
+      font-weight: 700;
+      letter-spacing: 0.01em;
+    }
+
+    .subtitle {
+      margin-bottom: 5mm;
+      font-size: 8.4pt;
+      color: #4b5563;
+      line-height: 1.38;
+      text-align: justify;
+    }
+
+    .article {
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      padding: 4mm 4.5mm;
+      background: #fff;
+      margin-bottom: 5mm;
+    }
+
+    .article-title {
+      font-size: 8.4pt;
+      text-transform: uppercase;
+      letter-spacing: 0.04em;
+      color: var(--gold);
+      font-weight: 700;
+      margin-bottom: 2mm;
+    }
+
+    .text {
+      font-size: 8.35pt;
+      line-height: 1.45;
+      color: #1f2937;
+      text-align: justify;
+    }
+
+    .text ul {
+      margin: 2mm 0 0 4mm;
+      padding: 0;
+    }
+
+    .text li {
+      margin-bottom: 1.2mm;
+    }
+
+    .footer {
+      position: absolute;
+      left: 10mm;
+      right: 10mm;
+      bottom: 4mm;
+      border-top: 1px solid var(--line);
+      padding-top: 2.2mm;
+      text-align: center;
+      font-size: 6.8pt;
+      line-height: 1.22;
+      color: #4b5563;
+    }
+
+    @media print {
+      body { background: white; }
+      .page { margin: 0; box-shadow: none; }
+    }
+  </style>
+</head>
+<body>
+  <div class="page">
+    <div class="header">
+      <div class="brand">
+        <img src="https://acdcformation.com/wp-content/uploads/2026/03/Logo-ACDC.png" alt="Logo ACDC-Formation" />
+        <div class="brand-text">
+          <strong>ACDC-Formation</strong>
+          <span>Azur - Compétences - Développement - Conseils</span>
+        </div>
+      </div>
+      <div class="company">
+        <strong>ACDC-Formation</strong><br />
+        7 avenue Paul Cézanne<br />
+        83310 Cogolin - France<br />
+        Siret : 405109901 00042<br />
+        NDA : 93 83 08347 83
+      </div>
+    </div>
+
+    <h1>Règlement intérieur</h1>
+    <div class="subtitle">
+      Conformément aux dispositions des articles L.6352-3 à L.6352-5 et R.6352-1 à R.6352-15 du Code du travail, le présent règlement intérieur a pour objet :<br /><br />
+      D’assurer le bon déroulement des formations, de garantir la sécurité des personnes et des biens, de préciser les droits et devoirs réciproques de l’organisme de formation et des apprenants.<br /><br />
+      Il s’applique à l’ensemble des personnes participant à une action de formation organisée par ACDC FORMATION, que celle-ci se déroule dans ses propres locaux, dans ceux d’une entreprise, d’une collectivité, ou dans tout autre lieu mis à disposition, y compris à distance.
+    </div>
+
+    <div class="article">
+      <div class="article-title">Article 1 – Devoirs de l’organisme de formation</div>
+      <div class="text">
+        ACDC FORMATION s’engage à :
+        <ul>
+          <li>mettre en œuvre les moyens pédagogiques, techniques et humains nécessaires au bon déroulement des formations ;</li>
+          <li>fournir aux apprenants les informations utiles (programme, objectifs, durée, horaires, lieu, modalités pédagogiques, règlement applicable) ;</li>
+          <li>assurer un accueil respectueux et garantir un environnement d’apprentissage sain et sécurisé ;</li>
+          <li>délivrer, à l’issue de la formation, les documents prévus par la réglementation (feuilles d’émargement, attestations de fin de formation, certificats de réalisation, selon le dispositif) ;</li>
+          <li>respecter la confidentialité des informations personnelles et professionnelles des participants.</li>
+        </ul>
+      </div>
+    </div>
+
+    <div class="article">
+      <div class="article-title">Article 2 – Devoirs des apprenants</div>
+      <div class="text">
+        Chaque apprenant s’engage à :
+        <ul>
+          <li>respecter les horaires et signer les feuilles d’émargement (présentiel) ou valider les relevés de connexion/présence (distanciel) ;</li>
+          <li>participer activement aux travaux, exercices et activités pédagogiques proposés ;</li>
+          <li>respecter le matériel mis à disposition (salles, équipements, outils informatiques, ressources pédagogiques) ;</li>
+          <li>adopter une attitude respectueuse envers les formateurs, les autres apprenants et toute personne intervenant dans le cadre de la formation ;</li>
+          <li>prévenir l’organisme en cas d’absence ou de retard ;</li>
+          <li>respecter les règles de confidentialité concernant les échanges, données et supports transmis pendant la formation.</li>
+        </ul>
+      </div>
+    </div>
+
+    <div class="article" style="margin-bottom:0;">
+      <div class="article-title">Article 3 – Règles de vie en formation</div>
+      <div class="text">
+        Afin de garantir un cadre d’apprentissage agréable et respectueux, les apprenants s’engagent à respecter les règles suivantes :
+        <ul>
+          <li>interdiction de fumer ou de vapoter dans les salles de formation et, plus largement, dans tout espace non prévu à cet effet ;</li>
+          <li>interdiction d’introduire ou de consommer des boissons alcoolisées ou des substances illicites ;</li>
+          <li>utilisation des téléphones portables et ordinateurs personnels uniquement dans le cadre pédagogique ou pendant les pauses, sauf consigne contraire du formateur ;</li>
+          <li>respect strict des consignes de sécurité, notamment en cas d’alerte incendie ou d’évacuation ;</li>
+          <li>port d’une tenue correcte et adaptée aux lieux et aux activités de formation ;</li>
+          <li>respect de la propreté des locaux et des espaces mis à disposition.</li>
+        </ul>
+      </div>
+    </div>
+
+    <div class="footer">
+      7 avenue Paul Cézanne - 83310 Cogolin - France - Siret : 405109901 00042 - NDA : 93 83 08347 83<br />
+      e-mail : contact@acdc-formation.com - Tél : 06 78 26 91 10 - site web : acdc-formation.com
+    </div>
+  </div>
+
+  <div class="page">
+    <div class="header">
+      <div class="brand">
+        <img src="https://acdcformation.com/wp-content/uploads/2026/03/Logo-ACDC.png" alt="Logo ACDC-Formation" />
+        <div class="brand-text">
+          <strong>ACDC-Formation</strong>
+          <span>Azur - Compétences - Développement - Conseils</span>
+        </div>
+      </div>
+      <div class="company">
+        <strong>ACDC-Formation</strong><br />
+        7 avenue Paul Cézanne<br />
+        83310 Cogolin - France<br />
+        Siret : 405109901 00042<br />
+        NDA : 93 83 08347 83
+      </div>
+    </div>
+
+    <h1>Règlement intérieur – suite</h1>
+
+    <div class="article">
+      <div class="article-title">Article 4 – Application du règlement intérieur en entreprise ou dans des locaux extérieurs</div>
+      <div class="text">
+        Lorsque la formation se déroule dans les locaux d’une entreprise, d’une collectivité ou d’un lieu tiers, les apprenants sont tenus de respecter :
+        <ul>
+          <li>le présent règlement intérieur d’ACDC FORMATION,</li>
+          <li>ainsi que le règlement intérieur de la structure d’accueil (consignes de sécurité, règles de vie, procédures internes).</li>
+        </ul>
+        En cas de contradiction entre les deux règlements, les règles de sécurité et de discipline du lieu d’accueil prévalent, sans exclure l’application des obligations générales du présent règlement.
+      </div>
+    </div>
+
+    <div class="article">
+      <div class="article-title">Article 5 – Sanctions disciplinaires</div>
+      <div class="text">
+        Tout manquement au présent règlement peut entraîner, après explications recueillies auprès de l’intéressé, une sanction proportionnée à la gravité des faits, pouvant aller jusqu’à :
+        <ul>
+          <li>un avertissement verbal ou écrit ;</li>
+          <li>une exclusion temporaire de la session ;</li>
+          <li>une exclusion définitive de la formation, notifiée par écrit.</li>
+        </ul>
+      </div>
+    </div>
+
+    <div class="article">
+      <div class="article-title">Article 6 – Procédure disciplinaire</div>
+      <div class="text">
+        Conformément aux articles R.6352-4 à R.6352-8 du Code du travail :
+        <ul>
+          <li>aucune sanction ne peut être prononcée sans que l’apprenant ait été informé des faits reprochés et ait eu la possibilité de présenter ses explications ;</li>
+          <li>toute sanction fait l’objet d’une notification écrite et motivée.</li>
+        </ul>
+      </div>
+    </div>
+
+    <div class="article" style="margin-bottom:0;">
+      <div class="article-title">Article 7 – Entrée en vigueur et durée d’application</div>
+      <div class="text">
+        Le présent règlement intérieur entre en application dès le début de chaque session de formation organisée par ACDC FORMATION.
+        Il est porté à la connaissance de chaque apprenant avant son entrée en formation et demeure applicable tant que l’organisme exerce son activité.<br /><br />
+        <strong>Dernière mise à jour :</strong> 18/02/2026.
+      </div>
+    </div>
+
+    <div class="footer">
+      7 avenue Paul Cézanne - 83310 Cogolin - France - Siret : 405109901 00042 - NDA : 93 83 08347 83<br />
+      e-mail : contact@acdc-formation.com - Tél : 06 78 26 91 10 - site web : acdc-formation.com
+    </div>
+  </div>
+</body>
+</html>

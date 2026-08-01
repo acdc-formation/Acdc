@@ -1,0 +1,1677 @@
+# Copyright (C) ACDC Formation
+# This file is distributed under the GPL-2.0-or-later license.
+msgid ""
+msgstr ""
+"Project-Id-Version: ACDC Formation SAAS\n"
+"Report-Msgid-Bugs-To: https://acdc-formation.com/\n"
+"POT-Creation-Date: 2026-07-22 07:56+0000\n"
+"MIME-Version: 1.0\n"
+"Content-Type: text/plain; charset=UTF-8\n"
+"Content-Transfer-Encoding: 8bit\n"
+"Language: fr_FR\n"
+"Plural-Forms: nplurals=2; plural=(n > 1);\n"
+"X-Domain: acdc-formation-saas\n"
+
+#: includes/quizzes/class-acdc-quizzes-render-editor-trait.php:174
+msgid "%1$d / %2$d apprenants ont commencé."
+msgstr ""
+
+#: includes/quizzes/class-acdc-quizzes-render-editor-trait.php:192
+msgid "%1$d apprenants ont commencé, mais le quiz n'est pas verrouillé."
+msgstr ""
+
+#: includes/quizzes/class-acdc-quizzes-render-editor-trait.php:1220
+msgid "%1$d terminés · %2$d en cours · %3$d non commencés · %4$d total"
+msgstr ""
+
+#: includes/quizzes/class-acdc-quizzes-render-editor-trait.php:1096
+msgid "%d apprenants disponibles. Cochez les destinataires."
+msgstr ""
+
+#: includes/quizzes/class-acdc-quizzes-actions-trait.php:1829
+msgid "%d invitation envoyée avec succès."
+msgid_plural "%d invitations envoyées avec succès."
+msgstr[0] ""
+msgstr[1] ""
+
+#: includes/quizzes/class-acdc-quizzes-render-trait.php:1149
+msgid "%d minute"
+msgid_plural "%d minutes"
+msgstr[0] ""
+msgstr[1] ""
+
+#: includes/quizzes/class-acdc-quizzes-render-trait.php:443
+msgid "%d question"
+msgid_plural "%d questions"
+msgstr[0] ""
+msgstr[1] ""
+
+#: includes/quizzes/class-acdc-quizzes-render-trait.php:450
+msgid "%d réponse"
+msgid_plural "%d réponses"
+msgstr[0] ""
+msgstr[1] ""
+
+#: includes/quizzes/class-acdc-quizzes-render-editor-trait.php:723
+msgid "%d seconde"
+msgid_plural "%d secondes"
+msgstr[0] ""
+msgstr[1] ""
+
+#: includes/quizzes/class-acdc-quizzes-actions-trait.php:1426
+msgid "(Avertissements : "
+msgstr ""
+
+#: includes/quizzes/class-acdc-quizzes-render-editor-trait.php:312
+msgid "(question sans titre)"
+msgstr ""
+
+#: includes/quizzes/class-acdc-quizzes-render-trait.php:197
+msgid "+ Créer"
+msgstr ""
+
+#: includes/quizzes/class-acdc-quizzes-render-editor-trait.php:112
+msgid "+ Nouvelle version"
+msgstr ""
+
+#: includes/quizzes/class-acdc-quizzes-render-editor-trait.php:1538
+msgid "0 question importée. Problème lors de l'insertion en base."
+msgstr ""
+
+#: includes/quizzes/class-acdc-quizzes-actions-trait.php:414 includes/quizzes/class-acdc-quizzes-actions-trait.php:429 includes/quizzes/class-acdc-quizzes-actions-trait.php:866
+#: includes/quizzes/class-acdc-quizzes-actions-trait.php:1273 includes/quizzes/class-acdc-quizzes-actions-trait.php:1320 includes/quizzes/class-acdc-quizzes-actions-trait.php:1366
+#: includes/quizzes/class-acdc-quizzes-actions-trait.php:3348
+msgid "Accès refusé."
+msgstr ""
+
+#: includes/quizzes/class-acdc-quizzes-render-editor-trait.php:922
+msgid "Action en cas d'échec"
+msgstr ""
+
+#: includes/settings-catalog/class-acdc-settings-catalog-actions-trait.php:18
+msgid "Action non autorisée."
+msgstr ""
+
+#: includes/quizzes/class-acdc-quizzes-render-editor-trait.php:1249
+msgid "Actions"
+msgstr ""
+
+#: includes/quizzes/class-acdc-quizzes-actions-trait.php:1409
+msgid "Activation impossible : "
+msgstr ""
+
+#: includes/quizzes/class-acdc-quizzes-render-editor-trait.php:942
+msgid "Active selon le contexte. Ces options sont surtout utiles pour les évaluations des acquis en mode présentiel synchrone."
+msgstr ""
+
+#: includes/quizzes/class-acdc-quizzes-render-editor-trait.php:853
+msgid "Activer ce quiz"
+msgstr ""
+
+#: includes/quizzes/class-acdc-quizzes-render-trait.php:399
+msgid "Activez le quiz pour pouvoir le lancer en live"
+msgstr ""
+
+#: includes/quizzes/class-acdc-quizzes-render-editor-trait.php:865
+msgid "Activé le %s."
+msgstr ""
+
+#: includes/quizzes/class-acdc-quizzes-render-editor-trait.php:1143
+msgid "Adresses e-mail (une par ligne) :"
+msgstr ""
+
+#: includes/quizzes/class-acdc-quizzes-render-editor-trait.php:398
+msgid "Aide / explication (optionnelle)"
+msgstr ""
+
+#: includes/quizzes/class-acdc-quizzes-render-editor-trait.php:1045
+msgid "Ajouter un objectif"
+msgstr ""
+
+#: includes/quizzes/class-acdc-quizzes-render-editor-trait.php:600
+msgid "Ajouter un élément"
+msgstr ""
+
+#: includes/quizzes/class-acdc-quizzes-actions-trait.php:3156 includes/quizzes/class-acdc-quizzes-render-editor-trait.php:379
+msgid "Ajouter une image"
+msgstr ""
+
+#: includes/quizzes/class-acdc-quizzes-render-editor-trait.php:679
+msgid "Ajouter une option"
+msgstr ""
+
+#: includes/quizzes/class-acdc-quizzes-render-editor-trait.php:514
+msgid "Ajouter une proposition"
+msgstr ""
+
+#: includes/quizzes/class-acdc-quizzes-render-editor-trait.php:239
+msgid "Ajouter une question"
+msgstr ""
+
+#: includes/quizzes/class-acdc-quizzes-render-trait.php:1892 includes/quizzes/class-acdc-quizzes-render-editor-trait.php:1418
+msgid "Analyser le fichier"
+msgstr ""
+
+#: includes/quizzes/class-acdc-quizzes-render-trait.php:554 includes/quizzes/class-acdc-quizzes-render-trait.php:988 includes/quizzes/class-acdc-quizzes-render-trait.php:1889
+#: includes/quizzes/class-acdc-quizzes-render-editor-trait.php:984 includes/quizzes/class-acdc-quizzes-render-editor-trait.php:1186 includes/quizzes/class-acdc-quizzes-render-editor-trait.php:1415
+msgid "Annuler"
+msgstr ""
+
+#: includes/quizzes/class-acdc-quizzes-render-editor-trait.php:1316
+msgid "Annuler cette invitation"
+msgstr ""
+
+#: includes/quizzes/class-acdc-quizzes-render-editor-trait.php:803
+msgid "Anti-triche"
+msgstr ""
+
+#: includes/quizzes/class-acdc-quizzes-render-editor-trait.php:1245
+msgid "Apprenant"
+msgstr ""
+
+#: includes/quizzes/class-acdc-quizzes-render-editor-trait.php:1081
+msgid "Apprenants d'une session"
+msgstr ""
+
+#: includes/quizzes/class-acdc-quizzes-render-editor-trait.php:1080
+msgid "Apprenants de la formation"
+msgstr ""
+
+#: includes/quizzes/class-acdc-quizzes-render-trait.php:420
+msgid "Archiver"
+msgstr ""
+
+#: includes/signature/class-acdc-sig-portal.php:73 includes/signature/class-acdc-sig-portal.php:366
+msgid "Archives"
+msgstr ""
+
+#: includes/quizzes/class-acdc-quizzes-render-editor-trait.php:927
+msgid "Attester la présence uniquement"
+msgstr ""
+
+#: includes/quizzes/class-acdc-quizzes-render-editor-trait.php:1181
+msgid "Au premier clic d'apprenant, le quiz sera automatiquement verrouillé pour traçabilité Qualiopi."
+msgstr ""
+
+#: includes/quizzes/class-acdc-quizzes-render-editor-trait.php:747
+msgid "Aucun"
+msgstr ""
+
+#: includes/quizzes/class-acdc-quizzes-render-editor-trait.php:735
+msgid "Aucun (non scoré)"
+msgstr ""
+
+#: includes/quizzes/class-acdc-quizzes-render-editor-trait.php:1090
+msgid "Aucun apprenant n'est rattaché à cette formation pour le moment."
+msgstr ""
+
+#: includes/quizzes/class-acdc-quizzes-actions-trait.php:1643
+msgid "Aucun apprenant sélectionné."
+msgstr ""
+
+#: includes/quizzes/class-acdc-quizzes-actions-trait.php:1471
+msgid "Aucun changement appliqué."
+msgstr ""
+
+#: includes/quizzes/class-acdc-quizzes-actions-trait.php:696
+msgid "Aucun changement à enregistrer."
+msgstr ""
+
+#: includes/quizzes/class-acdc-quizzes-core-trait.php:2579
+msgid "Aucun destinataire fourni."
+msgstr ""
+
+#: includes/quizzes/class-acdc-quizzes-actions-trait.php:1786
+msgid "Aucun destinataire valide n'a été identifié."
+msgstr ""
+
+#: includes/quizzes/class-acdc-quizzes-render-editor-trait.php:1025
+msgid "Aucun objectif pour ce quiz pour l'instant."
+msgstr ""
+
+#: includes/quizzes/class-acdc-quizzes-core-trait.php:2115
+msgid "Aucun objectif pédagogique n'est rattaché au quiz. C'est facultatif mais utile pour le score par compétence et la traçabilité Qualiopi."
+msgstr ""
+
+#: includes/trainer-portal/render/class-acdc-trainer-portal-quizzes-render-trait.php:218
+msgid "Aucun quiz de cette finalité n'est rattaché à vos formations."
+msgstr ""
+
+#: includes/trainer-portal/render/class-acdc-trainer-portal-quizzes-render-trait.php:216
+msgid "Aucun quiz n'est rattaché à vos formations pour le moment."
+msgstr ""
+
+#: includes/quizzes/class-acdc-quizzes-render-trait.php:266
+msgid "Aucun quiz pour cette formation pour le moment."
+msgstr ""
+
+#: includes/quizzes/class-acdc-quizzes-render-trait.php:268
+msgid "Aucun quiz pour le moment. Cliquez sur « + Créer » pour démarrer."
+msgstr ""
+
+#: includes/quizzes/class-acdc-quizzes-render-trait.php:943
+msgid "Aucun quiz source disponible pour cette finalité."
+msgstr ""
+
+#: includes/quizzes/class-acdc-quizzes-render-editor-trait.php:924
+msgid "Aucune"
+msgstr ""
+
+#: includes/quizzes/class-acdc-quizzes-actions-trait.php:3377
+msgid "Aucune donnée à exporter."
+msgstr ""
+
+#: includes/quizzes/class-acdc-quizzes-render-editor-trait.php:227
+msgid "Aucune question pour le moment."
+msgstr ""
+
+#: includes/quizzes/class-acdc-quizzes-render-editor-trait.php:262
+msgid "Aucune question sélectionnée."
+msgstr ""
+
+#: includes/quizzes/class-acdc-quizzes-core-trait.php:3877
+msgid "Aucune réponse de l'apprenant à corriger."
+msgstr ""
+
+#: includes/quizzes/class-acdc-quizzes-actions-trait.php:1596
+msgid "Avant d'envoyer, le quiz doit être complet : "
+msgstr ""
+
+#: includes/quizzes/class-acdc-quizzes-render-editor-trait.php:1178
+msgid "Avant de cliquer Envoyer :"
+msgstr ""
+
+#: includes/quizzes/class-acdc-quizzes-render-trait.php:1155
+msgid "Avant de commencer :"
+msgstr ""
+
+#: includes/quizzes/class-acdc-quizzes-render-trait.php:1125
+msgid "Bonjour %s"
+msgstr ""
+
+#: includes/quizzes/class-acdc-quizzes-actions-trait.php:1699
+msgid "Ce groupe ne contient aucun apprenant inscrit."
+msgstr ""
+
+#: includes/quizzes/class-acdc-quizzes-core-trait.php:2726
+msgid "Ce lien a expiré. Contactez votre formateur si besoin."
+msgstr ""
+
+#: includes/quizzes/class-acdc-quizzes-actions-trait.php:2028
+msgid "Ce participant a déjà terminé ou a été annulé."
+msgstr ""
+
+#: includes/quizzes/class-acdc-quizzes-actions-trait.php:2122
+msgid "Ce participant a déjà terminé."
+msgstr ""
+
+#: includes/quizzes/class-acdc-quizzes-core-trait.php:2749
+msgid "Ce quiz a été retiré."
+msgstr ""
+
+#: includes/quizzes/class-acdc-quizzes-render-editor-trait.php:860
+msgid "Ce quiz est actif. Il peut être lancé en session."
+msgstr ""
+
+#: includes/quizzes/class-acdc-quizzes-render-editor-trait.php:888
+msgid "Ce quiz est archivé."
+msgstr ""
+
+#: includes/quizzes/class-acdc-quizzes-render-editor-trait.php:848
+msgid "Ce quiz est en brouillon. Activez-le pour pouvoir le lancer en session."
+msgstr ""
+
+#: includes/quizzes/class-acdc-quizzes-render-editor-trait.php:251
+msgid "Ce quiz est encore vide. Cliquez sur « Ajouter une question » pour démarrer."
+msgstr ""
+
+#: includes/quizzes/class-acdc-quizzes-actions-trait.php:581 includes/quizzes/class-acdc-quizzes-render-editor-trait.php:87
+msgid "Ce quiz est verrouillé : créez une nouvelle version pour le modifier."
+msgstr ""
+
+#: includes/quizzes/class-acdc-quizzes-actions-trait.php:1456
+msgid "Ce quiz est verrouillé : la dépublication est impossible. Pour modifier, créez une nouvelle version."
+msgstr ""
+
+#: includes/quizzes/class-acdc-quizzes-core-trait.php:5199
+msgid "Ce quiz est verrouillé et ne peut plus être modifié."
+msgstr ""
+
+#: includes/quizzes/class-acdc-quizzes-render-editor-trait.php:202
+msgid "Ce quiz est verrouillé."
+msgstr ""
+
+#: includes/quizzes/class-acdc-quizzes-core-trait.php:2180
+msgid "Ce quiz est verrouillé. Pour modifier ou réactiver, créez une nouvelle version."
+msgstr ""
+
+#: includes/quizzes/class-acdc-quizzes-render-trait.php:1181
+msgid "Ce quiz ne contient aucune question. Contactez votre formateur."
+msgstr ""
+
+#: includes/quizzes/class-acdc-quizzes-actions-trait.php:1509
+msgid "Ce quiz était déjà verrouillé."
+msgstr ""
+
+#: includes/quizzes/class-acdc-quizzes-actions-trait.php:3403
+msgid "Ce test est verrouillé pour la traçabilité Qualiopi : des réponses d'apprenants y sont rattachées."
+msgstr ""
+
+#: includes/quizzes/class-acdc-quizzes-render-trait.php:130
+msgid "Cette fonctionnalité sera disponible dans une prochaine sous-version 3.21."
+msgstr ""
+
+#: includes/quizzes/class-acdc-quizzes-core-trait.php:2729
+msgid "Cette invitation a été annulée par votre formateur."
+msgstr ""
+
+#: includes/quizzes/class-acdc-quizzes-render-trait.php:1033
+msgid "Cette page n'est accessible qu'à partir d'un lien personnel reçu par e-mail."
+msgstr ""
+
+#: includes/quizzes/class-acdc-quizzes-core-trait.php:3866
+msgid "Cette question n'est pas une réponse libre."
+msgstr ""
+
+#: includes/quizzes/class-acdc-quizzes-render-trait.php:1441
+msgid "Cette question utilise un format non encore supporté en passation à distance. Une saisie libre est proposée à la place."
+msgstr ""
+
+#: includes/quizzes/class-acdc-quizzes-core-trait.php:2741
+msgid "Cette série a été annulée par votre formateur."
+msgstr ""
+
+#: includes/quizzes/class-acdc-quizzes-render-trait.php:1273
+msgid "Changement d'onglet détecté. Cet événement est enregistré."
+msgstr ""
+
+#: includes/quizzes/class-acdc-quizzes-render-editor-trait.php:556
+msgid "Cochez la proposition correcte (Vrai ou Faux)."
+msgstr ""
+
+#: includes/kernel/class-acdc-kernel-render-trait.php:175
+msgid "Code HTML"
+msgstr ""
+
+#: includes/quizzes/class-acdc-quizzes-render-trait.php:1164
+msgid "Commencer le quiz"
+msgstr ""
+
+#: includes/quizzes/class-acdc-quizzes-render-trait.php:1901
+msgid "Confirmer et créer le quiz"
+msgstr ""
+
+#: includes/quizzes/class-acdc-quizzes-render-editor-trait.php:1428
+msgid "Confirmer l'import"
+msgstr ""
+
+#: includes/quizzes/class-acdc-quizzes-render-editor-trait.php:974
+msgid "Conservation des données (jours)"
+msgstr ""
+
+#: includes/quizzes/class-acdc-quizzes-render-trait.php:355
+msgid "Consulter (lecture seule)"
+msgstr ""
+
+#: includes/quizzes/class-acdc-quizzes-actions-trait.php:3336
+msgid "Correction enregistrée et score recalculé."
+msgstr ""
+
+#: includes/quizzes/class-acdc-quizzes-render-trait.php:1898 includes/quizzes/class-acdc-quizzes-render-editor-trait.php:1425
+msgid "Corriger le fichier"
+msgstr ""
+
+#: includes/quizzes/class-acdc-quizzes-render-trait.php:555
+msgid "Créer et éditer"
+msgstr ""
+
+#: includes/quizzes/class-acdc-quizzes-render-trait.php:492
+msgid "Créer un quiz"
+msgstr ""
+
+#: includes/quizzes/class-acdc-quizzes-render-trait.php:374
+msgid "Créer une nouvelle version"
+msgstr ""
+
+#: includes/quizzes/class-acdc-quizzes-render-trait.php:498
+msgid "Créer — %s"
+msgstr ""
+
+#: includes/signature/class-acdc-sig-portal.php:68 includes/signature/class-acdc-sig-portal.php:163
+msgid "Demandes en cours"
+msgstr ""
+
+#: includes/quizzes/class-acdc-quizzes-render-trait.php:1427
+msgid "Descendre"
+msgstr ""
+
+#: includes/quizzes/class-acdc-quizzes-render-editor-trait.php:817
+msgid "Description"
+msgstr ""
+
+#: includes/quizzes/class-acdc-quizzes-render-editor-trait.php:1034
+msgid "Description (optionnelle)"
+msgstr ""
+
+#: includes/quizzes/class-acdc-quizzes-render-trait.php:379
+msgid "Disponible 3.21.10"
+msgstr ""
+
+#: includes/quizzes/class-acdc-quizzes-actions-trait.php:1335
+msgid "Données corrompues."
+msgstr ""
+
+#: includes/quizzes/class-acdc-quizzes-actions-trait.php:1330
+msgid "Données manquantes."
+msgstr ""
+
+#: includes/quizzes/class-acdc-quizzes-render-editor-trait.php:734
+msgid "Double"
+msgstr ""
+
+#: includes/quizzes/class-acdc-quizzes-render-trait.php:366 includes/quizzes/class-acdc-quizzes-render-trait.php:989
+msgid "Dupliquer"
+msgstr ""
+
+#: includes/quizzes/class-acdc-quizzes-render-trait.php:933
+msgid "Dupliquer depuis"
+msgstr ""
+
+#: includes/quizzes/class-acdc-quizzes-render-trait.php:202
+msgid "Dupliquer depuis…"
+msgstr ""
+
+#: includes/quizzes/class-acdc-quizzes-render-trait.php:937
+msgid "Dupliquer un quiz dans une formation"
+msgstr ""
+
+#: includes/quizzes/class-acdc-quizzes-render-trait.php:1146
+msgid "Durée estimée"
+msgstr ""
+
+#: includes/quizzes/class-acdc-quizzes-render-editor-trait.php:765
+msgid "Décocher si la question ne doit pas compter dans la note finale (ex. question d'animation)."
+msgstr ""
+
+#: includes/quizzes/class-acdc-quizzes-render-editor-trait.php:1157
+msgid "Délai avant expiration :"
+msgstr ""
+
+#: includes/quizzes/class-acdc-quizzes-actions-trait.php:1875
+msgid "Délai prolongé de %1$d jour(s). Nouvelle date limite : %2$s."
+msgstr ""
+
+#: includes/quizzes/class-acdc-quizzes-render-editor-trait.php:317 includes/quizzes/class-acdc-quizzes-render-editor-trait.php:494 includes/quizzes/class-acdc-quizzes-render-editor-trait.php:584
+#: includes/quizzes/class-acdc-quizzes-render-editor-trait.php:664
+msgid "Déplacer"
+msgstr ""
+
+#: includes/quizzes/class-acdc-quizzes-render-editor-trait.php:959
+msgid "Détecter le changement d'onglet pendant la passation"
+msgstr ""
+
+#: includes/quizzes/class-acdc-quizzes-render-editor-trait.php:903
+msgid "Détection de niveau"
+msgstr ""
+
+#: includes/quizzes/class-acdc-quizzes-render-editor-trait.php:1246
+msgid "E-mail"
+msgstr ""
+
+#: includes/quizzes/class-acdc-quizzes-render-editor-trait.php:827
+msgid "E-mail asynchrone"
+msgstr ""
+
+#: includes/quizzes/class-acdc-quizzes-render-trait.php:533
+msgid "E-mail asynchrone (par défaut)"
+msgstr ""
+
+#: includes/quizzes/class-acdc-quizzes-actions-trait.php:3150 includes/quizzes/class-acdc-quizzes-render-editor-trait.php:102
+msgid "Enregistrement…"
+msgstr ""
+
+#: includes/quizzes/class-acdc-quizzes-render-editor-trait.php:986 includes/quizzes/class-acdc-quizzes-render-editor-trait.php:1036
+msgid "Enregistrer"
+msgstr ""
+
+#: includes/quizzes/class-acdc-quizzes-actions-trait.php:3151 includes/quizzes/class-acdc-quizzes-render-editor-trait.php:103
+msgid "Enregistré"
+msgstr ""
+
+#: includes/quizzes/class-acdc-quizzes-render-editor-trait.php:1212
+msgid "Envoi du %s"
+msgstr ""
+
+#: includes/quizzes/class-acdc-quizzes-render-trait.php:412 includes/quizzes/class-acdc-quizzes-render-trait.php:577 includes/quizzes/class-acdc-quizzes-render-editor-trait.php:1065
+#: includes/quizzes/class-acdc-quizzes-render-editor-trait.php:1069
+msgid "Envoyer par e-mail"
+msgstr ""
+
+#: includes/quizzes/class-acdc-quizzes-render-editor-trait.php:1166
+msgid "Envoyer un rappel automatique 24h avant expiration"
+msgstr ""
+
+#: includes/quizzes/class-acdc-quizzes-actions-trait.php:3152 includes/quizzes/class-acdc-quizzes-render-editor-trait.php:104
+msgid "Erreur"
+msgstr ""
+
+#: includes/quizzes/class-acdc-quizzes-actions-trait.php:1347
+msgid "Erreur d'import."
+msgstr ""
+
+#: includes/quizzes/class-acdc-quizzes-actions-trait.php:1238
+msgid "Erreur de sauvegarde de l'objectif."
+msgstr ""
+
+#: includes/quizzes/class-acdc-quizzes-actions-trait.php:809
+msgid "Erreur lors de l'archivage."
+msgstr ""
+
+#: includes/quizzes/class-acdc-quizzes-actions-trait.php:1162
+msgid "Erreur lors de l'enregistrement de la question."
+msgstr ""
+
+#: includes/quizzes/class-acdc-quizzes-core-trait.php:3896
+msgid "Erreur lors de l'enregistrement."
+msgstr ""
+
+#: includes/quizzes/class-acdc-quizzes-actions-trait.php:2107
+msgid "Erreur lors de l'envoi de la relance."
+msgstr ""
+
+#: includes/quizzes/class-acdc-quizzes-actions-trait.php:1535
+msgid "Erreur lors de la création de la nouvelle version."
+msgstr ""
+
+#: includes/quizzes/class-acdc-quizzes-actions-trait.php:3444
+msgid "Erreur lors de la création de version."
+msgstr ""
+
+#: includes/quizzes/class-acdc-quizzes-actions-trait.php:670
+msgid "Erreur lors de la création du quiz."
+msgstr ""
+
+#: includes/quizzes/class-acdc-quizzes-actions-trait.php:725
+msgid "Erreur lors de la duplication du quiz."
+msgstr ""
+
+#: includes/quizzes/class-acdc-quizzes-actions-trait.php:766 includes/quizzes/class-acdc-quizzes-actions-trait.php:3433
+msgid "Erreur lors de la duplication."
+msgstr ""
+
+#: includes/quizzes/class-acdc-quizzes-actions-trait.php:847 includes/quizzes/class-acdc-quizzes-actions-trait.php:3411
+msgid "Erreur lors de la suppression."
+msgstr ""
+
+#: includes/quizzes/class-acdc-quizzes-render-trait.php:1969 includes/quizzes/class-acdc-quizzes-render-editor-trait.php:1510
+msgid "Erreur réseau."
+msgstr ""
+
+#: includes/quizzes/class-acdc-quizzes-render-trait.php:1962 includes/quizzes/class-acdc-quizzes-render-trait.php:1996 includes/quizzes/class-acdc-quizzes-render-editor-trait.php:1501
+#: includes/quizzes/class-acdc-quizzes-render-editor-trait.php:1534
+msgid "Erreur."
+msgstr ""
+
+#: includes/quizzes/class-acdc-quizzes-render-editor-trait.php:1234
+msgid "Expire le %s"
+msgstr ""
+
+#: includes/quizzes/class-acdc-quizzes-render-editor-trait.php:150
+msgid "Exporter JSON"
+msgstr ""
+
+#: includes/quizzes/class-acdc-quizzes-render-editor-trait.php:551 includes/quizzes/class-acdc-quizzes-render-editor-trait.php:552
+msgid "Faux"
+msgstr ""
+
+#: includes/quizzes/class-acdc-quizzes-render-trait.php:500 includes/quizzes/class-acdc-quizzes-render-trait.php:585 includes/quizzes/class-acdc-quizzes-render-trait.php:938
+#: includes/quizzes/class-acdc-quizzes-render-trait.php:1827 includes/quizzes/class-acdc-quizzes-render-editor-trait.php:156 includes/quizzes/class-acdc-quizzes-render-editor-trait.php:792
+#: includes/quizzes/class-acdc-quizzes-render-editor-trait.php:1014 includes/quizzes/class-acdc-quizzes-render-editor-trait.php:1070 includes/quizzes/class-acdc-quizzes-render-editor-trait.php:1371
+msgid "Fermer"
+msgstr ""
+
+#: includes/quizzes/class-acdc-quizzes-render-trait.php:1862 includes/quizzes/class-acdc-quizzes-render-editor-trait.php:1388
+msgid "Fichier .json uniquement — généré via le prompt officiel ACDC"
+msgstr ""
+
+#: includes/quizzes/class-acdc-quizzes-render-trait.php:1857 includes/quizzes/class-acdc-quizzes-render-editor-trait.php:1383
+msgid "Fichier JSON"
+msgstr ""
+
+#: includes/quizzes/class-acdc-quizzes-core-trait.php:5179
+msgid "Fichier non reconnu — utilisez le prompt officiel ACDC."
+msgstr ""
+
+#: includes/quizzes/class-acdc-quizzes-actions-trait.php:1280
+msgid "Fichier non reçu ou erreur d'upload."
+msgstr ""
+
+#: includes/quizzes/class-acdc-quizzes-actions-trait.php:1287
+msgid "Fichier trop volumineux (max 512 Ko)."
+msgstr ""
+
+#: includes/quizzes/class-acdc-quizzes-render-trait.php:99
+msgid "Fil d'Ariane"
+msgstr ""
+
+#: includes/quizzes/class-acdc-quizzes-render-trait.php:258
+msgid "Filtrer"
+msgstr ""
+
+#: includes/quizzes/class-acdc-quizzes-actions-trait.php:561
+msgid "Finalité de quiz invalide."
+msgstr ""
+
+#: includes/quizzes/class-acdc-quizzes-actions-trait.php:1384
+msgid "Fonctionnalité à venir dans une prochaine sous-version 3.21."
+msgstr ""
+
+#: includes/quizzes/class-acdc-quizzes-render-editor-trait.php:965
+msgid "Forcer le mode plein écran"
+msgstr ""
+
+#: includes/quizzes/class-acdc-quizzes-render-editor-trait.php:947
+msgid "Forcer le respect du temps limite par question"
+msgstr ""
+
+#: includes/quizzes/class-acdc-quizzes-render-editor-trait.php:1148
+msgid "Format accepté : \"email\" ou \"email, Prénom Nom\"."
+msgstr ""
+
+#: includes/quizzes/class-acdc-quizzes-render-trait.php:226
+msgid "Formation :"
+msgstr ""
+
+#: includes/quizzes/class-acdc-quizzes-render-trait.php:973
+msgid "Formation cible"
+msgstr ""
+
+#: includes/quizzes/class-acdc-quizzes-core-trait.php:5214
+msgid "Formation ou type de quiz manquant."
+msgstr ""
+
+#: includes/quizzes/class-acdc-quizzes-render-trait.php:517 includes/quizzes/class-acdc-quizzes-render-trait.php:1834
+msgid "Formation rattachée"
+msgstr ""
+
+#: includes/quizzes/class-acdc-quizzes-render-trait.php:1861 includes/quizzes/class-acdc-quizzes-render-editor-trait.php:1387
+msgid "Glissez votre fichier ici ou cliquez pour sélectionner"
+msgstr ""
+
+#: includes/quizzes/class-acdc-quizzes-actions-trait.php:1687
+msgid "Groupe introuvable."
+msgstr ""
+
+#: includes/quizzes/class-acdc-quizzes-render-editor-trait.php:801
+msgid "Général"
+msgstr ""
+
+#: includes/quizzes/class-acdc-quizzes-core-trait.php:3855
+msgid "Identifiants invalides."
+msgstr ""
+
+#: includes/quizzes/class-acdc-quizzes-actions-trait.php:3300
+msgid "Identifiants manquants."
+msgstr ""
+
+#: includes/quizzes/class-acdc-quizzes-render-editor-trait.php:369
+msgid "Image illustrative (optionnelle)"
+msgstr ""
+
+#: includes/quizzes/class-acdc-quizzes-render-trait.php:207
+msgid "Importer un quiz IA"
+msgstr ""
+
+#: includes/quizzes/class-acdc-quizzes-render-trait.php:1826 includes/quizzes/class-acdc-quizzes-render-editor-trait.php:1370
+msgid "Importer un quiz généré par IA"
+msgstr ""
+
+#: includes/quizzes/class-acdc-quizzes-render-editor-trait.php:144
+msgid "Importer via IA"
+msgstr ""
+
+#: includes/quizzes/class-acdc-quizzes-core-trait.php:2608
+msgid "Impossible de créer la session d'envoi."
+msgstr ""
+
+#: includes/quizzes/class-acdc-quizzes-core-trait.php:5230
+msgid "Impossible de créer le quiz."
+msgstr ""
+
+#: includes/quizzes/class-acdc-quizzes-actions-trait.php:1293
+msgid "Impossible de lire le fichier."
+msgstr ""
+
+#: includes/quizzes/class-acdc-quizzes-render-trait.php:1157
+msgid "Installez-vous dans un environnement calme."
+msgstr ""
+
+#: includes/quizzes/class-acdc-quizzes-render-editor-trait.php:953
+msgid "Interdire de revenir en arrière sur les questions précédentes"
+msgstr ""
+
+#: includes/quizzes/class-acdc-quizzes-actions-trait.php:1913
+msgid "Invitation annulée."
+msgstr ""
+
+#: includes/quizzes/class-acdc-quizzes-actions-trait.php:1340
+msgid "JSON invalide."
+msgstr ""
+
+#: includes/quizzes/class-acdc-quizzes-render-editor-trait.php:856
+msgid "L'activation vérifie que le quiz est prêt (titre, questions, bonnes réponses) avant de le rendre lançable. Tant qu'aucune session réelle n'est lancée, vous pourrez encore le modifier ou le repasser en brouillon."
+msgstr ""
+
+#: includes/quizzes/class-acdc-quizzes-core-trait.php:5430
+msgid "L'import a échoué. Aucune donnée n'a été enregistrée."
+msgstr ""
+
+#: includes/quizzes/class-acdc-quizzes-actions-trait.php:1228
+msgid "L'intitulé de l'objectif est obligatoire."
+msgstr ""
+
+#: includes/quizzes/class-acdc-quizzes-render-trait.php:984
+msgid "La copie est totalement indépendante : modifier la copie n'affecte pas l'original, et inversement."
+msgstr ""
+
+#: includes/quizzes/class-acdc-quizzes-core-trait.php:2111
+msgid "La description du quiz est vide. C'est utile pour que les apprenants comprennent l'objectif."
+msgstr ""
+
+#: includes/quizzes/class-acdc-quizzes-core-trait.php:2054
+msgid "La formation rattachée est introuvable. Le quiz a peut-être été créé sur une formation supprimée depuis."
+msgstr ""
+
+#: includes/quizzes/class-acdc-quizzes-actions-trait.php:568
+msgid "La formation rattachée est obligatoire."
+msgstr ""
+
+#: includes/quizzes/class-acdc-quizzes-core-trait.php:2738
+msgid "La session d'envoi est introuvable."
+msgstr ""
+
+#: includes/quizzes/class-acdc-quizzes-render-trait.php:894
+msgid "Lancer en live"
+msgstr ""
+
+#: includes/quizzes/class-acdc-quizzes-render-editor-trait.php:838
+msgid "Langue"
+msgstr ""
+
+#: includes/quizzes/class-acdc-quizzes-actions-trait.php:1298
+msgid "Le fichier n'est pas un JSON valide."
+msgstr ""
+
+#: includes/quizzes/class-acdc-quizzes-core-trait.php:5185
+msgid "Le fichier ne contient aucune question."
+msgstr ""
+
+#: includes/quizzes/class-acdc-quizzes-core-trait.php:2576
+msgid "Le quiz doit être actif pour être envoyé. Activez-le d'abord."
+msgstr ""
+
+#: includes/trainer-portal/render/class-acdc-trainer-portal-quizzes-render-trait.php:585
+msgid "Le quiz doit être à l'état Actif pour être envoyé."
+msgstr ""
+
+#: includes/quizzes/class-acdc-quizzes-core-trait.php:2746
+msgid "Le quiz est introuvable."
+msgstr ""
+
+#: includes/trainer-portal/render/class-acdc-trainer-portal-quizzes-render-trait.php:589
+msgid "Le quiz est verrouillé suite au premier envoi."
+msgstr ""
+
+#: includes/quizzes/class-acdc-quizzes-core-trait.php:2060
+msgid "Le quiz ne contient aucune question."
+msgstr ""
+
+#: includes/quizzes/class-acdc-quizzes-render-trait.php:549
+msgid "Le quiz sera animé en direct par le formateur (PIN, lobby, leaderboard)."
+msgstr ""
+
+#: includes/quizzes/class-acdc-quizzes-render-trait.php:544
+msgid "Le test de positionnement sera envoyé par e-mail aux apprenants avant la formation."
+msgstr ""
+
+#: includes/quizzes/class-acdc-quizzes-core-trait.php:2048
+msgid "Le titre du quiz est obligatoire."
+msgstr ""
+
+#: includes/quizzes/class-acdc-quizzes-actions-trait.php:553
+msgid "Le titre est obligatoire."
+msgstr ""
+
+#: includes/quizzes/class-acdc-quizzes-actions-trait.php:1497
+msgid "Le verrouillage manuel n'est possible que sur un quiz actif. Activez-le d'abord."
+msgstr ""
+
+#: includes/quizzes/class-acdc-quizzes-render-editor-trait.php:628
+msgid "Les apprenants répondent en texte libre. Ce type de question est corrigé manuellement par le formateur après la session."
+msgstr ""
+
+#: includes/quizzes/class-acdc-quizzes-render-editor-trait.php:1019
+msgid "Les objectifs servent à calculer un score par compétence en fin de quiz. Rattachez ensuite chaque question à un objectif depuis le panneau de paramètres."
+msgstr ""
+
+#: includes/trainer-portal/render/class-acdc-trainer-portal-quizzes-render-trait.php:587
+msgid "Les quiz live ne se prêtent pas à l'envoi par e-mail."
+msgstr ""
+
+#: includes/kernel/class-acdc-kernel-render-trait.php:14025
+msgid "Les réglages ont été enregistrés."
+msgstr ""
+
+#: includes/quizzes/class-acdc-quizzes-actions-trait.php:3352
+msgid "Lien expiré ou invalide. Recharge la page et réessaye."
+msgstr ""
+
+#: includes/quizzes/class-acdc-quizzes-render-trait.php:1085
+msgid "Lien indisponible"
+msgstr ""
+
+#: includes/dossiers-contracts/class-acdc-dossiers-contracts-actions-trait.php:1002
+msgid "Lien invalide ou expiré. Rechargez la page et réessayez."
+msgstr ""
+
+#: includes/quizzes/class-acdc-quizzes-core-trait.php:2720
+msgid "Lien invalide ou inconnu."
+msgstr ""
+
+#: includes/quizzes/class-acdc-quizzes-core-trait.php:2710
+msgid "Lien invalide."
+msgstr ""
+
+#: includes/quizzes/class-acdc-quizzes-render-trait.php:1032
+msgid "Lien manquant"
+msgstr ""
+
+#: includes/quizzes/class-acdc-quizzes-render-editor-trait.php:500
+msgid "Marquer comme bonne réponse"
+msgstr ""
+
+#: includes/quizzes/class-acdc-quizzes-core-trait.php:5189
+msgid "Maximum 100 questions par import."
+msgstr ""
+
+#: includes/quizzes/class-acdc-quizzes-render-trait.php:349
+msgid "Menu"
+msgstr ""
+
+#: includes/quizzes/class-acdc-quizzes-render-trait.php:1587
+msgid "Merci pour votre participation !"
+msgstr ""
+
+#: includes/quizzes/class-acdc-quizzes-render-editor-trait.php:1172
+msgid "Message personnalisé (optionnel) :"
+msgstr ""
+
+#: includes/quizzes/class-acdc-quizzes-render-editor-trait.php:824
+msgid "Mode de passation"
+msgstr ""
+
+#: includes/quizzes/class-acdc-quizzes-render-trait.php:530
+msgid "Mode de passation par défaut"
+msgstr ""
+
+#: includes/quizzes/class-acdc-quizzes-render-editor-trait.php:899
+msgid "Mode de scoring"
+msgstr ""
+
+#: includes/quizzes/class-acdc-quizzes-render-trait.php:357
+msgid "Modifier"
+msgstr ""
+
+#: includes/quizzes/class-acdc-quizzes-render-trait.php:1426
+msgid "Monter"
+msgstr ""
+
+#: includes/quizzes/class-acdc-quizzes-render-trait.php:1142
+msgid "Nombre de questions"
+msgstr ""
+
+#: includes/quizzes/class-acdc-quizzes-actions-trait.php:869 includes/quizzes/class-acdc-quizzes-actions-trait.php:1270 includes/quizzes/class-acdc-quizzes-actions-trait.php:1317
+msgid "Nonce invalide."
+msgstr ""
+
+#: includes/quizzes/class-acdc-quizzes-render-editor-trait.php:902
+msgid "Note absolue"
+msgstr ""
+
+#: includes/quizzes/class-acdc-quizzes-actions-trait.php:2161
+msgid "Nouveau lien envoyé."
+msgstr ""
+
+#: includes/signature/class-acdc-sig-portal.php:78
+msgid "Nouvelle demande"
+msgstr ""
+
+#: includes/signature/class-acdc-sig-portal.php:462
+msgid "Nouvelle demande de signature"
+msgstr ""
+
+#: includes/quizzes/class-acdc-quizzes-actions-trait.php:3155
+msgid "Nouvelle réponse"
+msgstr ""
+
+#: includes/quizzes/class-acdc-quizzes-actions-trait.php:3443
+msgid "Nouvelle version créée."
+msgstr ""
+
+#: includes/quizzes/class-acdc-quizzes-actions-trait.php:1543
+msgid "Nouvelle version créée. Vous éditez maintenant la nouvelle version (l'ancienne reste consultable en lecture seule)."
+msgstr ""
+
+#: includes/quizzes/class-acdc-quizzes-render-trait.php:345
+msgid "Numéro de version"
+msgstr ""
+
+#: includes/quizzes/class-acdc-quizzes-render-editor-trait.php:745
+msgid "Objectif pédagogique"
+msgstr ""
+
+#: includes/quizzes/class-acdc-quizzes-render-editor-trait.php:136
+msgid "Objectifs (%d)"
+msgstr ""
+
+#: includes/quizzes/class-acdc-quizzes-render-editor-trait.php:1009 includes/quizzes/class-acdc-quizzes-render-editor-trait.php:1013
+msgid "Objectifs pédagogiques"
+msgstr ""
+
+#: includes/quizzes/class-acdc-quizzes-render-trait.php:2079
+msgid "Objectifs pédagogiques détectés"
+msgstr ""
+
+#: includes/quizzes/class-acdc-quizzes-render-trait.php:472
+msgid "Ouvrir"
+msgstr ""
+
+#: includes/quizzes/class-acdc-quizzes-render-editor-trait.php:978
+msgid "Par défaut 1095 jours (3 ans, durée Qualiopi). Au-delà, les réponses individuelles sont anonymisées (les agrégats restent)."
+msgstr ""
+
+#: includes/quizzes/class-acdc-quizzes-render-editor-trait.php:153 includes/quizzes/class-acdc-quizzes-render-editor-trait.php:702
+msgid "Paramètres"
+msgstr ""
+
+#: includes/quizzes/class-acdc-quizzes-render-editor-trait.php:787 includes/quizzes/class-acdc-quizzes-render-editor-trait.php:791
+msgid "Paramètres du quiz"
+msgstr ""
+
+#: includes/quizzes/class-acdc-quizzes-render-editor-trait.php:152
+msgid "Paramètres globaux du quiz"
+msgstr ""
+
+#: includes/quizzes/class-acdc-quizzes-actions-trait.php:1853 includes/quizzes/class-acdc-quizzes-actions-trait.php:1895 includes/quizzes/class-acdc-quizzes-actions-trait.php:2025
+#: includes/quizzes/class-acdc-quizzes-actions-trait.php:2119
+msgid "Participant introuvable."
+msgstr ""
+
+#: includes/quizzes/class-acdc-quizzes-render-trait.php:1362
+msgid "Plusieurs réponses possibles (sondage)."
+msgstr ""
+
+#: includes/quizzes/class-acdc-quizzes-render-trait.php:1376
+msgid "Plusieurs réponses possibles."
+msgstr ""
+
+#: includes/quizzes/class-acdc-quizzes-render-editor-trait.php:740
+msgid "Points (max)"
+msgstr ""
+
+#: includes/quizzes/class-acdc-quizzes-render-editor-trait.php:216
+msgid "Pour le faire évoluer, créez une nouvelle version."
+msgstr ""
+
+#: includes/quizzes/class-acdc-quizzes-render-editor-trait.php:901
+msgid "Pourcentage"
+msgstr ""
+
+#: includes/quizzes/class-acdc-quizzes-actions-trait.php:1879
+msgid "Prolongation impossible."
+msgstr ""
+
+#: includes/quizzes/class-acdc-quizzes-render-editor-trait.php:1310
+msgid "Prolonger de 3 jours"
+msgstr ""
+
+#: includes/quizzes/class-acdc-quizzes-render-editor-trait.php:830
+msgid "Présentiel synchrone"
+msgstr ""
+
+#: includes/quizzes/class-acdc-quizzes-render-trait.php:536
+msgid "Présentiel synchrone (anti-triche)"
+msgstr ""
+
+#: includes/quizzes/class-acdc-quizzes-core-trait.php:5366
+msgid "QCM : %d bonne(s) réponse(s) au lieu de 1 exacte."
+msgstr ""
+
+#: includes/quizzes/class-acdc-quizzes-core-trait.php:5369
+msgid "QCM multiple : moins de 2 bonnes réponses."
+msgstr ""
+
+#: includes/quizzes/class-acdc-quizzes-core-trait.php:5375
+msgid "Question %d : "
+msgstr ""
+
+#: includes/quizzes/class-acdc-quizzes-core-trait.php:2101
+msgid "Question %d : aucune bonne réponse n'est cochée."
+msgstr ""
+
+#: includes/quizzes/class-acdc-quizzes-core-trait.php:2087
+msgid "Question %d : aucune proposition de réponse."
+msgstr ""
+
+#: includes/quizzes/class-acdc-quizzes-core-trait.php:5422
+msgid "Question %d : erreur d'insertion en base."
+msgstr ""
+
+#: includes/quizzes/class-acdc-quizzes-core-trait.php:2075
+msgid "Question %d : l'énoncé est vide."
+msgstr ""
+
+#: includes/quizzes/class-acdc-quizzes-core-trait.php:5296
+msgid "Question %d ignorée : titre vide."
+msgstr ""
+
+#: includes/quizzes/class-acdc-quizzes-core-trait.php:5291
+msgid "Question %d ignorée : type \"%s\" inconnu."
+msgstr ""
+
+#: includes/quizzes/class-acdc-quizzes-core-trait.php:3863
+msgid "Question introuvable."
+msgstr ""
+
+#: includes/quizzes/class-acdc-quizzes-render-editor-trait.php:762
+msgid "Question scorée"
+msgstr ""
+
+#: includes/quizzes/class-acdc-quizzes-render-editor-trait.php:223
+msgid "Questions"
+msgstr ""
+
+#: includes/quizzes/class-acdc-quizzes-render-trait.php:95 includes/quizzes/class-acdc-quizzes-render-trait.php:157
+msgid "Quiz"
+msgstr ""
+
+#: includes/quizzes/class-acdc-quizzes-actions-trait.php:211
+msgid "Quiz / Test / Évaluation"
+msgstr ""
+
+#: includes/quizzes/class-acdc-quizzes-actions-trait.php:1424
+msgid "Quiz activé. Il peut maintenant être lancé en session."
+msgstr ""
+
+#: includes/quizzes/class-acdc-quizzes-actions-trait.php:809 includes/quizzes/class-acdc-quizzes-actions-trait.php:3422
+msgid "Quiz archivé."
+msgstr ""
+
+#: includes/quizzes/class-acdc-quizzes-render-editor-trait.php:1378
+msgid "Quiz cible :"
+msgstr ""
+
+#: includes/quizzes/class-acdc-quizzes-actions-trait.php:682
+msgid "Quiz créé. Vous pouvez maintenant ajouter des questions."
+msgstr ""
+
+#: includes/quizzes/class-acdc-quizzes-actions-trait.php:3432
+msgid "Quiz dupliqué."
+msgstr ""
+
+#: includes/quizzes/class-acdc-quizzes-actions-trait.php:781
+msgid "Quiz dupliqué. La copie est en brouillon dans la liste."
+msgstr ""
+
+#: includes/quizzes/class-acdc-quizzes-actions-trait.php:743
+msgid "Quiz dupliqué. Vous éditez maintenant la copie."
+msgstr ""
+
+#: includes/quizzes/class-acdc-quizzes-actions-trait.php:1471
+msgid "Quiz dépublié, repassé en brouillon."
+msgstr ""
+
+#: includes/quizzes/class-acdc-quizzes-render-editor-trait.php:169
+msgid "Quiz envoyé, en attente du premier clic."
+msgstr ""
+
+#: includes/quizzes/class-acdc-quizzes-core-trait.php:5221
+msgid "Quiz importé"
+msgstr ""
+
+#: includes/quizzes/class-acdc-quizzes-actions-trait.php:575 includes/quizzes/class-acdc-quizzes-actions-trait.php:758 includes/quizzes/class-acdc-quizzes-actions-trait.php:796
+#: includes/quizzes/class-acdc-quizzes-actions-trait.php:825 includes/quizzes/class-acdc-quizzes-actions-trait.php:1093 includes/quizzes/class-acdc-quizzes-actions-trait.php:1178
+#: includes/quizzes/class-acdc-quizzes-actions-trait.php:1196 includes/quizzes/class-acdc-quizzes-actions-trait.php:1225 includes/quizzes/class-acdc-quizzes-actions-trait.php:1250
+#: includes/quizzes/class-acdc-quizzes-actions-trait.php:1402 includes/quizzes/class-acdc-quizzes-actions-trait.php:1449 includes/quizzes/class-acdc-quizzes-actions-trait.php:1490
+msgid "Quiz introuvable."
+msgstr ""
+
+#: includes/quizzes/class-acdc-quizzes-actions-trait.php:216
+msgid "Quiz live"
+msgstr ""
+
+#: includes/quizzes/class-acdc-quizzes-actions-trait.php:696
+msgid "Quiz mis à jour."
+msgstr ""
+
+#: includes/quizzes/class-acdc-quizzes-render-trait.php:952
+msgid "Quiz source"
+msgstr ""
+
+#: includes/quizzes/class-acdc-quizzes-actions-trait.php:714
+msgid "Quiz source introuvable."
+msgstr ""
+
+#: includes/quizzes/class-acdc-quizzes-actions-trait.php:847 includes/quizzes/class-acdc-quizzes-actions-trait.php:3410
+msgid "Quiz supprimé."
+msgstr ""
+
+#: includes/quizzes/class-acdc-quizzes-actions-trait.php:1096
+msgid "Quiz verrouillé : créez une nouvelle version pour modifier."
+msgstr ""
+
+#: includes/quizzes/class-acdc-quizzes-actions-trait.php:832
+msgid "Quiz verrouillé : suppression interdite. Utilisez « Archiver »."
+msgstr ""
+
+#: includes/quizzes/class-acdc-quizzes-actions-trait.php:1181 includes/quizzes/class-acdc-quizzes-actions-trait.php:1199
+msgid "Quiz verrouillé."
+msgstr ""
+
+#: includes/quizzes/class-acdc-quizzes-actions-trait.php:1508
+msgid "Quiz verrouillé. Toute modification ultérieure devra passer par une nouvelle version."
+msgstr ""
+
+#: includes/quizzes/class-acdc-quizzes-render-trait.php:1180
+msgid "Quiz vide"
+msgstr ""
+
+#: includes/quizzes/class-acdc-quizzes-render-editor-trait.php:804
+msgid "RGPD"
+msgstr ""
+
+#: includes/quizzes/class-acdc-quizzes-render-editor-trait.php:755
+msgid "Rattachez la question à un objectif pour calculer le score par compétence."
+msgstr ""
+
+#: includes/quizzes/class-acdc-quizzes-render-editor-trait.php:926
+msgid "Recommander un complément"
+msgstr ""
+
+#: includes/quizzes/class-acdc-quizzes-render-trait.php:1416
+msgid "Remettez les éléments dans le bon ordre avec les flèches."
+msgstr ""
+
+#: includes/quizzes/class-acdc-quizzes-actions-trait.php:3157 includes/quizzes/class-acdc-quizzes-render-editor-trait.php:379
+msgid "Remplacer l'image"
+msgstr ""
+
+#: includes/quizzes/class-acdc-quizzes-render-editor-trait.php:874
+msgid "Repasser en brouillon"
+msgstr ""
+
+#: includes/quizzes/class-acdc-quizzes-render-editor-trait.php:383 includes/quizzes/class-acdc-quizzes-render-editor-trait.php:508 includes/quizzes/class-acdc-quizzes-render-editor-trait.php:594
+#: includes/quizzes/class-acdc-quizzes-render-editor-trait.php:673
+msgid "Retirer"
+msgstr ""
+
+#: includes/quizzes/class-acdc-quizzes-render-editor-trait.php:1303
+msgid "Réenvoyer un nouveau lien"
+msgstr ""
+
+#: includes/signature/class-acdc-sig-portal.php:83
+msgid "Réglages"
+msgstr ""
+
+#: includes/kernel/class-acdc-kernel-render-trait.php:14023
+msgid "Réglages organisme"
+msgstr ""
+
+#: includes/signature/class-acdc-sig-portal.php:574
+msgid "Réglages — Signatures"
+msgstr ""
+
+#: includes/quizzes/class-acdc-quizzes-actions-trait.php:1208
+msgid "Réordonnancement impossible."
+msgstr ""
+
+#: includes/quizzes/class-acdc-quizzes-render-trait.php:2112 includes/quizzes/class-acdc-quizzes-render-editor-trait.php:1679
+msgid "Réponse de référence :"
+msgstr ""
+
+#: includes/quizzes/class-acdc-quizzes-render-editor-trait.php:390
+msgid "Réponses"
+msgstr ""
+
+#: includes/quizzes/class-acdc-quizzes-core-trait.php:5322
+msgid "Réponses Vrai/Faux auto-injectées."
+msgstr ""
+
+#: includes/quizzes/class-acdc-quizzes-actions-trait.php:231
+msgid "Résultats — Positionnement"
+msgstr ""
+
+#: includes/quizzes/class-acdc-quizzes-actions-trait.php:221
+msgid "Résultats — Quiz live"
+msgstr ""
+
+#: includes/quizzes/class-acdc-quizzes-actions-trait.php:241
+msgid "Résultats — Évaluations"
+msgstr ""
+
+#: includes/quizzes/class-acdc-quizzes-render-editor-trait.php:1082
+msgid "Saisie libre"
+msgstr ""
+
+#: includes/quizzes/class-acdc-quizzes-render-editor-trait.php:363
+msgid "Saisissez l'énoncé de la question…"
+msgstr ""
+
+#: includes/quizzes/class-acdc-quizzes-render-editor-trait.php:575
+msgid "Saisissez les éléments dans l'ordre attendu (cet ordre sera la bonne réponse). Les apprenants verront ces éléments mélangés et devront les remettre dans le bon ordre."
+msgstr ""
+
+#: includes/quizzes/class-acdc-quizzes-render-editor-trait.php:670
+msgid "Saisissez une option…"
+msgstr ""
+
+#: includes/quizzes/class-acdc-quizzes-render-editor-trait.php:505
+msgid "Saisissez une proposition…"
+msgstr ""
+
+#: includes/quizzes/class-acdc-quizzes-render-editor-trait.php:1248
+msgid "Score"
+msgstr ""
+
+#: includes/quizzes/class-acdc-quizzes-render-trait.php:1601
+msgid "Score indicatif : %s %%"
+msgstr ""
+
+#: includes/quizzes/class-acdc-quizzes-render-editor-trait.php:802
+msgid "Scoring"
+msgstr ""
+
+#: includes/quizzes/class-acdc-quizzes-render-editor-trait.php:1118
+msgid "Session :"
+msgstr ""
+
+#: includes/quizzes/class-acdc-quizzes-actions-trait.php:3372
+msgid "Session introuvable."
+msgstr ""
+
+#: includes/quizzes/class-acdc-quizzes-actions-trait.php:872 includes/quizzes/class-acdc-quizzes-actions-trait.php:3357
+msgid "Session invalide."
+msgstr ""
+
+#: includes/quizzes/class-acdc-quizzes-render-editor-trait.php:1032
+msgid "Seuil %"
+msgstr ""
+
+#: includes/quizzes/class-acdc-quizzes-render-editor-trait.php:909
+msgid "Seuil de réussite (%)"
+msgstr ""
+
+#: includes/quizzes/class-acdc-quizzes-render-editor-trait.php:915
+msgid "Seuils de niveau (JSON, optionnel)"
+msgstr ""
+
+#: includes/quizzes/class-acdc-quizzes-render-trait.php:1088
+msgid "Si vous pensez qu'il s'agit d'une erreur, contactez votre formateur."
+msgstr ""
+
+#: includes/signature/class-acdc-sig-portal.php:62
+msgid "Signatures électroniques"
+msgstr ""
+
+#: includes/quizzes/class-acdc-quizzes-render-editor-trait.php:655
+msgid "Sondage d'opinion : aucune réponse n'est juste ou fausse, les résultats sont affichés sous forme de barres en fin de question."
+msgstr ""
+
+#: includes/quizzes/class-acdc-quizzes-render-editor-trait.php:733
+msgid "Standard"
+msgstr ""
+
+#: includes/quizzes/class-acdc-quizzes-render-editor-trait.php:1247
+msgid "Statut"
+msgstr ""
+
+#: includes/quizzes/class-acdc-quizzes-render-trait.php:237
+msgid "Statut :"
+msgstr ""
+
+#: includes/quizzes/class-acdc-quizzes-render-trait.php:1261
+msgid "Suivante →"
+msgstr ""
+
+#: includes/quizzes/class-acdc-quizzes-actions-trait.php:1186 includes/quizzes/class-acdc-quizzes-actions-trait.php:1255
+msgid "Suppression impossible."
+msgstr ""
+
+#: includes/quizzes/class-acdc-quizzes-render-trait.php:427 includes/quizzes/class-acdc-quizzes-render-editor-trait.php:323 includes/quizzes/class-acdc-quizzes-render-editor-trait.php:1037
+msgid "Supprimer"
+msgstr ""
+
+#: includes/quizzes/class-acdc-quizzes-actions-trait.php:3154
+msgid "Supprimer cet objectif ?"
+msgstr ""
+
+#: includes/quizzes/class-acdc-quizzes-render-editor-trait.php:323
+msgid "Supprimer cette question"
+msgstr ""
+
+#: includes/quizzes/class-acdc-quizzes-actions-trait.php:3153
+msgid "Supprimer cette question ?"
+msgstr ""
+
+#: includes/quizzes/class-acdc-quizzes-render-trait.php:519 includes/quizzes/class-acdc-quizzes-render-trait.php:954 includes/quizzes/class-acdc-quizzes-render-trait.php:975
+msgid "Sélectionner"
+msgstr ""
+
+#: includes/quizzes/class-acdc-quizzes-render-trait.php:1836
+msgid "Sélectionner une formation"
+msgstr ""
+
+#: includes/quizzes/class-acdc-quizzes-render-trait.php:1946 includes/quizzes/class-acdc-quizzes-render-editor-trait.php:1478
+msgid "Sélectionnez un fichier JSON."
+msgstr ""
+
+#: includes/quizzes/class-acdc-quizzes-render-trait.php:1982
+msgid "Sélectionnez une formation."
+msgstr ""
+
+#: includes/quizzes/class-acdc-quizzes-render-editor-trait.php:717
+msgid "Temps limite"
+msgstr ""
+
+#: includes/quizzes/class-acdc-quizzes-render-editor-trait.php:925
+msgid "Tentative supplémentaire autorisée"
+msgstr ""
+
+#: includes/quizzes/class-acdc-quizzes-render-editor-trait.php:933
+msgid "Tentatives max"
+msgstr ""
+
+#: includes/quizzes/class-acdc-quizzes-actions-trait.php:226
+msgid "Tests de positionnement"
+msgstr ""
+
+#: includes/quizzes/class-acdc-quizzes-render-editor-trait.php:405
+msgid "Texte d'aide ou explication affiché après réponse…"
+msgstr ""
+
+#: includes/quizzes/class-acdc-quizzes-render-trait.php:1870 includes/quizzes/class-acdc-quizzes-render-editor-trait.php:1396
+msgid "Timer appliqué à toutes les questions (secondes)"
+msgstr ""
+
+#: includes/quizzes/class-acdc-quizzes-render-trait.php:510 includes/quizzes/class-acdc-quizzes-render-editor-trait.php:811
+msgid "Titre"
+msgstr ""
+
+#: includes/quizzes/class-acdc-quizzes-render-trait.php:239
+msgid "Tous"
+msgstr ""
+
+#: includes/quizzes/class-acdc-quizzes-render-editor-trait.php:1136
+msgid "Tous les apprenants rattachés à la session sélectionnée recevront le lien."
+msgstr ""
+
+#: includes/quizzes/class-acdc-quizzes-render-editor-trait.php:1098
+msgid "Tout cocher"
+msgstr ""
+
+#: includes/quizzes/class-acdc-quizzes-render-editor-trait.php:1100
+msgid "Tout décocher"
+msgstr ""
+
+#: includes/quizzes/class-acdc-quizzes-render-trait.php:228
+msgid "Toutes"
+msgstr ""
+
+#: includes/quizzes/class-acdc-quizzes-render-trait.php:254
+msgid "Toutes les versions"
+msgstr ""
+
+#: includes/quizzes/class-acdc-quizzes-render-editor-trait.php:706
+msgid "Type"
+msgstr ""
+
+#: includes/quizzes/class-acdc-quizzes-render-editor-trait.php:731
+msgid "Type de points"
+msgstr ""
+
+#: includes/quizzes/class-acdc-quizzes-render-trait.php:1846
+msgid "Type de quiz"
+msgstr ""
+
+#: includes/quizzes/class-acdc-quizzes-render-editor-trait.php:149
+msgid "Télécharger ce quiz au format JSON (réimport IA)"
+msgstr ""
+
+#: includes/quizzes/class-acdc-quizzes-render-editor-trait.php:1173
+msgid "Un mot pour vos apprenants…"
+msgstr ""
+
+#: includes/quizzes/class-acdc-quizzes-render-trait.php:1158
+msgid "Une fois commencé, terminez le quiz d'une traite si possible."
+msgstr ""
+
+#: includes/quizzes/class-acdc-quizzes-render-editor-trait.php:918
+msgid "Utile pour les tests de positionnement (CECRL, niveaux personnalisés)."
+msgstr ""
+
+#: includes/quizzes/class-acdc-quizzes-render-editor-trait.php:880
+msgid "Verrouiller manuellement"
+msgstr ""
+
+#: includes/quizzes/class-acdc-quizzes-render-editor-trait.php:879
+msgid "Verrouiller manuellement (utile pour figer une version sans attendre une session réelle)"
+msgstr ""
+
+#: includes/quizzes/class-acdc-quizzes-render-trait.php:460 includes/quizzes/class-acdc-quizzes-render-editor-trait.php:88
+msgid "Verrouillé"
+msgstr ""
+
+#: includes/quizzes/class-acdc-quizzes-render-editor-trait.php:208
+msgid "Verrouillé le %s. "
+msgstr ""
+
+#: includes/quizzes/class-acdc-quizzes-render-editor-trait.php:213
+msgid "Verrouillé suite au premier clic d'apprenant. "
+msgstr ""
+
+#: includes/quizzes/class-acdc-quizzes-render-editor-trait.php:81
+msgid "Version courante"
+msgstr ""
+
+#: includes/quizzes/class-acdc-quizzes-render-trait.php:248
+msgid "Versions :"
+msgstr ""
+
+#: includes/quizzes/class-acdc-quizzes-render-trait.php:251
+msgid "Versions courantes"
+msgstr ""
+
+#: includes/quizzes/class-acdc-quizzes-actions-trait.php:1680
+msgid "Veuillez sélectionner un groupe."
+msgstr ""
+
+#: includes/quizzes/class-acdc-quizzes-actions-trait.php:1663
+msgid "Veuillez sélectionner une formation."
+msgstr ""
+
+#: includes/quizzes/class-acdc-quizzes-actions-trait.php:1723
+msgid "Veuillez sélectionner une séance."
+msgstr ""
+
+#: includes/quizzes/class-acdc-quizzes-render-trait.php:380
+msgid "Voir les résultats"
+msgstr ""
+
+#: includes/quizzes/class-acdc-quizzes-render-trait.php:1591
+msgid "Vos réponses au quiz « %s » ont bien été enregistrées."
+msgstr ""
+
+#: includes/quizzes/class-acdc-quizzes-render-trait.php:1159
+msgid "Vos réponses sont enregistrées au fur et à mesure."
+msgstr ""
+
+#: includes/quizzes/class-acdc-quizzes-render-trait.php:1391
+msgid "Votre réponse…"
+msgstr ""
+
+#: includes/quizzes/class-acdc-quizzes-core-trait.php:2723
+msgid "Vous avez déjà passé ce quiz."
+msgstr ""
+
+#: includes/quizzes/class-acdc-quizzes-actions-trait.php:3365
+msgid "Vous n'avez pas accès à cette session."
+msgstr ""
+
+#: includes/quizzes/class-acdc-quizzes-render-editor-trait.php:180
+msgid "Vous pouvez encore modifier ce quiz. Mais dès qu'un apprenant cliquera son lien, le quiz sera automatiquement verrouillé pour traçabilité Qualiopi. Les apprenants suivants verront alors la version au moment du verrouillage."
+msgstr ""
+
+#: includes/quizzes/class-acdc-quizzes-render-editor-trait.php:884
+msgid "Vous pouvez le repasser en brouillon tant qu'aucune session réelle n'a été lancée. Une fois utilisé en session, il sera verrouillé automatiquement."
+msgstr ""
+
+#: includes/quizzes/class-acdc-quizzes-render-trait.php:1595
+msgid "Vous recevrez un e-mail de confirmation. Vous pouvez maintenant fermer cette page."
+msgstr ""
+
+#: includes/quizzes/class-acdc-quizzes-render-trait.php:1131
+msgid "Vous êtes invité à passer le quiz : %s."
+msgstr ""
+
+#: includes/quizzes/class-acdc-quizzes-render-editor-trait.php:546 includes/quizzes/class-acdc-quizzes-render-editor-trait.php:547
+msgid "Vrai"
+msgstr ""
+
+#: includes/quizzes/class-acdc-quizzes-render-editor-trait.php:1180
+msgid "Vérifiez que le contenu du quiz est prêt — vous pourrez encore modifier tant qu'aucun apprenant n'a cliqué."
+msgstr ""
+
+#: includes/kernel/class-acdc-kernel-render-trait.php:172
+msgid "Zone de saisie"
+msgstr ""
+
+#: includes/quizzes/class-acdc-quizzes-core-trait.php:3152
+msgid "[Rappel] Plus que 24h pour répondre — %s"
+msgstr ""
+
+#: includes/quizzes/class-acdc-quizzes-render-trait.php:1101
+msgid "apprenant"
+msgstr ""
+
+#: includes/quizzes/class-acdc-quizzes-render-trait.php:2063
+msgid "avert."
+msgstr ""
+
+#: includes/quizzes/class-acdc-quizzes-render-editor-trait.php:1618
+msgid "avertissement(s)"
+msgstr ""
+
+#: includes/quizzes/class-acdc-quizzes-render-trait.php:2064 includes/quizzes/class-acdc-quizzes-render-editor-trait.php:1549 includes/quizzes/class-acdc-quizzes-render-editor-trait.php:1619
+msgid "ignorée(s)"
+msgstr ""
+
+#: includes/quizzes/class-acdc-quizzes-render-editor-trait.php:1159
+msgid "jours"
+msgstr ""
+
+#: includes/quizzes/class-acdc-quizzes-render-trait.php:2062
+msgid "objectif(s)"
+msgstr ""
+
+#: includes/quizzes/class-acdc-quizzes-render-trait.php:2061
+msgid "question(s)"
+msgstr ""
+
+#: includes/quizzes/class-acdc-quizzes-render-editor-trait.php:1547
+msgid "question(s) importée(s) avec succès."
+msgstr ""
+
+#: includes/quizzes/class-acdc-quizzes-render-editor-trait.php:1617
+msgid "valide(s)"
+msgstr ""
+
+#: includes/quizzes/class-acdc-quizzes-actions-trait.php:2162
+msgid "Échec de l'envoi du nouveau lien."
+msgstr ""
+
+#: includes/quizzes/class-acdc-quizzes-render-trait.php:103
+msgid "Édition"
+msgstr ""
+
+#: includes/quizzes/class-acdc-quizzes-render-editor-trait.php:591
+msgid "Élément à placer…"
+msgstr ""
+
+#: includes/quizzes/class-acdc-quizzes-render-editor-trait.php:356
+msgid "Énoncé"
+msgstr ""
+
+#: includes/quizzes/class-acdc-quizzes-render-editor-trait.php:845
+msgid "État du quiz"
+msgstr ""
+
+#: includes/quizzes/class-acdc-quizzes-render-editor-trait.php:188
+msgid "État incohérent détecté."
+msgstr ""
+
+#: includes/quizzes/class-acdc-quizzes-actions-trait.php:236
+msgid "Évaluations des acquis"
+msgstr ""
+
+#: includes/quizzes/class-acdc-quizzes-render-editor-trait.php:1120
+msgid "— Sélectionner une session —"
+msgstr ""
+
+#: includes/quizzes/class-acdc-quizzes-render-trait.php:1258
+msgid "← Précédente"
+msgstr ""
+
+#: includes/quizzes/class-acdc-quizzes-render-editor-trait.php:1259
+msgid "⏰ Expiré"
+msgstr ""
+
+#: includes/quizzes/class-acdc-quizzes-render-trait.php:394 includes/quizzes/class-acdc-quizzes-render-trait.php:400 includes/quizzes/class-acdc-quizzes-render-editor-trait.php:130
+msgid "▶ Lancer en live"
+msgstr ""
+
+#: includes/quizzes/class-acdc-quizzes-render-editor-trait.php:1258
+msgid "✅ Terminé"
+msgstr ""
+
+#: includes/quizzes/class-acdc-quizzes-render-editor-trait.php:1187
+msgid "✉ Envoyer maintenant"
+msgstr ""
+
+#: includes/quizzes/class-acdc-quizzes-render-editor-trait.php:117
+msgid "✉ Envoyer par e-mail"
+msgstr ""
+
+#: includes/quizzes/class-acdc-quizzes-render-trait.php:1263
+msgid "✓ Valider mes réponses"
+msgstr ""
+
+#: includes/quizzes/class-acdc-quizzes-render-editor-trait.php:1260
+msgid "❌ Annulé"
+msgstr ""
+
+#: includes/quizzes/class-acdc-quizzes-render-editor-trait.php:1256
+msgid "👁 Lu"
+msgstr ""
+
+#: includes/quizzes/class-acdc-quizzes-render-editor-trait.php:1201
+msgid "📨 Suivi des envois"
+msgstr ""
+
+#: includes/quizzes/class-acdc-quizzes-render-editor-trait.php:1255
+msgid "🕒 Envoyé"
+msgstr ""
+
+#: includes/quizzes/class-acdc-quizzes-render-editor-trait.php:1257
+msgid "🟡 En cours"
+msgstr ""
+

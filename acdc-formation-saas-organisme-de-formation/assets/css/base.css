@@ -1,0 +1,177 @@
+:root {
+    --acdc-font: Rubik, Arial, system-ui, sans-serif;
+    --acdc-sidebar-width: 320px;
+    --acdc-menu-font-size: 14px;
+    --acdc-radius: 10px;
+    --acdc-radius-sm: 10px;
+    --acdc-radius-panel: 10px;
+    --acdc-radius-modal: 10px;
+    --acdc-radius-pill: 10px;
+    --acdc-bg: #F6F8FB;
+    --acdc-soft-bg: #fbf8f7;
+    --acdc-surface: #F9FAFB;
+    --acdc-white: #F9FAFB;
+    --acdc-text: #0C2D52;
+    --acdc-text-muted: #1E4777;
+    --acdc-text-light: #3C3C3C;
+    --acdc-primary: #C5A253;
+    --acdc-primary-dark: #D7A24B;
+    --acdc-primary-soft: #F3E3BF;
+    --acdc-secondary: #E9C77C;
+    --acdc-secondary-accent: #C9A409;
+    --acdc-link: #0C2D52;
+    --acdc-border: #DCE4EC;
+    --acdc-border-soft: #E7EDF3;
+    --acdc-border-strong: #0B0706;
+    --acdc-divider: #C5A253;
+    --acdc-success: #35B37E;
+    --acdc-warning: #F0B45E;
+    --acdc-danger: #E06D6D;
+    --acdc-info: #6E8FB3;
+    --acdc-button: #D7A24B;
+    --acdc-button-text: #0B0706;
+    --acdc-button-gradient: linear-gradient(90deg, #8A5A2B 0%, #C28A3A 17%, #D7A24B 34%, #E9C77C 50%, #D7A24B 67%, #B7772E 84%, #6B3F1D 100%);
+    --acdc-button-secondary-bg: #E9C77C;
+    --acdc-button-soft-bg: #F3E3BF;
+    --acdc-button-hover: #E8D2A0;
+    --acdc-shadow-panel: 0 4px 14px rgba(28, 44, 64, 0.05);
+    --acdc-shadow-modal: 0 10px 30px rgba(28, 44, 64, 0.12);
+    --acdc-focus-ring: 0 0 0 3px rgba(197, 162, 83, 0.18);
+}
+
+body.acdc-blank-template-body {
+    margin: 0;
+    background: var(--acdc-bg);
+    color: var(--acdc-text);
+}
+
+.acdc-blank-template-page,
+.acdc-admin-wrap,
+.acdc-portal-shell,
+.acdc-portal-shell * {
+    box-sizing: border-box;
+    font-family: var(--acdc-font);
+}
+
+.acdc-portal-shell,
+.acdc-portal-shell input,
+.acdc-portal-shell select,
+.acdc-portal-shell textarea,
+.acdc-portal-shell button {
+    font-size: 14px;
+    line-height: 18px;
+}
+
+h1,
+.acdc-login-head h1,
+.acdc-page h1 {
+    font-size: 25px;
+    line-height: 30px;
+    font-weight: 700;
+    color: var(--acdc-text);
+}
+
+h2,
+.acdc-page h2,
+.acdc-section-head h2,
+.acdc-panel h2 {
+    font-size: 20px;
+    line-height: 25px;
+    font-weight: 600;
+    color: var(--acdc-text);
+}
+
+h3,
+.acdc-page h3,
+.acdc-panel h3,
+.acdc-profile-section h3,
+.acdc-company-profile-form .acdc-panel h3 {
+    font-size: 18px;
+    line-height: 20px;
+    font-weight: 600;
+    color: var(--acdc-text);
+}
+
+small,
+.acdc-help,
+.acdc-help-inline,
+.acdc-profile-meta,
+.acdc-dashboard-meta {
+    font-size: 12px;
+    line-height: 16px;
+}
+
+label,
+.acdc-form label,
+.acdc-form-panel label {
+    font-size: 13px;
+    line-height: 16px;
+    font-weight: 500;
+}
+
+a {
+    color: var(--acdc-link);
+}
+
+a:hover,
+a:focus-visible {
+    color: var(--acdc-text);
+}
+
+.wrap .acdc-portal-layout {
+    min-height: auto;
+}
+
+.wrap .acdc-portal-nav {
+    height: auto;
+    min-height: calc(100vh - 60px);
+}
+
+.acdc-admin-wrap {
+    margin: 20px 20px 0 0;
+}
+
+
+.acdc-portal-shell-extranet {
+    width: 100vw;
+    max-width: none;
+    margin-left: calc(50% - 50vw);
+    margin-right: calc(50% - 50vw);
+}
+
+.acdc-portal-shell-extranet .acdc-portal-layout {
+    width: 100%;
+    max-width: none;
+}
+
+@media (max-width: 1100px) {
+    .acdc-portal-shell-extranet {
+        width: 100%;
+        margin-left: 0;
+        margin-right: 0;
+    }
+}
+
+.acdc-page {
+    --acdc-page-gap: 18px;
+}
+
+.acdc-page-dashboard {}
+.acdc-page-formations {}
+.acdc-page-evaluations {}
+.acdc-page-mid_surveys {}
+.acdc-page-hot_surveys {}
+.acdc-page-cold_surveys {}
+.acdc-page-trainer_surveys {}
+
+@media (max-width: 1100px) {
+    .acdc-portal-layout {
+        flex-direction: column;
+    }
+
+    .acdc-portal-nav {
+        width: 100%;
+        height: auto;
+        position: relative;
+    }
+}

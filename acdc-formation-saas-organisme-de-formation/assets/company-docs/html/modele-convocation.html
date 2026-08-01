@@ -1,0 +1,303 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Convocation en formation - ACDC-Formation</title>
+  <style>
+    :root {
+      --navy: #0C2D52;
+      --gold: #C5A253;
+      --ink: #1f2937;
+      --muted: #6b7280;
+      --line: #d7dde6;
+      --paper: #ffffff;
+      --soft: #f8fafc;
+    }
+
+    @page {
+      size: A4 portrait;
+      margin: 0;
+    }
+
+    * { box-sizing: border-box; }
+
+    body {
+      margin: 0;
+      background: #eef2f6;
+      font-family: Rubik, Arial, Helvetica, sans-serif;
+      color: var(--ink);
+    }
+
+    .page {
+      width: 210mm;
+      min-height: 297mm;
+      margin: 0 auto;
+      background: var(--paper);
+      box-shadow: 0 10px 30px rgba(12,45,82,0.08);
+      position: relative;
+      padding: 11mm 12.5mm 20mm;
+      overflow: hidden;
+    }
+
+    .header {
+      display: flex;
+      justify-content: space-between;
+      align-items: flex-start;
+      gap: 8mm;
+      border-bottom: 1.5px solid var(--gold);
+      padding-bottom: 3.5mm;
+      margin-bottom: 6mm;
+    }
+
+    .brand {
+      display: flex;
+      align-items: center;
+      gap: 4mm;
+      min-width: 0;
+    }
+
+    .brand img {
+      height: 16mm;
+      width: auto;
+      object-fit: contain;
+      flex-shrink: 0;
+    }
+
+    .brand-text strong {
+      display: block;
+      color: var(--navy);
+      font-size: 13.6pt;
+      line-height: 1.08;
+      font-weight: 700;
+    }
+
+    .brand-text span {
+      display: block;
+      margin-top: 0.8mm;
+      color: var(--gold);
+      font-size: 7.7pt;
+      font-weight: 500;
+      letter-spacing: 0.01em;
+    }
+
+    .company {
+      text-align: right;
+      font-size: 8pt;
+      line-height: 1.32;
+      color: #374151;
+      max-width: 64mm;
+    }
+
+    h1 {
+      margin: 0 0 1.8mm;
+      color: var(--navy);
+      font-size: 16pt;
+      font-weight: 700;
+      letter-spacing: 0.01em;
+      text-transform: uppercase;
+    }
+
+    .intro {
+      margin-bottom: 6mm;
+      font-size: 9pt;
+      line-height: 1.5;
+      color: #374151;
+    }
+
+    .recipient {
+      margin-bottom: 5mm;
+      padding: 4mm 4.5mm;
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      background: #fff;
+      font-size: 9.4pt;
+      line-height: 1.45;
+      color: var(--navy);
+      font-weight: 600;
+    }
+
+    .section {
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      padding: 4mm 4.5mm;
+      background: #fff;
+      margin-bottom: 5mm;
+    }
+
+    .section-title {
+      font-size: 8.4pt;
+      text-transform: uppercase;
+      letter-spacing: 0.04em;
+      color: var(--gold);
+      font-weight: 700;
+      margin-bottom: 2mm;
+    }
+
+    .text {
+      font-size: 8.7pt;
+      line-height: 1.48;
+      color: #1f2937;
+      text-align: justify;
+    }
+
+    .grid-2 {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 6mm;
+    }
+
+    .info-list {
+      display: grid;
+      grid-template-columns: 1fr;
+      gap: 2mm;
+      font-size: 8.7pt;
+      line-height: 1.42;
+    }
+
+    .info-item strong {
+      color: var(--navy);
+    }
+
+    .signature-block {
+      margin-top: 8mm;
+      display: flex;
+      justify-content: flex-end;
+      text-align: left;
+      position: relative;
+      min-height: 34mm;
+    }
+
+    .signature-content {
+      width: 72mm;
+      border-top: 1px solid var(--line);
+      padding-top: 3mm;
+      font-size: 8pt;
+      color: #4b5563;
+      position: relative;
+    }
+
+    .signature-content img {
+      position: absolute;
+      right: 0;
+      bottom: -10mm;
+      height: 30mm;
+      width: auto;
+      object-fit: contain;
+      opacity: 0.95;
+    }
+
+    .footer {
+      position: absolute;
+      left: 10mm;
+      right: 10mm;
+      bottom: 4mm;
+      border-top: 1px solid var(--line);
+      padding-top: 2.2mm;
+      text-align: center;
+      font-size: 6.8pt;
+      line-height: 1.22;
+      color: #4b5563;
+    }
+
+    @media print {
+      body { background: white; }
+      .page { margin: 0; box-shadow: none; }
+    }
+  </style>
+</head>
+<body>
+  <div class="page">
+    <div class="header">
+      <div class="brand">
+        <img src="https://acdcformation.com/wp-content/uploads/2026/03/Logo-ACDC.png" alt="Logo ACDC-Formation" />
+        <div class="brand-text">
+          <strong>ACDC-Formation</strong>
+          <span>Convocation en formation</span>
+        </div>
+      </div>
+      <div class="company">
+        <strong>ACDC-Formation</strong><br />
+        7 avenue Paul Cézanne<br />
+        83310 Cogolin - France<br />
+        Siret : 405109901 00042<br />
+        NDA : 93 83 08347 83
+      </div>
+    </div>
+
+    <h1>Convocation en formation</h1>
+
+    <div class="recipient">'(Créer une variable pour la civilité)' {{apprenant_nom_complet}}</div>
+
+    <div class="intro">
+      Nous avons le plaisir de vous adresser notre convocation à la formation : <strong>{{formation_intitule}}</strong>.<br />
+      Vous trouverez ci-dessous toutes les informations pratiques à savoir.
+    </div>
+
+    <div class="section">
+      <div class="section-title">Informations pratiques</div>
+      <div class="info-list">
+        <div class="info-item"><strong>Format de la formation :</strong> {{session_format}}</div>
+        <div class="info-item"><strong>Dates de l'action de formation :</strong> {{session_date_debut}} au {{session_date_fin}}</div>
+        <div class="info-item"><strong>Durée de l'action de formation :</strong> {{formation_duree}}</div>
+        <div class="info-item"><strong>Votre formation débutera le :</strong> {{session_date_debut}} à (Créer une variable)</div>
+      </div>
+    </div>
+
+    <div class="section">
+      <div class="section-title">Pour les séances de formation</div>
+      <div class="text">
+        La formation se déroulera dans les locaux situés à l'adresse suivante : <strong> {{session_lieu}}</strong>.
+      </div>
+    </div>
+
+    <div class="section">
+      <div class="section-title">Recommandations pour suivre la formation</div>
+      <div class="text">
+        Ces recommandations s'appliquent à tous les formats de formation (présentiel, distanciel ou mixte) : prévoir une arrivée 10 minutes avant le début de la session ; apporter de quoi prendre des notes (ordinateur, tablette ou carnet) ; vérifier la stabilité de la connexion Internet en cas de formation à distance ; se munir d'une pièce d'identité pour l'émargement ou l'accès sécurisé aux locaux ; en cas de besoin spécifique (handicap, matériel, accessibilité), en informer les référents handicap avant le démarrage de la formation (Ann-Cécile Joucher ou David Contal).
+      </div>
+    </div>
+
+    <div class="grid-2">
+      <div class="section">
+        <div class="section-title">Moyens d'accès à la formation</div>
+        <div class="text">
+          Les informations pratiques (adresse) sont précisées dans la convocation. Les formations se déroulent dans des locaux accessibles en voiture et généralement desservis par les transports publics. Un parking ou un stationnement à proximité est indiqué lorsque cela est possible.
+        </div>
+      </div>
+
+      <div class="section">
+        <div class="section-title">Accessibilité</div>
+        <div class="text">
+          <strong>Accès PMR :</strong> Oui<br /><br />
+          En cas de participant à mobilité réduite, l'organisme de formation s'engage à proposer une salle adaptée respectant les normes d'accessibilité. L'information sera communiquée individuellement lors de la convocation.
+        </div>
+      </div>
+    </div>
+
+    <div class="section">
+      <div class="section-title">Contacts</div>
+      <div class="text">
+        <strong>Référent de l'organisme de formation :</strong><br />
+        David Contal : dcontal@acdc-formation.com - 06 78 26 91 10<br />
+        Ann-Cécile Joucher : acjoucher@acdc-formation.com - 06 29 93 74 24<br /><br />
+        <strong>Contact de l'organisme de formation :</strong><br />
+        7 avenue Paul Cézanne 83310 Cogolin Golfe de Saint Tropez France
+      </div>
+    </div>
+
+    <div class="signature-block">
+      <div class="signature-content">
+        Fait à Cogolin<br />
+        Le : 13/04/2026
+        <img src="https://acdcformation.com/wp-content/uploads/2026/04/Cachet-et-signature.png" alt="Signature ACDC-Formation" style="height: 30mm; width: auto;" />
+      </div>
+    </div>
+
+    <div class="footer">
+      7 avenue Paul Cézanne - 83310 Cogolin - France - Siret : 405109901 00042 - NDA : 93 83 08347 83<br />
+      e-mail : contact@acdc-formation.com - Tél : 06 78 26 91 10 - site web : acdc-formation.com
+    </div>
+  </div>
+</body>
+</html>

@@ -1,0 +1,402 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Contrat de sous-traitance de formation - ACDC-Formation</title>
+  <style>
+    :root {
+      --navy: #0C2D52;
+      --gold: #C5A253;
+      --ink: #1f2937;
+      --muted: #6b7280;
+      --line: #d7dde6;
+      --paper: #ffffff;
+      --soft: #f8fafc;
+    }
+
+    @page { size: A4 portrait; margin: 0; }
+    * { box-sizing: border-box; }
+
+    body {
+      margin: 0;
+      background: #eef2f6;
+      font-family: Rubik, Arial, Helvetica, sans-serif;
+      color: var(--ink);
+    }
+
+    .page {
+      width: 210mm;
+      min-height: 297mm;
+      margin: 0 auto 12px;
+      background: var(--paper);
+      box-shadow: 0 10px 30px rgba(12,45,82,0.08);
+      position: relative;
+      padding: 11mm 12.5mm 18mm;
+      overflow: hidden;
+      page-break-after: always;
+    }
+
+    .page:last-child { page-break-after: auto; }
+
+    .header {
+      display: flex;
+      justify-content: space-between;
+      align-items: flex-start;
+      gap: 8mm;
+      border-bottom: 1.5px solid var(--gold);
+      padding-bottom: 3.5mm;
+      margin-bottom: 6mm;
+    }
+
+    .brand {
+      display: flex;
+      align-items: center;
+      gap: 4mm;
+      min-width: 0;
+    }
+
+    .brand img {
+      height: 16mm;
+      width: auto;
+      object-fit: contain;
+      flex-shrink: 0;
+    }
+
+    .brand-text strong {
+      display: block;
+      color: var(--navy);
+      font-size: 13.6pt;
+      line-height: 1.08;
+      font-weight: 700;
+    }
+
+    .brand-text span {
+      display: block;
+      margin-top: 0.8mm;
+      color: var(--gold);
+      font-size: 7.7pt;
+      font-weight: 500;
+      letter-spacing: 0.01em;
+    }
+
+    .company {
+      text-align: right;
+      font-size: 8pt;
+      line-height: 1.32;
+      color: #374151;
+      max-width: 64mm;
+    }
+
+    h1 {
+      margin: 0 0 2mm;
+      color: var(--navy);
+      font-size: 15.6pt;
+      font-weight: 700;
+      letter-spacing: 0.01em;
+    }
+
+    .subtitle {
+      margin-bottom: 5mm;
+      font-size: 8.2pt;
+      color: #4b5563;
+      line-height: 1.38;
+      text-align: justify;
+    }
+
+    .article {
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      padding: 4mm 4.5mm;
+      background: #fff;
+      margin-bottom: 5mm;
+    }
+
+    .article-title {
+      font-size: 8.4pt;
+      text-transform: uppercase;
+      letter-spacing: 0.04em;
+      color: var(--gold);
+      font-weight: 700;
+      margin-bottom: 2mm;
+    }
+
+    .text {
+      font-size: 8.25pt;
+      line-height: 1.42;
+      color: #1f2937;
+      text-align: justify;
+    }
+
+    .grid-2 {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 6mm;
+      margin-top: 2mm;
+    }
+
+    .field {
+      display: flex;
+      align-items: baseline;
+      gap: 2mm;
+      margin: 1.6mm 0;
+      font-size: 8.35pt;
+      line-height: 1.4;
+    }
+
+    .field strong {
+      color: var(--navy);
+      font-weight: 600;
+      min-width: 34mm;
+    }
+
+    .signature-zone {
+      margin-top: 7mm;
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 10mm;
+      align-items: end;
+    }
+
+    .sign-box {
+      text-align: center;
+      border-top: 1px solid var(--line);
+      padding-top: 3.2mm;
+      min-height: 18mm;
+      font-size: 7.9pt;
+      color: #4b5563;
+      position: relative;
+    }
+
+    .sign-box img {
+      position: absolute;
+      right: 2mm;
+      bottom: -8mm;
+      height: 26mm;
+      width: auto;
+      object-fit: contain;
+      opacity: 0.95;
+    }
+
+    .footer {
+      position: absolute;
+      left: 10mm;
+      right: 10mm;
+      bottom: 4mm;
+      border-top: 1px solid var(--line);
+      padding-top: 2.2mm;
+      text-align: center;
+      font-size: 6.8pt;
+      line-height: 1.22;
+      color: #4b5563;
+    }
+
+    @media print {
+      body { background: white; }
+      .page { margin: 0; box-shadow: none; }
+    }
+  </style>
+</head>
+<body>
+  <div class="page">
+    <div class="header">
+      <div class="brand">
+        <img src="https://acdcformation.com/wp-content/uploads/2026/03/Logo-ACDC.png" alt="Logo ACDC-Formation" />
+        <div class="brand-text">
+          <strong>ACDC-Formation</strong>
+          <span>Contrat de sous-traitance de formation</span>
+        </div>
+      </div>
+      <div class="company">
+        <strong>ACDC-Formation</strong><br />
+        7 avenue Paul Cézanne<br />
+        83310 Cogolin - France<br />
+        Siret : 405109901 00042<br />
+        NDA : 93 83 08347 83
+      </div>
+    </div>
+
+    <h1>Contrat de sous-traitance de formation</h1>
+    <div class="subtitle">
+      Entre les soussignés, il a été convenu ce qui suit. Ce modèle reprend la structure du document fourni et l’adapte à l’identité visuelle ACDC-Formation.
+    </div>
+
+    <div class="article">
+      <div class="article-title">Entre les soussignés</div>
+      <div class="grid-2" style="margin-top:0;">
+        <div>
+          <div class="field"><strong>Organisme :</strong><span>ACDC FORMATION</span></div>
+          <div class="field"><strong>DDA :</strong><span>93830834783</span></div>
+          <div class="field"><strong>Siège social :</strong><span>7 avenue Paul Cézanne - 83310 Cogolin</span></div>
+          <div class="field"><strong>SIRET :</strong><span>405109901 00042</span></div>
+          <div class="field"><strong>Représenté par :</strong><span>David Contal</span></div>
+          <div class="text" style="margin-top:2mm;">Ci-après nommé « l’organisme de formation ».</div>
+        </div>
+        <div>
+          <div class="field"><strong>Formateur :</strong><span>{{formateur_nom_complet}}</span></div>
+          <div class="field"><strong>Statut :</strong><span>{{formateur_statut}}</span></div>
+          <div class="field"><strong>SIRET :</strong><span>{{formateur_siret}}</span></div>
+          <div class="field"><strong>NDA :</strong><span>{{formateur_nda}}</span></div>
+          <div class="field"><strong>Adresse :</strong><span>{{formateur_adresse}}</span></div>
+          <div class="text" style="margin-top:2mm;">Ci-après dénommé « le formateur ».</div>
+        </div>
+      </div>
+    </div>
+
+    <div class="article">
+      <div class="article-title">Article 1 – Objet du contrat</div>
+      <div class="text">
+        Le présent contrat a pour objet de confier au formateur la réalisation d'actions de formation professionnelle continue, sous-traitées par l'organisme de formation, dans le respect des dispositions légales et réglementaires en vigueur, ainsi que des règles relatives à la sous-traitance (art. L.6353-1 et suivants du Code du travail).
+      </div>
+    </div>
+
+    <div class="article">
+      <div class="article-title">Article 2 – Nature des prestations confiées au formateur</div>
+      <div class="text">
+        Le formateur s'engage à dispenser la ou les formations suivantes :<br /><br />
+        <strong>Intitulé :</strong> {{formation_intitule}}<br />
+        <strong>Format :</strong> {{session_format}}<br />
+        <strong>Durée :</strong> {{formation_duree}}<br /><br />
+        Le contenu pédagogique et le déroulé sont définis conjointement par les parties.
+      </div>
+    </div>
+
+    <div class="article" style="margin-bottom:0;">
+      <div class="article-title">Article 3 – Obligations du formateur</div>
+      <div class="text">
+        Le formateur s'engage à : dispenser la formation selon les objectifs fixés ; respecter les règles légales en matière de formation professionnelle ; transmettre à l'organisme de formation l'ensemble des documents attestant de son activité, notamment l'extrait K-bis et le numéro de déclaration d'activité ; justifier de ses compétences (CV, expériences, certifications, etc.) ; avoir déposé auprès de l'administration fiscale l'ensemble des déclarations fiscales obligatoires, être à jour de ses obligations sociales et être en règle en matière d'assurance et de disposer d'un contrat d'assurance en responsabilité civile pour son activité ; respecter la confidentialité des informations communiquées par l'organisme de formation et les participants.
+      </div>
+    </div>
+
+    <div class="footer">
+      7 avenue Paul Cézanne - 83310 Cogolin - France - Siret : 405109901 00042 - NDA : 93 83 08347 83<br />
+      e-mail : contact@acdc-formation.com - Tél : 06 78 26 91 10 - site web : acdc-formation.com
+    </div>
+  </div>
+
+  <div class="page">
+    <div class="header">
+      <div class="brand">
+        <img src="https://acdcformation.com/wp-content/uploads/2026/03/Logo-ACDC.png" alt="Logo ACDC-Formation" />
+        <div class="brand-text">
+          <strong>ACDC-Formation</strong>
+          <span>Contrat de sous-traitance de formation</span>
+        </div>
+      </div>
+      <div class="company">
+        <strong>ACDC-Formation</strong><br />
+        7 avenue Paul Cézanne<br />
+        83310 Cogolin - France<br />
+        Siret : 405109901 00042<br />
+        NDA : 93 83 08347 83
+      </div>
+    </div>
+
+    <h1>Contrat de sous-traitance – suite</h1>
+
+    <div class="article">
+      <div class="article-title">Article 4 – Obligations de l'organisme de formation</div>
+      <div class="text">
+        L'organisme de formation s'engage à : fournir au formateur les informations nécessaires à la bonne exécution de la mission ; assurer la gestion administrative des prestations ; assurer la gestion logistique des prestations ; respecter ses obligations légales vis-à-vis des financeurs (OPCO, CPF, etc.).
+      </div>
+    </div>
+
+    <div class="article">
+      <div class="article-title">Article 5 – Statut juridique et responsabilité</div>
+      <div class="text">
+        Le formateur agit en toute indépendance, sans lien de subordination. Le présent contrat ne constitue ni un contrat de travail, ni un mandat social. Le formateur reste responsable de ses charges sociales, fiscales et de sa couverture professionnelle (assurance responsabilité civile professionnelle obligatoire).
+      </div>
+    </div>
+
+    <div class="article">
+      <div class="article-title">Article 6 – Rémunération et modalités de paiement</div>
+      <div class="text">
+        En contrepartie des prestations, le formateur percevra une rémunération de : {{remuneration_formateur}}.
+      </div>
+    </div>
+
+    <div class="article">
+      <div class="article-title">Article 7 – Modalités de paiement</div>
+      <div class="text">
+        Le règlement sera effectué sur présentation d'une facture détaillée, adressée par le formateur à l'organisme de formation en début de chaque mois, récapitulant les prestations réalisées au cours du mois précédent.
+      </div>
+    </div>
+
+    <div class="article">
+      <div class="article-title">Article 8 – Durée et résiliation</div>
+      <div class="text">
+        Le présent contrat est conclu pour une durée d'un an, à compter de sa date de signature par les deux parties. Il sera renouvelé par tacite reconduction pour des périodes successives d'un an, sauf résiliation par l'une ou l'autre des parties moyennant un préavis de 30 jours, notifié par lettre recommandée avec accusé de réception.
+      </div>
+    </div>
+
+    <div class="article" style="margin-bottom:0;">
+      <div class="article-title">Article 9 – Propriété intellectuelle</div>
+      <div class="text">
+        Les supports pédagogiques réalisés par le formateur demeurent sa propriété intellectuelle, sauf cession expresse stipulée par avenant.
+      </div>
+    </div>
+
+    <div class="footer">
+      7 avenue Paul Cézanne - 83310 Cogolin - France - Siret : 405109901 00042 - NDA : 93 83 08347 83<br />
+      e-mail : contact@acdc-formation.com - Tél : 06 78 26 91 10 - site web : acdc-formation.com
+    </div>
+  </div>
+
+  <div class="page">
+    <div class="header">
+      <div class="brand">
+        <img src="https://acdcformation.com/wp-content/uploads/2026/03/Logo-ACDC.png" alt="Logo ACDC-Formation" />
+        <div class="brand-text">
+          <strong>ACDC-Formation</strong>
+          <span>Contrat de sous-traitance de formation</span>
+        </div>
+      </div>
+      <div class="company">
+        <strong>ACDC-Formation</strong><br />
+        7 avenue Paul Cézanne<br />
+        83310 Cogolin - France<br />
+        Siret : 405109901 00042<br />
+        NDA : 93 83 08347 83
+      </div>
+    </div>
+
+    <h1>Contrat de sous-traitance – fin</h1>
+
+    <div class="article">
+      <div class="article-title">Article 10 – Confidentialité</div>
+      <div class="text">
+        Les parties s'engagent à ne divulguer aucune information confidentielle obtenue dans le cadre du présent contrat.
+      </div>
+    </div>
+
+    <div class="article">
+      <div class="article-title">Article 11 – Différends éventuels</div>
+      <div class="text">
+        En cas de différend, les parties s'efforceront de trouver une solution amiable. À défaut, compétence est attribuée aux tribunaux du ressort du siège social de l'organisme de formation.
+      </div>
+    </div>
+
+    <div class="article" style="margin-bottom:0;">
+      <div class="article-title">Fait en double exemplaire</div>
+      <div class="text">
+        Fait à {{lieu_signature}}, le {{date_signature}}.<br /><br />
+        <strong>Pour le formateur :</strong> {{formateur_nom_complet}}<br />
+        <strong>Pour l'organisme de formation :</strong> David Contal - ACDC FORMATION
+      </div>
+    </div>
+
+    <div class="signature-zone">
+      <div class="sign-box">Signature du formateur</div>
+      <div class="sign-box">
+        <img src="https://acdcformation.com/wp-content/uploads/2026/04/Cachet-et-signature.png" alt="Signature ACDC-Formation" style="position: absolute; right: -10mm; bottom: -70mm; height: 80mm; width: auto;" />
+        Signature de l'organisme de formation
+      </div>
+    </div>
+
+    <div class="footer">
+      7 avenue Paul Cézanne - 83310 Cogolin - France - Siret : 405109901 00042 - NDA : 93 83 08347 83<br />
+      e-mail : contact@acdc-formation.com - Tél : 06 78 26 91 10 - site web : acdc-formation.com
+    </div>
+  </div>
+</body>
+</html>
