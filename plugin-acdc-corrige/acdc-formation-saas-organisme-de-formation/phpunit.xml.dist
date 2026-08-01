@@ -9,6 +9,10 @@
     <testsuites>
         <testsuite name="unit">
             <directory>tests</directory>
+            <!-- Les tests d'intégration (WP_UnitTestCase) ont leur propre config
+                 (phpunit-integration.xml.dist) et ne doivent PAS être chargés par
+                 le bootstrap unitaire pur. -->
+            <exclude>tests/Integration</exclude>
         </testsuite>
     </testsuites>
     <coverage>
