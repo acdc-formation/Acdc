@@ -1362,7 +1362,7 @@
         .acdc-followup-table th:nth-child(5),
         .acdc-followup-table td:nth-child(5){width:95px;}
         .acdc-followup-table th:nth-child(6),
-        .acdc-followup-table td:nth-child(6){width:170px;}
+        .acdc-followup-table td:nth-child(6){width:210px;white-space:normal;}
         .acdc-followup-table th:nth-child(7),
         .acdc-followup-table td:nth-child(7){width:130px;}
         .acdc-followup-table th:nth-child(8),
