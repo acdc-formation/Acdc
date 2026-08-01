@@ -41,6 +41,15 @@ jobs:
             --exclude 'vendor' \
             --exclude 'node_modules' \
             --exclude '.phpunit.result.cache' \
+            --exclude '.phpunit-integration.result.cache' \
+            --exclude '/tests' \
+            --exclude '/bin' \
+            --exclude '/phpunit.xml.dist' \
+            --exclude '/phpunit-integration.xml.dist' \
+            --exclude '/phpcs.xml.dist' \
+            --exclude '/phpstan.neon.dist' \
+            --exclude '/composer.json' \
+            --exclude '/composer.lock' \
             "${PLUGIN_DIR}/" "${STAGE}/"
           ZIP="${PLUGIN_SLUG}-${{ steps.ver.outputs.version }}.zip"
           ( cd build && zip -rq "../${ZIP}" "${PLUGIN_SLUG}" )

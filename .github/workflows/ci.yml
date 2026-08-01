@@ -78,3 +78,73 @@ jobs:
       - name: PHPStan (analyse statique, niveau 4)
         continue-on-error: true
         run: composer phpstan
+
+  integration:
+    name: Tests d'intégration (WP réel, base jetable)
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          # Plancher déclaré du plugin (Requires at least 6.2 / Requires PHP 8.2).
+          - php: '8.2'
+            wp: '6.2'
+          # Version WordPress épinglée « courante » (révisable ; source wordpress.org/download/releases).
+          - php: '8.2'
+            wp: '7.0.2'
+          - php: '8.3'
+            wp: '7.0.2'
+    services:
+      mysql:
+        image: mysql:8.0
+        env:
+          MYSQL_ROOT_PASSWORD: root
+        ports:
+          - 3306:3306
+        options: >-
+          --health-cmd="mysqladmin ping -h 127.0.0.1 -uroot -proot --silent"
+          --health-interval=10s
+          --health-timeout=5s
+          --health-retries=15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: shivammathur/setup-php@v2
+        with:
+          php-version: ${{ matrix.php }}
+          extensions: mysqli
+          tools: composer:v2
+          coverage: none
+      - name: Outils système (client MySQL + subversion)
+        run: sudo apt-get update && sudo apt-get install -y default-mysql-client subversion
+      - name: Cache des dépendances Composer
+        uses: actions/cache@v4
+        with:
+          path: plugin-acdc-corrige/acdc-formation-saas-organisme-de-formation/vendor
+          key: composer-${{ runner.os }}-${{ hashFiles('plugin-acdc-corrige/acdc-formation-saas-organisme-de-formation/composer.json') }}
+          restore-keys: composer-${{ runner.os }}-
+      - name: Installer les dépendances (dev)
+        run: composer install --no-interaction --prefer-dist --no-progress
+      - name: Installer WordPress de test (base JETABLE)
+        env:
+          WP_TESTS_DIR: /tmp/wordpress-tests-lib
+          WP_CORE_DIR: /tmp/wordpress/
+        run: bash bin/install-wp-tests.sh wordpress_test root root 127.0.0.1:3306 ${{ matrix.wp }} false
+      - name: Suite d'intégration (échec = bloquant)
+        env:
+          WP_TESTS_DIR: /tmp/wordpress-tests-lib
+          WP_CORE_DIR: /tmp/wordpress/
+          ACDC_TEST_DB_NAME: wordpress_test
+          ACDC_TEST_DB_PREFIX: wptests_
+          ACDC_TEST_DB_HOST: 127.0.0.1:3306
+        run: |
+          set -o pipefail
+          composer test:integration 2>&1 | tee /tmp/phpunit-integration.log
+      # La suite unitaire (Support) tourne dans le job « tests » séparé : son statut
+      # reste indépendant même si l'intégration échoue.
+      - name: Journal PHPUnit (artefact minimal, en cas d'échec)
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: phpunit-integration-log-wp${{ matrix.wp }}-php${{ matrix.php }}
+          path: /tmp/phpunit-integration.log
+          if-no-files-found: ignore

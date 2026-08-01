@@ -31,6 +31,9 @@
         "allow-plugins": {
             "dealerdirect/phpcodesniffer-composer-installer": true
         },
+        "platform": {
+            "php": "8.2.0"
+        },
         "sort-packages": true
     },
     "scripts": {
@@ -39,6 +42,11 @@
         "phpcbf": "phpcbf",
         "phpstan": "phpstan analyse --memory-limit=1G",
         "test": "phpunit",
+        "test:integration": "phpunit -c phpunit-integration.xml.dist",
+        "test:all": [
+            "@test",
+            "@test:integration"
+        ],
         "check": [
             "@lint",
             "@phpcs",
