@@ -186,7 +186,7 @@ class ACDC_Sig_Portal {
                 </thead>
                 <tbody>
                 <?php foreach ( $items as $item ) :
-                    $expires   = $item->expires_at ? wp_date( 'd/m/Y H:i', strtotime( $item->expires_at ) ) : '—';
+                    $expires   = $item->expires_at ? mysql2date( 'd/m/Y H:i', $item->expires_at ) : '—';
                     $doc_label = ACDC_Sig_Core::DOC_TYPES[ $item->doc_type ] ?? $item->doc_type;
                     $level     = ( ACDC_Sig_Core::LEVEL_RENFORCE === $item->sig_level ) ? '🔒 Renforcée' : '✅ Simple';
                     $resend_url = wp_nonce_url( admin_url( 'admin-post.php?action=acdc_sig_portal_resend&request_id=' . $item->id ), 'acdc_sig_portal_resend_' . $item->id );
@@ -389,7 +389,7 @@ class ACDC_Sig_Portal {
                 </thead>
                 <tbody>
                 <?php foreach ( $rows as $row ) :
-                    $signed_at_label = $row['signed_at'] ? wp_date( 'd/m/Y H:i', strtotime( $row['signed_at'] ) ) : '—';
+                    $signed_at_label = $row['signed_at'] ? mysql2date( 'd/m/Y H:i', $row['signed_at'] ) : '—';
                     $dl = '';
                     // SVG icônes ACDC inline (render_inline_icon inaccessible hors trait)
                     $icon_view = '<span aria-hidden="true" style="display:inline-flex;align-items:center;justify-content:center;width:25px;height:25px;line-height:1;"><svg style="fill:none!important" width="25" height="25" viewBox="0 0 24 24" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M2 12s3.5-6 10-6 10 6 10 6-3.5 6-10 6-10-6-10-6Z"/><circle cx="12" cy="12" r="3"/></svg></span>';

@@ -289,7 +289,7 @@ class ACDC_Sig_Sessions {
             echo '<table class="acdc-sig-table"><thead><tr><th>Signataire</th><th>Document</th><th>Statut</th><th>Expiration</th><th>Actions</th></tr></thead><tbody>';
             foreach ( $active as $req ) {
                 $doc_label  = ACDC_Sig_Core::DOC_TYPES[ $req->doc_type ] ?? $req->doc_type;
-                $expires    = $req->expires_at ? wp_date( 'd/m/Y H:i', strtotime( $req->expires_at ) ) : '—';
+                $expires    = $req->expires_at ? mysql2date( 'd/m/Y H:i', $req->expires_at ) : '—';
                 $resend_url = wp_nonce_url( admin_url( 'admin-post.php?action=acdc_sig_resend_request&request_id=' . $req->id ), 'acdc_sig_resend_' . $req->id );
                 $delete_url = wp_nonce_url( admin_url( 'admin-post.php?action=acdc_sig_delete_request&request_id=' . $req->id ), 'acdc_sig_delete_' . $req->id );
                 echo '<tr>';

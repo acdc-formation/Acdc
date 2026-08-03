@@ -1360,7 +1360,10 @@ trait ACDC_Dossiers_Contracts_Core_Trait {
     $date_src = ! empty( $contract->signature_completed_at ) ? $contract->signature_completed_at
               : ( ! empty( $contract->updated_at ) ? $contract->updated_at : '' );
     if ( $date_src ) {
-      $lines[] = wp_date( 'j F Y à H\hi', strtotime( (string) $date_src ) );
+      /* +2h — La date est stockée en heure locale (current_time). wp_date(strtotime()) la
+         relisait comme de l'UTC et ré-appliquait l'offset (+2h → bascule au lendemain pour
+         un événement après 22h). mysql2date() la traite correctement comme locale. */
+      $lines[] = mysql2date( 'j F Y à H\hi', (string) $date_src );
     }
     return $lines;
   }
@@ -1385,7 +1388,7 @@ trait ACDC_Dossiers_Contracts_Core_Trait {
     // Date
     $date_src = ! empty( $contract->signature_completed_at ) ? $contract->signature_completed_at
               : ( ! empty( $contract->updated_at ) ? $contract->updated_at : '' );
-    $date_label = $date_src ? wp_date( 'j M Y', strtotime( (string) $date_src ) ) : '';
+    $date_label = $date_src ? mysql2date( 'j M Y', (string) $date_src ) : ''; // +2h : voir note ci-dessus (heure locale, pas d'offset ré-appliqué).
 
     $sent_at = ! empty( $contract->signature_sent_at ) ? $contract->signature_sent_at : '';
     $is_overdue = false;

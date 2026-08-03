@@ -154,7 +154,7 @@ class ACDC_Sig_Admin {
         echo '<table class="acdc-sig-table"><thead><tr><th>Signataire</th><th>Type</th><th>Niveau</th><th>Statut</th><th>Expiration</th><th>Actions</th></tr></thead><tbody>';
 
         foreach ( $items as $item ) {
-            $expires   = $item->expires_at ? wp_date( 'd/m/Y H:i', strtotime( $item->expires_at ) ) : '—';
+            $expires   = $item->expires_at ? mysql2date( 'd/m/Y H:i', $item->expires_at ) : '—';
             $doc_label = ACDC_Sig_Core::DOC_TYPES[ $item->doc_type ] ?? $item->doc_type;
             $level     = ( ACDC_Sig_Core::LEVEL_RENFORCE === $item->sig_level ) ? '🔒 Renforcée' : '✅ Simple';
 
@@ -196,7 +196,7 @@ class ACDC_Sig_Admin {
         echo '<table class="acdc-sig-table"><thead><tr><th>Signataire</th><th>Type</th><th>Statut</th><th>Signé le</th><th>Document</th></tr></thead><tbody>';
         foreach ( $items as $item ) {
             $doc_label = ACDC_Sig_Core::DOC_TYPES[ $item->doc_type ] ?? $item->doc_type;
-            $signed_at = $item->signed_at ? wp_date( 'd/m/Y H:i', strtotime( $item->signed_at ) ) : '—';
+            $signed_at = $item->signed_at ? mysql2date( 'd/m/Y H:i', $item->signed_at ) : '—';
             $dl        = $item->signed_doc_url ? '<a href="' . esc_url( $item->signed_doc_url ) . '" target="_blank">📄 Télécharger</a>' : '—';
             echo '<tr>';
             echo '<td><strong>' . esc_html( $item->signer_name ) . '</strong><br><small>' . esc_html( $item->signer_email ) . '</small></td>';

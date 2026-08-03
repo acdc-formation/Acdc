@@ -3023,7 +3023,7 @@ public function render_admin_registration_contract_page() { $this->render_admin_
               <tr>
                 <td style="font-weight:600;"><?php echo esc_html(trim((string)$em->learner_name)); ?></td>
                 <td><span class="acdc-badge-sm" style="background:<?php echo esc_attr($sc_em[0]); ?>;color:<?php echo esc_attr($sc_em[1]); ?>;"><?php echo esc_html($sc_em[2]); ?></span></td>
-                <td style="color:#6b7280;"><?php echo !empty($em->signed_at) ? esc_html(wp_date('d/m/Y H:i',strtotime($em->signed_at))) : '—'; ?></td>
+                <td style="color:#6b7280;"><?php echo !empty($em->signed_at) ? esc_html(mysql2date('d/m/Y H:i',$em->signed_at)) : '—'; ?></td>
                 <td><?php if($doc_em): ?><a href="<?php echo esc_url($doc_em); ?>" target="_blank" style="color:#8b5b23;font-weight:600;">📄</a><?php else: ?>—<?php endif; ?></td>
               </tr>
             <?php endforeach; ?>

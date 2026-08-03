@@ -115,7 +115,9 @@ class ACDC_Sig_Email {
         $subject       = $custom_subject ? $s['email_subject'] : ( $doc_label_court . ' à signer — ' . $b['company_name'] );
         $intro         = $custom_intro   ? $s['email_intro']   : ( 'Vous trouverez ci-dessous ' . $doc_label_possessif . '. Nous vous invitons à en prendre connaissance, puis à le signer électroniquement avant son expiration.' );
         $btn_color     = $s['btn_color']     ?: '#C5A253';
-        $expires_label = $request->expires_at ? wp_date( 'd/m/Y à H:i', strtotime( $request->expires_at ) ) : '';
+        /* +2h — expires_at est stocké en heure locale (current_time). mysql2date() le rend
+           tel quel ; wp_date(strtotime()) le relisait comme UTC et ajoutait l'offset (+2h). */
+        $expires_label = $request->expires_at ? mysql2date( 'd/m/Y à H:i', $request->expires_at ) : '';
 
         // --- Bloc "Lire le document" (bouton contour marine) ---
         $read_block = '';
