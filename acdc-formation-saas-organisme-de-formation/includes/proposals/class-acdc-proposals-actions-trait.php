@@ -282,9 +282,11 @@ trait Acdc_Proposals_Actions_Trait {
     $html_url = method_exists( $this, 'generate_proposal_html' ) ? $this->generate_proposal_html( $proposal ) : '';
     if ( $html_url ) {
       global $wpdb;
+      /* M18 — Générer le document ne vaut pas envoi : on ne touche plus au statut ici
+         (le statut « envoyée » + last_sent_at sont posés uniquement à l'envoi réel). */
       $wpdb->update(
         $this->get_proposal_table(),
-        array( 'pdf_url' => $html_url, 'status' => 'envoyee', 'updated_at' => current_time( 'mysql' ) ),
+        array( 'pdf_url' => $html_url, 'updated_at' => current_time( 'mysql' ) ),
         array( 'id' => $proposal_id )
       );
       wp_send_json_success( array( 'pdf_url' => $html_url, 'type' => 'html' ) );
@@ -296,7 +298,7 @@ trait Acdc_Proposals_Actions_Trait {
       global $wpdb;
       $wpdb->update(
         $this->get_proposal_table(),
-        array( 'pdf_url' => $pdf_url, 'status' => 'envoyee', 'updated_at' => current_time( 'mysql' ) ),
+        array( 'pdf_url' => $pdf_url, 'updated_at' => current_time( 'mysql' ) ),
         array( 'id' => $proposal_id )
       );
       wp_send_json_success( array( 'pdf_url' => $pdf_url, 'type' => 'pdf' ) );

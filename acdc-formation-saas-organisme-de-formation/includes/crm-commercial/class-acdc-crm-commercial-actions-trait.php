@@ -654,8 +654,15 @@ public function handle_save_prospect_rdv() {
   if ( ! in_array( $meeting_mode, $allowed_meeting_modes, true ) ) {
     $this->redirect_to_portal( 'prospect_followup', 'Veuillez sélectionner un type de rendez-vous.', 'error', $back_args );
   }
-  if ( 'visioconference' === $meeting_mode && ( empty( $meeting_link ) || ! wp_http_validate_url( $meeting_link ) ) ) {
-    $this->redirect_to_portal( 'prospect_followup', 'Veuillez renseigner un lien de visioconférence valide.', 'error', $back_args );
+  /* M6 — Validation SYNTAXIQUE du lien visio (http/https bien formé). wp_http_validate_url()
+     exigeait une URL joignable (résolution DNS, IP non privée) et rejetait des liens pourtant
+     valides (ex. un sous-domaine pas encore actif). Un lien de réunion n'a pas à être joignable
+     depuis le serveur au moment de la saisie. */
+  $meeting_link_valid = ( '' !== $meeting_link )
+    && ( false !== filter_var( $meeting_link, FILTER_VALIDATE_URL ) )
+    && in_array( strtolower( (string) wp_parse_url( $meeting_link, PHP_URL_SCHEME ) ), array( 'http', 'https' ), true );
+  if ( 'visioconference' === $meeting_mode && ! $meeting_link_valid ) {
+    $this->redirect_to_portal( 'prospect_followup', 'Veuillez renseigner un lien de visioconférence valide (URL commençant par https://).', 'error', $back_args );
   }
 
   switch ( $meeting_mode ) {

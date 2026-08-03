@@ -1015,7 +1015,12 @@ trait ACDC_Documents_Billing_Actions_Trait {
       'signature_status'     => 'envoyée',
       'status'               => 'a_signer',
     ), array( 'id' => $quote_id ), array( '%d', '%s', '%s' ), array( '%d' ) );
-    $this->redirect_to_portal( 'quotes', 'Demande de signature envoyée à ' . $signer_email . '.', 'success' );
+    /* M10 — Revenir sur la fiche du devis (et non sur l'écran hub qui perdait le contexte). */
+    $this->redirect_to_portal( 'quotes', 'Demande de signature envoyée à ' . $signer_email . '.', 'success', array(
+      'scope'        => $quote->scope ?: 'action',
+      'quote_action' => 'view',
+      'quote_id'     => (int) $quote_id,
+    ) );
   }
 
   /**

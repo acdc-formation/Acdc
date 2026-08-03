@@ -1832,6 +1832,8 @@ startxref
           <h1 class="acdc-screen-title"><?php echo esc_html( $p->formation_title ?: 'Proposition sans titre' ); ?></h1>
           <p class="acdc-screen-subtitle"><?php echo esc_html( $p->client_company ); ?><?php if ( $p->client_name ) echo ' &mdash; ' . esc_html( $p->client_name ); ?></p>
         </div>
+        <?php /* M18 \u2014 \u00ab Envoyer \u00bb tant que jamais envoy\u00e9e, \u00ab Renvoyer \u00bb ensuite. */
+        $prop_send_label = ! empty( $p->last_sent_at ) ? 'Renvoyer' : 'Envoyer'; ?>
         <div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap;">
           <a href="<?php echo esc_url( $list_url ); ?>" class="acdc-button acdc-button-soft">&#8592; Retour</a>
           <a href="<?php echo esc_url( $edit_url ); ?>" class="acdc-button acdc-button-soft"><?php echo $this->render_inline_icon( 'edit', 18 ); ?> Modifier</a>
@@ -1840,11 +1842,11 @@ startxref
             <a href="<?php echo esc_url( $resend_url ); ?>"
                class="acdc-button acdc-button-primary"
                onclick="return confirm('Envoyer la proposition par email \u00e0 <?php echo esc_js( $p->client_email ); ?> ?');">
-              <?php echo $this->render_inline_icon( 'send', 18 ); ?> Renvoyer
+              <?php echo $this->render_inline_icon( 'send', 18 ); ?> <?php echo esc_html( $prop_send_label ); ?>
             </a>
           <?php else : ?>
             <span class="acdc-button acdc-button-soft" style="opacity:.45;cursor:not-allowed;pointer-events:none;">
-              <?php echo $this->render_inline_icon( 'send', 18 ); ?> Renvoyer
+              <?php echo $this->render_inline_icon( 'send', 18 ); ?> <?php echo esc_html( $prop_send_label ); ?>
             </span>
           <?php endif; ?>
           <?php if ( empty( $p->client_email ) ) : ?>

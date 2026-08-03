@@ -1179,7 +1179,13 @@
         <?php if ( ! $read_only ) : ?>
           <p class="acdc-actions-end-wrap">
             <a class="acdc-button acdc-button-soft" href="<?php echo esc_url( $cancel_url ); ?>">Annuler</a>
-            <button type="submit" class="acdc-button acdc-button-primary"><?php echo $prospect ? 'Modifier le prospect' : 'Créer le prospect'; ?></button>
+            <?php
+            /* m3 — Le libellé dépend de l'existence d'un identifiant (édition), non de la simple
+               présence de l'objet : en « Répliquer », $prospect contient les données dupliquées
+               SANS id (nouveau prospect), et affichait « Modifier » à tort. */
+            $prospect_has_id = ( is_object( $prospect ) && ! empty( $prospect->id ) ) || ( is_array( $prospect ) && ! empty( $prospect['id'] ) );
+            ?>
+            <button type="submit" class="acdc-button acdc-button-primary"><?php echo $prospect_has_id ? 'Modifier le prospect' : 'Créer le prospect'; ?></button>
           </p>
         <?php else : ?>
           <p class="acdc-actions-end-wrap">
