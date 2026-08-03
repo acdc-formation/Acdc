@@ -7291,6 +7291,7 @@ dbDelta( $sql_companies );
     if ( '' === $value ) {
       return null;
     }
+    $value = $this->acdc_normalize_fr_datetime( $value );
     $timestamp = strtotime( $value );
     if ( ! $timestamp ) {
       return null;
@@ -7299,6 +7300,31 @@ dbDelta( $sql_companies );
        datetime_local_value). Aucun décalage gmt_offset, sinon −2 h à l'affichage et,
        pour une date sans heure, le jour bascule la veille. */
     return gmdate( 'Y-m-d H:i:s', $timestamp );
+  }
+
+  /**
+   * Normalise une date française « jj/mm/aaaa » (avec heure optionnelle) en ISO
+   * « aaaa-mm-jj hh:mm:ss ». Indispensable avant strtotime(), qui interprète les dates
+   * à slashes au format américain m/d/Y (« 03/08/2026 » → 8 mars) et inverse mois/jour.
+   * Les valeurs déjà en ISO (champs datetime-local : « 2026-08-03T17:00 ») ne matchent
+   * pas le motif et sont renvoyées telles quelles.
+   */
+  private function acdc_normalize_fr_datetime( $value ) {
+    $value = is_string( $value ) ? trim( $value ) : '';
+    if ( '' === $value ) {
+      return $value;
+    }
+    if ( preg_match( '#^(\d{1,2})/(\d{1,2})/(\d{4})(?:[\sT]+(\d{1,2}):(\d{2}))?#', $value, $m ) ) {
+      if ( checkdate( (int) $m[2], (int) $m[1], (int) $m[3] ) ) {
+        return sprintf(
+          '%04d-%02d-%02d %02d:%02d:00',
+          (int) $m[3], (int) $m[2], (int) $m[1],
+          isset( $m[4] ) ? (int) $m[4] : 0,
+          isset( $m[5] ) ? (int) $m[5] : 0
+        );
+      }
+    }
+    return $value;
   }
 
 
@@ -9266,6 +9292,7 @@ public function register_admin_menu() {
   if ( empty( $value ) ) {
     return null;
   }
+  $value = $this->acdc_normalize_fr_datetime( $value );
   $timestamp = strtotime( $value );
   /* ACDC — Fuseau : conserver l'heure locale « murale » telle que saisie (cohérent avec
      l'affichage mysql2date). Sans cela, un −2 h était appliqué au stockage (17:00 → 15:00). */
