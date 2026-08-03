@@ -7281,7 +7281,11 @@ dbDelta( $sql_companies );
       return '';
     }
     $timestamp = strtotime( $value );
-    return $timestamp ? gmdate( 'Y-m-d\TH:i', $timestamp + ( get_option( 'gmt_offset' ) * HOUR_IN_SECONDS ) ) : '';
+    /* ACDC — Fuseau : les champs datetime-local sont saisis et affichés en heure locale
+       (stockage cohérent avec current_time('mysql') + affichage mysql2date). On conserve
+       donc l'heure « murale » telle quelle, sans décalage gmt_offset (qui provoquait un
+       −2 h à l'affichage : 17:00 saisi devenait 15:00). */
+    return $timestamp ? gmdate( 'Y-m-d\TH:i', $timestamp ) : '';
   }  private function datetime_from_local( $value ) {
     $value = is_string( $value ) ? trim( $value ) : '';
     if ( '' === $value ) {
@@ -7291,8 +7295,11 @@ dbDelta( $sql_companies );
     if ( ! $timestamp ) {
       return null;
     }
-    return gmdate( 'Y-m-d H:i:s', $timestamp - ( get_option( 'gmt_offset' ) * HOUR_IN_SECONDS ) );
-  }  
+    /* ACDC — Fuseau : stockage de l'heure locale « murale » telle que saisie (voir
+       datetime_local_value). Aucun décalage gmt_offset, sinon −2 h à l'affichage et,
+       pour une date sans heure, le jour bascule la veille. */
+    return gmdate( 'Y-m-d H:i:s', $timestamp );
+  }
 
 
   private function normalize_price_number( $value, $decimals = 2 ) {
@@ -9260,7 +9267,9 @@ public function register_admin_menu() {
     return null;
   }
   $timestamp = strtotime( $value );
-  return $timestamp ? gmdate( 'Y-m-d H:i:s', $timestamp - ( get_option( 'gmt_offset' ) * HOUR_IN_SECONDS ) ) : null;
+  /* ACDC — Fuseau : conserver l'heure locale « murale » telle que saisie (cohérent avec
+     l'affichage mysql2date). Sans cela, un −2 h était appliqué au stockage (17:00 → 15:00). */
+  return $timestamp ? gmdate( 'Y-m-d H:i:s', $timestamp ) : null;
 }private function format_pdf_date( $value, $with_time = false ) {
   if ( empty( $value ) ) {
     return 'Non renseigné';

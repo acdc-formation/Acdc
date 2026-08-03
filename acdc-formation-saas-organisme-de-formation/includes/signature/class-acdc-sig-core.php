@@ -269,14 +269,30 @@ class ACDC_Sig_Core {
         return str_pad( (string) random_int( 0, 999999 ), 6, '0', STR_PAD_LEFT );
     }
 
+    /*
+     * ACDC — Stockage OTP via OPTION persistante (et non transient).
+     * Motif : sous cache objet externe (Redis/Memcached), un transient ne vit QUE dans le
+     * cache et n'a aucun repli en base : s'il est évincé, get_transient() renvoie false et
+     * le code est déclaré « expiré » immédiatement, même émis à l'instant. Une option
+     * (autoload=no) est toujours persistée en base : elle survit à l'éviction du cache.
+     * L'expiration (15 min) est gérée explicitement via un timestamp UTC (time()),
+     * indépendant du fuseau du site.
+     */
+
+    const OTP_TTL_SECONDS    = 900;  // 15 minutes
+    const OTP_OK_TTL_SECONDS = 3600; // 60 minutes
+
     /**
-     * Stocke le code OTP hashé en transient pour 15 minutes.
+     * Stocke le code OTP hashé (option persistante) pour 15 minutes.
      */
     public function store_otp( $request_id, $otp ) {
-        set_transient(
+        update_option(
             'acdc_sig_otp_' . (int) $request_id,
-            wp_hash( (string) $otp ),
-            15 * MINUTE_IN_SECONDS
+            array(
+                'hash'    => wp_hash( (string) $otp ),
+                'expires' => time() + self::OTP_TTL_SECONDS,
+            ),
+            false
         );
     }
 
@@ -285,25 +301,29 @@ class ACDC_Sig_Core {
      * Retourne 'ok', 'invalid' ou 'expired'.
      */
     public function verify_otp( $request_id, $otp ) {
-        $stored = get_transient( 'acdc_sig_otp_' . (int) $request_id );
-        if ( false === $stored ) {
+        $stored = get_option( 'acdc_sig_otp_' . (int) $request_id );
+        if ( ! is_array( $stored ) || empty( $stored['hash'] ) || empty( $stored['expires'] ) ) {
             return 'expired';
         }
-        if ( ! hash_equals( $stored, wp_hash( (string) $otp ) ) ) {
+        if ( time() > (int) $stored['expires'] ) {
+            delete_option( 'acdc_sig_otp_' . (int) $request_id );
+            return 'expired';
+        }
+        if ( ! hash_equals( (string) $stored['hash'], wp_hash( (string) $otp ) ) ) {
             return 'invalid';
         }
-        delete_transient( 'acdc_sig_otp_' . (int) $request_id );
+        delete_option( 'acdc_sig_otp_' . (int) $request_id );
         return 'ok';
     }
 
     /**
-     * Marque l'OTP comme validé pour ce token (transient 60 min).
+     * Marque l'OTP comme validé pour ce token (option persistante, 60 min).
      */
     public function mark_otp_verified( $token ) {
-        set_transient(
+        update_option(
             'acdc_sig_otpok_' . md5( (string) $token ),
-            1,
-            60 * MINUTE_IN_SECONDS
+            time() + self::OTP_OK_TTL_SECONDS,
+            false
         );
     }
 
@@ -311,14 +331,22 @@ class ACDC_Sig_Core {
      * Vérifie si l'OTP a déjà été validé pour ce token.
      */
     public function is_otp_verified( $token ) {
-        return (bool) get_transient( 'acdc_sig_otpok_' . md5( (string) $token ) );
+        $expires = (int) get_option( 'acdc_sig_otpok_' . md5( (string) $token ), 0 );
+        if ( $expires <= 0 ) {
+            return false;
+        }
+        if ( time() > $expires ) {
+            delete_option( 'acdc_sig_otpok_' . md5( (string) $token ) );
+            return false;
+        }
+        return true;
     }
 
     /**
      * Supprime le marqueur de validation OTP (appelé après signature réussie).
      */
     public function clear_otp_verified( $token ) {
-        delete_transient( 'acdc_sig_otpok_' . md5( (string) $token ) );
+        delete_option( 'acdc_sig_otpok_' . md5( (string) $token ) );
     }
 
     /* -----------------------------------------------------------------------
