@@ -50,14 +50,22 @@ trait ACDC_Documents_Billing_Render_Trait {
 
   private function render_front_quotes_hub() {
     $base_url = is_admin() ? admin_url( 'admin.php?page=acdc-of-dashboard' ) : $this->portal_page_url( array( 'tab' => 'quotes' ) );
+    /* Contexte prospect/proposition venant du menu ⋯ : on le propage et, s'il est présent,
+       on saute directement au formulaire de création (pré-rempli) au lieu de la liste. */
+    $passthrough = array();
+    if ( ! empty( $_GET['prospect_id'] ) ) { $passthrough['prospect_id'] = absint( wp_unslash( $_GET['prospect_id'] ) ); }
+    if ( ! empty( $_GET['proposal_id'] ) ) { $passthrough['proposal_id'] = absint( wp_unslash( $_GET['proposal_id'] ) ); }
+    $direct_create = ! empty( $passthrough ) ? array( 'quote_action' => 'create' ) : array();
+    $action_url    = add_query_arg( array_merge( array( 'tab' => 'quotes', 'scope' => 'action' ), $direct_create, $passthrough ), $base_url );
+    $ancillary_url = add_query_arg( array_merge( array( 'tab' => 'quotes', 'scope' => 'ancillary' ), $direct_create, $passthrough ), $base_url );
     ?>
     <section class="acdc-section-head" style="align-items:flex-start;"><div><h2>Devis</h2></div></section>
     <div class="acdc-grid-2cols" style="gap:18px;">
-      <a href="<?php echo esc_url( add_query_arg( array( 'tab' => 'quotes', 'scope' => 'action' ), $base_url ) ); ?>" class="acdc-panel" style="min-height:98px;display:flex;flex-direction:column;justify-content:center;align-items:center;text-align:center;text-decoration:none;">
+      <a href="<?php echo esc_url( $action_url ); ?>" class="acdc-panel" style="min-height:98px;display:flex;flex-direction:column;justify-content:center;align-items:center;text-align:center;text-decoration:none;">
         <h3 style="margin:0 0 10px;color:#C5A253;font-size:18px;">Actions de formation</h3>
         <p style="margin:0;color:#1E4777;">Devis</p>
       </a>
-      <a href="<?php echo esc_url( add_query_arg( array( 'tab' => 'quotes', 'scope' => 'ancillary' ), $base_url ) ); ?>" class="acdc-panel" style="min-height:98px;display:flex;flex-direction:column;justify-content:center;align-items:center;text-align:center;text-decoration:none;">
+      <a href="<?php echo esc_url( $ancillary_url ); ?>" class="acdc-panel" style="min-height:98px;display:flex;flex-direction:column;justify-content:center;align-items:center;text-align:center;text-decoration:none;">
         <h3 style="margin:0 0 10px;color:#C5A253;font-size:18px;">Prestations annexes</h3>
         <p style="margin:0;color:#1E4777;">Devis</p>
       </a>
@@ -69,7 +77,10 @@ trait ACDC_Documents_Billing_Render_Trait {
     $base_url    = is_admin() ? admin_url( 'admin.php?page=acdc-of-dashboard' ) : $this->portal_page_url( array( 'tab' => 'quotes' ) );
     $back_url    = add_query_arg( array( 'tab' => 'quotes' ), $base_url );
     $scope_label = 'ancillary' === $scope ? 'Prestations annexes' : 'Actions de formation';
-    $create_url  = add_query_arg( array( 'tab' => 'quotes', 'scope' => $scope, 'quote_action' => 'create' ), $base_url );
+    $create_args = array( 'tab' => 'quotes', 'scope' => $scope, 'quote_action' => 'create' );
+    if ( ! empty( $_GET['prospect_id'] ) ) { $create_args['prospect_id'] = absint( wp_unslash( $_GET['prospect_id'] ) ); }
+    if ( ! empty( $_GET['proposal_id'] ) ) { $create_args['proposal_id'] = absint( wp_unslash( $_GET['proposal_id'] ) ); }
+    $create_url  = add_query_arg( $create_args, $base_url );
     $rows_raw    = $this->get_quotes( array( 'scope' => $scope ) );
     $rows        = array();
     foreach ( $rows_raw as $q ) {
@@ -464,6 +475,31 @@ trait ACDC_Documents_Billing_Render_Trait {
             $row['payment_methods'] = sanitize_text_field( (string) $prefill_proposal->formation_funding )
               . "\n\nRèglement par virement bancaire à l'édition de la facture.";
           }
+        }
+      }
+
+      /* Préremplir depuis le prospect si prospect_id est passé en GET (menu ⋯ → Devis),
+         en l'absence de proposition. Reprend les mêmes clés $row que le prefill proposition. */
+      if ( empty( $row['proposal_id'] ) && ! empty( $row['source_prospect_id'] ) && method_exists( $this, 'get_prospect' ) ) {
+        $prefill_prospect = $this->get_prospect( (int) $row['source_prospect_id'] );
+        if ( $prefill_prospect ) {
+          $is_company_p = ! $this->is_individual_prospect_profile( $prefill_prospect->profile_type ?? '' );
+          $row['commanditaire_type'] = $is_company_p ? 'Entreprise' : 'Particulier';
+          $row['apprenant']          = $this->get_prospect_display_name( $prefill_prospect );
+          $row['apprenant_email']    = $this->get_prospect_primary_email( $prefill_prospect );
+          $row['client_company']     = $is_company_p ? (string) ( $prefill_prospect->company_name ?? '' ) : '';
+          $row['address']            = (string) ( $prefill_prospect->address ?? '' );
+          $row['postal_code']        = (string) ( $prefill_prospect->postal_code ?? '' );
+          $row['city']               = (string) ( $prefill_prospect->city ?? '' );
+          $desired_p = trim( (string) ( $prefill_prospect->desired_training ?? '' ) );
+          if ( '' !== $desired_p ) {
+            $row['formation_title'] = $desired_p;
+            $row['formation']       = $desired_p;
+            $row['formation_full']  = $desired_p;
+          }
+          $row['formation_address']     = (string) ( $prefill_prospect->address ?? '' );
+          $row['formation_postal_code'] = (string) ( $prefill_prospect->postal_code ?? '' );
+          $row['formation_city']        = (string) ( $prefill_prospect->city ?? '' );
         }
       }
     }
