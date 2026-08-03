@@ -1130,6 +1130,11 @@ public function handle_update_registration_contract_document() {
       array( 'id' => (int) $contract->id )
     );
 
+    // M23 — Convention signée = conversion : faire passer le prospect à « Converti ».
+    if ( ! empty( $contract->source_prospect_id ) && method_exists( $this, 'maybe_advance_prospect_status' ) ) {
+      $this->maybe_advance_prospect_status( (int) $contract->source_prospect_id, 'Converti', true );
+    }
+
     // Envoyer le PDF signé à l'organisme + au signataire
     // Récupérer l'email du signataire depuis la sig_request (requête directe — $this->core n'existe pas dans ce trait)
     $sig_table       = $wpdb->prefix . 'acdc_sig_requests';

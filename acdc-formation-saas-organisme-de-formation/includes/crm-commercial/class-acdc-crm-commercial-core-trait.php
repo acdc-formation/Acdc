@@ -500,7 +500,7 @@
     );
   }
 
-  protected function maybe_advance_prospect_status( $prospect_id, $target_status ) {
+  protected function maybe_advance_prospect_status( $prospect_id, $target_status, $allow_terminal = false ) {
     if ( ! $prospect_id || ! $target_status ) {
       return false;
     }
@@ -509,8 +509,9 @@
     if ( ! $target_rank ) {
       return false;
     }
-    // Never auto-advance to Converti or Perdu
-    if ( in_array( $target_status, array( 'Converti', 'Perdu' ), true ) ) {
+    // Never auto-advance to Converti or Perdu — SAUF événement explicite (ex. signature
+    // d'une convention ou d'un devis) qui passe $allow_terminal = true.
+    if ( ! $allow_terminal && in_array( $target_status, array( 'Converti', 'Perdu' ), true ) ) {
       return false;
     }
     $prospect = $this->get_prospect( (int) $prospect_id );

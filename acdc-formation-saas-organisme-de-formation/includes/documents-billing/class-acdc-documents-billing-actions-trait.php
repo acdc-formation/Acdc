@@ -1015,6 +1015,10 @@ trait ACDC_Documents_Billing_Actions_Trait {
       'signature_status'     => 'envoyée',
       'status'               => 'a_signer',
     ), array( 'id' => $quote_id ), array( '%d', '%s', '%s' ), array( '%d' ) );
+    /* M23 — Envoi du devis en signature = « Devis envoyé » dans le pipeline prospect. */
+    if ( ! empty( $quote->source_prospect_id ) && method_exists( $this, 'maybe_advance_prospect_status' ) ) {
+      $this->maybe_advance_prospect_status( (int) $quote->source_prospect_id, 'Devis envoyé' );
+    }
     /* M10 — Revenir sur la fiche du devis (et non sur l'écran hub qui perdait le contexte). */
     $this->redirect_to_portal( 'quotes', 'Demande de signature envoyée à ' . $signer_email . '.', 'success', array(
       'scope'        => $quote->scope ?: 'action',
@@ -1052,23 +1056,37 @@ trait ACDC_Documents_Billing_Actions_Trait {
       'status'               => 'signe',
       'signed_document_url'  => $signed_url,
     ), array( 'id' => $quote_id ), array( '%s', '%s', '%s' ), array( '%d' ) );
-    // Notifier l'organisme
     $signed_at   = current_time( 'mysql' );
     $profile_s   = $this->get_company_profile_options();
     $from_name_s = ! empty( $profile_s['enterprise_contact_name'] )  ? sanitize_text_field( (string) $profile_s['enterprise_contact_name'] )  : get_bloginfo( 'name' );
     $from_email_s= ! empty( $profile_s['enterprise_contact_email'] ) ? sanitize_email( (string) $profile_s['enterprise_contact_email'] )       : sanitize_email( (string) get_option( 'admin_email' ) );
-    $admin_email = sanitize_email( (string) get_option( 'admin_email' ) );
     $signer_name = sanitize_text_field( (string) $quote->apprenant_name );
     $quote_num   = sanitize_text_field( (string) $quote->number );
-    if ( '' !== $admin_email && is_email( $admin_email ) ) {
-      $headers_s = array( 'Content-Type: text/html; charset=UTF-8', 'From: ' . sanitize_text_field( $from_name_s ) . ' <' . $from_email_s . '>' );
-      $subj_admin = '✅ Devis signé — ' . $quote_num . ' — ' . $signer_name;
-      $body_admin = '<div style="font-family:Arial,sans-serif;color:#24324a;max-width:600px;margin:0 auto;">'
-                  . '<h2 style="color:#1f335d;">✅ Devis signé électroniquement</h2>'
-                  . '<p>Le devis <strong>' . esc_html( $quote_num ) . '</strong> de <strong>' . esc_html( $signer_name ) . '</strong> a été signé électroniquement.</p>'
-                  . '<p>La preuve de signature est disponible dans le module <strong>Archives des signatures</strong>.</p>'
-                  . '</div>';
-      wp_mail( $admin_email, $subj_admin, $body_admin, $headers_s );
+
+    /* M23 — Devis signé = conversion : faire passer le prospect à « Converti ». */
+    if ( ! empty( $quote->source_prospect_id ) && method_exists( $this, 'maybe_advance_prospect_status' ) ) {
+      $this->maybe_advance_prospect_status( (int) $quote->source_prospect_id, 'Converti', true );
+    }
+
+    /* Exemplaire client du devis signé — le flux devis ne l'envoyait pas (contrairement à la
+       convention). La notification interne, elle, est déjà émise par le module de signature
+       (notify_admin) : on ne la ré-émet plus ici, ce qui supprime aussi le doublon interne. */
+    $client_email = sanitize_email( (string) $quote->apprenant_email );
+    if ( '' !== $client_email && is_email( $client_email ) ) {
+      $doc_link = $signed_url ?: ( ! empty( $quote->html_url ) ? esc_url_raw( (string) $quote->html_url ) : '' );
+      $headers_c = array( 'Content-Type: text/html; charset=UTF-8', 'From: ' . sanitize_text_field( $from_name_s ) . ' <' . $from_email_s . '>' );
+      $subj_client = '📄 Votre exemplaire — Devis signé';
+      $cta_client  = $doc_link
+        ? '<p style="text-align:center;margin:24px 0;"><a href="' . esc_url( $doc_link ) . '" style="display:inline-block;padding:13px 26px;background:#C5A253;color:#0B0706;text-decoration:none;border-radius:8px;font-weight:700;">📄 Consulter votre devis signé</a></p>'
+        : '';
+      $body_client = '<div style="font-family:Arial,sans-serif;color:#24324a;max-width:600px;margin:0 auto;">'
+                   . '<h2 style="color:#1f335d;">Votre devis a bien été signé</h2>'
+                   . '<p>Bonjour ' . esc_html( $signer_name ) . ',</p>'
+                   . '<p>Nous confirmons la signature électronique de votre devis <strong>' . esc_html( $quote_num ) . '</strong>, le ' . esc_html( mysql2date( 'd/m/Y à H\hi', $signed_at ) ) . '.</p>'
+                   . $cta_client
+                   . '<p>Merci de votre confiance.</p>'
+                   . '</div>';
+      wp_mail( $client_email, $subj_client, $body_client, $headers_c );
     }
   }
 }
