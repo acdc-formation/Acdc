@@ -1006,13 +1006,18 @@
     $proposal_table = $wpdb->prefix . 'acdc_of_proposals';
     $need_table     = $this->need_table;
 
+    /* Rattachement au dossier par IDENTIFIANT du prospect : soit la proposition porte
+       directement source_prospect_id, soit elle est reliée via son recueil (need). Un
+       INNER JOIN sur le recueil excluait toute proposition sans recueil (need_id=0), qui
+       n'apparaissait donc pas dans le dossier. LEFT JOIN + OR corrige ce cas. */
     return $wpdb->get_results( $wpdb->prepare(
       "SELECT p.id, p.need_id, p.title, p.client_company, p.formation_title, p.status, p.created_at, p.pdf_url, p.last_sent_at
        FROM {$proposal_table} p
-       INNER JOIN {$need_table} n ON n.id = p.need_id
-       WHERE n.source_prospect_id = %d
+       LEFT JOIN {$need_table} n ON n.id = p.need_id
+       WHERE p.source_prospect_id = %d OR n.source_prospect_id = %d
        ORDER BY p.created_at DESC
        LIMIT 20",
+      (int) $prospect->id,
       (int) $prospect->id
     ) );
   }
