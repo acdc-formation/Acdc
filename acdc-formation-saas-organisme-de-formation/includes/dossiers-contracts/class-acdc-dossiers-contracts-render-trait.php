@@ -1096,13 +1096,17 @@ trait ACDC_Dossiers_Contracts_Render_Trait {
         'price_ht' => ! empty( $prospect_prefill['price_ht'] ) ? (string) $prospect_prefill['price_ht'] : '',
       );
     }
+    /* B10 — learner_ids a pu être normalisé en TABLEAU plus haut (ligne ~965) : le relire
+       via (string) donnait « Array » et vidait la sélection à l'édition (« Aucun apprenant
+       sélectionné » alors que les apprenants étaient bien enregistrés). On gère les deux cas. */
     $selected_learner_ids = array();
-    if ( ! empty( $contract->learner_ids ) ) {
-      foreach ( explode( ',', (string) $contract->learner_ids ) as $raw_learner_id ) {
-        $learner_id = absint( trim( $raw_learner_id ) );
-        if ( $learner_id ) {
-          $selected_learner_ids[] = $learner_id;
-        }
+    $raw_learner_ids = is_array( $contract->learner_ids )
+      ? $contract->learner_ids
+      : explode( ',', (string) $contract->learner_ids );
+    foreach ( (array) $raw_learner_ids as $raw_learner_id ) {
+      $learner_id = absint( trim( (string) $raw_learner_id ) );
+      if ( $learner_id ) {
+        $selected_learner_ids[] = $learner_id;
       }
     }
     ?>

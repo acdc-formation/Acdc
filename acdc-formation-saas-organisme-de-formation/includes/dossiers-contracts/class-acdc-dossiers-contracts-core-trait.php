@@ -16,38 +16,42 @@ trait ACDC_Dossiers_Contracts_Core_Trait {
 
 
   private function get_contract_params_defaults() {
+    /* B8 — Textes par défaut des clauses obligatoires. Ils étaient vides, obligeant à tout
+       ressaisir à la main sur chaque convention. Ces valeurs génériques (alignées Qualiopi)
+       restent modifiables dans « Paramètres de convention » et sont écrasées par toute
+       valeur enregistrée par l'organisme. */
     return array(
       'attach_program_rules' => '1',
       'legal_reference' => 'Articles L6353-1 et L.6353-2 du Code du travail et Décret n°2018-1341 du 28 décembre 2018',
-      'accessibility_handicap' => '',
-      'material_environment' => '',
-      'implementation_followup_evaluation' => '',
-      'financial_provisions' => '',
-      'payment_terms' => '',
-      'cancellation_terms' => '',
-      'possible_disputes' => '',
+      'accessibility_handicap' => "Nos formations sont accessibles aux personnes en situation de handicap. Pour toute situation particulière, notre référent handicap étudie avec vous, avant l'entrée en formation, les adaptations pédagogiques, matérielles et organisationnelles nécessaires afin de garantir l'accès à la formation.",
+      'material_environment' => "La formation se déroule dans une salle adaptée équipée du matériel pédagogique nécessaire (vidéoprojecteur, paperboard, connexion internet). Les supports pédagogiques sont remis à chaque participant. En distanciel, une plateforme de visioconférence et les accès nécessaires sont fournis avant le démarrage.",
+      'implementation_followup_evaluation' => "La formation est mise en œuvre conformément au programme annexé. Le suivi de l'exécution est assuré par des feuilles d'émargement signées par demi-journée. Les acquis sont évalués tout au long de la formation (évaluation formative) et à son terme (évaluation sommative). Une évaluation de satisfaction est recueillie auprès des participants à l'issue de la formation.",
+      'financial_provisions' => "Le coût de la formation est indiqué dans les conditions financières de la présente convention. En cas de prise en charge par un financeur (OPCO, France Travail, etc.), l'organisme adresse la facture au financeur ; en l'absence de prise en charge totale, le reliquat reste dû par le commanditaire.",
+      'payment_terms' => "Le règlement s'effectue par virement bancaire à réception de facture, selon l'échéancier convenu entre les parties. Les coordonnées bancaires de l'organisme figurent sur la facture.",
+      'cancellation_terms' => "Toute annulation ou report doit être notifié par écrit. En cas d'annulation par le commanditaire à moins de 10 jours ouvrés du début de la formation, une indemnité de dédit pourra être facturée conformément à l'article L.6354-1 du Code du travail. En cas d'annulation ou de report du fait de l'organisme, les sommes déjà versées sont intégralement remboursées.",
+      'possible_disputes' => "En cas de différend relatif à l'interprétation ou à l'exécution de la présente convention, les parties s'efforceront de trouver une solution amiable. À défaut d'accord, le litige sera porté devant les tribunaux compétents du ressort du siège social de l'organisme de formation.",
       'withdrawal_delay_days' => '14',
       'preview_label' => 'Convention de formation',
       'additional_sections' => array(
         array(
           'title' => 'Engagements de l\'Apprenant',
-          'content' => '',
+          'content' => "L'apprenant s'engage à suivre l'intégralité de la formation avec assiduité, à signer les feuilles d'émargement, à respecter le règlement intérieur de l'organisme et à participer activement aux activités et aux évaluations prévues.",
         ),
         array(
           'title' => 'Engagements de l\'Organisme de Formation',
-          'content' => '',
+          'content' => "L'organisme de formation s'engage à dispenser la formation conformément au programme convenu, à mettre à disposition les moyens pédagogiques, techniques et humains nécessaires, à assurer le suivi administratif de l'action et à délivrer les attestations de fin de formation.",
         ),
         array(
           'title' => 'Discipline et sanctions',
-          'content' => '',
+          'content' => "L'apprenant est tenu de respecter le règlement intérieur de l'organisme de formation. Tout manquement peut donner lieu à une sanction dans les conditions prévues par ce règlement et par les articles R.6352-3 et suivants du Code du travail.",
         ),
         array(
           'title' => 'Données personnelles et confidentialité',
-          'content' => '',
+          'content' => "Les données personnelles collectées sont traitées conformément au Règlement général sur la protection des données (RGPD), pour les seules finalités liées à la gestion de la formation, et conservées pendant la durée légale. Chaque personne concernée dispose d'un droit d'accès, de rectification et de suppression de ses données.",
         ),
         array(
           'title' => 'Litiges',
-          'content' => '',
+          'content' => "Tout litige relatif à l'interprétation ou à l'exécution de la présente convention relève, à défaut d'accord amiable entre les parties, de la compétence des tribunaux du ressort du siège social de l'organisme de formation.",
         ),
       ),
     );
@@ -63,6 +67,13 @@ trait ACDC_Dossiers_Contracts_Core_Trait {
     $options = wp_parse_args( $saved, $defaults );
     if ( empty( $options['additional_sections'] ) || ! is_array( $options['additional_sections'] ) ) {
       $options['additional_sections'] = $defaults['additional_sections'];
+    }
+    /* B8 — Une clause enregistrée vide retombe sur le texte par défaut (clauses obligatoires) :
+       sans cela, un enregistrement antérieur avec champs vides masquerait les défauts. */
+    foreach ( array( 'legal_reference', 'accessibility_handicap', 'material_environment', 'implementation_followup_evaluation', 'financial_provisions', 'payment_terms', 'cancellation_terms', 'possible_disputes' ) as $clause_key ) {
+      if ( ( ! isset( $options[ $clause_key ] ) || '' === trim( (string) $options[ $clause_key ] ) ) && ! empty( $defaults[ $clause_key ] ) ) {
+        $options[ $clause_key ] = $defaults[ $clause_key ];
+      }
     }
     return $options;
   }
