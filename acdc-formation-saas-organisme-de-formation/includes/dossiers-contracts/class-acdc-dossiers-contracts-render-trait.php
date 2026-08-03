@@ -926,7 +926,9 @@ trait ACDC_Dossiers_Contracts_Render_Trait {
                   <div class="acdc-groups-actions-inline">
                     <?php
                     $has_sig_req_f = ! empty( $entry->signature_request_id ) && (int) $entry->signature_request_id > 0;
-                    $resend_url_f  = $has_sig_req_f ? wp_nonce_url( admin_url( 'admin-post.php?action=acdc_sig_portal_resend&request_id=' . (int) $entry->signature_request_id ), 'acdc_sig_portal_resend_' . (int) $entry->signature_request_id ) : '';
+                    /* Ne pas proposer « Renvoyer pour signature » sur une convention déjà signée. */
+                    $is_signed_f   = ! empty( $entry->signed_document_url ) || ! empty( $entry->signed_document_path ) || in_array( (string) ( $entry->signature_status ?? '' ), array( 'completed', 'signe', 'signée' ), true );
+                    $resend_url_f  = ( $has_sig_req_f && ! $is_signed_f ) ? wp_nonce_url( admin_url( 'admin-post.php?action=acdc_sig_portal_resend&request_id=' . (int) $entry->signature_request_id ), 'acdc_sig_portal_resend_' . (int) $entry->signature_request_id ) : '';
                     $send_sig_url_f = ! $has_sig_req_f ? wp_nonce_url( admin_url( 'admin-post.php?action=acdc_send_contract_for_signature&contract_id=' . (int) $entry->id ), 'acdc_send_contract_for_signature_' . (int) $entry->id ) : '';
                     $reg_url_f     = $this->portal_page_url( array( 'tab' => 'register_training', 'action' => 'bulk_from_contract', 'contract_id' => (int) $entry->id ) );
                     $delete_url_f  = wp_nonce_url( admin_url( 'admin-post.php?action=acdc_delete_registration_contract&contract_id=' . (int) $entry->id . ( is_admin() ? '&page=acdc-of-registration-contract' : '' ) ), 'acdc_delete_registration_contract_' . (int) $entry->id );
@@ -2195,7 +2197,9 @@ trait ACDC_Dossiers_Contracts_Render_Trait {
                   <div class="acdc-groups-actions-inline">
                     <?php
                     $has_sig_req = ! empty( $entry->signature_request_id ) && (int) $entry->signature_request_id > 0;
-                    $resend_url  = $has_sig_req ? wp_nonce_url( admin_url( 'admin-post.php?action=acdc_sig_resend_request&request_id=' . (int) $entry->signature_request_id ), 'acdc_sig_resend_' . (int) $entry->signature_request_id ) : '';
+                    /* Ne pas proposer « Renvoyer pour signature » sur une convention déjà signée. */
+                    $is_signed_row = ! empty( $entry->signed_document_url ) || ! empty( $entry->signed_document_path ) || in_array( (string) ( $entry->signature_status ?? '' ), array( 'completed', 'signe', 'signée' ), true );
+                    $resend_url  = ( $has_sig_req && ! $is_signed_row ) ? wp_nonce_url( admin_url( 'admin-post.php?action=acdc_sig_resend_request&request_id=' . (int) $entry->signature_request_id ), 'acdc_sig_resend_' . (int) $entry->signature_request_id ) : '';
                     $reg_url     = $this->portal_page_url( array( 'tab' => 'register_training', 'action' => 'bulk_from_contract', 'contract_id' => (int) $entry->id ) );
                     ?>
                     <div class="acdc-row-menu" data-acdc-row-menu>

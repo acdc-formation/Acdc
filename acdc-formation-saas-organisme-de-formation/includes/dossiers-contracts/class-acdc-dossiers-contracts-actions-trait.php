@@ -1216,11 +1216,20 @@ public function handle_update_registration_contract_document() {
       $signer_email_addr = sanitize_email( (string) $contract->commanditaire_email );
     }
     if ( '' !== $signer_email_addr ) {
+      /* Accord grammatical : « de la convention signée » (fém.) vs « du contrat signé » (masc.). */
+      $kind_lc = strtolower( (string) $kind );
+      if ( 'convention' === $kind_lc ) {
+        $doc_phrase = 'de la convention signée';
+      } elseif ( 'contrat' === $kind_lc ) {
+        $doc_phrase = 'du contrat signé';
+      } else {
+        $doc_phrase = 'du ' . $kind_lc . ' signé';
+      }
       $signer_subject = '📄 Votre exemplaire — ' . esc_html( $kind ) . ' signé(e)';
       $signer_body    = '<div style="font-family:Arial,sans-serif;color:#24324a;max-width:600px;margin:0 auto;">'
                       . '<h2 style="color:#1f335d;">Votre exemplaire signé</h2>'
                       . '<p>Bonjour,</p>'
-                      . '<p>Veuillez trouver en pièce jointe votre exemplaire du ' . esc_html( strtolower( $kind ) ) . ' signé le <strong>' . esc_html( $signed_at ) . '</strong>.</p>'
+                      . '<p>Veuillez trouver en pièce jointe votre exemplaire ' . esc_html( $doc_phrase ) . ' le <strong>' . esc_html( $signed_at ) . '</strong>.</p>'
                       . '<p>Conservez ce document pour vos archives.</p>'
                       . '</div>';
       wp_mail( $signer_email_addr, $signer_subject, $signer_body, $headers, array( (string) $pdf_result['path'] ) );
