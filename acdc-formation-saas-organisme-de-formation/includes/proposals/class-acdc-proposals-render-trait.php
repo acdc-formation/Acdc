@@ -2088,6 +2088,55 @@ startxref
       'access_conditions'        => $is_edit ? (string) $p->access_conditions : '',
       'status'                   => $is_edit ? (string) $p->status : 'brouillon',
     );
+    /* --- Nouveau depuis un prospect (menu Suivi commercial → Proposition commerciale) ---
+       Le formulaire capte prospect_id mais ne se préremplissait que via un recueil lié.
+       Lancé sans recueil (need_id=0), il restait entièrement vide. On préremplit ici depuis
+       le prospect et on rattache automatiquement son recueil des besoins le plus récent
+       (lie need_id → réutilise les fallbacks recueil ci-dessous et relie la proposition). */
+    if ( ! $is_edit && ! empty( $v['source_prospect_id'] ) ) {
+      $pp = $this->get_prospect( (int) $v['source_prospect_id'] );
+      if ( $pp ) {
+        if ( empty( $v['need_id'] ) && ! empty( $this->need_table ) ) {
+          global $wpdb;
+          $latest_need_id = (int) $wpdb->get_var( $wpdb->prepare(
+            "SELECT id FROM {$this->need_table} WHERE source_prospect_id = %d ORDER BY id DESC LIMIT 1",
+            (int) $v['source_prospect_id']
+          ) );
+          if ( $latest_need_id ) {
+            $v['need_id'] = $latest_need_id;
+          }
+        }
+        $is_company_pp = ! $this->is_individual_prospect_profile( (string) ( $pp->profile_type ?? '' ) );
+        $pp_signer = trim( ( (string) ( $pp->signer_first_name ?? '' ) ) . ' ' . ( (string) ( $pp->signer_last_name ?? '' ) ) );
+        if ( '' === $pp_signer ) {
+          $pp_signer = trim( ( (string) ( $pp->first_name ?? '' ) ) . ' ' . ( (string) ( $pp->last_name ?? '' ) ) );
+        }
+        if ( '' === (string) $v['client_name'] && '' !== $pp_signer ) { $v['client_name'] = $pp_signer; }
+        if ( '' === (string) $v['client_title'] && ! empty( $pp->signer_quality ) ) { $v['client_title'] = (string) $pp->signer_quality; }
+        if ( empty( $v['client_email'] ) ) {
+          $pp_email = $this->get_prospect_primary_email( $pp );
+          if ( $pp_email ) { $v['client_email'] = $pp_email; }
+        }
+        if ( '' === (string) $v['client_company'] && $is_company_pp && ! empty( $pp->company_name ) ) { $v['client_company'] = (string) $pp->company_name; }
+        if ( '' === (string) $v['client_siret'] && ! empty( $pp->siret ) ) { $v['client_siret'] = (string) $pp->siret; }
+        if ( '' === (string) $v['client_address'] && ! empty( $pp->address ) ) { $v['client_address'] = (string) $pp->address; }
+        if ( empty( $v['client_postal_code'] ) && ! empty( $pp->postal_code ) ) { $v['client_postal_code'] = (string) $pp->postal_code; }
+        if ( empty( $v['client_city'] ) && ! empty( $pp->city ) ) { $v['client_city'] = (string) $pp->city; }
+        $pp_fid = isset( $pp->desired_formation_id ) ? (int) $pp->desired_formation_id : 0;
+        if ( empty( $v['formation_id'] ) && $pp_fid ) {
+          $pp_formation = $this->get_formation( $pp_fid );
+          if ( $pp_formation ) {
+            $v['formation_id'] = $pp_fid;
+            if ( '' === (string) $v['formation_title'] && ! empty( $pp_formation->title ) ) { $v['formation_title'] = (string) $pp_formation->title; }
+            if ( '' === (string) $v['title'] && ! empty( $pp_formation->title ) ) { $v['title'] = (string) $pp_formation->title; }
+          }
+        }
+        if ( '' === (string) $v['thematique'] && ! empty( $pp->desired_thematique ) ) { $v['thematique'] = (string) $pp->desired_thematique; }
+        if ( '' === (string) $v['title'] && ! empty( $pp->desired_training ) ) { $v['title'] = (string) $pp->desired_training; }
+        if ( '' === (string) $v['formation_title'] && ! empty( $pp->desired_training ) ) { $v['formation_title'] = (string) $pp->desired_training; }
+      }
+    }
+
     /* --- Fallback depuis le recueil des besoins lié --- */
     $v_need = ! empty( $v['need_id'] ) ? $this->get_need( (int) $v['need_id'] ) : null;
     if ( $v_need ) {
