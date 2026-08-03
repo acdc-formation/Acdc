@@ -2516,6 +2516,10 @@ startxref
               Laissez un champ vide pour utiliser le programme de la fiche formation.
               <strong>⚡ G&#233;n&#233;rer via IA</strong> r&#233;sume le programme en respectant le format de la page.
             </p>
+            <p style="margin:0 0 16px;">
+              <button type="button" class="acdc-button acdc-button-primary acdc-prog-gen-all-btn" style="height:34px;font-size:12px;padding:0 14px;">&#9889; G&#233;n&#233;rer tout le programme (IA)</button>
+              <span class="acdc-prog-gen-all-status" style="font-size:12px;color:#4b5d76;margin-left:10px;"></span>
+            </p>
             <?php for ( $__j = 1; $__j <= 10; $__j++ ) :
               $__key  = 'program_j' . $__j;
               $__show = $__j <= max( 1, (int) $v['formation_days'] );
@@ -2757,7 +2761,7 @@ startxref
       fd.append('nonce', _acdcFullNonce);
       fd.append('formation_id', formationId);
       fd.append('day', day);
-      fetch(_acdcFullAjax, {method:'POST', body:fd})
+      return fetch(_acdcFullAjax, {method:'POST', body:fd})
         .then(function(r){return r.json();})
         .then(function(res){
           ta.disabled = false;
@@ -2789,6 +2793,36 @@ startxref
       var day = parseInt(btn.getAttribute('data-day'));
       var fid = document.getElementById('acdc-full-formation-id').value;
       acdcProgGenerateDay(day, fid);
+    });
+
+    /* Générer TOUT le programme : boucle séquentielle sur tous les jours affichés. */
+    function acdcProgGenerateAllDays() {
+      var days = parseInt(document.getElementById('acdc-full-days').value) || 1;
+      var fid  = document.getElementById('acdc-full-formation-id').value;
+      if (!fid) { alert('Sélectionnez une formation d’abord.'); return; }
+      var allBtn = document.querySelector('.acdc-prog-gen-all-btn');
+      var allSt  = document.querySelector('.acdc-prog-gen-all-status');
+      if (allBtn) allBtn.disabled = true;
+      var chain = Promise.resolve();
+      var _mk = function(day) {
+        return function() {
+          if (allSt) { allSt.textContent = 'Génération J' + day + '/' + days + '…'; allSt.style.color = '#8a6d2a'; }
+          return acdcProgGenerateDay(day, fid);
+        };
+      };
+      for (var d = 1; d <= days; d++) { chain = chain.then(_mk(d)); }
+      chain.then(function() {
+        if (allBtn) allBtn.disabled = false;
+        if (allSt) { allSt.textContent = '✓ Programme généré (' + days + ' j)'; allSt.style.color = '#35b37e'; }
+      }).catch(function() {
+        if (allBtn) allBtn.disabled = false;
+        if (allSt) { allSt.textContent = 'Erreur pendant la génération'; allSt.style.color = '#e06d6d'; }
+      });
+    }
+    document.addEventListener('click', function(e) {
+      var b = e.target.closest('.acdc-prog-gen-all-btn');
+      if (!b) return;
+      acdcProgGenerateAllDays();
     });
 
     function acdcToggleTrainerBio(cb) {

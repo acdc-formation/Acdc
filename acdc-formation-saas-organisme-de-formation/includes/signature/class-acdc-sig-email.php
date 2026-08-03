@@ -89,6 +89,11 @@ class ACDC_Sig_Email {
             $doc_label_court     = 'Contrat individuel de formation';
             $sign_btn_label      = 'Signer votre contrat';
             $footer_notice       = 'Cet e-mail a été envoyé suite à l\'établissement de votre contrat de formation. Vos données sont traitées conformément au RGPD.';
+        } elseif ( 'devis' === $doc_type ) {
+            $doc_label_possessif = 'votre devis de formation';
+            $doc_label_court     = 'Devis de formation';
+            $sign_btn_label      = 'Signer votre devis';
+            $footer_notice       = 'Cet e-mail a été envoyé suite à l\'établissement de votre devis de formation. Vos données sont traitées conformément au RGPD.';
         } else {
             $doc_label_possessif = 'le document';
             $doc_label_court     = $doc_label;
@@ -98,8 +103,17 @@ class ACDC_Sig_Email {
 
         $sign_url      = add_query_arg( 'sig', $request->token, $this->core->get_signature_page_url() );
         $doc_url       = ! empty( $request->doc_url ) ? (string) $request->doc_url : '';
-        $subject       = $s['email_subject'] ?: $doc_label_court . ' à signer — ' . $b['company_name'];
-        $intro         = $s['email_intro']   ?: 'Vous trouverez ci-dessous ' . $doc_label_possessif . '. Nous vous invitons à en prendre connaissance, puis à le signer électroniquement avant son expiration.';
+        /* B4 — Objet/intro spécifiques au type de document. Les réglages globaux par défaut
+           (« Document à signer » / intro générique) aplatissaient tous les types : le client
+           ne savait pas ce qu'il signait (ni devis, ni convention). On n'utilise le réglage
+           global que s'il a été personnalisé (différent du défaut) ; sinon on reprend le
+           libellé propre au type (Devis / Convention / Contrat …). */
+        $sig_default_subject = 'Document à signer';
+        $sig_default_intro   = 'Vous avez reçu une demande de signature électronique. Merci de signer le document en cliquant sur le bouton ci-dessous.';
+        $custom_subject = ( '' !== trim( (string) $s['email_subject'] ) && $sig_default_subject !== $s['email_subject'] );
+        $custom_intro   = ( '' !== trim( (string) $s['email_intro'] ) && $sig_default_intro !== $s['email_intro'] );
+        $subject       = $custom_subject ? $s['email_subject'] : ( $doc_label_court . ' à signer — ' . $b['company_name'] );
+        $intro         = $custom_intro   ? $s['email_intro']   : ( 'Vous trouverez ci-dessous ' . $doc_label_possessif . '. Nous vous invitons à en prendre connaissance, puis à le signer électroniquement avant son expiration.' );
         $btn_color     = $s['btn_color']     ?: '#C5A253';
         $expires_label = $request->expires_at ? wp_date( 'd/m/Y à H:i', strtotime( $request->expires_at ) ) : '';
 

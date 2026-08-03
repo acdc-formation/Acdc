@@ -2761,6 +2761,12 @@ trait ACDC_Kernel_Actions_Trait {
   $need_id = isset( $_POST['need_id'] ) ? absint( $_POST['need_id'] ) : 0;
   $input  = isset( $_POST['need'] ) && is_array( $_POST['need'] ) ? wp_unslash( $_POST['need'] ) : array();
   $source_prospect_id = isset( $input['source_prospect_id'] ) ? absint( $input['source_prospect_id'] ) : 0;
+  /* M1 — L'e-mail au prospect n'est plus envoyé implicitement : il n'est envoyé que si
+     l'interrupteur « Envoyer le recueil au prospect » est actif (coché par défaut). Champ
+     absent (appel hérité) → on conserve l'envoi pour ne pas changer le comportement. */
+  $notify_client = isset( $input['notify_client'] )
+    ? ( '' !== (string) $input['notify_client'] && '0' !== (string) $input['notify_client'] )
+    : true;
 
   $data = array(
     'company_id'     => isset( $input['company_id'] ) ? absint( $input['company_id'] ) : 0,
@@ -2863,7 +2869,7 @@ trait ACDC_Kernel_Actions_Trait {
     'notification_sent' => false,
   );
 
-  if ( false !== $result && $need_id ) {
+  if ( false !== $result && $need_id && $notify_client ) {
     $email_results = $this->acdc_send_need_email_notifications( $need_id, $data, $source_prospect_id );
     if ( ! empty( $email_results['client_sent'] ) ) {
       $wpdb->update( $this->need_table, array( 'sent_at' => $now, 'updated_at' => $now ), array( 'id' => $need_id ) );
@@ -2877,13 +2883,17 @@ trait ACDC_Kernel_Actions_Trait {
     } elseif ( ! empty( $email_results['notification_attempted'] ) ) {
       $message .= ' Notification interne non envoyée.';
     }
+  } elseif ( false !== $result && $need_id && ! $notify_client ) {
+    $message .= ' (Non envoyé au prospect — envoi désactivé.)';
   }
 
   $success_extra = array( 'action' => 'edit', 'item_id' => $need_id );
   if ( $source_prospect_id ) {
     $success_extra['prospect_id'] = $source_prospect_id;
     if ( false !== $result ) {
-      $this->maybe_advance_prospect_status( $source_prospect_id, 'Recueil envoyé' );
+      if ( $notify_client ) {
+        $this->maybe_advance_prospect_status( $source_prospect_id, 'Recueil envoyé' );
+      }
 
       /* ── Cascade retour : need → prospect ── */
       global $wpdb;

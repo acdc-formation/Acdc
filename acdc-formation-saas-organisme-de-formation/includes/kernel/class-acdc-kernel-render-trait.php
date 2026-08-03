@@ -9415,6 +9415,14 @@ trait ACDC_Kernel_Render_Trait {
             : $this->portal_page_url( $varg );
         }
         ?>
+        <div class="acdc-need-form-row" style="justify-content:flex-start;align-items:flex-start;gap:12px;margin-bottom:6px;">
+          <label class="acdc-switch" style="margin-top:2px;flex:0 0 auto;">
+            <input type="hidden" name="need[notify_client]" value="0">
+            <input type="checkbox" name="need[notify_client]" value="1" checked>
+            <span class="acdc-switch-slider"></span>
+          </label>
+          <span style="line-height:1.4;">Envoyer le recueil au prospect par e-mail<br><small style="color:#8a6d2a;">Coché : le recueil est envoyé au prospect dès l'enregistrement. Décochez pour enregistrer sans envoyer (brouillon).</small></span>
+        </div>
         <div class="acdc-need-form-row">
           <a class="acdc-button acdc-button-soft" href="<?php echo esc_url( $cancel_need_url_local ); ?>" data-acdc-no-iconize="1">← Retour à la liste</a>
           <button type="submit" class="acdc-button acdc-button-primary" data-acdc-no-iconize="1">Enregistrer</button>
