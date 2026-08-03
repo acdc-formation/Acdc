@@ -341,20 +341,55 @@ trait ACDC_Dossiers_Contracts_Core_Trait {
         $prefill['public_funding'] = sanitize_text_field( (string) $proposal->formation_funding );
       }
     } else {
-      /* Fallback sur la formation catalogue via desired_training */
-      $desired_training = isset( $prospect->desired_training ) ? trim( (string) $prospect->desired_training ) : '';
-      if ( '' !== $desired_training ) {
-        foreach ( (array) $formations as $formation ) {
-          $formation_id    = ! empty( $formation->id ) ? (int) $formation->id : 0;
-          $formation_title = isset( $formation->title ) ? trim( (string) $formation->title ) : '';
-          if ( ! $formation_id || '' === $formation_title ) {
-            continue;
+      /* Priorité : formation liée au prospect par IDENTIFIANT exact (desired_formation_id).
+         Le match par titre en fuzzy (stripos) présélectionnait la mauvaise formation quand
+         deux intitulés se ressemblent (un titre préfixe de l'autre) ou que le catalogue
+         contient des doublons — d'où une formation et un tarif erronés sur la convention. */
+      $desired_formation_id = isset( $prospect->desired_formation_id ) ? (int) $prospect->desired_formation_id : 0;
+      if ( $desired_formation_id ) {
+        $linked_formation = $this->get_formation( $desired_formation_id );
+        if ( $linked_formation ) {
+          $prefill['formation_id']    = $desired_formation_id;
+          $prefill['objectives_text'] = isset( $linked_formation->objectives ) ? wp_strip_all_tags( (string) $linked_formation->objectives ) : '';
+          $prefill['price_ht']        = isset( $linked_formation->price_ht ) ? (string) $linked_formation->price_ht : '';
+        }
+      }
+      /* Fallback sur la formation catalogue via desired_training (titre) si aucun id exact. */
+      if ( empty( $prefill['formation_id'] ) ) {
+        $desired_training = isset( $prospect->desired_training ) ? trim( (string) $prospect->desired_training ) : '';
+        if ( '' !== $desired_training ) {
+          foreach ( (array) $formations as $formation ) {
+            $formation_id    = ! empty( $formation->id ) ? (int) $formation->id : 0;
+            $formation_title = isset( $formation->title ) ? trim( (string) $formation->title ) : '';
+            if ( ! $formation_id || '' === $formation_title ) {
+              continue;
+            }
+            /* Exact d'abord (toutes les formations), pour éviter qu'un titre préfixe
+               ne l'emporte via le fuzzy ci-dessous. */
+            if ( 0 === strcasecmp( $formation_title, $desired_training ) ) {
+              $prefill['formation_id']    = $formation_id;
+              $prefill['objectives_text'] = isset( $formation->objectives ) ? wp_strip_all_tags( (string) $formation->objectives ) : '';
+              $prefill['price_ht']        = isset( $formation->price_ht ) ? (string) $formation->price_ht : '';
+              break;
+            }
           }
-          if ( 0 === strcasecmp( $formation_title, $desired_training ) || false !== stripos( $formation_title, $desired_training ) || false !== stripos( $desired_training, $formation_title ) ) {
-            $prefill['formation_id']    = $formation_id;
-            $prefill['objectives_text'] = isset( $formation->objectives ) ? wp_strip_all_tags( (string) $formation->objectives ) : '';
-            $prefill['price_ht']        = isset( $formation->price_ht ) ? (string) $formation->price_ht : '';
-            break;
+        }
+      }
+      if ( empty( $prefill['formation_id'] ) ) {
+        $desired_training = isset( $prospect->desired_training ) ? trim( (string) $prospect->desired_training ) : '';
+        if ( '' !== $desired_training ) {
+          foreach ( (array) $formations as $formation ) {
+            $formation_id    = ! empty( $formation->id ) ? (int) $formation->id : 0;
+            $formation_title = isset( $formation->title ) ? trim( (string) $formation->title ) : '';
+            if ( ! $formation_id || '' === $formation_title ) {
+              continue;
+            }
+            if ( false !== stripos( $formation_title, $desired_training ) || false !== stripos( $desired_training, $formation_title ) ) {
+              $prefill['formation_id']    = $formation_id;
+              $prefill['objectives_text'] = isset( $formation->objectives ) ? wp_strip_all_tags( (string) $formation->objectives ) : '';
+              $prefill['price_ht']        = isset( $formation->price_ht ) ? (string) $formation->price_ht : '';
+              break;
+            }
           }
         }
       }

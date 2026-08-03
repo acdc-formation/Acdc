@@ -497,6 +497,21 @@ trait ACDC_Documents_Billing_Render_Trait {
             $row['formation']       = $desired_p;
             $row['formation_full']  = $desired_p;
           }
+          /* Formation liée par identifiant exact : titre + tarif HT depuis le catalogue. */
+          $desired_fid_p = isset( $prefill_prospect->desired_formation_id ) ? (int) $prefill_prospect->desired_formation_id : 0;
+          if ( $desired_fid_p && method_exists( $this, 'get_formation' ) ) {
+            $linked_formation_p = $this->get_formation( $desired_fid_p );
+            if ( $linked_formation_p ) {
+              if ( ! empty( $linked_formation_p->title ) ) {
+                $row['formation_title'] = (string) $linked_formation_p->title;
+                $row['formation']       = (string) $linked_formation_p->title;
+                $row['formation_full']  = (string) $linked_formation_p->title;
+              }
+              if ( isset( $linked_formation_p->price_ht ) && '' !== (string) $linked_formation_p->price_ht ) {
+                $row['tarif_ht_value'] = number_format( (float) $linked_formation_p->price_ht, 2, ',', '' );
+              }
+            }
+          }
           $row['formation_address']     = (string) ( $prefill_prospect->address ?? '' );
           $row['formation_postal_code'] = (string) ( $prefill_prospect->postal_code ?? '' );
           $row['formation_city']        = (string) ( $prefill_prospect->city ?? '' );
