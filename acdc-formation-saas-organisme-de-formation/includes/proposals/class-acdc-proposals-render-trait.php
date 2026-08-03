@@ -2131,6 +2131,25 @@ startxref
             $v['formation_id'] = $pp_fid;
             if ( '' === (string) $v['formation_title'] && ! empty( $pp_formation->title ) ) { $v['formation_title'] = (string) $pp_formation->title; }
             if ( '' === (string) $v['title'] && ! empty( $pp_formation->title ) ) { $v['title'] = (string) $pp_formation->title; }
+            /* Dériver jours + tarif côté serveur : la logique JS (événement change du select)
+               ne se déclenche pas sur un préremplissage serveur, d'où formation_days=1 et un
+               total à 900 € au lieu de 1 800 €. On reproduit le calcul de data-duration-days. */
+            $dur_raw = (string) ( $pp_formation->duration ?? '' );
+            $pp_days = 0;
+            if ( preg_match( '/^(\d+):(\d{2})$/', $dur_raw, $dm ) ) {
+              $total_h = (int) $dm[1] + (int) $dm[2] / 60;
+              $pp_days = $total_h > 0 ? max( 1, (int) round( $total_h / 7 ) ) : 0;
+            } elseif ( preg_match( '/(\d+)\s*j/i', $dur_raw, $dm ) ) {
+              $pp_days = (int) $dm[1];
+            } elseif ( preg_match( '/^(\d+)$/', $dur_raw, $dm ) ) {
+              $pp_days = (int) $dm[1];
+            }
+            if ( $pp_days > 0 ) { $v['formation_days'] = $pp_days; }
+            $pp_price_ht = (float) ( $pp_formation->price_ht ?? 0 );
+            if ( $pp_price_ht > 0 ) {
+              $v['formation_total'] = $pp_price_ht;
+              $v['formation_price_per_day'] = round( $pp_price_ht / max( 1, (int) $v['formation_days'] ), 2 );
+            }
           }
         }
         if ( '' === (string) $v['thematique'] && ! empty( $pp->desired_thematique ) ) { $v['thematique'] = (string) $pp->desired_thematique; }
@@ -2144,6 +2163,10 @@ startxref
     if ( $v_need ) {
       if ( empty( $v['formation_public'] ) && ! empty( $v_need->target_audience ) ) {
         $v['formation_public'] = strip_tags( (string) $v_need->target_audience );
+      }
+      /* Nombre d'apprenants depuis le recueil (sinon reste à 1 alors que le public en cite 3). */
+      if ( (int) $v['formation_learners_count'] <= 1 && ! empty( $v_need->learners_count ) && (int) $v_need->learners_count > 0 ) {
+        $v['formation_learners_count'] = (int) $v_need->learners_count;
       }
       if ( empty( $v['client_email'] ) && ! empty( $v_need->source_prospect_id ) ) {
         $prospect_fb = $this->get_prospect( (int) $v_need->source_prospect_id );

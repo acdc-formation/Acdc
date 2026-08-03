@@ -505,6 +505,14 @@ trait Acdc_Proposals_Actions_Trait {
     if ( ! $proposal_html_url ) {
       return new WP_Error( 'html_failed', 'La génération de la proposition HTML a échoué.' );
     }
+    /* La régénération crée un fichier horodaté : on réécrit pdf_url en base pour que le
+       lien « Visualiser » du dossier et de la fiche pointe vers ce fichier (sinon 404 sur
+       l'ancien chemin). */
+    if ( $proposal_html_url !== ( isset( $proposal->pdf_url ) ? (string) $proposal->pdf_url : '' ) ) {
+      global $wpdb;
+      $wpdb->update( $this->get_proposal_table(), array( 'pdf_url' => $proposal_html_url ), array( 'id' => (int) $proposal_id ) );
+      $proposal->pdf_url = $proposal_html_url;
+    }
 
     $upload_dir = wp_upload_dir();
 
