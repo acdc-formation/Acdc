@@ -1108,7 +1108,27 @@ trait ACDC_Documents_Billing_Core_Trait {
 </body>
 </html>
     <?php
-    return (string) ob_get_clean();
+    $quote_doc_html = (string) ob_get_clean();
+    /* Bouton « Enregistrer en PDF » : le gabarit est optimisé pour l'impression navigateur
+       (@page A4 + @media print). window.print() produit donc un PDF fidèle (« Enregistrer au
+       format PDF » dans la boîte d'impression). Le bouton est masqué dans le PDF lui-même. */
+    $print_btn = '<style>@media print{.acdc-doc-print-btn{display:none !important;}}</style>'
+      . '<div class="acdc-doc-print-btn" style="position:fixed;top:12px;right:12px;z-index:99999;">'
+      . '<button type="button" onclick="window.print();return false;" style="background:#C5A253;color:#0B0706;border:none;border-radius:8px;padding:11px 20px;font-weight:700;font-size:14px;font-family:Arial,Helvetica,sans-serif;cursor:pointer;box-shadow:0 4px 14px rgba(0,0,0,.18);">&#128424;&#65039; Enregistrer en PDF</button>'
+      . '</div>';
+    if ( false !== strpos( $quote_doc_html, '<body>' ) ) {
+      $quote_doc_html = $this->acdc_str_replace_first( '<body>', '<body>' . $print_btn, $quote_doc_html );
+    }
+    return $quote_doc_html;
+  }
+
+  /** Remplace uniquement la première occurrence de $search dans $subject. */
+  private function acdc_str_replace_first( $search, $replace, $subject ) {
+    $pos = strpos( $subject, $search );
+    if ( false === $pos ) {
+      return $subject;
+    }
+    return substr_replace( $subject, $replace, $pos, strlen( $search ) );
   }
 
   private function get_mock_invoices_data( $scope = 'action' ) {
