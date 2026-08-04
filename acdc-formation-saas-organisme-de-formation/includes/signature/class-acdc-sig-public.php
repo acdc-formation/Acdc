@@ -136,7 +136,7 @@ class ACDC_Sig_Public {
         *{box-sizing:border-box}body{margin:0;font-family:'Lato',sans-serif;background:#faf9f7}
         .sig-wrap{max-width:520px;margin:0 auto;padding:20px 16px 40px}
         .sig-hd{background:#1a2744;color:#fff;border-radius:8px 8px 0 0;padding:20px;text-align:center}
-        .sig-hd h1{margin:0;font-size:20px}.sig-hd p{margin:6px 0 0;opacity:.8;font-size:14px}
+        .sig-hd h1{margin:0;font-size:20px;color:#fff !important}.sig-hd p{margin:6px 0 0;opacity:.8;font-size:14px;color:#fff}
         .sig-badge{display:inline-block;margin-top:8px;background:rgba(255,255,255,.15);border:1px solid rgba(255,255,255,.3);border-radius:12px;padding:2px 10px;font-size:11px;letter-spacing:.5px}
         .sig-body{background:#fff;border:1px solid #e2e2e2;border-top:none;border-radius:0 0 8px 8px;padding:28px}
         .otp-info{text-align:center;color:#4b5d76;font-size:14px;margin:0 0 24px;line-height:1.5}
@@ -260,7 +260,7 @@ class ACDC_Sig_Public {
         *{box-sizing:border-box}body{margin:0;font-family:'Lato',sans-serif;background:#faf9f7}
         .sig-wrap{max-width:600px;margin:0 auto;padding:20px 16px 40px}
         .sig-hd{background:#1a2744;color:#fff;border-radius:8px 8px 0 0;padding:20px;text-align:center}
-        .sig-hd h1{margin:0;font-size:20px}.sig-hd p{margin:6px 0 0;opacity:.8;font-size:14px}
+        .sig-hd h1{margin:0;font-size:20px;color:#fff !important}.sig-hd p{margin:6px 0 0;opacity:.8;font-size:14px;color:#fff}
         .sig-badge{display:inline-block;margin-top:8px;background:rgba(255,255,255,.15);border:1px solid rgba(255,255,255,.3);border-radius:12px;padding:2px 10px;font-size:11px;letter-spacing:.5px}
         .sig-body{background:#fff;border:1px solid #e2e2e2;border-top:none;border-radius:0 0 8px 8px;padding:24px}
         .sig-info{background:#f0f4ff;border-left:3px solid #1a2744;padding:10px 14px;border-radius:0 4px 4px 0;font-size:13px;margin-bottom:16px}

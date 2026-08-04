@@ -104,9 +104,10 @@
       margin-bottom: 5mm;
     }
     .article-title {
-      font-size: 8.4pt;
-      text-transform: uppercase;
-      letter-spacing: 0.04em;
+      font-size: 8.8pt;
+      /* Pas de text-transform:uppercase : mPDF ne met pas les lettres accentuées en capitale
+         (« EFFECTIF FORMé »). Les titres restent en casse naturelle, accents corrects. */
+      letter-spacing: 0.02em;
       color: var(--gold);
       font-weight: 700;
       margin-bottom: 2mm;

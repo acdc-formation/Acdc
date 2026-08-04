@@ -2697,7 +2697,7 @@ startxref
         <?php /* === SECTION 8 : Page 4 — À propos d'ACDC Formation === */ ?>
         <div class="acdc-panel acdc-mb-18">
           <div class="acdc-panel-heading" style="padding:14px 20px;border-bottom:1px solid #f0e6dc;">
-            <h3 style="margin:0;font-size:13px;font-weight:700;color:#8a6d2a;text-transform:uppercase;letter-spacing:.06em;">8 &mdash; Page 4&nbsp;: &#192; propos d&apos;ACDC Formation</h3>
+            <h3 style="margin:0;font-size:13px;font-weight:700;color:#8a6d2a;text-transform:uppercase;letter-spacing:.06em;">8 &mdash; Page 4&nbsp;: &#192; propos d'ACDC Formation</h3>
           </div>
           <div style="padding:20px;">
             <p style="font-size:12px;color:#4b5d76;margin-bottom:10px;">Texte affich&#233; page 4 du document. <strong>Laissez vide</strong> pour utiliser automatiquement le texte des R&#233;glages. Saisissez quelque chose ici uniquement pour surcharger cette proposition sp&#233;cifiquement.</p>
@@ -2724,12 +2724,12 @@ startxref
         <?php /* === SECTION 10 : Page 14 — Modalités et délais d'accès === */ ?>
         <div class="acdc-panel acdc-mb-18">
           <div class="acdc-panel-heading" style="padding:14px 20px;border-bottom:1px solid #f0e6dc;">
-            <h3 style="margin:0;font-size:13px;font-weight:700;color:#8a6d2a;text-transform:uppercase;letter-spacing:.06em;">10 &mdash; Page 14&nbsp;: Modalit&#233;s et d&#233;lais d&apos;acc&#232;s</h3>
+            <h3 style="margin:0;font-size:13px;font-weight:700;color:#8a6d2a;text-transform:uppercase;letter-spacing:.06em;">10 &mdash; Page 14&nbsp;: Modalités et délais d'accès</h3>
           </div>
           <div style="padding:20px;">
             <p style="font-size:12px;color:#4b5d76;margin-bottom:8px;">Un &#233;l&#233;ment par ligne. <strong>Laissez vide</strong> pour utiliser les valeurs des R&#233;glages.</p>
             <?php $field_ta( '', 'Ressources &#224; pr&#233;voir', 'access_resources', 4, 'Une salle équipée…' ); ?>
-            <?php $field_ta( '', 'Modalit&#233;s et d&#233;lais d&apos;acc&#232;s', 'access_conditions', 5, 'Délai indicatif 30 jours…' ); ?>
+            <?php $field_ta( '', 'Modalités et délais d\'accès', 'access_conditions', 5, 'Délai indicatif 30 jours…' ); ?>
           </div>
         </div>
 

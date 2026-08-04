@@ -339,12 +339,21 @@ class ACDC_Sig_Email {
         $admin_email = $s['admin_email'] ?: get_option( 'admin_email' );
         $doc_label   = ACDC_Sig_Core::DOC_TYPES[ $request->doc_type ] ?? $request->doc_type;
 
+        /* Référence du document (n° devis / convention…) : conservée dans les notes de la demande.
+           Permet une notification interne contextualisée (« … — Devis DE-2026-6 »). */
+        $doc_ref     = '';
+        $notes_arr   = json_decode( isset( $request->notes ) ? (string) $request->notes : '', true );
+        if ( is_array( $notes_arr ) && ! empty( $notes_arr['doc_reference'] ) ) {
+            $doc_ref = (string) $notes_arr['doc_reference'];
+        }
+        $doc_full = $doc_label . ( '' !== $doc_ref ? ' ' . $doc_ref : '' );
+
         if ( 'signe' === $event ) {
-            $subject = '✅ Document signé — ' . $request->signer_name . ' — ' . $doc_label;
-            $msg     = esc_html( $request->signer_name ) . ' a signé le document « ' . esc_html( $doc_label ) . ' » le ' . wp_date( 'd/m/Y à H:i' ) . '.';
+            $subject = '✅ Document signé — ' . $request->signer_name . ' — ' . $doc_full;
+            $msg     = esc_html( $request->signer_name ) . ' a signé le document « ' . esc_html( $doc_full ) . ' » le ' . wp_date( 'd/m/Y à H:i' ) . '.';
         } else {
-            $subject = '⚠️ Signature refusée — ' . $request->signer_name;
-            $msg     = esc_html( $request->signer_name ) . ' a refusé de signer le document « ' . esc_html( $doc_label ) . ' ».';
+            $subject = '⚠️ Signature refusée — ' . $request->signer_name . ( '' !== $doc_ref ? ' — ' . $doc_full : '' );
+            $msg     = esc_html( $request->signer_name ) . ' a refusé de signer le document « ' . esc_html( $doc_full ) . ' ».';
         }
 
         // Lien front-office extranet (tab conventions)
@@ -354,6 +363,22 @@ class ACDC_Sig_Email {
         $admin_url = add_query_arg( array( 'tab' => 'registration_contract' ), $portal_base );
         $body      = '<p>' . $msg . '</p><p><a href="' . esc_url( $admin_url ) . '">Voir dans le tableau de bord</a></p>';
         $headers   = array( 'Content-Type: text/html; charset=UTF-8' );
+
+        /* En-têtes X-ACDC : rattachement/archivage de la notification interne au bon document
+           (colonne « Source » de l'Archive des e-mails contextualisée au lieu de « plugin »). */
+        $related_type = isset( $notes_arr['entity_type'] ) ? sanitize_key( (string) $notes_arr['entity_type'] ) : sanitize_key( (string) $request->doc_type );
+        $related_id   = 0;
+        if ( is_array( $notes_arr ) ) {
+            foreach ( array( 'quote_id', 'contract_id', 'entity_id', 'invoice_id' ) as $k ) {
+                if ( ! empty( $notes_arr[ $k ] ) ) { $related_id = (int) $notes_arr[ $k ]; break; }
+            }
+        }
+        $headers[] = 'X-ACDC-Source-Module: signature';
+        $headers[] = 'X-ACDC-Source-Action: ' . ( 'signe' === $event ? 'document_signed' : 'document_refused' );
+        $headers[] = 'X-ACDC-Related-Entity-Type: ' . ( '' !== $related_type ? $related_type : 'document' );
+        if ( $related_id ) { $headers[] = 'X-ACDC-Related-Entity-Id: ' . $related_id; }
+        $headers[] = 'X-ACDC-Email-Category: signature';
+        $headers[] = 'X-ACDC-Email-Audience: interne';
 
         wp_mail( $admin_email, $subject, $body, $headers );
     }

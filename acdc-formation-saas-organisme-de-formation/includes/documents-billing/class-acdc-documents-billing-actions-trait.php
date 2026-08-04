@@ -41,6 +41,19 @@ trait ACDC_Documents_Billing_Actions_Trait {
     $start_date       = ! empty( $input['start_date'] ) ? $this->datetime_from_local( $input['start_date'] ) : null;
     $end_date         = ! empty( $input['end_date'] ) ? $this->datetime_from_local( $input['end_date'] ) : null;
 
+    /* Désignation : si le champ est vide ou reste le gabarit « à définir », on le recompose
+       à partir des dates saisies pour ne pas figer « Dates … : à définir » sur le document. */
+    $designation_in = sanitize_textarea_field( $input['designation'] ?? '' );
+    if ( '' === trim( $designation_in ) || false !== mb_stripos( $designation_in, 'à définir' ) ) {
+      $d_start = $start_date ? mysql2date( 'd/m/Y', $start_date ) : '';
+      $d_end   = $end_date ? mysql2date( 'd/m/Y', $end_date ) : '';
+      if ( $d_start && $d_end && $d_end !== $d_start ) {
+        $designation_in = "Dates de l'action de formation : du " . $d_start . ' au ' . $d_end;
+      } elseif ( $d_start ) {
+        $designation_in = "Dates de l'action de formation : le " . $d_start;
+      }
+    }
+
     $data = array(
       'id'                      => $quote_id,
       'scope'                   => $scope,
@@ -68,7 +81,7 @@ trait ACDC_Documents_Billing_Actions_Trait {
       'trained_headcount'       => sanitize_text_field( $input['trained_headcount'] ?? '' ),
       'duration_label'          => sanitize_text_field( $input['duration_label'] ?? '' ),
       'objectives'              => sanitize_textarea_field( $input['objectives'] ?? '' ),
-      'designation'             => sanitize_textarea_field( $input['designation'] ?? '' ),
+      'designation'             => $designation_in,
       'quantity'                => sanitize_text_field( $input['quantity'] ?? '1,00' ),
       'tarif_ht'                => $tarif_ht,
       'vat_rate'                => (float) str_replace( ',', '.', preg_replace( '/[^0-9,.]/', '', $input['vat_rate'] ?? '20' ) ),
@@ -221,6 +234,17 @@ trait ACDC_Documents_Billing_Actions_Trait {
     if ( ! $quote ) { $this->redirect_to_portal( 'quotes', 'Devis introuvable.', 'error' ); }
     $scope = (string) $quote->scope;
     $wpdb->update( $this->quote_table, array( 'status' => $new_status ), array( 'id' => $quote_id ) );
+
+    /* Le statut du devis pilote le cycle de vie du prospect : « Envoyé » → « Devis envoyé »,
+       « Signé » → « Converti » (terminal). Aligne le changement manuel sur le flux automatique. */
+    if ( ! empty( $quote->source_prospect_id ) && method_exists( $this, 'maybe_advance_prospect_status' ) ) {
+      if ( 'envoye' === $new_status ) {
+        $this->maybe_advance_prospect_status( (int) $quote->source_prospect_id, 'Devis envoyé' );
+      } elseif ( 'signe' === $new_status ) {
+        $this->maybe_advance_prospect_status( (int) $quote->source_prospect_id, 'Converti', true );
+      }
+    }
+
     $this->redirect_to_portal( 'quotes', 'Statut mis à jour.', 'success', array( 'scope' => $scope ) );
   }
 
@@ -1048,6 +1072,7 @@ trait ACDC_Documents_Billing_Actions_Trait {
       'notes'        => wp_json_encode( array(
         'entity_type'           => 'quote',
         'quote_id'              => (int) $quote_id,
+        'doc_reference'         => (string) $quote->number,
         'signed_delivery_email' => sanitize_email( (string) get_option( 'admin_email' ) ),
       ) ),
     ) );
