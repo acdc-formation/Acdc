@@ -54,6 +54,7 @@ trait ACDC_Documents_Billing_Actions_Trait {
       'apprenant_name'          => sanitize_text_field( $input['apprenant_name'] ?? '' ),
       'apprenant_email'         => sanitize_email( $input['apprenant_email'] ?? '' ),
       'client_company'          => sanitize_text_field( $input['client_company'] ?? '' ),
+      'client_siret'            => sanitize_text_field( $input['client_siret'] ?? '' ),
       'client_address'          => sanitize_text_field( $input['client_address'] ?? '' ),
       'client_address_complement' => sanitize_text_field( $input['client_address_complement'] ?? '' ),
       'client_postal_code'      => sanitize_text_field( $input['client_postal_code'] ?? '' ),

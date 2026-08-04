@@ -492,6 +492,7 @@ trait ACDC_Documents_Billing_Render_Trait {
           $row['apprenant']          = $this->get_prospect_display_name( $prefill_prospect );
           $row['apprenant_email']    = $this->get_prospect_primary_email( $prefill_prospect );
           $row['client_company']     = $is_company_p ? (string) ( $prefill_prospect->company_name ?? '' ) : '';
+          $row['client_siret']       = (string) ( $prefill_prospect->siret ?? '' );
           $row['address']            = (string) ( $prefill_prospect->address ?? '' );
           $row['postal_code']        = (string) ( $prefill_prospect->postal_code ?? '' );
           $row['city']               = (string) ( $prefill_prospect->city ?? '' );
@@ -559,6 +560,7 @@ trait ACDC_Documents_Billing_Render_Trait {
       <div class="acdc-contract-label">Nom Signataire <span class="acdc-required">*</span></div><div><input type="text" name="quote[apprenant_name]" value="<?php echo esc_attr( $row['apprenant'] ?? '' ); ?>" required></div>
       <div class="acdc-contract-label">Email Signataire <span class="acdc-required">*</span></div><div><input type="email" name="quote[apprenant_email]" value="<?php echo esc_attr( $row['apprenant_email'] ?? '' ); ?>" required></div>
       <div class="acdc-contract-label">Entreprise / société</div><div><input type="text" name="quote[client_company]" value="<?php echo esc_attr( $row['client_company'] ?? '' ); ?>"></div>
+      <div class="acdc-contract-label">SIRET client</div><div><input type="text" name="quote[client_siret]" value="<?php echo esc_attr( $row['client_siret'] ?? '' ); ?>" placeholder="14 chiffres"></div>
       <div class="acdc-contract-label">Adresse</div><div><input type="text" name="quote[client_address]" value="<?php echo esc_attr( $row['address'] ?? '' ); ?>"></div>
       <div class="acdc-contract-label">Complément d'adresse</div><div><input type="text" name="quote[client_address_complement]" value="<?php echo esc_attr( $row['address_complement'] ?? '' ); ?>"></div>
       <div class="acdc-contract-label">Code postal</div><div><input type="text" name="quote[client_postal_code]" value="<?php echo esc_attr( $row['postal_code'] ?? '' ); ?>"></div>

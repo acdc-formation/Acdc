@@ -85,6 +85,8 @@ trait ACDC_Documents_Billing_Core_Trait {
     // ACDC 3.24.98 — Colonnes e-signature devis
     $this->maybe_add_table_column( $this->quote_table, 'signature_request_id', 'BIGINT UNSIGNED DEFAULT NULL' );
     $this->maybe_add_table_column( $this->quote_table, 'signature_status',     "VARCHAR(30) NOT NULL DEFAULT ''" );
+    // SIRET du client (commanditaire) — pour l'afficher sur le devis.
+    $this->maybe_add_table_column( $this->quote_table, 'client_siret',         "VARCHAR(20) NOT NULL DEFAULT ''" );
   }
 
   private function get_quotes( $args = array() ) {
@@ -244,6 +246,7 @@ trait ACDC_Documents_Billing_Core_Trait {
       'commanditaire_name'  => $q->client_company ?: $q->apprenant_name,
       'apprenant'           => (string) $q->apprenant_name,
       'client_company'      => (string) $q->client_company,
+      'client_siret'        => isset( $q->client_siret ) ? (string) $q->client_siret : '',
       'client_contact'      => (string) $q->apprenant_name,
       'client_address_full' => trim( (string) $q->client_address . ( ! empty( $q->client_address_complement ) ? ' ' . $q->client_address_complement : '' ) ),
       'client_postal_city'  => trim( $q->client_postal_code . ' ' . $q->client_city ),
@@ -1009,6 +1012,7 @@ trait ACDC_Documents_Billing_Core_Trait {
         <div class="box-title">Client</div>
         <div class="client-lines">
           Nom / Société : <?php echo $this->quote_html( $client_name ); ?><br />
+          <?php if ( ! empty( $row['client_siret'] ) ) : ?>SIRET : <?php echo $this->quote_html( $row['client_siret'] ); ?><br /><?php endif; ?>
           Adresse : <?php echo $this->quote_html( $row['client_address_full'] ?? '' ); ?><br />
           Code postal / Ville : <?php echo $this->quote_html( $row['client_postal_city'] ?? '' ); ?><br />
           Contact : <?php echo $this->quote_html( $client_contact ); ?>
