@@ -1347,10 +1347,10 @@ trait ACDC_Documents_Billing_Core_Trait {
     try {
       $mpdf = new \Mpdf\Mpdf( array(
         'format'        => 'A4',
-        'margin_top'    => 12,
-        'margin_bottom' => 12,
-        'margin_left'   => 12,
-        'margin_right'  => 12,
+        'margin_top'    => 14,
+        'margin_bottom' => 14,
+        'margin_left'   => 14,
+        'margin_right'  => 14,
         'tempDir'       => sys_get_temp_dir(),
       ) );
       $mpdf->SetTitle( 'Devis ' . sanitize_file_name( (string) ( $row['number'] ?? '' ) ) );
@@ -1358,6 +1358,8 @@ trait ACDC_Documents_Billing_Core_Trait {
       $pdf = $mpdf->Output( '', 'S' );
       return is_string( $pdf ) ? $pdf : '';
     } catch ( \Throwable $e ) {
+      /* Ne jamais casser l'envoi de l'e-mail : on trace la cause pour diagnostic. */
+      error_log( 'ACDC build_quote_pdf: ' . $e->getMessage() ); // phpcs:ignore WordPress.PHP.DevelopmentFunctions.error_log_error_log
       return '';
     }
   }

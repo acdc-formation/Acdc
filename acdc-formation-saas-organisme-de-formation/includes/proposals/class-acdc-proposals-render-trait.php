@@ -2015,6 +2015,39 @@ startxref
     <?php
   }
 
+  /** Normalise un intitulé pour comparaison souple (minuscules, sans accents ni ponctuation superflue). */
+  private function acdc_normalize_match_text( $text ) {
+    $text = (string) $text;
+    if ( function_exists( 'remove_accents' ) ) { $text = remove_accents( $text ); }
+    $text = strtolower( $text );
+    $text = preg_replace( '/[^a-z0-9]+/', ' ', $text );
+    return trim( (string) $text );
+  }
+
+  /**
+   * Déduit le nombre de jours de formation depuis un libellé de durée hétérogène :
+   * « 14:00 » / « 14h00 » / « 14h » (heures → /7), « 2 jours » / « 2 j » / « 2 », « en 2 jours ».
+   * @return int Nombre de jours (0 si indéterminable).
+   */
+  private function acdc_parse_formation_days( $duration ) {
+    $dur_raw = trim( (string) $duration );
+    if ( '' === $dur_raw ) { return 0; }
+    /* Format heures « H:MM » ou « HhMM » ou « Hh » → conversion en jours (base 7h/jour). */
+    if ( preg_match( '/^(\d+)\s*[:h]\s*(\d{0,2})/i', $dur_raw, $dm ) && ( false !== strpos( $dur_raw, ':' ) || false !== stripos( $dur_raw, 'h' ) ) ) {
+      $total_h = (int) $dm[1] + ( isset( $dm[2] ) && '' !== $dm[2] ? (int) $dm[2] / 60 : 0 );
+      return $total_h > 0 ? max( 1, (int) round( $total_h / 7 ) ) : 0;
+    }
+    /* Format jours « N j », « N jour(s) », « en N jours ». */
+    if ( preg_match( '/(\d+)\s*j/i', $dur_raw, $dm ) ) {
+      return (int) $dm[1];
+    }
+    /* Nombre seul → interprété comme des jours. */
+    if ( preg_match( '/(\d+)/', $dur_raw, $dm ) ) {
+      return (int) $dm[1];
+    }
+    return 0;
+  }
+
   /* ---------------------------------------------------------------
    * Formulaire complet création / modification
    * hotfix7 — tous les champs éditables
@@ -2125,6 +2158,25 @@ startxref
         if ( empty( $v['client_postal_code'] ) && ! empty( $pp->postal_code ) ) { $v['client_postal_code'] = (string) $pp->postal_code; }
         if ( empty( $v['client_city'] ) && ! empty( $pp->city ) ) { $v['client_city'] = (string) $pp->city; }
         $pp_fid = isset( $pp->desired_formation_id ) ? (int) $pp->desired_formation_id : 0;
+        /* Fallback : si le prospect n'a pas de formation catalogue liée (desired_formation_id vide),
+           on tente de la retrouver par intitulé (desired_training / desired_thematique) pour que la
+           formation soit tout de même présélectionnée et le tarif/durée dérivés. */
+        if ( ! $pp_fid ) {
+          $wanted = trim( (string) ( $pp->desired_training ?? '' ) );
+          if ( '' === $wanted ) { $wanted = trim( (string) ( $pp->desired_thematique ?? '' ) ); }
+          if ( '' !== $wanted && method_exists( $this, 'get_formations' ) ) {
+            $catalog = $this->get_formations();
+            $wanted_norm = $this->acdc_normalize_match_text( $wanted );
+            $exact = 0; $fuzzy = 0;
+            foreach ( (array) $catalog as $cf ) {
+              $ct = $this->acdc_normalize_match_text( (string) ( $cf->title ?? '' ) );
+              if ( '' === $ct ) { continue; }
+              if ( $ct === $wanted_norm ) { $exact = (int) $cf->id; break; }
+              if ( ! $fuzzy && ( false !== strpos( $ct, $wanted_norm ) || false !== strpos( $wanted_norm, $ct ) ) ) { $fuzzy = (int) $cf->id; }
+            }
+            $pp_fid = $exact ?: $fuzzy;
+          }
+        }
         if ( empty( $v['formation_id'] ) && $pp_fid ) {
           $pp_formation = $this->get_formation( $pp_fid );
           if ( $pp_formation ) {
@@ -2134,19 +2186,11 @@ startxref
             /* Dériver jours + tarif côté serveur : la logique JS (événement change du select)
                ne se déclenche pas sur un préremplissage serveur, d'où formation_days=1 et un
                total à 900 € au lieu de 1 800 €. On reproduit le calcul de data-duration-days. */
-            $dur_raw = (string) ( $pp_formation->duration ?? '' );
-            $pp_days = 0;
-            if ( preg_match( '/^(\d+):(\d{2})$/', $dur_raw, $dm ) ) {
-              $total_h = (int) $dm[1] + (int) $dm[2] / 60;
-              $pp_days = $total_h > 0 ? max( 1, (int) round( $total_h / 7 ) ) : 0;
-            } elseif ( preg_match( '/(\d+)\s*j/i', $dur_raw, $dm ) ) {
-              $pp_days = (int) $dm[1];
-            } elseif ( preg_match( '/^(\d+)$/', $dur_raw, $dm ) ) {
-              $pp_days = (int) $dm[1];
-            }
-            if ( $pp_days > 0 ) { $v['formation_days'] = $pp_days; }
+            $v['formation_days'] = max( 1, $this->acdc_parse_formation_days( (string) ( $pp_formation->duration ?? '' ) ) );
             $pp_price_ht = (float) ( $pp_formation->price_ht ?? 0 );
             if ( $pp_price_ht > 0 ) {
+              /* Le tarif catalogue est un tarif TOTAL pour la durée : on le répartit par jour
+                 pour ne jamais injecter le total dans « Tarif jour » (risque de prix doublé). */
               $v['formation_total'] = $pp_price_ht;
               $v['formation_price_per_day'] = round( $pp_price_ht / max( 1, (int) $v['formation_days'] ), 2 );
             }

@@ -253,23 +253,21 @@ trait ACDC_Documents_Billing_Actions_Trait {
       wp_die( esc_html( 'Devis introuvable.' ) );
     }
     $row = $this->build_quote_row_from_record( $quote );
-    $pdf = $this->build_quote_pdf( $row );
     $filename = 'devis-' . sanitize_file_name( $row['number'] ) . '.pdf';
-    if ( '' === (string) $pdf ) {
-      /* mPDF indisponible : on retombe sur le HTML imprimable (bouton « Enregistrer en PDF »). */
-      $html = $this->get_quote_document_html( $row );
-      $this->log_action_event( 'download', 'quote_pdf', $quote_id, 'fallback_html' );
-      $this->send_html_download_response( 'devis-' . sanitize_file_name( $row['number'] ) . '.html', $html );
-      return;
-    }
     $this->log_action_event( 'download', 'quote_pdf', $quote_id );
-    while ( ob_get_level() ) { ob_end_clean(); }
-    nocache_headers();
-    header( 'Content-Type: application/pdf' );
-    header( 'Content-Disposition: attachment; filename="' . $filename . '"' );
-    header( 'Content-Length: ' . strlen( $pdf ) );
-    echo $pdf; // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped -- binaire PDF
-    exit;
+
+    /* On passe par render_html_pdf() : c'est le moteur mPDF déjà utilisé (et validé
+       en production) pour la convention et les autres documents. Il diffuse un vrai
+       fichier PDF puis exit ; il n'y a plus de repli silencieux en HTML. */
+    $autoload = dirname( dirname( dirname( dirname( plugin_dir_path( __FILE__ ) ) ) ) ) . '/acdc-libs/vendor/autoload.php';
+    if ( method_exists( $this, 'render_html_pdf' ) && file_exists( $autoload ) ) {
+      $html = $this->get_quote_pdf_html( $row );
+      $this->render_html_pdf( $html, $filename, 'attachment' ); // diffuse + exit
+    }
+
+    /* mPDF réellement absent : dernier recours, HTML imprimable. */
+    $html = $this->get_quote_document_html( $row );
+    $this->send_html_download_response( 'devis-' . sanitize_file_name( $row['number'] ) . '.html', $html );
   }
 
   public function handle_download_invoice_document() {
@@ -985,9 +983,28 @@ trait ACDC_Documents_Billing_Actions_Trait {
       $this->redirect_to_portal( 'quotes', 'Devis introuvable.', 'error' );
       return;
     }
-    // Vérifier qu'une demande n'est pas déjà active
+    // Une demande existe déjà : « Renvoyer » (resend=1) relance l'e-mail au lieu d'échouer.
     if ( ! empty( $quote->signature_request_id ) && (int) $quote->signature_request_id > 0 ) {
-      $this->redirect_to_portal( 'quotes', 'Une demande de signature existe déjà pour ce devis.', 'error' );
+      $existing_req_id = (int) $quote->signature_request_id;
+      if ( 'signée' === (string) $quote->signature_status ) {
+        $this->redirect_to_portal( 'quotes', 'Ce devis est déjà signé.', 'error' );
+        return;
+      }
+      $resend = isset( $_GET['resend'] ) && '1' === (string) $_GET['resend'];
+      if ( ! $resend ) {
+        $this->redirect_to_portal( 'quotes', 'Une demande de signature existe déjà pour ce devis. Utilisez « Renvoyer ».', 'error' );
+        return;
+      }
+      if ( class_exists( 'ACDC_Sig_Core' ) && class_exists( 'ACDC_Sig_Email' ) ) {
+        $sig_core_r = new ACDC_Sig_Core();
+        $sig_core_r->init_tables();
+        $sig_email_r = new ACDC_Sig_Email( $sig_core_r );
+        $sig_email_r->send_signature_email( $existing_req_id );
+        $this->log_action_event( 'resend_signature', 'quote', $quote_id );
+        $this->redirect_to_portal( 'quotes', 'La demande de signature a été renvoyée.', 'success' );
+        return;
+      }
+      $this->redirect_to_portal( 'quotes', 'Le module de signature électronique n\'est pas disponible.', 'error' );
       return;
     }
     // Vérifier l'adresse e-mail du destinataire

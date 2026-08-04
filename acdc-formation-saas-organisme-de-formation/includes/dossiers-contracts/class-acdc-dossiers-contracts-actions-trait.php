@@ -1183,14 +1183,16 @@ public function handle_update_registration_contract_document() {
     $from_email    = ! empty( $marketing['sender_email'] ) ? sanitize_email( (string) $marketing['sender_email'] ) : sanitize_email( (string) get_option( 'admin_email' ) );
 
     $kind          = isset( $contract->commanditaire_type ) && 'Particulier' === (string) $contract->commanditaire_type ? 'Contrat' : 'Convention';
+    /* Accord grammatical : « Convention signée » (fém.) vs « Contrat signé » (masc.). */
+    $kind_signed   = 'Convention' === $kind ? 'signée' : 'signé';
     $signer_name   = isset( $contract->commanditaire_signer_last_name ) ? trim( (string) $contract->commanditaire_signer_first_name . ' ' . (string) $contract->commanditaire_signer_last_name ) : 'le signataire';
     $formation     = isset( $contract->formation_title ) ? (string) $contract->formation_title : '';
     $signed_at     = wp_date( 'd/m/Y à H:i' );
 
-    $subject = '✅ ' . $kind . ' signé(e) — ' . ( $signer_name ? $signer_name : '' ) . ( $formation ? ' — ' . $formation : '' );
+    $subject = '✅ ' . $kind . ' ' . $kind_signed . ' — ' . ( $signer_name ? $signer_name : '' ) . ( $formation ? ' — ' . $formation : '' );
     $body    = '<div style="font-family:Arial,sans-serif;color:#24324a;max-width:600px;margin:0 auto;">'
-             . '<h2 style="color:#1f335d;">✅ ' . esc_html( $kind ) . ' signé(e)</h2>'
-             . '<p>' . esc_html( $kind ) . ' signé(e) le <strong>' . esc_html( $signed_at ) . '</strong> par <strong>' . esc_html( $signer_name ? $signer_name : 'le signataire' ) . '</strong>.</p>'
+             . '<h2 style="color:#1f335d;">✅ ' . esc_html( $kind ) . ' ' . esc_html( $kind_signed ) . '</h2>'
+             . '<p>' . esc_html( $kind ) . ' ' . esc_html( $kind_signed ) . ' le <strong>' . esc_html( $signed_at ) . '</strong> par <strong>' . esc_html( $signer_name ? $signer_name : 'le signataire' ) . '</strong>.</p>'
              . ( $formation ? '<p>Formation : <strong>' . esc_html( $formation ) . '</strong></p>' : '' )
              . '<p>Le document signé est joint à cet e-mail.</p>'
              . '</div>';
@@ -1225,7 +1227,7 @@ public function handle_update_registration_contract_document() {
       } else {
         $doc_phrase = 'du ' . $kind_lc . ' signé';
       }
-      $signer_subject = '📄 Votre exemplaire — ' . esc_html( $kind ) . ' signé(e)';
+      $signer_subject = '📄 Votre exemplaire — ' . esc_html( $kind ) . ' ' . esc_html( $kind_signed );
       $signer_body    = '<div style="font-family:Arial,sans-serif;color:#24324a;max-width:600px;margin:0 auto;">'
                       . '<h2 style="color:#1f335d;">Votre exemplaire signé</h2>'
                       . '<p>Bonjour,</p>'

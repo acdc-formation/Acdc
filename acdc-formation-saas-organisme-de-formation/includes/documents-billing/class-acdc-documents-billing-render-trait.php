@@ -25,7 +25,21 @@ trait ACDC_Documents_Billing_Render_Trait {
     }
 
     if ( 'create' === $action ) {
-      $this->render_front_quote_form( $scope, null, false );
+      /* Duplication : préremplir depuis le devis source, en repartant sur une identité neuve. */
+      $dup_row = null;
+      $duplicate_id = isset( $_GET['duplicate_id'] ) ? absint( $_GET['duplicate_id'] ) : 0;
+      if ( $duplicate_id ) {
+        $dup_src = $this->get_quote( $duplicate_id );
+        if ( $dup_src ) {
+          $dup_row = $this->build_quote_row_from_record( $dup_src );
+          /* On efface l'identité et l'état de signature : c'est un nouveau devis. */
+          foreach ( array( 'id', 'number', 'signature_status', 'signature_request_id', 'signed_document_url', 'html_url', 'pdf_url' ) as $k ) {
+            if ( isset( $dup_row[ $k ] ) ) { $dup_row[ $k ] = ''; }
+          }
+          $dup_row['status'] = 'brouillon';
+        }
+      }
+      $this->render_front_quote_form( $scope, $dup_row, false );
       return;
     }
 
@@ -347,7 +361,7 @@ trait ACDC_Documents_Billing_Render_Trait {
       <a href="<?php echo esc_url( $edit_url ); ?>" class="acdc-button acdc-button-soft">Modifier</a>
       <a href="<?php echo esc_url( $back_url ); ?>" class="acdc-button acdc-button-soft">← Retour</a>
     </div>
-    <div class="acdc-panel acdc-profile-section"><h3>Commanditaire</h3><div class="acdc-details-grid"><div>Apprenant</div><div style="color:#C5A253;font-weight:700;"><?php echo esc_html( $row['apprenant'] ); ?></div><div>Adresse</div><div><?php echo esc_html( $row['address'] ); ?></div><div>Complément d'adresse</div><div><?php echo esc_html( $row['address_complement'] ); ?></div><div>Code postal</div><div><?php echo esc_html( $row['postal_code'] ); ?></div><div>Ville</div><div><?php echo esc_html( $row['city'] ); ?></div></div></div>
+    <div class="acdc-panel acdc-profile-section"><h3>Commanditaire</h3><div class="acdc-details-grid"><div>Signataire / Client</div><div style="color:#C5A253;font-weight:700;"><?php echo esc_html( ! empty( $row['client_contact'] ) ? $row['client_contact'] : $row['apprenant'] ); ?></div><?php if ( ! empty( $row['client_company'] ) ) : ?><div>Société</div><div><?php echo esc_html( $row['client_company'] ); ?></div><?php endif; ?><?php if ( ! empty( $row['client_siret'] ) ) : ?><div>SIRET client</div><div><?php echo esc_html( $row['client_siret'] ); ?></div><?php endif; ?><div>Adresse</div><div><?php echo esc_html( $row['address'] ); ?></div><div>Complément d'adresse</div><div><?php echo esc_html( $row['address_complement'] ); ?></div><div>Code postal</div><div><?php echo esc_html( $row['postal_code'] ); ?></div><div>Ville</div><div><?php echo esc_html( $row['city'] ); ?></div></div></div>
     <div class="acdc-panel acdc-profile-section"><h3>Formation</h3><div class="acdc-details-grid"><div>Formation</div><div style="color:#C5A253;font-weight:700;"><?php echo esc_html( $row['formation_full'] ); ?></div><div>Format</div><div><?php echo esc_html( $row['format'] ); ?></div><div>Adresse</div><div><?php echo esc_html( $row['formation_address'] ); ?></div><div>Code postal</div><div><?php echo esc_html( $row['formation_postal_code'] ); ?></div><div>Ville</div><div><?php echo esc_html( $row['formation_city'] ); ?></div><div>Durée</div><div><?php echo esc_html( $row['duration'] ); ?></div><div>Date de début</div><div><?php echo esc_html( $row['start_date'] ); ?></div><div>Date de fin</div><div><?php echo esc_html( $row['end_date'] ); ?></div><div>Effectif formé</div><div><?php echo esc_html( $row['trained_headcount'] ); ?></div></div></div>
     <div class="acdc-panel acdc-profile-section"><h3>Devis</h3><div class="acdc-details-grid"><div>Télécharger</div><div><a href="<?php echo esc_url( $pdf_url ); ?>" class="acdc-file-chip">📄 Devis <?php echo esc_html( $row['number'] ); ?>.pdf</a> <a href="<?php echo esc_url( $download_url ); ?>" class="acdc-file-chip">🖨️ Version imprimable (HTML)</a></div><div>Statut</div><div><span class="acdc-status-badge"><?php echo esc_html( $row['status'] ); ?></span></div><div>Préfixe</div><div><?php echo esc_html( $row['prefix'] ); ?></div><div>Numéro</div><div><?php echo esc_html( $row['num'] ); ?></div><div>Date d'émission</div><div><?php echo esc_html( $row['emission_date'] ); ?></div><div>Date d'expiration</div><div><?php echo esc_html( $row['expiration_date'] ); ?></div><div>Désignation</div><div><a href="<?php echo esc_url( $preview_url ); ?>" target="_blank" rel="noopener">Afficher le contenu</a></div><div>Quantité</div><div><?php echo esc_html( $row['quantity'] ); ?></div><div>Tarif de l'action de formation (€ HT)</div><div><?php echo esc_html( $row['tarif_ht'] ); ?></div><div>Taux de TVA (%)</div><div><?php echo esc_html( isset( $row['vat_rate'] ) && '' !== (string) $row['vat_rate'] ? (string) $row['vat_rate'] : '0,00' ); ?> %</div><div>Frais de transport</div><div>⛔</div><div>Frais de restauration et / ou hébergement</div><div>⛔</div><div>Lignes supplémentaires</div><div>—</div><div>Tarif de l'action de formation (€ TTC)</div><div><?php echo esc_html( $row['tarif_ttc'] ); ?></div><div>Adresse d'émission</div><div><a href="<?php echo esc_url( $preview_url ); ?>" target="_blank" rel="noopener">Afficher le contenu</a></div><div>Méthodes de paiement</div><div><a href="<?php echo esc_url( $preview_url ); ?>" target="_blank" rel="noopener">Afficher le contenu</a></div><div>Commentaire (n'apparaît pas sur le devis)</div><div>—</div><div>Pièce jointe</div><div>—</div><div>Programme de formation</div><div>⛔</div><div>CGV</div><div>⛔</div></div></div>
     <div class="acdc-panel acdc-profile-section"><h3>Voir un devis : <?php echo esc_html( $row['number'] ); ?></h3><div class="acdc-details-grid"><div>Créé le</div><div><?php echo esc_html( $row['emission_date'] ); ?></div><div>Modifié le</div><div><?php echo esc_html( $row['emission_date'] ); ?></div></div></div>
@@ -357,6 +371,7 @@ trait ACDC_Documents_Billing_Render_Trait {
     $sig_request_id_v = ( $q_real_sig && ! empty( $q_real_sig->signature_request_id ) ) ? (int) $q_real_sig->signature_request_id : 0;
     $sig_status_v     = ( $q_real_sig && ! empty( $q_real_sig->signature_status ) ) ? (string) $q_real_sig->signature_status : '';
     $send_sig_url     = $this->secure_admin_post_url( 'acdc_send_quote_for_signature', array( 'quote_id' => (int) $row['id'] ), 'acdc_send_quote_for_signature_' . (int) $row['id'] );
+    $resend_sig_url   = $this->secure_admin_post_url( 'acdc_send_quote_for_signature', array( 'quote_id' => (int) $row['id'], 'resend' => 1 ), 'acdc_send_quote_for_signature_' . (int) $row['id'] );
     ?>
     <div class="acdc-panel acdc-profile-section">
       <h3>Signature électronique</h3>
@@ -380,7 +395,7 @@ trait ACDC_Documents_Billing_Render_Trait {
             <?php if ( '' === $sig_status_v ) : ?>
               <a href="<?php echo esc_url( $send_sig_url ); ?>" class="acdc-button acdc-button-primary" onclick="return confirm('Envoyer ce devis en signature électronique à <?php echo esc_attr( $row['apprenant_email'] ?? '' ); ?> ?');">✉️ Envoyer en signature</a>
             <?php else : ?>
-              <a href="<?php echo esc_url( $send_sig_url ); ?>" class="acdc-button acdc-button-soft" onclick="return confirm('Une demande est déjà active. Renvoyer quand même ?');">🔁 Renvoyer</a>
+              <a href="<?php echo esc_url( $resend_sig_url ); ?>" class="acdc-button acdc-button-soft" onclick="return confirm('Renvoyer l\'e-mail de signature au destinataire ?');">🔁 Renvoyer</a>
             <?php endif; ?>
           <?php else : ?>
             <span style="color:#276a2e;font-weight:600;">Document signé — preuve dans Archives signatures</span>
