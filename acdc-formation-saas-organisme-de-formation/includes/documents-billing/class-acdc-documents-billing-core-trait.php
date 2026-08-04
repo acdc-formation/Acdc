@@ -1135,6 +1135,233 @@ trait ACDC_Documents_Billing_Core_Trait {
     return substr_replace( $subject, $replace, $pos, strlen( $search ) );
   }
 
+  /**
+   * Gabarit devis 100 % compatible mPDF (tables, pas de grid/flex/absolute).
+   * Reprend exactement les mêmes valeurs calculées que get_quote_document_html
+   * mais dans une mise en page à base de <table> que le moteur mPDF sait rendre
+   * fidèlement pour produire un vrai fichier PDF téléchargeable.
+   */
+  private function get_quote_pdf_html( $row ) {
+    $number         = ! empty( $row['number'] ) ? $row['number'] : trim( ( $row['prefix'] ?? 'DE-' ) . ( $row['num'] ?? '1' ) );
+    $client_name    = ! empty( $row['client_company'] ) ? $row['client_company'] : $row['commanditaire_name'];
+    $client_contact = ! empty( $row['client_contact'] ) ? $row['client_contact'] : $row['apprenant'];
+    $formation      = ! empty( $row['formation_full'] ) ? $row['formation_full'] : $row['formation'];
+    $tot_ht         = ! empty( $row['tarif_ht_number'] ) ? $row['tarif_ht_number'] : $this->normalize_price_number( $row['tarif_ht'] ?? '0' );
+    $tot_ttc        = ! empty( $row['tarif_ttc_number'] ) ? $row['tarif_ttc_number'] : $this->normalize_price_number( $row['tarif_ttc'] ?? '0' );
+    $vat_rate       = ! empty( $row['vat_rate_number'] ) ? $row['vat_rate_number'] : $this->normalize_price_number( $row['vat_rate'] ?? '20,00' );
+    $tva_total      = ! empty( $row['tva_total_number'] ) ? $row['tva_total_number'] : $this->format_quote_money_value( (float) str_replace( ',', '.', $tot_ttc ) - (float) str_replace( ',', '.', $tot_ht ) );
+    $quantity       = ! empty( $row['quantity_number'] ) ? $row['quantity_number'] : $this->normalize_price_number( $row['quantity'] ?? '1,00' );
+    $is_vat_exempt  = ( (float) str_replace( ',', '.', $vat_rate ) == 0.0 );
+
+    $sig_img_url   = 'https://acdcformation.com/wp-content/uploads/2026/04/Cachet-et-signature.png';
+    $logo_img_url  = ! empty( $row['_org_logo'] ) ? (string) $row['_org_logo'] : 'https://acdcformation.com/wp-content/uploads/2026/03/Logo-ACDC.png';
+    $sig_data_uri  = $this->quote_img_to_data_uri( $sig_img_url );
+    $logo_data_uri = $this->quote_img_to_data_uri( $logo_img_url );
+
+    /* Désignation (formation + dates/modalités) sur plusieurs lignes. */
+    $designation_lines = array( $this->quote_html( $formation ) );
+    if ( ! empty( $row['start_date'] ) || ! empty( $row['end_date'] ) ) {
+      $dates_str = trim( ( $row['start_date'] ?? '' ) . ( ! empty( $row['end_date'] ) && $row['end_date'] !== $row['start_date'] ? ' — ' . $row['end_date'] : '' ) );
+      $designation_lines[] = 'Dates : ' . $this->quote_html( $dates_str );
+    }
+    if ( ! empty( $row['duration'] ) )          { $designation_lines[] = 'Durée : ' . $this->quote_html( $row['duration'] ); }
+    if ( ! empty( $row['format'] ) )            { $designation_lines[] = 'Format : ' . $this->quote_html( $row['format'] ); }
+    if ( ! empty( $row['location'] ) )          { $designation_lines[] = 'Lieu : ' . $this->quote_html( $row['location'] ); }
+    if ( ! empty( $row['trained_headcount'] ) ) { $designation_lines[] = 'Effectif : ' . $this->quote_html( $row['trained_headcount'] ); }
+    $designation_html = implode( '<br />', $designation_lines );
+
+    ob_start();
+    ?>
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+  <meta charset="UTF-8" />
+  <title>Devis <?php echo $this->quote_html( $number ); ?></title>
+  <style>
+    body { font-family: sans-serif; color:#1f2937; font-size:9pt; }
+    .brand-name { color:#0C2D52; font-size:15pt; font-weight:bold; }
+    .brand-sub { color:#C5A253; font-size:8pt; }
+    .org-block { font-size:8pt; color:#374151; line-height:1.4; text-align:right; }
+    .rule { border-bottom:1.5px solid #C5A253; height:0; line-height:0; font-size:0; }
+    .box { border:1px solid #d7dde6; padding:6px 8px; }
+    .box-title { font-size:8pt; color:#C5A253; font-weight:bold; text-transform:uppercase; padding-bottom:3px; }
+    .box-lines { font-size:9pt; line-height:1.5; color:#1f2937; }
+    h1.devis-title { color:#0C2D52; font-size:16pt; font-weight:bold; margin:14px 0 6px; }
+    table.items { width:100%; border-collapse:collapse; font-size:8.5pt; }
+    table.items thead th { background:#0C2D52; color:#ffffff; font-weight:bold; padding:6px 5px; text-align:left; }
+    table.items tbody td { padding:7px 5px; border-bottom:1px solid #d7dde6; vertical-align:top; }
+    table.totals { width:100%; border-collapse:collapse; font-size:9pt; border:1px solid #d7dde6; }
+    table.totals td { padding:6px 8px; border-bottom:1px solid #d7dde6; }
+    table.totals tr.grand td { background:#EDF1F6; color:#0C2D52; font-weight:bold; }
+    .mentions { font-size:7.5pt; color:#374151; line-height:1.4; }
+    .bank { font-size:7.5pt; color:#0C2D52; }
+    .sig-title { font-size:7.5pt; font-weight:bold; text-transform:uppercase; color:#C5A253; padding-bottom:4px; }
+    .sig-cell { border-top:1px solid #d7dde6; padding-top:6px; }
+    .footer { border-top:1px solid #d7dde6; padding-top:6px; margin-top:10px; text-align:center; font-size:7pt; color:#4b5563; line-height:1.4; }
+  </style>
+</head>
+<body>
+  <table width="100%" cellpadding="0" cellspacing="0">
+    <tr>
+      <td width="55%" valign="middle">
+        <table cellpadding="0" cellspacing="0"><tr>
+          <?php if ( $logo_data_uri ) : ?><td valign="middle" style="padding-right:8px;"><img src="<?php echo $logo_data_uri; ?>" height="48" /></td><?php endif; ?>
+          <td valign="middle">
+            <span class="brand-name"><?php echo $this->quote_html( $row['_org_name'] ?? 'ACDC Formation' ); ?></span><br />
+            <span class="brand-sub">Devis de formation professionnelle</span>
+          </td>
+        </tr></table>
+      </td>
+      <td width="45%" valign="top" class="org-block">
+        <strong><?php echo $this->quote_html( $row['_org_name'] ?? 'ACDC Formation' ); ?></strong><br />
+        <?php echo $this->quote_html( $row['_org_address'] ?? '' ); ?><br />
+        <?php if ( ! empty( $row['_org_siret'] ) ) : ?>Siret : <?php echo $this->quote_html( $row['_org_siret'] ); ?><br /><?php endif; ?>
+        <?php if ( ! empty( $row['_org_nda'] ) ) : ?>NDA : <?php echo $this->quote_html( $row['_org_nda'] ); ?><?php endif; ?>
+      </td>
+    </tr>
+  </table>
+  <div class="rule">&nbsp;</div>
+  <br />
+
+  <table width="100%" cellpadding="0" cellspacing="0">
+    <tr>
+      <td width="58%" valign="top" style="padding-right:8px;">
+        <div class="box">
+          <div class="box-title">Client</div>
+          <div class="box-lines">
+            Nom / Société : <?php echo $this->quote_html( $client_name ); ?><br />
+            <?php if ( ! empty( $row['client_siret'] ) ) : ?>SIRET : <?php echo $this->quote_html( $row['client_siret'] ); ?><br /><?php endif; ?>
+            Adresse : <?php echo $this->quote_html( $row['client_address_full'] ?? '' ); ?><br />
+            Code postal / Ville : <?php echo $this->quote_html( $row['client_postal_city'] ?? '' ); ?><br />
+            Contact : <?php echo $this->quote_html( $client_contact ); ?>
+          </div>
+        </div>
+      </td>
+      <td width="42%" valign="top">
+        <div class="box">
+          <div class="box-title">Devis</div>
+          <div class="box-lines">
+            N&deg; devis : <?php echo $this->quote_html( $number ); ?><br />
+            Date d&rsquo;&eacute;mission : <?php echo $this->quote_html( $row['emission_date'] ?? '' ); ?><br />
+            Date de validit&eacute; : <?php echo $this->quote_html( $row['expiration_date'] ?? '' ); ?>
+          </div>
+        </div>
+      </td>
+    </tr>
+  </table>
+
+  <h1 class="devis-title">Devis</h1>
+
+  <table class="items">
+    <thead>
+      <tr>
+        <th width="42%">Désignation</th>
+        <th width="11%">Quantité</th>
+        <th width="15%"><?php echo $is_vat_exempt ? 'Prix net (€)' : 'P.U (€ HT)'; ?></th>
+        <?php if ( ! $is_vat_exempt ) : ?><th width="12%">TVA (%)</th><?php endif; ?>
+        <th width="20%"><?php echo $is_vat_exempt ? 'Total net (€)' : 'Total (€ HT)'; ?></th>
+      </tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td><?php echo $designation_html; ?></td>
+        <td><?php echo $this->quote_html( $quantity ); ?></td>
+        <td><?php echo $this->quote_html( $tot_ht ); ?></td>
+        <?php if ( ! $is_vat_exempt ) : ?><td><?php echo $this->quote_html( $vat_rate ); ?></td><?php endif; ?>
+        <td><?php echo $this->quote_html( $tot_ht ); ?></td>
+      </tr>
+    </tbody>
+  </table>
+
+  <br />
+  <table width="100%" cellpadding="0" cellspacing="0">
+    <tr>
+      <td width="55%" valign="top" style="padding-right:8px;">
+        <div class="mentions">
+          <?php echo $this->quote_html( $row['payment_methods'] ?? '' ); ?>
+        </div>
+        <br />
+        <div class="bank">IBAN : <?php echo $this->quote_html( $row['iban'] ?? '' ); ?> &mdash; BIC : <?php echo $this->quote_html( $row['bic'] ?? '' ); ?></div>
+        <br />
+        <div class="mentions">
+          <?php if ( $is_vat_exempt ) : ?>
+          Devis valable <?php echo $this->quote_html( $row['validity_days'] ?? '30' ); ?> jours. Prix nets de TVA. TVA non applicable, art. 293 B CGI. Certifié Qualiopi.
+          <?php else : ?>
+          Devis valable <?php echo $this->quote_html( $row['validity_days'] ?? '30' ); ?> jours. Prix HT et TTC. TVA en vigueur. Certifié Qualiopi.
+          <?php endif; ?>
+        </div>
+      </td>
+      <td width="45%" valign="top">
+        <table class="totals" cellpadding="0" cellspacing="0">
+          <?php if ( $is_vat_exempt ) : ?>
+          <tr class="grand"><td>Total net (€)</td><td align="right"><?php echo $this->quote_html( $tot_ht ); ?> €</td></tr>
+          <tr><td colspan="2" style="font-size:7.5pt;color:#6b7280;">TVA non applicable — article 293 B du CGI</td></tr>
+          <?php else : ?>
+          <tr><td><strong>Total HT (€)</strong></td><td align="right"><?php echo $this->quote_html( $tot_ht ); ?> €</td></tr>
+          <tr><td><strong>Total TVA (€)</strong></td><td align="right"><?php echo $this->quote_html( $tva_total ); ?> €</td></tr>
+          <tr class="grand"><td>Total TTC (€)</td><td align="right"><?php echo $this->quote_html( $tot_ttc ); ?> €</td></tr>
+          <?php endif; ?>
+        </table>
+      </td>
+    </tr>
+  </table>
+
+  <br /><br />
+  <table width="100%" cellpadding="0" cellspacing="0">
+    <tr>
+      <td width="50%" valign="top" style="padding-right:10px;">
+        <div class="sig-title">Signature ACDC Formation</div>
+        <div class="sig-cell" style="text-align:center;">
+          <?php if ( $sig_data_uri ) : ?><img src="<?php echo $sig_data_uri; ?>" height="120" /><?php else : ?>&nbsp;<?php endif; ?>
+        </div>
+      </td>
+      <td width="50%" valign="top">
+        <div class="sig-title">Bon pour accord — Lu et approuvé</div>
+        <div class="sig-cell" style="min-height:120px;">&nbsp;</div>
+      </td>
+    </tr>
+  </table>
+
+  <div class="footer">
+    <?php echo $this->quote_html( $row['_org_address'] ?? '' ); ?> &mdash; Siret : <?php echo $this->quote_html( $row['_org_siret'] ?? '' ); ?><?php if ( ! empty( $row['_org_nda'] ) ) : ?> &mdash; NDA : <?php echo $this->quote_html( $row['_org_nda'] ); ?><?php endif; ?><br />
+    <?php if ( ! empty( $row['_org_email'] ) ) : ?>e-mail : <?php echo $this->quote_html( $row['_org_email'] ); ?> &mdash; <?php endif; ?>Tél : <?php echo $this->quote_html( $row['_org_phone'] ?? '' ); ?> &mdash; site web : <?php echo $this->quote_html( $row['_org_website'] ?? '' ); ?>
+  </div>
+</body>
+</html>
+    <?php
+    return (string) ob_get_clean();
+  }
+
+  /**
+   * Génère le binaire PDF du devis via mPDF (gabarit table-based).
+   * @return string Binaire PDF, ou '' si mPDF indisponible / erreur.
+   */
+  private function build_quote_pdf( $row ) {
+    $html = $this->get_quote_pdf_html( $row );
+    if ( '' === (string) $html ) { return ''; }
+
+    $autoload = dirname( dirname( dirname( dirname( plugin_dir_path( __FILE__ ) ) ) ) ) . '/acdc-libs/vendor/autoload.php';
+    if ( file_exists( $autoload ) ) { require_once $autoload; }
+    if ( ! class_exists( '\Mpdf\Mpdf' ) ) { return ''; }
+
+    try {
+      $mpdf = new \Mpdf\Mpdf( array(
+        'format'        => 'A4',
+        'margin_top'    => 12,
+        'margin_bottom' => 12,
+        'margin_left'   => 12,
+        'margin_right'  => 12,
+        'tempDir'       => sys_get_temp_dir(),
+      ) );
+      $mpdf->SetTitle( 'Devis ' . sanitize_file_name( (string) ( $row['number'] ?? '' ) ) );
+      $mpdf->WriteHTML( $html );
+      $pdf = $mpdf->Output( '', 'S' );
+      return is_string( $pdf ) ? $pdf : '';
+    } catch ( \Throwable $e ) {
+      return '';
+    }
+  }
+
   private function get_mock_invoices_data( $scope = 'action' ) {
     if ( ! $this->is_documents_billing_demo_enabled() ) {
       return array();

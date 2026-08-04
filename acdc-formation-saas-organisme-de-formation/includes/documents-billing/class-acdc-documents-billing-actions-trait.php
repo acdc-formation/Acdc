@@ -243,6 +243,35 @@ trait ACDC_Documents_Billing_Actions_Trait {
     $this->send_html_download_response( 'devis-' . sanitize_file_name( $row['number'] ) . '.html', $html );
   }
 
+  /** Téléchargement d'un vrai fichier PDF du devis (gabarit mPDF dédié). */
+  public function handle_download_quote_pdf() {
+    $this->require_manage_options();
+    $quote_id = isset( $_GET['quote_id'] ) ? absint( $_GET['quote_id'] ) : 0;
+    $this->verify_nonce_or_die( 'acdc_download_quote_pdf_' . $quote_id );
+    $quote = $quote_id ? $this->get_quote( $quote_id ) : null;
+    if ( ! $quote ) {
+      wp_die( esc_html( 'Devis introuvable.' ) );
+    }
+    $row = $this->build_quote_row_from_record( $quote );
+    $pdf = $this->build_quote_pdf( $row );
+    $filename = 'devis-' . sanitize_file_name( $row['number'] ) . '.pdf';
+    if ( '' === (string) $pdf ) {
+      /* mPDF indisponible : on retombe sur le HTML imprimable (bouton « Enregistrer en PDF »). */
+      $html = $this->get_quote_document_html( $row );
+      $this->log_action_event( 'download', 'quote_pdf', $quote_id, 'fallback_html' );
+      $this->send_html_download_response( 'devis-' . sanitize_file_name( $row['number'] ) . '.html', $html );
+      return;
+    }
+    $this->log_action_event( 'download', 'quote_pdf', $quote_id );
+    while ( ob_get_level() ) { ob_end_clean(); }
+    nocache_headers();
+    header( 'Content-Type: application/pdf' );
+    header( 'Content-Disposition: attachment; filename="' . $filename . '"' );
+    header( 'Content-Length: ' . strlen( $pdf ) );
+    echo $pdf; // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped -- binaire PDF
+    exit;
+  }
+
   public function handle_download_invoice_document() {
     $this->require_manage_options();
     $invoice_id = isset( $_GET['invoice_id'] ) ? absint( $_GET['invoice_id'] ) : 0;
@@ -1095,9 +1124,31 @@ trait ACDC_Documents_Billing_Actions_Trait {
                    . '<p>Bonjour ' . esc_html( $signer_name ) . ',</p>'
                    . '<p>Nous confirmons la signature électronique de votre devis <strong>' . esc_html( $quote_num ) . '</strong>, le ' . esc_html( mysql2date( 'd/m/Y à H\hi', $signed_at ) ) . '.</p>'
                    . $cta_client
+                   . '<p>Vous trouverez votre devis au format PDF en pièce jointe.</p>'
                    . '<p>Merci de votre confiance.</p>'
                    . '</div>';
-      wp_mail( $client_email, $subj_client, $body_client, $headers_c );
+
+      /* Pièce jointe : vrai fichier PDF du devis (gabarit mPDF dédié). */
+      $attachments = array();
+      $tmp_pdf     = '';
+      if ( method_exists( $this, 'build_quote_pdf' ) ) {
+        $row_pdf = $this->build_quote_row_from_record( $quote );
+        $pdf_bin = $this->build_quote_pdf( $row_pdf );
+        if ( '' !== (string) $pdf_bin ) {
+          $tmp_pdf = trailingslashit( sys_get_temp_dir() ) . 'devis-' . sanitize_file_name( $quote_num ) . '.pdf';
+          if ( false !== file_put_contents( $tmp_pdf, $pdf_bin ) ) { // phpcs:ignore WordPress.WP.AlternativeFunctions.file_system_operations_file_put_contents
+            $attachments[] = $tmp_pdf;
+          } else {
+            $tmp_pdf = '';
+          }
+        }
+      }
+
+      wp_mail( $client_email, $subj_client, $body_client, $headers_c, $attachments );
+
+      if ( '' !== $tmp_pdf && file_exists( $tmp_pdf ) ) {
+        @unlink( $tmp_pdf ); // phpcs:ignore WordPress.PHP.NoSilencedErrors.Discouraged
+      }
     }
   }
 }

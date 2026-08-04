@@ -551,6 +551,7 @@ class ACDC_Formation_SAAS_Plugin {
     add_action( 'admin_post_acdc_delete_funder_survey', array( $this, 'handle_delete_funder_survey' ) );
     add_action( 'admin_post_acdc_create_funder_survey_from_model', array( $this, 'handle_create_funder_survey_from_model' ) );
     add_action( 'admin_post_acdc_download_quote_document', array( $this, 'handle_download_quote_document' ) );
+    add_action( 'admin_post_acdc_download_quote_pdf',      array( $this, 'handle_download_quote_pdf' ) );
     add_action( 'admin_post_acdc_save_quote',             array( $this, 'handle_save_quote' ) );
     add_action( 'admin_post_acdc_send_quote_email',       array( $this, 'handle_send_quote_email' ) );
     add_action( 'admin_post_acdc_delete_quote',           array( $this, 'handle_delete_quote' ) );
