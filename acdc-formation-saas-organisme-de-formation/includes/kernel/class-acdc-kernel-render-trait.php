@@ -523,6 +523,14 @@ trait ACDC_Kernel_Render_Trait {
       return '<div class="acdc-portal-shell"><div class="acdc-panel"><h2>Accès requis</h2><p>Veuillez vous connecter pour accéder à cet espace.</p><p><a class="acdc-button acdc-button-primary" href="' . esc_url( $this->login_page_url() ) . '">Aller à la connexion</a></p></div></div>';
     }
 
+    /* M25 — L'extranet est authentifié et dynamique : il ne doit jamais être servi en cache
+       (sinon l'Archive des e-mails et les données récentes apparaissent périmées). On signale
+       aux caches de page/objet de ne pas mettre cette page en cache. */
+    if ( ! defined( 'DONOTCACHEPAGE' ) )   { define( 'DONOTCACHEPAGE', true ); }
+    if ( ! defined( 'DONOTCACHEOBJECT' ) ) { define( 'DONOTCACHEOBJECT', true ); }
+    if ( ! defined( 'DONOTCACHEDB' ) )     { define( 'DONOTCACHEDB', true ); }
+    if ( ! headers_sent() && function_exists( 'nocache_headers' ) ) { nocache_headers(); }
+
     $atts = shortcode_atts( array( 'tab' => 'dashboard' ), $atts, 'acdc_of_portal' );
     $tab   = isset( $_GET['tab'] ) ? sanitize_key( wp_unslash( $_GET['tab'] ) ) : sanitize_key( $atts['tab'] );
     $action = isset( $_GET['action'] ) ? sanitize_key( wp_unslash( $_GET['action'] ) ) : 'list';

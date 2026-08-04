@@ -395,15 +395,19 @@ trait ACDC_Documents_Billing_Render_Trait {
     if ( ! $row ) {
       $branding_q  = $this->get_branding_options();
       $profile_q   = $this->get_company_profile_options();
+      /* Une seule source pour la durée de validité : le réglage devis. La date d'expiration
+         ET le texte « Devis valable X jours » en découlent, sinon incohérence (ex. expiration
+         à 90 j mais document « valable 30 jours »). */
+      $quote_validity_days = max( 1, (int) ( $this->get_billing_settings_options()['quotes']['validity_days'] ?? 30 ) );
       $row = array(
         'id' => 0, 'scope' => $scope, 'number' => $this->get_quote_next_number( $scope ),
         'commanditaire_type' => '', 'apprenant' => '', 'client_company' => '',
         'formation_full' => '', 'formation' => '', 'formation_title' => '',
         'start_date' => '', 'end_date' => '', 'trained_headcount' => '',
-        'emission_date' => wp_date( 'd/m/Y' ), 'expiration_date' => wp_date( 'd/m/Y', strtotime( '+' . max( 1, (int) ( $this->get_billing_settings_options()['quotes']['validity_days'] ?? 30 ) ) . ' days' ) ),
+        'emission_date' => wp_date( 'd/m/Y' ), 'expiration_date' => wp_date( 'd/m/Y', strtotime( '+' . $quote_validity_days . ' days' ) ),
         'tarif_ht_value' => '', 'tarif_ttc_value' => '0', 'vat_rate' => '20,00',
         'quantity' => '1,00', 'designation' => "Dates de l'action de formation : à définir",
-        'format' => 'Présentiel', 'validity_days' => '30',
+        'format' => 'Présentiel', 'validity_days' => (string) $quote_validity_days,
         'vat_rate' => ( isset( $profile_q['vat_rate_default'] ) && '20' === (string) $profile_q['vat_rate_default'] ) ? '20,00' : '0,00',
         'iban' => ! empty( $profile_q['bank_iban'] ) ? (string) $profile_q['bank_iban'] : 'FR76 3000 4023 7500 0101 1397 203',
         'bic'  => ! empty( $profile_q['bank_bic'] )  ? (string) $profile_q['bank_bic']  : 'BNPAFRPPXXX',

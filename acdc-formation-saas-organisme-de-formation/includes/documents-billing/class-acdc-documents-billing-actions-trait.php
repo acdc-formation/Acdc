@@ -1074,7 +1074,17 @@ trait ACDC_Documents_Billing_Actions_Trait {
     $client_email = sanitize_email( (string) $quote->apprenant_email );
     if ( '' !== $client_email && is_email( $client_email ) ) {
       $doc_link = $signed_url ?: ( ! empty( $quote->html_url ) ? esc_url_raw( (string) $quote->html_url ) : '' );
-      $headers_c = array( 'Content-Type: text/html; charset=UTF-8', 'From: ' . sanitize_text_field( $from_name_s ) . ' <' . $from_email_s . '>' );
+      /* En-têtes transactionnels X-ACDC : archivage + rattachement fiable au devis/prospect. */
+      $headers_c = method_exists( $this, 'acdc_get_transactional_email_headers' )
+        ? $this->acdc_get_transactional_email_headers( array(
+            'source_module'       => 'documents-billing',
+            'source_action'       => 'quote_signed_client_copy',
+            'related_entity_type' => 'quote',
+            'related_entity_id'   => (int) $quote_id,
+            'email_category'      => 'commercial',
+            'email_audience'      => 'prospect',
+          ) )
+        : array( 'Content-Type: text/html; charset=UTF-8', 'From: ' . sanitize_text_field( $from_name_s ) . ' <' . $from_email_s . '>' );
       $subj_client = '📄 Votre exemplaire — Devis signé';
       $cta_client  = $doc_link
         ? '<p style="text-align:center;margin:24px 0;"><a href="' . esc_url( $doc_link ) . '" style="display:inline-block;padding:13px 26px;background:#C5A253;color:#0B0706;text-decoration:none;border-radius:8px;font-weight:700;">📄 Consulter votre devis signé</a></p>'
