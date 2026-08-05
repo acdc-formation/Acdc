@@ -1,0 +1,17 @@
+{
+  "mcpServers": {
+    "wordpress-acdc": {
+      "command": "npx",
+      "args": [
+        "-y",
+        "@automattic/mcp-wordpress-remote@latest"
+      ],
+      "env": {
+        "WP_API_URL": "https://acdcformation.com/wp-json/mcp/mcp-adapter-default-server",
+        "WP_API_USERNAME": "${WP_API_USERNAME}",
+        "WP_API_PASSWORD": "${WP_API_PASSWORD}",
+        "LOG_FILE": "./.mcp-logs/mcp-adapter.log"
+      }
+    }
+  }
+}
