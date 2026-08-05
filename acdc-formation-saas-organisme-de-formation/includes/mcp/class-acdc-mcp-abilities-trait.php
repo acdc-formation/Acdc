@@ -13,7 +13,8 @@
  *     coordonnées (aucune ability de lecture financeur n'est déclarée).
  *   - Chaque ability a un permission_callback réel adossé à une capacité DÉDIÉE
  *     (acdc_mcp_read / acdc_mcp_write — jamais manage_options), un input_schema
- *     et un output_schema explicites, et meta.mcp.public = true.
+ *     et un output_schema explicites, une category (obligatoire, pré-enregistrée)
+ *     et meta.public = true (exposition REST/MCP).
  *   - Rôles dédiés : acdc_mcp_agent (lecture+écriture), acdc_mcp_readonly
  *     (lecture). L'administrateur reçoit aussi les deux capacités.
  *
@@ -36,19 +37,20 @@ trait ACDC_Mcp_Abilities_Trait {
 
 	/**
 	 * Enregistre toutes les abilities ACDC.
-	 * Branché sur les DEUX hooks connus de l'API Abilities (abilities_api_init et
-	 * wp_abilities_api_init selon la version), avec garde d'idempotence.
+	 * Branché sur le hook du core wp_abilities_api_init (armé tôt dans
+	 * class-acdc-mcp.php), avec garde d'idempotence.
 	 */
 	public function register_mcp_abilities() {
-		// Idempotence : une seule passe même si les deux hooks se déclenchent.
+		// Idempotence : une seule passe même si le hook se déclenche plusieurs fois.
 		if ( $this->acdc_mcp_abilities_registered ) {
 			return;
 		}
 		// Disponibilité de l'API avant tout appel.
 		if ( ! function_exists( 'wp_register_ability' ) ) {
-			return; // API Abilities absente (plugin abilities / mcp-adapter non actifs).
+			return; // API Abilities absente.
 		}
-		$this->acdc_mcp_abilities_registered = true;
+		$this->acdc_mcp_abilities_registered   = true;
+		$this->acdc_mcp_registration_failures = array();
 
 		/* ---------------------- LOT 1 — LECTURE SEULE ---------------------- */
 
@@ -293,23 +295,81 @@ trait ACDC_Mcp_Abilities_Trait {
 	/* ============================ HELPERS ============================== */
 
 	/**
-	 * Enregistre une ability avec le drapeau MCP public explicite.
+	 * Slug de la catégorie d'abilities ACDC (contrat core : une catégorie
+	 * enregistrée est OBLIGATOIRE pour chaque ability).
+	 */
+	const MCP_CATEGORY = 'acdc-of';
+
+	/**
+	 * Enregistre une ability conformément au contrat réel du core WordPress 6.9/7.0 :
+	 * label, description, category (obligatoire, catégorie pré-enregistrée),
+	 * execute_callback, permission_callback, input/output_schema, meta.public.
+	 * Trace tout échec (retour null) quand WP_DEBUG est actif.
 	 */
 	private function acdc_register_mcp_ability( $name, $label, $description, $input_schema, $output_schema, $execute_cb, $permission_cb ) {
-		wp_register_ability(
+		$ability = wp_register_ability(
 			$name,
 			array(
 				'label'               => $label,
 				'description'         => $description,
+				'category'            => self::MCP_CATEGORY,
 				'input_schema'        => $input_schema,
 				'output_schema'       => $output_schema,
 				'execute_callback'    => $execute_cb,
 				'permission_callback' => $permission_cb,
 				'meta'                => array(
-					// Exposition MCP explicite (lue par mcp-adapter).
-					'mcp' => array( 'public' => true ),
+					// Exposition publique (REST / MCP). Contrat core : meta.public (bool).
+					'public'       => true,
+					'show_in_rest' => true,
 				),
 			)
+		);
+		if ( null === $ability ) {
+			$this->acdc_mcp_registration_failures[] = (string) $name;
+			if ( defined( 'WP_DEBUG' ) && WP_DEBUG ) {
+				error_log( 'ACDC MCP: échec d\'enregistrement de l\'ability « ' . $name . ' » (voir _doing_it_wrong / contrat Abilities API).' );
+			}
+		}
+		return $ability;
+	}
+
+	/** Noms d'abilities dont l'enregistrement a échoué (diagnostic). */
+	private $acdc_mcp_registration_failures = array();
+
+	/**
+	 * Enregistre la catégorie d'abilities ACDC.
+	 * DOIT être branché sur wp_abilities_api_categories_init (avant wp_abilities_api_init).
+	 */
+	public function register_mcp_ability_categories() {
+		if ( ! function_exists( 'wp_register_ability_category' ) ) {
+			return;
+		}
+		$cat = wp_register_ability_category(
+			self::MCP_CATEGORY,
+			array(
+				'label'       => 'ACDC Formation',
+				'description' => 'Actions CRM ACDC exposées via MCP (lecture + écritures sûres, sans e-mail).',
+			)
+		);
+		if ( null === $cat && defined( 'WP_DEBUG' ) && WP_DEBUG ) {
+			error_log( 'ACDC MCP: échec d\'enregistrement de la catégorie « ' . self::MCP_CATEGORY .' ».' );
+		}
+	}
+
+	/** Liste blanche canonique des 11 abilities (source unique, réutilisée par le diagnostic). */
+	public function acdc_mcp_expected_ability_names() {
+		return array(
+			'acdc-of/list-formations',
+			'acdc-of/get-formation',
+			'acdc-of/list-prospects',
+			'acdc-of/get-prospect',
+			'acdc-of/list-leads',
+			'acdc-of/list-quotes',
+			'acdc-of/get-quote',
+			'acdc-of/get-indicators',
+			'acdc-of/create-quote',
+			'acdc-of/update-quote',
+			'acdc-of/create-prospect',
 		);
 	}
 
@@ -721,5 +781,143 @@ trait ACDC_Mcp_Abilities_Trait {
 			'id'       => (int) $persist['id'],
 			'prospect' => $this->mcp_map_prospect( $this->get_prospect( (int) $persist['id'] ) ),
 		);
+	}
+
+	/* ==================== DIAGNOSTIC ADMIN (Réglages → ACDC MCP) ==================== */
+
+	/** Enregistre la page de diagnostic sous Réglages. Branché sur admin_menu. */
+	public function register_mcp_admin_page() {
+		if ( ! function_exists( 'add_options_page' ) ) {
+			return;
+		}
+		add_options_page(
+			'ACDC MCP',
+			'ACDC MCP',
+			'manage_options',
+			'acdc-mcp',
+			array( $this, 'render_mcp_admin_page' )
+		);
+	}
+
+	/** Construit l'état de diagnostic (aucune donnée métier, aucun secret). */
+	public function acdc_mcp_diagnostics() {
+		$expected = $this->acdc_mcp_expected_ability_names();
+
+		$abilities_api = function_exists( 'wp_register_ability' );
+		$lib_present   = class_exists( '\WP\MCP\Core\McpAdapter' );
+
+		// État de chaque ability attendue.
+		$rows = array();
+		foreach ( $expected as $name ) {
+			$registered = function_exists( 'wp_has_ability' ) ? (bool) wp_has_ability( $name ) : false;
+			$reason     = '';
+			if ( ! $registered ) {
+				if ( ! $abilities_api ) {
+					$reason = 'API Abilities absente';
+				} elseif ( in_array( $name, (array) $this->acdc_mcp_registration_failures, true ) ) {
+					$reason = 'échec d\'enregistrement (contrat Abilities — voir logs si WP_DEBUG)';
+				} else {
+					$reason = 'hook wp_abilities_api_init non déclenché ou ability non armée';
+				}
+			}
+			$rows[] = array( 'name' => $name, 'registered' => $registered, 'reason' => $reason );
+		}
+
+		// Liste blanche transmise au serveur MCP.
+		$whitelist = ( class_exists( 'ACDC_Mcp_Server' ) && defined( 'ACDC_Mcp_Server::ABILITIES' ) )
+			? (array) constant( 'ACDC_Mcp_Server::ABILITIES' )
+			: $expected;
+
+		// Endpoint MCP.
+		$endpoint = '';
+		if ( class_exists( 'ACDC_Mcp_Server' ) && function_exists( 'rest_url' ) ) {
+			$endpoint = rest_url( ACDC_Mcp_Server::ROUTE_NAMESPACE . '/' . ACDC_Mcp_Server::ROUTE );
+		}
+
+		// Rôles/capacités + comptes porteurs.
+		$roles_info = array();
+		foreach ( array( 'acdc_mcp_agent', 'acdc_mcp_readonly', 'administrator' ) as $role_slug ) {
+			$role = function_exists( 'get_role' ) ? get_role( $role_slug ) : null;
+			if ( ! $role ) {
+				continue;
+			}
+			$caps = array();
+			foreach ( array( 'acdc_mcp_read', 'acdc_mcp_write' ) as $cap ) {
+				if ( ! empty( $role->capabilities[ $cap ] ) ) {
+					$caps[] = $cap;
+				}
+			}
+			$users = array();
+			if ( function_exists( 'get_users' ) ) {
+				$found = get_users( array( 'role' => $role_slug, 'number' => 50, 'fields' => array( 'user_login' ) ) );
+				foreach ( (array) $found as $u ) {
+					$users[] = (string) $u->user_login; // identifiant de connexion, jamais de secret.
+				}
+			}
+			$roles_info[] = array( 'role' => $role_slug, 'caps' => $caps, 'users' => $users );
+		}
+
+		return array(
+			'plugin_version'  => defined( 'ACDC_OF_SAAS_VERSION' ) ? (string) ACDC_OF_SAAS_VERSION : '',
+			'abilities_api'   => $abilities_api,
+			'lib_present'     => $lib_present,
+			'lib_version'     => defined( 'ACDC_MCP_ADAPTER_VERSION' ) ? (string) ACDC_MCP_ADAPTER_VERSION : '',
+			'endpoint'        => (string) $endpoint,
+			'whitelist'       => array_values( $whitelist ),
+			'abilities'       => $rows,
+			'registered_count'=> count( array_filter( $rows, function ( $r ) { return $r['registered']; } ) ),
+			'roles'           => $roles_info,
+		);
+	}
+
+	/** Rendu de la page de diagnostic (admins uniquement). */
+	public function render_mcp_admin_page() {
+		if ( ! current_user_can( 'manage_options' ) ) {
+			wp_die( esc_html( 'Accès refusé.' ) );
+		}
+		$d   = $this->acdc_mcp_diagnostics();
+		$yes = '<span style="color:#1a7f37;font-weight:600;">Oui</span>';
+		$no  = '<span style="color:#b32d2e;font-weight:600;">Non</span>';
+		echo '<div class="wrap"><h1>ACDC MCP — Diagnostic</h1>';
+		echo '<p>Aucune donnée métier ni secret sur cette page.</p>';
+
+		echo '<table class="widefat striped" style="max-width:820px;margin-bottom:20px;"><tbody>';
+		printf( '<tr><td><strong>Version du plugin</strong></td><td>%s</td></tr>', esc_html( $d['plugin_version'] ) );
+		printf( '<tr><td><strong>API Abilities présente</strong></td><td>%s</td></tr>', $d['abilities_api'] ? $yes : $no ); // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped
+		printf( '<tr><td><strong>Bibliothèque mcp-adapter</strong></td><td>%s %s</td></tr>', $d['lib_present'] ? $yes : $no, esc_html( $d['lib_version'] ? 'v' . $d['lib_version'] : '' ) ); // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped
+		printf( '<tr><td><strong>Endpoint MCP</strong></td><td><code>%s</code></td></tr>', esc_html( $d['endpoint'] ) );
+		printf( '<tr><td><strong>Abilities enregistrées</strong></td><td>%d / %d</td></tr>', (int) $d['registered_count'], count( $d['abilities'] ) );
+		echo '</tbody></table>';
+
+		echo '<h2>Abilities (liste blanche)</h2>';
+		echo '<table class="widefat striped" style="max-width:820px;margin-bottom:20px;"><thead><tr><th>Ability</th><th>État</th><th>Motif si manquante</th></tr></thead><tbody>';
+		foreach ( $d['abilities'] as $r ) {
+			printf(
+				'<tr><td><code>%s</code></td><td>%s</td><td>%s</td></tr>',
+				esc_html( $r['name'] ),
+				$r['registered'] ? '<span style="color:#1a7f37;font-weight:600;">ENREGISTRÉE</span>' : '<span style="color:#b32d2e;font-weight:600;">MANQUANTE</span>', // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped
+				esc_html( $r['reason'] )
+			);
+		}
+		echo '</tbody></table>';
+
+		echo '<h2>Liste blanche transmise au serveur MCP</h2><ul style="list-style:disc;margin-left:20px;">';
+		foreach ( $d['whitelist'] as $w ) {
+			printf( '<li><code>%s</code></li>', esc_html( $w ) );
+		}
+		echo '</ul>';
+
+		echo '<h2>Rôles &amp; capacités</h2>';
+		echo '<table class="widefat striped" style="max-width:820px;"><thead><tr><th>Rôle</th><th>Capacités MCP</th><th>Comptes porteurs</th></tr></thead><tbody>';
+		foreach ( $d['roles'] as $ri ) {
+			printf(
+				'<tr><td><code>%s</code></td><td>%s</td><td>%s</td></tr>',
+				esc_html( $ri['role'] ),
+				esc_html( $ri['caps'] ? implode( ', ', $ri['caps'] ) : '—' ),
+				esc_html( $ri['users'] ? implode( ', ', $ri['users'] ) : '—' )
+			);
+		}
+		echo '</tbody></table>';
+		echo '</div>';
 	}
 }

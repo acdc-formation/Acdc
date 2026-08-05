@@ -561,13 +561,15 @@ class ACDC_Formation_SAAS_Plugin {
     add_action( 'admin_post_acdc_save_funder_survey', array( $this, 'handle_save_funder_survey' ) );
     add_action( 'admin_post_acdc_delete_funder_survey', array( $this, 'handle_delete_funder_survey' ) );
     add_action( 'admin_post_acdc_create_funder_survey_from_model', array( $this, 'handle_create_funder_survey_from_model' ) );
-    /* ACDC 3.25.144 — Enregistrement des abilities MCP (API WordPress Abilities).
-       Les deux noms de hook existent selon la version de l'API ; la méthode est
-       idempotente, donc s'exécuter sur les deux ne provoque aucun double enregistrement. */
-    add_action( 'abilities_api_init',    array( $this, 'register_mcp_abilities' ) );
-    add_action( 'wp_abilities_api_init', array( $this, 'register_mcp_abilities' ) );
+    /* ACDC 3.25.147 — L'enregistrement des abilities MCP (catégorie + abilities)
+       est armé le PLUS TÔT possible dans includes/class-acdc-mcp.php, au chargement
+       du module, indépendamment de la classe et du serveur MCP (voir ce fichier).
+       Le seul hook du core est wp_abilities_api_init (+ wp_abilities_api_categories_init) :
+       le hook fantôme « abilities_api_init » a été retiré. */
     /* Provisionne les rôles/capacités MCP au boot si la version diffère (sans réactivation). */
     add_action( 'init', array( $this, 'acdc_mcp_maybe_setup_roles' ) );
+    /* Page de diagnostic Réglages → ACDC MCP (admins uniquement). */
+    add_action( 'admin_menu', array( $this, 'register_mcp_admin_page' ) );
 
     add_action( 'admin_post_acdc_download_quote_document', array( $this, 'handle_download_quote_document' ) );
     add_action( 'admin_post_acdc_download_quote_pdf',      array( $this, 'handle_download_quote_pdf' ) );

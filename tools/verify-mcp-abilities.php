@@ -79,26 +79,67 @@ if ( preg_match( '/function mcp_build_quote_data[\s\S]*?\}/', $src, $mm ) ) { $w
 $no_funder_in_writes = ( false === strpos( $write_blocks, 'funder' ) && false === strpos( $write_blocks, 'planned_funding' ) );
 check( 'Aucune écriture des données financeur', $funder_writes_only_read && $no_funder_in_writes, $failures, $checks );
 
-/* --- 5. Cohérence d'enregistrement des abilities --- */
+/* --- 5. Cohérence d'enregistrement des abilities (contrat core WordPress) --- */
 $n_register  = substr_count( $src, 'acdc_register_mcp_ability(' ) - 1; // -1 : la définition de la méthode
 $n_permcb    = preg_match_all( '/array\(\s*\$this,\s*\'mcp_can_(read|write)\'\s*\)/', $src );
-$n_public    = substr_count( $src, "'mcp' => array( 'public' => true )" );
 $n_inschema  = substr_count( $src, "'input_schema'" );
 $n_outschema = substr_count( $src, "'output_schema'" );
 
 check( 'Au moins 8 abilities enregistrées (Lot 1+2)', $n_register >= 11, $failures, $checks );
 check( 'Chaque enregistrement a un permission_callback mcp_can_read/write (' . $n_permcb . ')', $n_permcb >= $n_register, $failures, $checks );
-check( 'meta.mcp.public présent une fois par ability (helper)', $n_public >= 1, $failures, $checks );
 check( 'input_schema + output_schema présents dans le helper', $n_inschema >= 1 && $n_outschema >= 1, $failures, $checks );
+
+/* --- 5b. Contrat core : category OBLIGATOIRE + catégorie pré-enregistrée (cause racine du bug) --- */
+check( "Chaque ability porte 'category' (contrat core requis)",
+	false !== strpos( $src, "'category'            => self::MCP_CATEGORY" ), $failures, $checks );
+check( 'Catégorie enregistrée sur wp_abilities_api_categories_init',
+	false !== strpos( $src, 'function register_mcp_ability_categories' )
+	&& false !== strpos( $src, 'wp_register_ability_category(' ), $failures, $checks );
+check( "Exposition core correcte : meta.public + show_in_rest (bool)",
+	false !== strpos( $src, "'public'       => true" ) && false !== strpos( $src, "'show_in_rest' => true" ), $failures, $checks );
+check( 'Échecs d\'enregistrement journalisés (WP_DEBUG)',
+	false !== strpos( $src, 'WP_DEBUG' ) && false !== strpos( $src, 'error_log(' ), $failures, $checks );
+
+/* --- 5c. Hook fantôme retiré + hooks du core armés tôt (class-acdc-mcp.php) --- */
+$loader = @file_get_contents( $plugin . '/includes/class-acdc-mcp.php' );
+check( "Hook fantôme 'abilities_api_init' retiré du code exécutable",
+	$loader && ! preg_match( "/add_action\(\s*'abilities_api_init'/", $loader )
+	&& ! preg_match( "/add_action\(\s*'abilities_api_init'/", @file_get_contents( $plugin . '/includes/class-acdc-plugin.php' ) ),
+	$failures, $checks );
+check( 'Hooks core armés tôt (categories_init + api_init) dans le loader',
+	$loader && false !== strpos( $loader, "'wp_abilities_api_categories_init'" ) && false !== strpos( $loader, "'wp_abilities_api_init'" ),
+	$failures, $checks );
+
+/* --- 5d. Page de diagnostic admin (manage_options, sans donnée métier) --- */
+check( 'Page diagnostic admin (Réglages → ACDC MCP, manage_options)',
+	false !== strpos( $src, 'function register_mcp_admin_page' )
+	&& false !== strpos( $src, "add_options_page(" )
+	&& false !== strpos( $src, "current_user_can( 'manage_options' )" )
+	&& false !== strpos( $src, 'function render_mcp_admin_page' ),
+	$failures, $checks );
+
+/* --- 5e. TEST FONCTIONNEL : les 11 abilities s'enregistrent (core simulé) --- */
+$smoke = $root . '/tools/mcp-registration-smoke.php';
+$smoke_ok = false;
+if ( is_file( $smoke ) ) {
+	$out = array(); $code = 0;
+	exec( 'php ' . escapeshellarg( $smoke ) . ' 2>&1', $out, $code );
+	$smoke_ok = ( 0 === $code );
+}
+check( 'Smoke fonctionnel : 11/11 abilities enregistrées avec la catégorie', $smoke_ok, $failures, $checks );
 
 /* --- 6. Aucun permission_callback « true » en dur --- */
 $hardcoded_true = preg_match( "/'permission_callback'\s*=>\s*(true|'__return_true'|function[^)]*\)\s*\{\s*return\s+true)/", $src )
 	|| false !== strpos( $src, '__return_true' );
 check( 'Aucun permission_callback = true en dur', ! $hardcoded_true, $failures, $checks );
 
-/* --- 7. Aucune dépendance à manage_options (capacités DÉDIÉES uniquement) --- */
-// On cible la capacité en tant qu'argument (les mentions en commentaire « jamais manage_options » sont tolérées).
-check( 'Aucune ability ne dépend de manage_options', false === strpos( $src, "'manage_options'" ), $failures, $checks );
+/* --- 7. Aucune PERMISSION D'ABILITY ne dépend de manage_options (capacités dédiées) --- */
+// manage_options reste légitime pour la page d'admin (register/render) ; on cible uniquement
+// les permission_callback des abilities et les gardes internes d'écriture.
+$perm_manage    = preg_match( '/function mcp_can_(read|write)[\s\S]{0,140}manage_options/', $src );
+$guard_manage   = preg_match( "/current_user_can\(\s*'manage_options'\s*\)[\s\S]{0,80}acdc_mcp_forbidden/", $src );
+$permcb_manage  = preg_match( "/'permission_callback'\s*=>[\s\S]{0,80}manage_options/", $src );
+check( 'Aucune permission d\'ability ne dépend de manage_options', ! $perm_manage && ! $guard_manage && ! $permcb_manage, $failures, $checks );
 
 /* --- 7b. Permissions adossées aux capacités dédiées acdc_mcp_read / acdc_mcp_write --- */
 check( 'mcp_can_read → acdc_mcp_read', (bool) preg_match( "/function mcp_can_read[\s\S]{0,160}current_user_can\(\s*'acdc_mcp_read'\s*\)/", $src ), $failures, $checks );
