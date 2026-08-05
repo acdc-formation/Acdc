@@ -92,8 +92,39 @@ $hardcoded_true = preg_match( "/'permission_callback'\s*=>\s*(true|'__return_tru
 	|| false !== strpos( $src, '__return_true' );
 check( 'Aucun permission_callback = true en dur', ! $hardcoded_true, $failures, $checks );
 
-/* --- 7. Permissions basées sur current_user_can --- */
-check( 'Permissions basées sur current_user_can', false !== strpos( $src, "current_user_can( 'manage_options' )" ), $failures, $checks );
+/* --- 7. Aucune dépendance à manage_options (capacités DÉDIÉES uniquement) --- */
+// On cible la capacité en tant qu'argument (les mentions en commentaire « jamais manage_options » sont tolérées).
+check( 'Aucune ability ne dépend de manage_options', false === strpos( $src, "'manage_options'" ), $failures, $checks );
+
+/* --- 7b. Permissions adossées aux capacités dédiées acdc_mcp_read / acdc_mcp_write --- */
+check( 'mcp_can_read → acdc_mcp_read', (bool) preg_match( "/function mcp_can_read[\s\S]{0,160}current_user_can\(\s*'acdc_mcp_read'\s*\)/", $src ), $failures, $checks );
+check( 'mcp_can_write → acdc_mcp_write', (bool) preg_match( "/function mcp_can_write[\s\S]{0,160}current_user_can\(\s*'acdc_mcp_write'\s*\)/", $src ), $failures, $checks );
+
+/* --- 7c. Rattachement par lot : 8 abilities en lecture, 3 en écriture --- */
+$n_read_bind  = preg_match_all( "/array\(\s*\\\$this,\s*'mcp_can_read'\s*\)/", $src );
+$n_write_bind = preg_match_all( "/array\(\s*\\\$this,\s*'mcp_can_write'\s*\)/", $src );
+check( 'Lot 1 : 8 abilities rattachées à mcp_can_read (' . $n_read_bind . ')', 8 === $n_read_bind, $failures, $checks );
+check( 'Lot 2 : 3 abilities rattachées à mcp_can_write (' . $n_write_bind . ')', 3 === $n_write_bind, $failures, $checks );
+// Toutes les écritures internes vérifient acdc_mcp_write (jamais manage_options).
+check( 'Écritures internes gardées par acdc_mcp_write', 3 <= substr_count( $src, "current_user_can( 'acdc_mcp_write' )" ), $failures, $checks );
+
+/* --- 7d. Rôles : capacités correctement déclarées --- */
+$has_setup = preg_match( '/function acdc_mcp_setup_roles[\s\S]*?update_option\(\s*\'acdc_mcp_roles_version\'/', $src, $sm );
+$setup = $has_setup ? $sm[0] : '';
+check( 'Rôle acdc_mcp_agent : read + acdc_mcp_read + acdc_mcp_write',
+	false !== strpos( $setup, "'acdc_mcp_agent'" )
+	&& (bool) preg_match( "/acdc_mcp_agent[\s\S]{0,260}'read', 'acdc_mcp_read', 'acdc_mcp_write'/", $setup ),
+	$failures, $checks );
+check( 'Rôle acdc_mcp_readonly : read + acdc_mcp_read (sans write)',
+	false !== strpos( $setup, "'acdc_mcp_readonly'" )
+	&& (bool) preg_match( "/acdc_mcp_readonly[\s\S]{0,320}'read', 'acdc_mcp_read'[\s\S]{0,200}remove_cap\(\s*'acdc_mcp_write'/", $setup ),
+	$failures, $checks );
+check( 'administrator reçoit acdc_mcp_read + acdc_mcp_write',
+	(bool) preg_match( "/get_role\(\s*'administrator'\s*\)[\s\S]{0,200}add_cap\(\s*'acdc_mcp_read'\s*\)[\s\S]{0,120}add_cap\(\s*'acdc_mcp_write'\s*\)/", $setup ),
+	$failures, $checks );
+check( 'Désactivation : suppression des rôles + révocation admin',
+	(bool) preg_match( "/function acdc_mcp_remove_roles[\s\S]*?remove_role\(\s*'acdc_mcp_agent'[\s\S]*?remove_role\(\s*'acdc_mcp_readonly'[\s\S]*?remove_cap\(\s*'acdc_mcp_read'[\s\S]*?remove_cap\(\s*'acdc_mcp_write'/", $src ),
+	$failures, $checks );
 
 /* --- 8. mu-plugin garde-fou --- */
 if ( is_readable( $guard ) ) {

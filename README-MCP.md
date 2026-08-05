@@ -21,9 +21,30 @@ depuis l'environnement local (`${WP_API_USERNAME}` / `${WP_API_PASSWORD}`) :
 
 ### 2. Créer un utilisateur WordPress dédié à rôle restreint
 - Ne **pas** utiliser le compte administrateur principal.
-- Créer un utilisateur spécifique (ex. `mcp-bot`) avec le rôle le plus restreint
-  possible couvrant strictement les capacités nécessaires aux abilities exposées.
-- Ce cloisonnement limite l'impact en cas de fuite du mot de passe d'application.
+- Créer un utilisateur spécifique (ex. `mcp-bot`) et lui attribuer **l'un des
+  rôles dédiés MCP** fournis par le plugin (voir « Rôles & capacités » ci-dessous).
+- Ce cloisonnement limite l'impact en cas de fuite du mot de passe d'application :
+  l'agent ne dispose QUE des capacités MCP, pas de l'administration WordPress.
+
+#### Rôles & capacités (fournis automatiquement par le plugin)
+Le plugin déclare deux capacités dédiées — `acdc_mcp_read` (lecture) et
+`acdc_mcp_write` (écriture) — et **aucune ability n'utilise `manage_options`**.
+Trois rôles peuvent porter ces capacités :
+
+| Rôle | Capacités | Peut faire | À choisir si… |
+|------|-----------|------------|----------------|
+| **`acdc_mcp_readonly`** | `read` + `acdc_mcp_read` | Lot 1 seulement (lister/consulter formations, prospects, leads, devis, indicateurs) | L'agent doit **seulement lire** — le choix le plus sûr, recommandé par défaut. |
+| **`acdc_mcp_agent`** | `read` + `acdc_mcp_read` + `acdc_mcp_write` | Lot 1 **et** Lot 2 (créer/modifier un devis, créer un prospect ; jamais d'e-mail) | L'agent doit aussi **écrire** (devis/prospects), en préproduction. |
+| **`administrator`** | reçoit `acdc_mcp_read` + `acdc_mcp_write` | Tout | Compatibilité : l'admin garde l'accès sans configuration. |
+
+Recommandation : pour un usage MCP en préproduction, créez `mcp-bot` avec
+**`acdc_mcp_readonly`** par défaut, et ne passez à **`acdc_mcp_agent`** que
+lorsque vous voulez autoriser les écritures sûres du Lot 2.
+
+Provisionnement : les rôles/capacités sont créés à l'activation du plugin **et**
+au boot via un contrôle de version (ils apparaissent donc après simple mise à
+jour, sans réactivation). Ils sont **supprimés proprement à la désactivation**
+(rôles retirés + capacités révoquées sur `administrator`).
 
 ### 3. Générer un mot de passe d'application pour cet utilisateur
 - `Utilisateurs → (l'utilisateur dédié) → Mots de passe d'application`.

@@ -11,8 +11,11 @@
  *   - AUCUNE ability de suppression.
  *   - AUCUNE ability n'écrit sur les données financeurs, ni n'expose leurs
  *     coordonnées (aucune ability de lecture financeur n'est déclarée).
- *   - Chaque ability a un permission_callback réel (current_user_can), un
- *     input_schema et un output_schema explicites, et meta.mcp.public = true.
+ *   - Chaque ability a un permission_callback réel adossé à une capacité DÉDIÉE
+ *     (acdc_mcp_read / acdc_mcp_write — jamais manage_options), un input_schema
+ *     et un output_schema explicites, et meta.mcp.public = true.
+ *   - Rôles dédiés : acdc_mcp_agent (lecture+écriture), acdc_mcp_readonly
+ *     (lecture). L'administrateur reçoit aussi les deux capacités.
  *
  * Deux lots :
  *   - Lot 1 : lecture seule (formations, prospects, leads, devis, indicateurs).
@@ -310,14 +313,95 @@ trait ACDC_Mcp_Abilities_Trait {
 		);
 	}
 
-	/** Permission LECTURE — jamais « true » en dur. */
+	/** Permission LECTURE — capacité dédiée (jamais « true » en dur, jamais manage_options). */
 	public function mcp_can_read( $input = array() ) {
-		return current_user_can( 'manage_options' );
+		return current_user_can( 'acdc_mcp_read' );
 	}
 
-	/** Permission ÉCRITURE — jamais « true » en dur. */
+	/** Permission ÉCRITURE — capacité dédiée (jamais « true » en dur, jamais manage_options). */
 	public function mcp_can_write( $input = array() ) {
-		return current_user_can( 'manage_options' );
+		return current_user_can( 'acdc_mcp_write' );
+	}
+
+	/* ==================== CAPACITÉS & RÔLES DÉDIÉS ==================== */
+
+	/** Version du schéma de rôles/capacités MCP. Incrémenter force une re-provision au boot. */
+	private function acdc_mcp_roles_version() {
+		return '1';
+	}
+
+	/**
+	 * Provisionne (idempotent) les capacités et rôles dédiés MCP :
+	 *   - capacités : acdc_mcp_read (lecture), acdc_mcp_write (écriture) ;
+	 *   - rôle acdc_mcp_agent    : read + acdc_mcp_read + acdc_mcp_write ;
+	 *   - rôle acdc_mcp_readonly : read + acdc_mcp_read ;
+	 *   - administrator          : reçoit acdc_mcp_read + acdc_mcp_write (compat. usage actuel).
+	 * Rejouable sans effet de bord (add_role est ignoré si le rôle existe ; on force les caps).
+	 */
+	public function acdc_mcp_setup_roles() {
+		if ( ! function_exists( 'add_role' ) || ! function_exists( 'get_role' ) ) {
+			return;
+		}
+
+		// Rôle agent (lecture + écriture).
+		add_role( 'acdc_mcp_agent', 'ACDC MCP Agent', array() );
+		$agent = get_role( 'acdc_mcp_agent' );
+		if ( $agent ) {
+			foreach ( array( 'read', 'acdc_mcp_read', 'acdc_mcp_write' ) as $cap ) {
+				$agent->add_cap( $cap );
+			}
+		}
+
+		// Rôle lecture seule.
+		add_role( 'acdc_mcp_readonly', 'ACDC MCP Lecture seule', array() );
+		$readonly = get_role( 'acdc_mcp_readonly' );
+		if ( $readonly ) {
+			foreach ( array( 'read', 'acdc_mcp_read' ) as $cap ) {
+				$readonly->add_cap( $cap );
+			}
+			// Garantit que la variante « lecture seule » ne détient jamais l'écriture.
+			$readonly->remove_cap( 'acdc_mcp_write' );
+		}
+
+		// Administrateur : conserve l'accès (compatibilité avec l'usage actuel).
+		$admin = get_role( 'administrator' );
+		if ( $admin ) {
+			$admin->add_cap( 'acdc_mcp_read' );
+			$admin->add_cap( 'acdc_mcp_write' );
+		}
+
+		update_option( 'acdc_mcp_roles_version', $this->acdc_mcp_roles_version(), false );
+	}
+
+	/**
+	 * Provisionne les rôles au boot uniquement si nécessaire (check de version),
+	 * pour que le rôle apparaisse même sans réactivation du plugin.
+	 */
+	public function acdc_mcp_maybe_setup_roles() {
+		if ( get_option( 'acdc_mcp_roles_version' ) !== $this->acdc_mcp_roles_version() ) {
+			$this->acdc_mcp_setup_roles();
+		}
+	}
+
+	/**
+	 * Suppression propre des rôles/capacités MCP (désactivation du plugin).
+	 * Retire les rôles dédiés et révoque les capacités accordées à l'administrateur.
+	 */
+	public function acdc_mcp_remove_roles() {
+		if ( function_exists( 'remove_role' ) ) {
+			remove_role( 'acdc_mcp_agent' );
+			remove_role( 'acdc_mcp_readonly' );
+		}
+		if ( function_exists( 'get_role' ) ) {
+			$admin = get_role( 'administrator' );
+			if ( $admin ) {
+				$admin->remove_cap( 'acdc_mcp_read' );
+				$admin->remove_cap( 'acdc_mcp_write' );
+			}
+		}
+		if ( function_exists( 'delete_option' ) ) {
+			delete_option( 'acdc_mcp_roles_version' );
+		}
 	}
 
 	/** Schéma d'écriture partagé des devis. $creating : true = création (id interdit), false = maj (id requis). */
@@ -549,7 +633,7 @@ trait ACDC_Mcp_Abilities_Trait {
 	}
 
 	public function mcp_create_quote( $input ) {
-		if ( ! current_user_can( 'manage_options' ) ) { return new WP_Error( 'acdc_mcp_forbidden', 'Accès refusé.' ); }
+		if ( ! current_user_can( 'acdc_mcp_write' ) ) { return new WP_Error( 'acdc_mcp_forbidden', 'Accès refusé.' ); }
 		$data = $this->mcp_build_quote_data( is_array( $input ) ? $input : array() );
 		if ( empty( $data['scope'] ) ) { $data['scope'] = 'action'; }
 		if ( empty( $data['status'] ) ) { $data['status'] = 'brouillon'; }
@@ -566,7 +650,7 @@ trait ACDC_Mcp_Abilities_Trait {
 	}
 
 	public function mcp_update_quote( $input ) {
-		if ( ! current_user_can( 'manage_options' ) ) { return new WP_Error( 'acdc_mcp_forbidden', 'Accès refusé.' ); }
+		if ( ! current_user_can( 'acdc_mcp_write' ) ) { return new WP_Error( 'acdc_mcp_forbidden', 'Accès refusé.' ); }
 		$id = isset( $input['id'] ) ? (int) $input['id'] : 0;
 		if ( ! $id || ! $this->get_quote( $id ) ) { return new WP_Error( 'acdc_mcp_not_found', 'Devis introuvable.' ); }
 		$data = $this->mcp_build_quote_data( is_array( $input ) ? $input : array() );
@@ -577,7 +661,7 @@ trait ACDC_Mcp_Abilities_Trait {
 	}
 
 	public function mcp_create_prospect( $input ) {
-		if ( ! current_user_can( 'manage_options' ) ) { return new WP_Error( 'acdc_mcp_forbidden', 'Accès refusé.' ); }
+		if ( ! current_user_can( 'acdc_mcp_write' ) ) { return new WP_Error( 'acdc_mcp_forbidden', 'Accès refusé.' ); }
 		$input = is_array( $input ) ? $input : array();
 
 		$profile_type = sanitize_text_field( (string) ( $input['profile_type'] ?? '' ) );

@@ -157,12 +157,21 @@ class ACDC_Formation_SAAS_Plugin {
     $plugin = self::get_instance();
     $plugin->install_or_update();
     $plugin->ensure_default_pages();
+    /* ACDC 3.25.144 — Provisionne les rôles/capacités MCP dédiés. */
+    if ( method_exists( $plugin, 'acdc_mcp_setup_roles' ) ) {
+      $plugin->acdc_mcp_setup_roles();
+    }
     flush_rewrite_rules();
   }
 
   public static function deactivate() {
     if ( function_exists( 'delete_transient' ) ) {
       delete_transient( 'acdc_of_saas_runtime_notice' );
+    }
+    /* ACDC 3.25.144 — Suppression propre des rôles/capacités MCP dédiés. */
+    $plugin = self::get_instance();
+    if ( method_exists( $plugin, 'acdc_mcp_remove_roles' ) ) {
+      $plugin->acdc_mcp_remove_roles();
     }
     flush_rewrite_rules();
   }
@@ -557,6 +566,8 @@ class ACDC_Formation_SAAS_Plugin {
        idempotente, donc s'exécuter sur les deux ne provoque aucun double enregistrement. */
     add_action( 'abilities_api_init',    array( $this, 'register_mcp_abilities' ) );
     add_action( 'wp_abilities_api_init', array( $this, 'register_mcp_abilities' ) );
+    /* Provisionne les rôles/capacités MCP au boot si la version diffère (sans réactivation). */
+    add_action( 'init', array( $this, 'acdc_mcp_maybe_setup_roles' ) );
 
     add_action( 'admin_post_acdc_download_quote_document', array( $this, 'handle_download_quote_document' ) );
     add_action( 'admin_post_acdc_download_quote_pdf',      array( $this, 'handle_download_quote_pdf' ) );
