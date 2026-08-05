@@ -24,6 +24,48 @@
     return $wpdb->get_results( "SELECT * FROM {$this->prospect_table} ORDER BY created_at DESC, id DESC" );
   }
 
+  /**
+   * Persistance d'un prospect (insertion ou mise à jour), sans aucun envoi d'e-mail.
+   * Centralise l'assurance-schéma + insert/update + relance sur colonne inconnue, afin
+   * d'être réutilisée à la fois par handle_save_prospect() (formulaire) et par le module MCP.
+   *
+   * @param array $data        Colonnes déjà nettoyées à écrire.
+   * @param int   $prospect_id 0 pour créer, sinon l'ID à mettre à jour.
+   * @return array{ok:bool,id:int} Résultat : succès + identifiant final.
+   */
+  protected function persist_prospect_record( array $data, $prospect_id = 0 ) {
+    $prospect_id = (int) $prospect_id;
+    $this->ensure_storage_ready();
+    $this->ensure_prospect_schema_integrity();
+    global $wpdb;
+    $now = current_time( 'mysql' );
+
+    if ( $prospect_id ) {
+      $data['updated_at'] = $now;
+      $result = $wpdb->update( $this->prospect_table, $data, array( 'id' => $prospect_id ) );
+    } else {
+      $data['created_at'] = $now;
+      $data['updated_at'] = $now;
+      $result = $wpdb->insert( $this->prospect_table, $data );
+      $prospect_id = (int) $wpdb->insert_id;
+    }
+
+    if ( false === $result ) {
+      $db_error = (string) $wpdb->last_error;
+      if ( false !== stripos( $db_error, 'Unknown column' ) || false !== stripos( $db_error, "doesn't exist" ) ) {
+        $this->ensure_prospect_schema_integrity();
+        if ( $prospect_id ) {
+          $result = $wpdb->update( $this->prospect_table, $data, array( 'id' => $prospect_id ) );
+        } else {
+          $result = $wpdb->insert( $this->prospect_table, $data );
+          $prospect_id = (int) $wpdb->insert_id;
+        }
+      }
+    }
+
+    return array( 'ok' => ( false !== $result ), 'id' => $prospect_id );
+  }
+
 
   /**
    * Version paginée de la liste des prospects (bornage par page, côté SQL).

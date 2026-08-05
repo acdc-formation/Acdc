@@ -219,42 +219,20 @@ public function handle_save_prospect() {
     $data['accessibility_needs'] = '';
   }
 
-  $this->ensure_storage_ready();
-  $this->ensure_prospect_schema_integrity();
-  global $wpdb;
-  $now = current_time( 'mysql' );
+  $is_update     = (bool) $prospect_id;
+  $message       = $is_update ? 'Prospect mis à jour.' : 'Prospect créé.';
+  $error_context = $is_update ? 'Impossible de mettre à jour le prospect.' : 'Impossible de créer le prospect.';
 
-  if ( $prospect_id ) {
-    $data['updated_at'] = $now;
-    $result = $wpdb->update( $this->prospect_table, $data, array( 'id' => $prospect_id ) );
-    $message = 'Prospect mis à jour.';
-    $error_context = 'Impossible de mettre à jour le prospect.';
-  } else {
-    $data['created_at'] = $now;
-    $data['updated_at'] = $now;
-    $result = $wpdb->insert( $this->prospect_table, $data );
-    $prospect_id = (int) $wpdb->insert_id;
-    $message = 'Prospect créé.';
-    $error_context = 'Impossible de créer le prospect.';
-  }
+  /* Persistance mutualisée (même logique réutilisée par le module MCP), sans envoi d'e-mail. */
+  $persist     = $this->persist_prospect_record( $data, $prospect_id );
+  $prospect_id = (int) $persist['id'];
+  /* Conserve la sémantique « résultat BDD » attendue par le reste du flux (cascade + redirection). */
+  $result      = $persist['ok'] ? ( $prospect_id ?: true ) : false;
 
-  if ( false === $result ) {
-    $db_error = (string) $wpdb->last_error;
-    if ( false !== stripos( $db_error, 'Unknown column' ) || false !== stripos( $db_error, "doesn't exist" ) ) {
-      $this->ensure_prospect_schema_integrity();
-      if ( $prospect_id ) {
-        $result = $wpdb->update( $this->prospect_table, $data, array( 'id' => $prospect_id ) );
-      } else {
-        $result = $wpdb->insert( $this->prospect_table, $data );
-        $prospect_id = (int) $wpdb->insert_id;
-      }
-    }
-
-    if ( false === $result ) {
-      $this->store_prospect_form_state( $input );
-      $this->log_prospect_save_failure( $error_context, $prospect_id, $data );
-      $this->redirect_to_portal( 'prospects', $error_context . ' Une erreur technique est survenue.', 'error', $target_args );
-    }
+  if ( ! $persist['ok'] ) {
+    $this->store_prospect_form_state( $input );
+    $this->log_prospect_save_failure( $error_context, $prospect_id, $data );
+    $this->redirect_to_portal( 'prospects', $error_context . ' Une erreur technique est survenue.', 'error', $target_args );
   }
 
   if ( 'needs' === $redirect_to || 'recueil_besoins' === $redirect_to ) {

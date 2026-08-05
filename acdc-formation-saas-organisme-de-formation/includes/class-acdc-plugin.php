@@ -67,6 +67,8 @@ class ACDC_Formation_SAAS_Plugin {
   use ACDC_Trainer_Portal_Results_Render_Trait;
   use ACDC_Kernel_Core_Trait;
   use ACDC_Kernel_Actions_Trait;
+  /* ACDC 3.25.144 — Module MCP : abilities exposées via mcp-adapter. */
+  use ACDC_Mcp_Abilities_Trait;
   /* ACDC 3.23.11 — Module veille automatisée IA (V1→V6). */
   use ACDC_Watch_Core_Trait;
   use ACDC_Watch_AI_Trait;
@@ -550,6 +552,9 @@ class ACDC_Formation_SAAS_Plugin {
     add_action( 'admin_post_acdc_save_funder_survey', array( $this, 'handle_save_funder_survey' ) );
     add_action( 'admin_post_acdc_delete_funder_survey', array( $this, 'handle_delete_funder_survey' ) );
     add_action( 'admin_post_acdc_create_funder_survey_from_model', array( $this, 'handle_create_funder_survey_from_model' ) );
+    /* ACDC 3.25.144 — Enregistrement des abilities MCP (API WordPress Abilities). */
+    add_action( 'wp_abilities_api_init', array( $this, 'register_mcp_abilities' ) );
+
     add_action( 'admin_post_acdc_download_quote_document', array( $this, 'handle_download_quote_document' ) );
     add_action( 'admin_post_acdc_download_quote_pdf',      array( $this, 'handle_download_quote_pdf' ) );
     add_action( 'admin_post_acdc_save_quote',             array( $this, 'handle_save_quote' ) );
