@@ -1,2 +1,5 @@
 # Artefacts de build du plugin (générés à la demande)
 *.zip
+
+# Logs runtime éventuels d'un proxy MCP local (jamais versionnés)
+.mcp-logs/
