@@ -1,5 +1,2 @@
 # Artefacts de build du plugin (générés à la demande)
 *.zip
-
-# Logs du serveur MCP (contiennent potentiellement des données de session)
-.mcp-logs/

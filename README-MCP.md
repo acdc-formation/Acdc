@@ -3,15 +3,36 @@
 Ce dépôt fournit une configuration MCP (`.mcp.json`, scope projet) pour piloter le
 site **https://acdcformation.com**. La bibliothèque **WordPress/mcp-adapter est
 intégrée DANS le plugin ACDC** (vendorisée, v0.5.0) : **aucun plugin séparé à
-installer/activer**. Le site étant distant, l'accès passe par le proxy officiel
-`@automattic/mcp-wordpress-remote` (STDIO/wp-cli impossible à distance).
+installer/activer**.
 
-Endpoint MCP exposé par le plugin (transport REST) :
+**Connexion HTTP directe (native), sans proxy.** Le plugin expose un vrai endpoint
+MCP streamable-HTTP ; Claude Code s'y connecte en direct via un serveur `.mcp.json`
+de `type: http`. Le proxy `@automattic/mcp-wordpress-remote` **n'est plus utilisé**
+(il visait les endpoints du plugin Automattic, pas notre namespace REST custom).
+
+Endpoint MCP exposé par le plugin :
 **`https://acdcformation.com/wp-json/acdc-mcp/v1/mcp`**
 
-Le serveur déclaré côté Claude est `wordpress-acdc`. Il lit ses identifiants
-**uniquement** depuis l'environnement local (`${WP_API_USERNAME}` /
-`${WP_API_PASSWORD}`) : **aucun secret n'est stocké dans le dépôt.**
+Authentification par **mot de passe d'application WordPress** (HTTP Basic). La
+valeur Basic est lue **uniquement** depuis la variable d'environnement
+`${ACDC_MCP_BASIC}`, développée par Claude Code **à l'intérieur du header**
+`Authorization` — **aucun secret n'est stocké dans le dépôt** :
+
+```json
+{
+  "mcpServers": {
+    "wordpress-acdc": {
+      "type": "http",
+      "url": "https://acdcformation.com/wp-json/acdc-mcp/v1/mcp",
+      "headers": { "Authorization": "Basic ${ACDC_MCP_BASIC}" }
+    }
+  }
+}
+```
+
+> La substitution `${VAR}` dans les `headers` est **officiellement supportée** par
+> Claude Code (doc MCP : « Environment variables can be expanded in … `headers`:
+> for HTTP server authentication »).
 
 Le serveur MCP n'expose **que la liste blanche explicite de nos 11 abilities**
 (8 lecture + 3 écritures sûres) — pas de découverte automatique des abilities du
@@ -62,43 +83,51 @@ jour, sans réactivation). Ils sont **supprimés proprement à la désactivation
 - Saisir un nom (ex. `mcp-remote`), générer, **copier la valeur affichée une seule fois**.
 - Ce mot de passe d'application (et non le mot de passe de connexion) sert d'identifiant API.
 
-### 4. Exporter les identifiants dans l'environnement local (jamais dans le dépôt)
-Dans le shell depuis lequel vous lancez `claude` :
+### 4. Stocker le mot de passe dans le Keychain macOS (jamais en clair dans un fichier)
+Le secret vit **uniquement** dans le trousseau macOS. La variable `ACDC_MCP_BASIC`
+(= Base64 de `identifiant:motdepasse`) est reconstruite au vol depuis le Keychain,
+sans jamais écrire le mot de passe dans un fichier.
 
 ```bash
-export WP_API_USERNAME="mcp-bot"
-export WP_API_PASSWORD="xxxx xxxx xxxx xxxx xxxx xxxx"   # le mot de passe d'application
+# a) Enregistrer le mot de passe d'application dans le Keychain (invite masquée : collez-le puis Entrée)
+security add-generic-password -a mcp-bot -s acdc-mcp -U -w
+
+# b) Exporter la valeur Basic pour la session courante (lue depuis le Keychain, espaces retirés)
+export ACDC_MCP_BASIC="$(printf '%s:%s' mcp-bot "$(security find-generic-password -a mcp-bot -s acdc-mcp -w | tr -d ' ')" | base64)"
 ```
 
-> Ne jamais committer ces valeurs, ne pas les coller dans `.mcp.json`.
-> Astuce : placez-les dans un fichier non versionné hors dépôt (ex. `~/.acdc-mcp.env`)
-> chargé manuellement (`source ~/.acdc-mcp.env`).
+Pour la rendre permanente (aucune valeur secrète écrite — seulement une lecture du
+Keychain), ajoutez la ligne `b)` à `~/.zshrc`.
 
-### 5. Vérifier que le namespace `acdc-mcp/v1` est bien exposé
-Avant tout test, contrôler que le plugin publie son serveur MCP :
-
+### 5. Vérifier la connexion
 ```bash
+# Le namespace doit apparaître (déjà OK sur le site) :
 curl -s https://acdcformation.com/wp-json/ | grep -o 'acdc-mcp/[^"]*' | sort -u
+
+# Depuis la racine du dépôt : approuver puis lister
+claude          # approuver « wordpress-acdc » à la 1re utilisation (ou via /mcp)
+claude mcp list # attendu : wordpress-acdc … ✔ Connected
 ```
 
-Le namespace `acdc-mcp/v1` doit apparaître (il est **absent** tant que le plugin
-ACDC ≥ 3.25.146 n'est pas actif, ou si l'API Abilities n'est pas chargée).
-L'endpoint MCP est : `https://acdcformation.com/wp-json/acdc-mcp/v1/mcp`.
+`claude mcp list` doit afficher `wordpress-acdc: https://acdcformation.com/wp-json/acdc-mcp/v1/mcp (HTTP) - ✔ Connected`.
+Le compte `mcp-bot` (rôle *ACDC MCP Lecture seule*) donne accès aux 8 abilities de
+lecture ; les 3 écritures nécessitent le rôle `acdc_mcp_agent`.
 
-### 6. Lancer Claude et approuver le serveur
-- Lancer `claude` à la racine du dépôt.
-- Approuver le serveur `wordpress-acdc` (scope projet → approbation requise à la
-  première utilisation), ou via `/mcp`.
-- Vérifier ensuite avec `claude mcp list` que le statut passe à *connected*.
+### 6. Révoquer proprement (en cas de fuite)
+```bash
+# 1) WordPress : Utilisateurs → mcp-bot → Mots de passe d'application → Révoquer « claude »
+# 2) Supprimer le secret du Keychain :
+security delete-generic-password -a mcp-bot -s acdc-mcp
+# 3) Purger la variable de la session (et retirer la ligne de ~/.zshrc si ajoutée) :
+unset ACDC_MCP_BASIC
+```
 
 ---
 
-## Journalisation
-Les logs du proxy sont écrits dans `./.mcp-logs/mcp-adapter.log`
-(dossier **ignoré par Git**, voir `.gitignore`).
-
 ## Rappel sécurité
-- Aucun identifiant en clair dans le dépôt : seules les références `${WP_API_USERNAME}`
-  et `${WP_API_PASSWORD}` figurent dans `.mcp.json`.
-- Révoquer le mot de passe d'application depuis WordPress en cas de doute
-  (`Utilisateurs → Mots de passe d'application → Révoquer`).
+- **Aucun secret dans le dépôt** : `.mcp.json` ne contient que la référence
+  `${ACDC_MCP_BASIC}`. Le mot de passe d'application ne vit que dans le Keychain.
+- La révocation WordPress (étape 6.1) invalide immédiatement l'accès, même si la
+  variable d'environnement subsiste.
+- HTTPS obligatoire (Basic auth) — l'endpoint refuse déjà les requêtes non
+  authentifiées (`401 rest_forbidden`).
