@@ -87,6 +87,7 @@ trait ACDC_Documents_Billing_Core_Trait {
     $this->maybe_add_table_column( $this->quote_table, 'signature_status',     "VARCHAR(30) NOT NULL DEFAULT ''" );
     // SIRET du client (commanditaire) — pour l'afficher sur le devis.
     $this->maybe_add_table_column( $this->quote_table, 'client_siret',         "VARCHAR(20) NOT NULL DEFAULT ''" );
+    $this->maybe_add_table_column( $this->quote_table, 'client_signature_path', "VARCHAR(255) NOT NULL DEFAULT ''" );
   }
 
   private function get_quotes( $args = array() ) {
@@ -247,6 +248,7 @@ trait ACDC_Documents_Billing_Core_Trait {
       'apprenant'           => (string) $q->apprenant_name,
       'client_company'      => (string) $q->client_company,
       'client_siret'        => isset( $q->client_siret ) ? (string) $q->client_siret : '',
+      'client_signature_uri' => ( ! empty( $q->client_signature_path ) && file_exists( (string) $q->client_signature_path ) ) ? $this->quote_file_to_data_uri( (string) $q->client_signature_path ) : '',
       'client_contact'      => (string) $q->apprenant_name,
       'client_address_full' => trim( (string) $q->client_address . ( ! empty( $q->client_address_complement ) ? ' ' . $q->client_address_complement : '' ) ),
       'client_postal_city'  => trim( $q->client_postal_code . ' ' . $q->client_city ),
@@ -1101,7 +1103,14 @@ trait ACDC_Documents_Billing_Core_Trait {
     <div style="position:absolute;right:21mm;bottom:22mm;width:calc(50% - 26mm);">
       <div style="font-size:7pt;font-weight:700;text-transform:uppercase;letter-spacing:.05em;color:#C5A253;margin-bottom:1mm;">Bon pour accord — Lu et approuvé</div>
       <div style="font-size:7pt;font-weight:700;text-transform:uppercase;letter-spacing:.05em;color:#C5A253;margin-bottom:5mm;">Signature</div>
+      <?php if ( ! empty( $row['client_signature_uri'] ) ) : ?>
+      <div style="display:flex;flex-direction:column;justify-content:center;align-items:center;min-height:56mm;">
+        <img src="<?php echo $row['client_signature_uri']; ?>" alt="Signature du client" style="max-width:100%;height:40mm;object-fit:contain;" />
+        <div style="font-size:7pt;color:#4b5563;margin-top:2mm;"><?php echo $this->quote_html( $client_contact ?: $client_name ); ?><?php if ( ! empty( $row['client_signed_date'] ) ) : ?> — le <?php echo $this->quote_html( $row['client_signed_date'] ); ?><?php endif; ?></div>
+      </div>
+      <?php else : ?>
       <div style="min-height:60mm;"></div>
+      <?php endif; ?>
     </div>
 
     <div class="footer">
@@ -1317,7 +1326,12 @@ trait ACDC_Documents_Billing_Core_Trait {
       </td>
       <td width="50%" valign="top">
         <div class="sig-title">Bon pour accord — Lu et approuvé</div>
-        <div class="sig-cell" style="min-height:120px;">&nbsp;</div>
+        <div class="sig-cell" style="min-height:120px;text-align:center;">
+          <?php if ( ! empty( $row['client_signature_uri'] ) ) : ?>
+            <img src="<?php echo $row['client_signature_uri']; ?>" height="90" /><br />
+            <span style="font-size:7pt;color:#4b5563;"><?php echo $this->quote_html( $client_contact ?: $client_name ); ?><?php if ( ! empty( $row['client_signed_date'] ) ) : ?> — le <?php echo $this->quote_html( $row['client_signed_date'] ); ?><?php endif; ?></span>
+          <?php else : ?>&nbsp;<?php endif; ?>
+        </div>
       </td>
     </tr>
   </table>
@@ -1603,6 +1617,20 @@ trait ACDC_Documents_Billing_Core_Trait {
     $mime = 'image/png';
     if ( 'jpg' === $ext || 'jpeg' === $ext ) { $mime = 'image/jpeg'; }
     elseif ( 'svg' === $ext ) { $mime = 'image/svg+xml'; }
+    elseif ( 'gif' === $ext ) { $mime = 'image/gif'; }
+    elseif ( 'webp' === $ext ) { $mime = 'image/webp'; }
+    return 'data:' . $mime . ';base64,' . base64_encode( $content );
+  }
+
+  /** Convertit un fichier image local (chemin disque) en data URI base64, ou '' si indisponible. */
+  private function quote_file_to_data_uri( $path ) {
+    $path = (string) $path;
+    if ( '' === $path || ! file_exists( $path ) ) { return ''; }
+    $content = @file_get_contents( $path ); // phpcs:ignore
+    if ( false === $content || '' === $content ) { return ''; }
+    $ext  = strtolower( pathinfo( $path, PATHINFO_EXTENSION ) );
+    $mime = 'image/png';
+    if ( 'jpg' === $ext || 'jpeg' === $ext ) { $mime = 'image/jpeg'; }
     elseif ( 'gif' === $ext ) { $mime = 'image/gif'; }
     elseif ( 'webp' === $ext ) { $mime = 'image/webp'; }
     return 'data:' . $mime . ';base64,' . base64_encode( $content );

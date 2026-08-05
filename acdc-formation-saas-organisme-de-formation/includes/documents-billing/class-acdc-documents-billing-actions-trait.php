@@ -1123,11 +1123,31 @@ trait ACDC_Documents_Billing_Actions_Trait {
     }
     // Récupérer l'URL du document signé (le HTML du devis, inchangé — la preuve est dans sig_requests)
     $signed_url = ! empty( $quote->html_url ) ? esc_url_raw( (string) $quote->html_url ) : '';
-    $wpdb->update( $this->quote_table, array(
+
+    /* Signature manuscrite du client : PNG capturé par le module de signature, comme la
+       convention. On le mémorise sur le devis pour l'apposer côté « Bon pour accord » dans
+       tous les rendus ultérieurs (PDF téléchargé + pièce jointe e-mail) → devis signé des
+       DEUX parties (organisme via le cachet + client via sa signature manuscrite). */
+    $client_sig_path = '';
+    $upload_dir_q    = wp_upload_dir();
+    $sig_dir_q       = trailingslashit( $upload_dir_q['basedir'] ) . 'acdc-signatures/' . $request_id . '/';
+    $sig_files_q     = glob( $sig_dir_q . 'signature-*.png' );
+    if ( ! empty( $sig_files_q ) ) {
+      rsort( $sig_files_q );
+      if ( file_exists( (string) $sig_files_q[0] ) ) { $client_sig_path = (string) $sig_files_q[0]; }
+    }
+
+    $update_data    = array(
       'signature_status'     => 'signée',
       'status'               => 'signe',
       'signed_document_url'  => $signed_url,
-    ), array( 'id' => $quote_id ), array( '%s', '%s', '%s' ), array( '%d' ) );
+    );
+    $update_formats = array( '%s', '%s', '%s' );
+    if ( '' !== $client_sig_path ) {
+      $update_data['client_signature_path'] = $client_sig_path;
+      $update_formats[] = '%s';
+    }
+    $wpdb->update( $this->quote_table, $update_data, array( 'id' => $quote_id ), $update_formats, array( '%d' ) );
     $signed_at   = current_time( 'mysql' );
     $profile_s   = $this->get_company_profile_options();
     $from_name_s = ! empty( $profile_s['enterprise_contact_name'] )  ? sanitize_text_field( (string) $profile_s['enterprise_contact_name'] )  : get_bloginfo( 'name' );
@@ -1166,15 +1186,18 @@ trait ACDC_Documents_Billing_Actions_Trait {
                    . '<p>Bonjour ' . esc_html( $signer_name ) . ',</p>'
                    . '<p>Nous confirmons la signature électronique de votre devis <strong>' . esc_html( $quote_num ) . '</strong>, le ' . esc_html( mysql2date( 'd/m/Y à H\hi', $signed_at ) ) . '.</p>'
                    . $cta_client
-                   . '<p>Vous trouverez votre devis au format PDF en pièce jointe.</p>'
+                   . '<p>Vous trouverez en pièce jointe votre devis au format PDF, signé par les deux parties (organisme et client).</p>'
                    . '<p>Merci de votre confiance.</p>'
                    . '</div>';
 
-      /* Pièce jointe : vrai fichier PDF du devis (gabarit mPDF dédié). */
+      /* Pièce jointe : vrai fichier PDF du devis (gabarit mPDF dédié), signé des deux parties.
+         On relit le devis pour que la ligne intègre la signature manuscrite du client. */
       $attachments = array();
       $tmp_pdf     = '';
       if ( method_exists( $this, 'build_quote_pdf' ) ) {
-        $row_pdf = $this->build_quote_row_from_record( $quote );
+        $quote_signed = $this->get_quote( $quote_id ) ?: $quote;
+        $row_pdf = $this->build_quote_row_from_record( $quote_signed );
+        $row_pdf['client_signed_date'] = mysql2date( 'd/m/Y', $signed_at );
         $pdf_bin = $this->build_quote_pdf( $row_pdf );
         if ( '' !== (string) $pdf_bin ) {
           $tmp_pdf = trailingslashit( sys_get_temp_dir() ) . 'devis-' . sanitize_file_name( $quote_num ) . '.pdf';
