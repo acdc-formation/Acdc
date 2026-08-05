@@ -1,23 +1,34 @@
 # MCP — Accès distant au site WordPress ACDC (transport HTTP)
 
 Ce dépôt fournit une configuration MCP (`.mcp.json`, scope projet) pour piloter le
-site **https://acdcformation.com** via le plugin **WordPress `mcp-adapter`**, en
-utilisant le proxy officiel `@automattic/mcp-wordpress-remote` (le site étant
-distant, le transport STDIO/wp-cli n'est pas possible).
+site **https://acdcformation.com**. La bibliothèque **WordPress/mcp-adapter est
+intégrée DANS le plugin ACDC** (vendorisée, v0.5.0) : **aucun plugin séparé à
+installer/activer**. Le site étant distant, l'accès passe par le proxy officiel
+`@automattic/mcp-wordpress-remote` (STDIO/wp-cli impossible à distance).
 
-Le serveur déclaré est `wordpress-acdc`. Il lit ses identifiants **uniquement**
-depuis l'environnement local (`${WP_API_USERNAME}` / `${WP_API_PASSWORD}`) :
-**aucun secret n'est stocké dans le dépôt.**
+Endpoint MCP exposé par le plugin (transport REST) :
+**`https://acdcformation.com/wp-json/acdc-mcp/v1/mcp`**
+
+Le serveur déclaré côté Claude est `wordpress-acdc`. Il lit ses identifiants
+**uniquement** depuis l'environnement local (`${WP_API_USERNAME}` /
+`${WP_API_PASSWORD}`) : **aucun secret n'est stocké dans le dépôt.**
+
+Le serveur MCP n'expose **que la liste blanche explicite de nos 11 abilities**
+(8 lecture + 3 écritures sûres) — pas de découverte automatique des abilities du
+site (le serveur « par défaut » de la bibliothèque est désactivé).
 
 ---
 
 ## Marche à suivre
 
-### 1. Installer et activer le plugin `mcp-adapter` sur le site
-- Récupérer l'archive : `https://github.com/WordPress/mcp-adapter/releases/latest/download/mcp-adapter.zip`
-- L'installer via `Extensions → Ajouter → Téléverser`, puis **l'activer**.
-- Prérequis déjà vérifiés sur le site : WordPress 7.0.2, namespace `wp-abilities/v1`
-  présent, mots de passe d'application actifs.
+### 1. Déployer le plugin ACDC (la bibliothèque MCP est incluse)
+- Installer/mettre à jour le plugin **ACDC ≥ 3.25.146** (`Extensions → Ajouter →
+  Téléverser`). La bibliothèque `mcp-adapter` est **embarquée** — rien d'autre à
+  installer.
+- Prérequis site (déjà vérifiés) : WordPress 7.0.2, **API Abilities présente**
+  (namespace `wp-abilities/v1`), mots de passe d'application actifs.
+- Le plugin **Automattic « WordPress MCP » n'est PAS utilisé** (il n'utilise pas
+  l'API Abilities) : le laisser **inactif**.
 
 ### 2. Créer un utilisateur WordPress dédié à rôle restreint
 - Ne **pas** utiliser le compte administrateur principal.
@@ -63,16 +74,16 @@ export WP_API_PASSWORD="xxxx xxxx xxxx xxxx xxxx xxxx"   # le mot de passe d'app
 > Astuce : placez-les dans un fichier non versionné hors dépôt (ex. `~/.acdc-mcp.env`)
 > chargé manuellement (`source ~/.acdc-mcp.env`).
 
-### 5. Vérifier que le namespace `mcp/` est bien exposé
-Avant tout test, contrôler que l'adaptateur est actif et publie ses routes :
+### 5. Vérifier que le namespace `acdc-mcp/v1` est bien exposé
+Avant tout test, contrôler que le plugin publie son serveur MCP :
 
 ```bash
-curl -s https://acdcformation.com/wp-json/ | grep -o 'mcp/[^"]*' | sort -u
+curl -s https://acdcformation.com/wp-json/ | grep -o 'acdc-mcp/[^"]*' | sort -u
 ```
 
-Le namespace `mcp/` doit apparaître (il est **absent** tant que le plugin
-`mcp-adapter` n'est pas activé). L'URL configurée pour le serveur est :
-`https://acdcformation.com/wp-json/mcp/mcp-adapter-default-server`.
+Le namespace `acdc-mcp/v1` doit apparaître (il est **absent** tant que le plugin
+ACDC ≥ 3.25.146 n'est pas actif, ou si l'API Abilities n'est pas chargée).
+L'endpoint MCP est : `https://acdcformation.com/wp-json/acdc-mcp/v1/mcp`.
 
 ### 6. Lancer Claude et approuver le serveur
 - Lancer `claude` à la racine du dépôt.

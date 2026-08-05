@@ -19,6 +19,8 @@
 $root = dirname( __DIR__ );
 $plugin = $root . '/acdc-formation-saas-organisme-de-formation';
 $trait = $plugin . '/includes/mcp/class-acdc-mcp-abilities-trait.php';
+$server = $plugin . '/includes/mcp/class-acdc-mcp-server.php';
+$vendor = $plugin . '/includes/vendor/mcp-adapter';
 $guard = $root . '/mu-plugins/acdc-preprod-mail-guard.php';
 
 $failures = 0;
@@ -33,8 +35,10 @@ function check( $label, $ok, &$failures, &$checks ) {
 /* --- 1. Lint PHP des fichiers du module --- */
 $lint_targets = array(
 	$trait,
+	$server,
 	$guard,
 	$plugin . '/includes/class-acdc-mcp.php',
+	$plugin . '/includes/vendor/mcp-adapter/autoload.php',
 	$plugin . '/includes/crm-commercial/class-acdc-crm-commercial-core-trait.php',
 	$plugin . '/includes/crm-commercial/class-acdc-crm-commercial-actions-trait.php',
 );
@@ -125,6 +129,66 @@ check( 'administrator reçoit acdc_mcp_read + acdc_mcp_write',
 check( 'Désactivation : suppression des rôles + révocation admin',
 	(bool) preg_match( "/function acdc_mcp_remove_roles[\s\S]*?remove_role\(\s*'acdc_mcp_agent'[\s\S]*?remove_role\(\s*'acdc_mcp_readonly'[\s\S]*?remove_cap\(\s*'acdc_mcp_read'[\s\S]*?remove_cap\(\s*'acdc_mcp_write'/", $src ),
 	$failures, $checks );
+
+/* --- 8bis. Bibliothèque mcp-adapter vendorisée + serveur MCP intégré --- */
+$has_lib = is_file( $vendor . '/autoload.php' )
+	&& is_file( $vendor . '/mcp-adapter/includes/Core/McpAdapter.php' )
+	&& is_file( $vendor . '/mcp-adapter/includes/Transport/HttpTransport.php' )
+	&& is_dir( $vendor . '/php-mcp-schema/src' );
+check( 'Bibliothèque mcp-adapter vendorisée présente', $has_lib, $failures, $checks );
+
+// L'autoloader vendorisé résout réellement les classes clés (hors WordPress).
+$autoload_ok = false;
+if ( is_file( $vendor . '/autoload.php' ) ) {
+	$probe = 'define("ABSPATH","/tmp/"); require ' . var_export( $vendor . '/autoload.php', true ) . ';'
+		. ' exit( class_exists("\\\\WP\\\\MCP\\\\Core\\\\McpAdapter") && class_exists("\\\\WP\\\\MCP\\\\Transport\\\\HttpTransport") ? 0 : 1 );';
+	$out = array(); $code = 0;
+	exec( 'php -r ' . escapeshellarg( $probe ) . ' 2>/dev/null', $out, $code );
+	$autoload_ok = ( 0 === $code );
+}
+check( 'Autoloader vendorisé résout McpAdapter + HttpTransport', $autoload_ok, $failures, $checks );
+
+if ( is_readable( $server ) ) {
+	$srv = file_get_contents( $server );
+
+	// Création du serveur : create_server appelé, transport REST HttpTransport, error handler.
+	check( 'Serveur : create_server() appelé', false !== strpos( $srv, '->create_server(' ), $failures, $checks );
+	check( 'Serveur : transport REST HttpTransport', false !== strpos( $srv, 'Transport\\HttpTransport::class' ), $failures, $checks );
+	check( 'Serveur : hook mcp_adapter_init', false !== strpos( $srv, "add_action( 'mcp_adapter_init'" ), $failures, $checks );
+
+	// Pas de découverte automatique : serveur par défaut désactivé.
+	check( 'Serveur : découverte auto désactivée (default server off)',
+		false !== strpos( $srv, "add_filter( 'mcp_adapter_create_default_server', '__return_false' )" ), $failures, $checks );
+
+	// Défensif : gardes class_exists/method_exists.
+	check( 'Serveur : gardes défensives (class_exists/method_exists)',
+		false !== strpos( $srv, 'class_exists( \'\\WP\\MCP\\Core\\McpAdapter\' )' ) && false !== strpos( $srv, 'method_exists( $adapter' ),
+		$failures, $checks );
+
+	// Liste blanche : EXACTEMENT 11 abilities acdc-of/*, et ZÉRO ability d'e-mail.
+	if ( preg_match( '/const ABILITIES = array\(([\s\S]*?)\);/', $srv, $wl ) ) {
+		$whitelist = $wl[1];
+		$n_wl   = preg_match_all( "/'acdc-of\/[a-z-]+'/", $whitelist, $wlm );
+		$names  = array_map( function ( $s ) { return trim( $s, "'" ); }, $wlm[0] );
+		$expected = array(
+			'acdc-of/list-formations', 'acdc-of/get-formation', 'acdc-of/list-prospects',
+			'acdc-of/get-prospect', 'acdc-of/list-leads', 'acdc-of/list-quotes',
+			'acdc-of/get-quote', 'acdc-of/get-indicators',
+			'acdc-of/create-quote', 'acdc-of/update-quote', 'acdc-of/create-prospect',
+		);
+		sort( $names );
+		$exp = $expected; sort( $exp );
+		check( 'Liste blanche : exactement 11 abilities', 11 === $n_wl, $failures, $checks );
+		check( 'Liste blanche : correspond aux 11 abilities attendues (8 lecture + 3 écriture)', $names === $exp, $failures, $checks );
+		// Aucune ability d'e-mail : aucun nom évoquant un envoi (send/email/mail/notify/relance).
+		$email_like = preg_grep( '/(send|email|mail|notify|relance|funder|financeur)/i', $names );
+		check( 'Liste blanche : zéro ability d\'e-mail / financeur', empty( $email_like ), $failures, $checks );
+	} else {
+		check( 'Liste blanche : bloc ABILITIES trouvé', false, $failures, $checks );
+	}
+} else {
+	check( 'class-acdc-mcp-server.php présent', false, $failures, $checks );
+}
 
 /* --- 8. mu-plugin garde-fou --- */
 if ( is_readable( $guard ) ) {
