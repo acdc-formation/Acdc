@@ -28,13 +28,24 @@ if ( ! defined( 'ABSPATH' ) ) {
 
 trait ACDC_Mcp_Abilities_Trait {
 
+	/** Garde d'idempotence : empêche un double enregistrement si les deux hooks se déclenchent. */
+	private $acdc_mcp_abilities_registered = false;
+
 	/**
-	 * Enregistre toutes les abilities ACDC. Branché sur wp_abilities_api_init.
+	 * Enregistre toutes les abilities ACDC.
+	 * Branché sur les DEUX hooks connus de l'API Abilities (abilities_api_init et
+	 * wp_abilities_api_init selon la version), avec garde d'idempotence.
 	 */
 	public function register_mcp_abilities() {
+		// Idempotence : une seule passe même si les deux hooks se déclenchent.
+		if ( $this->acdc_mcp_abilities_registered ) {
+			return;
+		}
+		// Disponibilité de l'API avant tout appel.
 		if ( ! function_exists( 'wp_register_ability' ) ) {
 			return; // API Abilities absente (plugin abilities / mcp-adapter non actifs).
 		}
+		$this->acdc_mcp_abilities_registered = true;
 
 		/* ---------------------- LOT 1 — LECTURE SEULE ---------------------- */
 

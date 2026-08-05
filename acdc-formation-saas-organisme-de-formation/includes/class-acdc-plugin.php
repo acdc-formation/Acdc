@@ -552,7 +552,10 @@ class ACDC_Formation_SAAS_Plugin {
     add_action( 'admin_post_acdc_save_funder_survey', array( $this, 'handle_save_funder_survey' ) );
     add_action( 'admin_post_acdc_delete_funder_survey', array( $this, 'handle_delete_funder_survey' ) );
     add_action( 'admin_post_acdc_create_funder_survey_from_model', array( $this, 'handle_create_funder_survey_from_model' ) );
-    /* ACDC 3.25.144 — Enregistrement des abilities MCP (API WordPress Abilities). */
+    /* ACDC 3.25.144 — Enregistrement des abilities MCP (API WordPress Abilities).
+       Les deux noms de hook existent selon la version de l'API ; la méthode est
+       idempotente, donc s'exécuter sur les deux ne provoque aucun double enregistrement. */
+    add_action( 'abilities_api_init',    array( $this, 'register_mcp_abilities' ) );
     add_action( 'wp_abilities_api_init', array( $this, 'register_mcp_abilities' ) );
 
     add_action( 'admin_post_acdc_download_quote_document', array( $this, 'handle_download_quote_document' ) );
