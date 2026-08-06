@@ -536,6 +536,18 @@ class ACDC_Sig_Public {
 
         $result = $this->core->verify_otp( $request->id, $otp_code );
 
+        /* ACDC 3.25.153 — verify_otp() est à USAGE UNIQUE : il supprime le code dès
+           qu'il l'a validé. Toute soumission en double (double clic, renvoi de
+           formulaire, requête rejouée) trouvait donc « plus de code » et repartait
+           avec otp_error=expired — alors que l'identité venait d'être vérifiée et que
+           l'étape suivante s'affichait normalement. Message d'erreur trompeur affiché
+           dans la barre d'adresse du signataire.
+           Si l'OTP est DÉJÀ marqué vérifié pour ce jeton, la vérification est un
+           succès idempotent : on ne pose pas d'erreur. */
+        if ( 'ok' !== $result && $this->core->is_otp_verified( $request->token ) ) {
+            $result = 'ok';
+        }
+
         if ( 'ok' === $result ) {
             $this->core->mark_otp_verified( $token );
             $this->core->log_event( $request->id, 'otp_verified', 'Code OTP validé.', $_SERVER['REMOTE_ADDR'] ?? '', $_SERVER['HTTP_USER_AGENT'] ?? '' );

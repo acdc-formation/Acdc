@@ -1507,6 +1507,25 @@ trait ACDC_Kernel_Actions_Trait {
     foreach ( $contract_ids as $cid ) {
       $this->acdc_purge_trainer_contract_files( (int) $cid );
     }
+
+    /* ACDC 3.25.153 — V3.8 : la suppression ne retirait QUE la ligne du formateur.
+       Le compte du portail formateur survivait, avec ses jetons et ses sessions.
+       Conséquence démontrée en recette : réutiliser la même adresse pour un nouveau
+       formateur déclenchait « Cet e-mail est déjà associé à un autre formateur », le
+       contrôle d'unicité trouvant un compte orphelin invisible depuis l'interface.
+       On purge donc l'ensemble de la chaîne : sessions → jetons → compte. */
+    $account_ids = (array) $wpdb->get_col( $wpdb->prepare(
+      "SELECT id FROM {$this->trainer_portal_account_table} WHERE trainer_id = %d",
+      $trainer_id
+    ) );
+    foreach ( $account_ids as $aid ) {
+      $aid = (int) $aid;
+      if ( ! $aid ) { continue; }
+      $wpdb->delete( $this->trainer_portal_session_table, array( 'account_id' => $aid ), array( '%d' ) );
+      $wpdb->delete( $this->trainer_portal_token_table,   array( 'account_id' => $aid ), array( '%d' ) );
+    }
+    $wpdb->delete( $this->trainer_portal_account_table, array( 'trainer_id' => $trainer_id ), array( '%d' ) );
+
     $wpdb->delete( $this->trainer_table, array( 'id' => $trainer_id ) );
     $this->redirect_to_portal( 'trainers', 'Formateur supprimé.', 'success' );
   }

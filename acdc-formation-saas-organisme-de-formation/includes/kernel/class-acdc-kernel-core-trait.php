@@ -1016,6 +1016,24 @@ private function acdc_send_transactional_email( $to, $subject, $template_args = 
       }
     }
 
+    /* ACDC 3.25.153 — V3.8 : purger les comptes de portail formateur ORPHELINS,
+       c'est-à-dire rattachés à un formateur qui n'existe plus. Ils bloquaient la
+       réutilisation d'une adresse e-mail (« déjà associé à un autre formateur »)
+       tout en restant invisibles depuis l'interface. */
+    $acdc_pa = $wpdb->prefix . 'acdc_of_trainer_portal_accounts';
+    $acdc_tr = $wpdb->prefix . 'acdc_of_trainers';
+    if ( $acdc_pa === $wpdb->get_var( $wpdb->prepare( 'SHOW TABLES LIKE %s', $acdc_pa ) ) ) {
+      $acdc_orphans = (array) $wpdb->get_col(
+        "SELECT a.id FROM {$acdc_pa} a LEFT JOIN {$acdc_tr} t ON t.id = a.trainer_id WHERE t.id IS NULL"
+      );
+      if ( ! empty( $acdc_orphans ) ) {
+        $acdc_ids = implode( ',', array_map( 'absint', $acdc_orphans ) );
+        $wpdb->query( "DELETE FROM {$wpdb->prefix}acdc_of_trainer_portal_sessions WHERE account_id IN ({$acdc_ids})" );
+        $wpdb->query( "DELETE FROM {$wpdb->prefix}acdc_of_trainer_portal_tokens   WHERE account_id IN ({$acdc_ids})" );
+        $wpdb->query( "DELETE FROM {$acdc_pa} WHERE id IN ({$acdc_ids})" );
+      }
+    }
+
     $charset_collate = $wpdb->get_charset_collate();
 
     $sql_companies = "CREATE TABLE {$this->company_table} (
