@@ -72,8 +72,21 @@ trait ACDC_Quizzes_Render_Results_Trait {
             $filter_purpose = (string) $purpose;
         }
 
-        // KPIs globaux (filtrés par finalité si on est sur un tab spécifique)
-        $kpis = $this->get_qz_results_dashboard_kpis( array( 'purpose' => $filter_purpose ) );
+        /* ACDC 3.25.157 — Filtre par quiz (?qz_quiz=), posé par l'entrée de menu
+           « Voir les résultats » de la liste des quiz. */
+        $filter_quiz  = isset( $_GET['qz_quiz'] ) ? absint( wp_unslash( $_GET['qz_quiz'] ) ) : 0;
+        $filter_quiz_title = '';
+        if ( $filter_quiz > 0 ) {
+            $filtered_quiz = $this->get_qz_quiz( $filter_quiz );
+            if ( $filtered_quiz ) {
+                $filter_quiz_title = (string) $filtered_quiz->title;
+            } else {
+                $filter_quiz = 0; // Quiz supprimé : on ne filtre pas dans le vide.
+            }
+        }
+
+        // KPIs globaux (filtrés par finalité si on est sur un tab spécifique, et par quiz si demandé)
+        $kpis = $this->get_qz_results_dashboard_kpis( array( 'purpose' => $filter_purpose, 'quiz_id' => $filter_quiz ) );
 
         // Liste des envois
         $args = array(
@@ -85,6 +98,12 @@ trait ACDC_Quizzes_Render_Results_Trait {
             $args['status'] = $filter_status;
         }
         $sessions = $this->get_qz_dispatch_sessions( $args );
+
+        if ( $filter_quiz > 0 ) {
+            $sessions = array_values( array_filter( $sessions, function( $s ) use ( $filter_quiz ) {
+                return ( (int) $s->quiz_id === $filter_quiz );
+            } ) );
+        }
 
         // Filtrer par purpose côté PHP (le SQL n'a pas de purpose direct sur sessions)
         if ( '' !== $filter_purpose ) {
@@ -132,6 +151,19 @@ trait ACDC_Quizzes_Render_Results_Trait {
             <h1 class="acdc-qz-results-hero-title"><?php echo esc_html( $title ); ?></h1>
             <p class="acdc-qz-results-hero-subline"><?php echo esc_html( $subtitle ); ?></p>
         </header>
+
+        <?php
+        /* ACDC 3.25.157 — Un écran filtré doit le dire, et offrir le retour au
+           périmètre complet : sans cela les chiffres semblent contredire ceux du
+           même écran atteint par l'onglet. */
+        if ( $filter_quiz > 0 ) :
+            $unfiltered_url = remove_query_arg( 'qz_quiz' );
+        ?>
+        <div class="acdc-qz-results-filter-banner" style="display:flex;align-items:center;gap:12px;flex-wrap:wrap;margin:0 0 16px;padding:10px 14px;border:1px solid #e6ebf2;border-radius:8px;background:#f7f9fc;font-size:13px;">
+            <span>Résultats limités au quiz <strong><?php echo esc_html( $filter_quiz_title ); ?></strong>.</span>
+            <a class="acdc-button acdc-button-soft" href="<?php echo esc_url( $unfiltered_url ); ?>">Voir tous les quiz</a>
+        </div>
+        <?php endif; ?>
 
         <?php if ( $pending_only ) : ?>
         <div style="margin:0 0 18px;padding:12px 18px;background:#fff0f0;border:1.5px solid #f5c6c6;
@@ -266,11 +298,15 @@ trait ACDC_Quizzes_Render_Results_Trait {
                             if ( 'live' === $s->quiz_purpose ) {
                                 global $wpdb;
                                 $tbl_p = $this->get_qz_table( 'participants' );
+                                /* ACDC 3.25.157 — Un score de 0 est une valeur : ni le
+                                   filtre SQL ni le test d'affichage ne doivent l'écarter,
+                                   sans quoi la colonne affiche « — » (pas de donnée) pour
+                                   une session pourtant jouée et notée. */
                                 $avg_pts = $wpdb->get_var( $wpdb->prepare(
-                                    "SELECT AVG(total_score) FROM {$tbl_p} WHERE session_id=%d AND status='completed' AND total_score IS NOT NULL AND total_score > 0",
+                                    "SELECT AVG(total_score) FROM {$tbl_p} WHERE session_id=%d AND status='completed' AND total_score IS NOT NULL",
                                     (int) $s->id
                                 ) );
-                                if ( $avg_pts !== null && $avg_pts > 0 ) {
+                                if ( null !== $avg_pts ) {
                                     $avg_display = number_format( (float) $avg_pts, 0, ',', ' ' ) . ' pts';
                                 }
                             } elseif ( null !== $s->avg_score ) {
@@ -466,9 +502,24 @@ trait ACDC_Quizzes_Render_Results_Trait {
             <p class="acdc-qz-results-hero-meta">
                 <strong>Formation :</strong> <?php echo esc_html( $session->formation_title ?? '—' ); ?>
                 &nbsp;·&nbsp;
+                <?php
+                /* ACDC 3.25.157 — « Envoyé le » et « Échéance » n'ont aucun sens pour une
+                   session live, qui n'est ni envoyée ni datée d'expiration : l'en-tête
+                   affichait deux tirets. La donnée pertinente existe — started_at — et
+                   c'est elle qu'on présente. */
+                if ( 'live' === (string) $session->quiz_purpose ) :
+                    $live_started = ! empty( $session->started_at ) ? $session->started_at : $session->created_at;
+                ?>
+                <strong>Lancé le :</strong> <?php echo esc_html( $this->qz_format_datetime( $live_started ) ); ?>
+                <?php if ( ! empty( $session->ended_at ) ) : ?>
+                &nbsp;·&nbsp;
+                <strong>Terminé le :</strong> <?php echo esc_html( $this->qz_format_datetime( $session->ended_at ) ); ?>
+                <?php endif; ?>
+                <?php else : ?>
                 <strong>Envoyé le :</strong> <?php echo esc_html( $this->qz_format_datetime( $session->sent_at ) ); ?>
                 &nbsp;·&nbsp;
                 <strong>Échéance :</strong> <?php echo esc_html( $this->qz_format_datetime( $session->expires_at ) ); ?>
+                <?php endif; ?>
             </p>
             <div class="acdc-qz-results-hero-actions">
                 <a class="acdc-button acdc-button-primary" href="<?php echo esc_url( $export_url ); ?>">
@@ -563,7 +614,9 @@ trait ACDC_Quizzes_Render_Results_Trait {
                                     <?php
                                     if ( 'live' === $session->quiz_purpose ) {
                                         // Quiz live : score en points bruts
-                                        if ( null === $p->total_score || (float) $p->total_score === 0.0 ) {
+                                        /* ACDC 3.25.157 — Seul NULL (aucune passation) vaut
+                                           « — ». Un participant à 0 point doit lire « 0 pts ». */
+                                        if ( null === $p->total_score ) {
                                             echo '—';
                                         } else {
                                             echo '<strong>' . esc_html( number_format( (float) $p->total_score, 0, ',', ' ' ) ) . ' pts</strong>';

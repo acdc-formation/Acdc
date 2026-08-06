@@ -31,6 +31,10 @@
          */
         _saveTimers: {},
 
+        /* ACDC 3.25.157 — État de concurrence de l'autosave (une requête en vol max). */
+        _inFlight: {},
+        _pendingRerun: {},
+
         /**
          * Initialise les écouteurs sur le document.
          */
@@ -503,6 +507,19 @@
         runAutosave: function( quizId ) {
             var $form = $( '.acdc-qz-question-form' );
             if ( ! $form.length ) { return; }
+
+            /* ACDC 3.25.157 — UNE SEULE requête d'autosave en vol à la fois.
+               Le debounce ne protégeait que l'ordonnancement, pas la concurrence :
+               une saisie qui se poursuivait pendant qu'une requête lente était
+               encore en cours en déclenchait une seconde, et le serveur exécutait
+               deux fois « supprime les propositions puis réinsère-les » —
+               d'où les propositions dupliquées. Si une sauvegarde est en cours, on
+               note qu'il reste des modifications à envoyer et on rejoue à son retour. */
+            if ( QzEditor._inFlight[ quizId ] ) {
+                QzEditor._pendingRerun[ quizId ] = true;
+                return;
+            }
+            QzEditor._inFlight[ quizId ] = true;
             var qid = parseInt( $form.data( 'question-id' ), 10 ) || 0;
             var type = $form.data( 'type' );
 
@@ -576,6 +593,13 @@
                 } )
                 .fail( function() {
                     QzEditor.setAutosaveStatus( 'error' );
+                } )
+                .always( function() {
+                    QzEditor._inFlight[ quizId ] = false;
+                    if ( QzEditor._pendingRerun[ quizId ] ) {
+                        QzEditor._pendingRerun[ quizId ] = false;
+                        QzEditor.runAutosave( quizId );
+                    }
                 } );
         },
 

@@ -890,6 +890,47 @@ ACDC-Formation",
     return $args;
   }
 
+  /**
+   * ACDC 3.25.157 — Assainit un destinataire pour l'archive SANS perdre son nom.
+   *
+   * sanitize_email() ne conserve que l'adresse : appliqué à « Nom <adresse> », il
+   * effaçait le nom, et l'archive affichait une adresse nue là où le reste de
+   * l'application montrait le nom de l'apprenant. On assainit ici chaque partie.
+   *
+   * @param string $recipient Destinataire brut, « adresse » ou « Nom <adresse> ».
+   * @return string Destinataire assaini, ou '' si l'adresse est invalide.
+   */
+  public function acdc_sanitize_archive_recipient( $recipient ) {
+    $recipient = trim( (string) $recipient );
+    if ( '' === $recipient ) {
+      return '';
+    }
+    if ( ! preg_match( '/^(.*)<([^>]+)>\s*$/', $recipient, $m ) ) {
+      return sanitize_email( $recipient );
+    }
+    $email = sanitize_email( trim( $m[2] ) );
+    if ( '' === $email ) {
+      return '';
+    }
+    $name = trim( sanitize_text_field( $m[1] ) );
+    $name = trim( $name, '"\'' );
+    return ( '' === $name ) ? $email : $name . ' <' . $email . '>';
+  }
+
+  /**
+   * ACDC 3.25.157 — Extrait l'adresse seule d'un destinataire archivé.
+   *
+   * @param string $recipient « adresse » ou « Nom <adresse> ».
+   * @return string Adresse assainie, ou '' si invalide.
+   */
+  public function acdc_archive_recipient_email( $recipient ) {
+    $recipient = trim( (string) $recipient );
+    if ( preg_match( '/<([^>]+)>\s*$/', $recipient, $m ) ) {
+      $recipient = trim( $m[1] );
+    }
+    return sanitize_email( $recipient );
+  }
+
   private function archive_email_event( $args, $status = 'sent', $error_message = '', $mail_data = array() ) {
     if ( ! is_array( $args ) || empty( $args['to'] ) ) {
       return;
@@ -904,7 +945,7 @@ ACDC-Formation",
       'id' => uniqid( 'mail_', true ),
       'sent_at' => current_time( 'mysql' ),
       'subject' => isset( $args['subject'] ) ? sanitize_text_field( $args['subject'] ) : '',
-      'to' => array_values( array_filter( array_map( 'sanitize_email', $to ) ) ),
+      'to' => array_values( array_filter( array_map( array( $this, 'acdc_sanitize_archive_recipient' ), $to ) ) ),
       'cc' => array_values( $headers_data['cc'] ),
       'bcc' => array_values( $headers_data['bcc'] ),
       'from_name' => $headers_data['from_name'],
@@ -1019,7 +1060,10 @@ ACDC-Formation",
     }
     if ( '' === $label && ! empty( $entry['to'] ) ) {
       $email_raw = is_array( $entry['to'] ) ? $entry['to'][0] : (string) $entry['to'];
-      $email_clean = sanitize_email( trim( $email_raw ) );
+      /* ACDC 3.25.157 — Le destinataire archivé peut désormais valoir « Nom <adresse> » :
+         sanitize_email() appliqué tel quel produirait une chaîne invalide et ferait
+         retomber ce libellé à vide. On isole l'adresse d'abord. */
+      $email_clean = $this->acdc_archive_recipient_email( $email_raw );
       // ACDC 3.25.77 — Fallback : chercher le nom par email dans toutes les tables
       if ( $email_clean && is_email( $email_clean ) ) {
         $found = null;

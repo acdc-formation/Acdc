@@ -347,7 +347,10 @@
                 } else if (type === 'open_text') {
                     statsEl.textContent = 'Réponses corrigées par le formateur — ' + countTotal + ' apprenant' + (countTotal > 1 ? 's' : '') + ' ont répondu';
                 } else {
-                    statsEl.textContent = countCorrect + ' bonne' + (countCorrect > 1 ? 's' : '') + ' réponse' + (countCorrect > 1 ? 's' : '') + ' sur ' + countTotal + ' apprenant' + (countTotal > 1 ? 's' : '');
+                    /* ACDC 3.25.157 — countTotal compte les RÉPONDANTS, pas les
+                       participants connectés : « sur 0 apprenant » s'affichait alors
+                       qu'un participant était bien présent. On nomme ce qui est compté. */
+                    statsEl.textContent = countCorrect + ' bonne' + (countCorrect > 1 ? 's' : '') + ' réponse' + (countCorrect > 1 ? 's' : '') + ' sur ' + countTotal + ' répondant' + (countTotal > 1 ? 's' : '');
                 }
                 statsEl.style.display = 'block';
             }

@@ -375,10 +375,17 @@ trait ACDC_Quizzes_Render_Trait {
                                 </button>
                             </li>
                         <?php endif; ?>
-                        <li class="acdc-qz-menu-disabled">
-                            <span title="<?php esc_attr_e( 'Disponible 3.21.10', 'acdc-formation-saas' ); ?>">
+                        <?php
+                        /* ACDC 3.25.157 — Cette entrée était un simple placeholder
+                           « Disponible 3.21.10 », désactivé sans condition : l'écran de
+                           résultats existe pourtant et fonctionne. On la branche, filtrée
+                           sur le quiz de la ligne. */
+                        $qz_results_url = $this->qz_admin_url( $purpose, array( 'view' => 'results', 'qz_quiz' => $quiz_id ) );
+                        ?>
+                        <li>
+                            <a href="<?php echo esc_url( $qz_results_url ); ?>">
                                 <?php esc_html_e( 'Voir les résultats', 'acdc-formation-saas' ); ?>
-                            </span>
+                            </a>
                         </li>
                         <?php if ( self::ACDC_OF_QZ_DELIVERY_LIVE_SYNC === $quiz->delivery_mode ) : ?>
                             <?php if ( self::ACDC_OF_QZ_STATUS_ACTIVE === $quiz->status ) : ?>
@@ -507,7 +514,7 @@ trait ACDC_Quizzes_Render_Trait {
 
                     <p>
                         <label>
-                            <span class="acdc-required"><?php esc_html_e( 'Titre', 'acdc-formation-saas' ); ?> *</span>
+                            <?php /* ACDC 3.25.157 — L'astérisque est déjà ajouté par .acdc-required::after (CSS) : le répéter ici affichait « Titre * * ». */ ?><span class="acdc-required"><?php esc_html_e( 'Titre', 'acdc-formation-saas' ); ?></span>
                             <input type="text" name="title" required maxlength="200" autocomplete="off" />
                         </label>
                     </p>

@@ -714,7 +714,23 @@ trait ACDC_Quizzes_Render_Editor_Trait {
             </div>
 
             <div class="acdc-qz-field">
-                <label class="acdc-qz-field-label"><?php esc_html_e( 'Temps limite', 'acdc-formation-saas' ); ?></label>
+                <?php
+                /* ACDC 3.25.157 — Le compte à rebours n'existe que sur le quiz live.
+                   En passation asynchrone (positionnement, évaluation des acquis) cette
+                   durée ne chronomètre rien : elle ne sert qu'à estimer le temps annoncé
+                   à l'apprenant sur l'écran d'accueil. Le libellé « Temps limite » y
+                   laissait croire à une interruption automatique qui n'a jamais lieu. */
+                $tl_quiz    = isset( $question->quiz_id ) ? $this->get_qz_quiz( (int) $question->quiz_id ) : null;
+                $tl_is_live = $tl_quiz && self::ACDC_OF_QZ_DELIVERY_LIVE_SYNC === $tl_quiz->delivery_mode;
+                ?>
+                <label class="acdc-qz-field-label">
+                    <?php echo esc_html( $tl_is_live ? __( 'Temps limite', 'acdc-formation-saas' ) : __( 'Durée estimée', 'acdc-formation-saas' ) ); ?>
+                </label>
+                <?php if ( ! $tl_is_live ) : ?>
+                <p class="acdc-qz-field-help" style="margin:0 0 6px;font-size:12px;color:#6b7280;">
+                    <?php esc_html_e( 'Sert au temps annoncé à l’apprenant. La passation n’est pas chronométrée hors quiz live.', 'acdc-formation-saas' ); ?>
+                </p>
+                <?php endif; ?>
                 <select name="time_limit" class="acdc-qz-input" <?php echo esc_attr( $disabled ); ?>>
                     <?php foreach ( array( 5, 10, 20, 30, 45, 60, 90, 120, 180, 300, 600 ) as $sec ) : ?>
                         <option value="<?php echo esc_attr( $sec ); ?>" <?php selected( (int) $question->time_limit, $sec ); ?>>
@@ -808,7 +824,7 @@ trait ACDC_Quizzes_Render_Editor_Trait {
                     <div class="acdc-qz-tab-pane is-active" data-tab-pane="general">
                         <p>
                             <label>
-                                <span class="acdc-required"><?php esc_html_e( 'Titre', 'acdc-formation-saas' ); ?> *</span>
+                                <?php /* ACDC 3.25.157 — L'astérisque est déjà ajouté par .acdc-required::after (CSS) : le répéter ici affichait « Titre * * ». */ ?><span class="acdc-required"><?php esc_html_e( 'Titre', 'acdc-formation-saas' ); ?></span>
                                 <input type="text" name="title" value="<?php echo esc_attr( $quiz->title ); ?>" required maxlength="200" <?php echo esc_attr( $disabled ); ?> />
                             </label>
                         </p>

@@ -1389,20 +1389,34 @@ trait ACDC_Quizzes_Core_Trait {
         }
 
         $existing_id = isset( $data['id'] ) ? (int) $data['id'] : 0;
+        /* ACDC 3.25.157 — Verrou de sérialisation des sauvegardes concurrentes.
+           Verrou NOMMÉ MySQL et non transaction : il fonctionne quel que soit le
+           moteur de tables (y compris MyISAM, où START TRANSACTION serait un
+           no-op silencieux). Il n'est utile que sur une question existante — c'est
+           là que le remplacement destructif des réponses a lieu. */
+        $lock_name = '';
         if ( $existing_id > 0 ) {
+            $lock_name = $this->qz_answers_lock_acquire( $existing_id );
             $existing = $wpdb->get_row( $wpdb->prepare( "SELECT * FROM {$tbl_q} WHERE id = %d AND quiz_id = %d", $existing_id, $quiz_id ) );
             if ( ! $existing ) {
+                $this->qz_answers_lock_release( $lock_name );
                 return false;
             }
             $wpdb->update( $tbl_q, $row, array( 'id' => $existing_id ) );
             $question_id = $existing_id;
-            // Réponses : on supprime les anciennes et on recrée — plus simple, pas de problème de stale IDs côté UI.
+            /* ACDC 3.25.157 — Le remplacement des réponses est un DELETE suivi de N
+               INSERT. Sans sérialisation, deux autosaves concurrents sur la MÊME
+               question s'entrelacent : les deux DELETE passent d'abord, puis les deux
+               jeux d'INSERT — et la question se retrouve avec ses propositions en
+               double (« Gamma, Gamma, Delta, Delta »). Le verrou nommé MySQL, pris
+               plus haut, sérialise les deux requêtes ; le DELETE reste ici. */
             $wpdb->delete( $tbl_a, array( 'question_id' => $question_id ) );
         } else {
             $row['created_at'] = $now;
             $wpdb->insert( $tbl_q, $row );
             $question_id = (int) $wpdb->insert_id;
             if ( $question_id <= 0 ) {
+                $this->qz_answers_lock_release( $lock_name );
                 return false;
             }
         }
@@ -1427,10 +1441,84 @@ trait ACDC_Quizzes_Core_Trait {
             }
         }
 
+        /* ACDC 3.25.157 — Filet de sécurité : répare les doublons déjà en base.
+           À l'intérieur d'une sauvegarde, sort_order est strictement croissant et
+           donc unique. Deux lignes de même sort_order pour une même question ne
+           peuvent donc provenir que d'une double écriture : on ne conserve que la
+           première. Aucun contenu légitime n'est perdu. */
+        $this->qz_dedupe_question_answers( $question_id );
+
         // Mise à jour updated_at du quiz parent.
         $wpdb->update( $this->get_qz_table( 'quizzes' ), array( 'updated_at' => $now ), array( 'id' => $quiz_id ) );
 
+        $this->qz_answers_lock_release( $lock_name );
+
         return $question_id;
+    }
+
+    /**
+     * ACDC 3.25.157 — Prend un verrou nommé MySQL sur les réponses d'une question.
+     *
+     * @param int $question_id Identifiant de la question.
+     * @return string Nom du verrou obtenu, ou '' si le verrou n'a pas pu être pris
+     *                (on n'échoue pas la sauvegarde pour autant : la déduplication
+     *                de fin de traitement reste le filet).
+     */
+    private function qz_answers_lock_acquire( $question_id ) {
+        global $wpdb;
+        $question_id = (int) $question_id;
+        if ( $question_id <= 0 ) {
+            return '';
+        }
+        /* Le nom est préfixé par la base : deux sites partageant un même serveur
+           MySQL ne doivent pas se bloquer mutuellement. Limite MySQL : 64 octets. */
+        $name = substr( 'acdc_qz_ans_' . md5( DB_NAME . '|' . $question_id ), 0, 64 );
+        $got  = $wpdb->get_var( $wpdb->prepare( 'SELECT GET_LOCK(%s, %d)', $name, 5 ) );
+        return ( '1' === (string) $got ) ? $name : '';
+    }
+
+    /**
+     * ACDC 3.25.157 — Relâche le verrou pris par qz_answers_lock_acquire().
+     *
+     * @param string $lock_name Nom retourné à l'acquisition ('' = rien à faire).
+     */
+    private function qz_answers_lock_release( $lock_name ) {
+        if ( '' === (string) $lock_name ) {
+            return;
+        }
+        global $wpdb;
+        $wpdb->get_var( $wpdb->prepare( 'SELECT RELEASE_LOCK(%s)', $lock_name ) );
+    }
+
+    /**
+     * ACDC 3.25.157 — Supprime les propositions en doublon d'une question.
+     * Critère : même sort_order (impossible au sein d'une seule sauvegarde).
+     *
+     * @param int $question_id Identifiant de la question.
+     */
+    private function qz_dedupe_question_answers( $question_id ) {
+        global $wpdb;
+        $question_id = (int) $question_id;
+        $tbl_a       = $this->get_qz_table( 'answers' );
+        if ( $question_id <= 0 || '' === $tbl_a ) {
+            return;
+        }
+        $rows = $wpdb->get_results( $wpdb->prepare(
+            "SELECT id, sort_order FROM {$tbl_a} WHERE question_id = %d ORDER BY sort_order ASC, id ASC",
+            $question_id
+        ) );
+        if ( empty( $rows ) ) {
+            return;
+        }
+        $seen = array();
+        foreach ( $rows as $r ) {
+            $key = (int) $r->sort_order;
+            if ( isset( $seen[ $key ] ) ) {
+                $wpdb->delete( $tbl_a, array( 'id' => (int) $r->id ), array( '%d' ) );
+                continue;
+            }
+            $seen[ $key ] = true;
+        }
     }
 
     /**
@@ -3124,7 +3212,7 @@ trait ACDC_Quizzes_Core_Trait {
         $subject_tpl = isset( $purpose_subjects[ $qz_purpose ] ) ? $purpose_subjects[ $qz_purpose ] : $purpose_subjects['live'];
         $subject = sprintf( $subject_tpl, (string) $args['quiz']->title );
 
-        return $this->send_qz_email( $args['email'], $subject, $body );
+        return $this->send_qz_email( $args['email'], $subject, $body, $this->qz_recipient_display_name( $args ) );
     }
 
         public function send_qz_async_invitation_email( $args ) {
@@ -3142,7 +3230,7 @@ trait ACDC_Quizzes_Core_Trait {
         $qz_purpose  = isset( $args['quiz']->quiz_purpose ) ? (string) $args['quiz']->quiz_purpose : 'live';
         $subject_tpl = isset( $purpose_subjects[ $qz_purpose ] ) ? $purpose_subjects[ $qz_purpose ] : $purpose_subjects['live'];
         $subject = sprintf( $subject_tpl, $this->get_qz_organisation_name() );
-        return $this->send_qz_email( $args['email'], $subject, $body );
+        return $this->send_qz_email( $args['email'], $subject, $body, $this->qz_recipient_display_name( $args ) );
     }
 
     /**
@@ -3159,7 +3247,7 @@ trait ACDC_Quizzes_Core_Trait {
             __( '[Rappel] Plus que 24h pour répondre — %s', 'acdc-formation-saas' ),
             (string) $args['quiz']->title
         );
-        return $this->send_qz_email( $args['email'], $subject, $body );
+        return $this->send_qz_email( $args['email'], $subject, $body, $this->qz_recipient_display_name( $args ) );
     }
 
     /**
@@ -3180,13 +3268,47 @@ trait ACDC_Quizzes_Core_Trait {
         $qz_purpose   = isset( $args['quiz']->quiz_purpose ) ? (string) $args['quiz']->quiz_purpose : 'live';
         $confirm_tpl  = isset( $purpose_confirms[ $qz_purpose ] ) ? $purpose_confirms[ $qz_purpose ] : $purpose_confirms['live'];
         $subject = sprintf( $confirm_tpl, (string) $args['quiz']->title );
-        return $this->send_qz_email( $args['email'], $subject, $body );
+        return $this->send_qz_email( $args['email'], $subject, $body, $this->qz_recipient_display_name( $args ) );
+    }
+
+    /**
+     * ACDC 3.25.157 — Nom d'affichage du destinataire d'un e-mail quiz.
+     * Les jeux d'arguments des quatre modèles portent first_name/last_name, et
+     * parfois full_name ; on retient le premier renseigné.
+     *
+     * @param array $args Arguments passés au modèle d'e-mail.
+     * @return string Nom d'affichage, ou '' si aucun n'est connu.
+     */
+    private function qz_recipient_display_name( $args ) {
+        if ( ! is_array( $args ) ) {
+            return '';
+        }
+        $full = isset( $args['full_name'] ) ? trim( (string) $args['full_name'] ) : '';
+        if ( '' !== $full ) {
+            return $full;
+        }
+        $first = isset( $args['first_name'] ) ? trim( (string) $args['first_name'] ) : '';
+        $last  = isset( $args['last_name'] ) ? trim( (string) $args['last_name'] ) : '';
+        return trim( $first . ' ' . $last );
     }
 
     /**
      * Wrapper d'envoi par wp_mail() avec headers HTML.
      */
-    private function send_qz_email( $to, $subject, $html_body ) {
+    private function send_qz_email( $to, $subject, $html_body, $to_name = '' ) {
+        /* ACDC 3.25.157 — Le nom du destinataire n'était jamais transmis à wp_mail() :
+           l'e-mail partait vers l'adresse nue, et l'archive — fidèle à ce qu'elle
+           reçoit — n'affichait que l'adresse, alors que le nom saisi apparaissait
+           partout ailleurs. On le passe désormais au format RFC « Nom <adresse> ». */
+        $to_name = trim( (string) $to_name );
+        if ( '' !== $to_name && is_string( $to ) && false === strpos( $to, '<' ) ) {
+            /* Les virgules et chevrons casseraient l'en-tête : on les retire, et on
+               entoure de guillemets pour rester valide avec un nom accentué. */
+            $clean_name = trim( str_replace( array( ',', '<', '>', '"' ), ' ', $to_name ) );
+            if ( '' !== $clean_name ) {
+                $to = '"' . $clean_name . '" <' . $to . '>';
+            }
+        }
         $headers = array( 'Content-Type: text/html; charset=UTF-8' );
         $from_name  = $this->get_qz_organisation_name();
         $from_email = $this->get_qz_organisation_email();
@@ -4021,6 +4143,14 @@ trait ACDC_Quizzes_Core_Trait {
             $where_s[]  = 'q.quiz_purpose = %s';
             $params_s[] = $purpose;
         }
+        /* ACDC 3.25.157 — Filtre par quiz, utilisé par l'entrée de menu « Voir les
+           résultats » : les vignettes doivent porter sur le même périmètre que la
+           liste affichée en dessous, sans quoi le KPI global contredirait le tableau. */
+        $quiz_filter_id = isset( $args['quiz_id'] ) ? (int) $args['quiz_id'] : 0;
+        if ( $quiz_filter_id > 0 ) {
+            $where_s[]  = 'q.id = %d';
+            $params_s[] = $quiz_filter_id;
+        }
         $apply_trainer = false;
         if ( $trainer_id > 0 ) {
             // On vérifie si le filtre formateur retourne au moins une session
@@ -4071,12 +4201,17 @@ trait ACDC_Quizzes_Core_Trait {
                 : $wpdb->prepare( "SELECT COUNT(*) FROM {$tbl_pa} pa WHERE pa.session_id IN ({$sub_sessions_sql}) AND pa.is_correct = 1", $params_s )
         );
         $pct_correct = ( $count_answers > 0 ) ? round( $count_correct / $count_answers * 100, 1 ) : null;
-        // Pour les sessions live : score moyen en points bruts ; sinon en pourcentage
+        /* Pour les sessions live : score moyen en points bruts ; sinon en pourcentage.
+           ACDC 3.25.157 — La condition « total_score > 0 » a été retirée : elle
+           excluait de la moyenne tout participant ayant marqué 0 point. Avec un seul
+           participant à 0, l'AVG ne portait sur aucune ligne, renvoyait NULL, et la
+           vignette affichait « — » comme s'il n'y avait pas de donnée. Un zéro est
+           une valeur, pas une absence : seul NULL doit produire un tiret. */
         if ( 'live' === $purpose ) {
             $avg_score = $wpdb->get_var(
                 empty( $params_s )
-                    ? "SELECT AVG(p.total_score) FROM {$tbl_p} p WHERE p.status = 'completed' AND p.total_score IS NOT NULL AND p.total_score > 0 AND p.session_id IN ({$sub_sessions_sql})"
-                    : $wpdb->prepare( "SELECT AVG(p.total_score) FROM {$tbl_p} p WHERE p.status = 'completed' AND p.total_score IS NOT NULL AND p.total_score > 0 AND p.session_id IN ({$sub_sessions_sql})", $params_s )
+                    ? "SELECT AVG(p.total_score) FROM {$tbl_p} p WHERE p.status = 'completed' AND p.total_score IS NOT NULL AND p.session_id IN ({$sub_sessions_sql})"
+                    : $wpdb->prepare( "SELECT AVG(p.total_score) FROM {$tbl_p} p WHERE p.status = 'completed' AND p.total_score IS NOT NULL AND p.session_id IN ({$sub_sessions_sql})", $params_s )
             );
         } else {
             $avg_score = $wpdb->get_var(
