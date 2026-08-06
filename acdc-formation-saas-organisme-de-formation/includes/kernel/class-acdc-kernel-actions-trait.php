@@ -1506,8 +1506,14 @@ trait ACDC_Kernel_Actions_Trait {
        suppression tant qu'une mission signée subsiste : à l'organisme de l'archiver
        puis de la retirer sciemment. La minimisation RGPD ne prime pas sur une
        obligation légale de conservation. */
+    /* ACDC 3.25.157 — La garde ne compte QUE les contrats signés non archivés.
+       La version 3.25.155 comptait tous les contrats signés et créait une impasse :
+       ce message renvoyait vers la suppression de la mission, que l'autre garde
+       interdisait — aucun chemin ne permettait plus de retirer un formateur. Le
+       déblocage passe désormais par une action explicite « Archiver » (le PDF est
+       téléchargé, puis horodaté en base), et non par la levée de la protection. */
     $signed_count = (int) $wpdb->get_var( $wpdb->prepare(
-      "SELECT COUNT(*) FROM {$this->trainer_contract_table} WHERE trainer_id = %d AND signature_status = %s",
+      "SELECT COUNT(*) FROM {$this->trainer_contract_table} WHERE trainer_id = %d AND signature_status = %s AND archived_at IS NULL",
       $trainer_id,
       'signée'
     ) );
@@ -1515,7 +1521,7 @@ trait ACDC_Kernel_Actions_Trait {
       $this->redirect_to_portal(
         'trainers',
         sprintf(
-          'Suppression impossible : ce formateur a %d contrat%s signé%s, à conserver comme pièce comptable. Archivez-le%s puis supprimez la mission correspondante avant de retirer le formateur.',
+          'Suppression impossible : ce formateur a %d contrat%s signé%s non archivé%s, à conserver comme pièce comptable. Ouvrez sa fiche, cliquez sur « Archiver » dans la colonne Actions de chaque mission signée (le PDF est téléchargé sur votre poste), puis relancez la suppression.',
           $signed_count,
           $signed_count > 1 ? 's' : '',
           $signed_count > 1 ? 's' : '',
@@ -1635,16 +1641,21 @@ trait ACDC_Kernel_Actions_Trait {
        Sans ce garde-fou, celui posé sur le formateur se contournerait simplement
        en supprimant d'abord ses missions. La suppression reste possible via une
        confirmation explicite (paramètre force=1) pour les cas légitimes. */
-    $is_signed_mission = (string) $wpdb->get_var( $wpdb->prepare(
-      "SELECT signature_status FROM {$this->trainer_contract_table} WHERE id = %d AND trainer_id = %d",
+    $signed_row = $wpdb->get_row( $wpdb->prepare(
+      "SELECT signature_status, archived_at FROM {$this->trainer_contract_table} WHERE id = %d AND trainer_id = %d",
       $contract_id,
       $trainer_id
     ) );
+    $is_signed_mission = $signed_row ? (string) $signed_row->signature_status : '';
+    $is_archived       = $signed_row && ! empty( $signed_row->archived_at );
     $forced = isset( $_GET['force'] ) && '1' === (string) $_GET['force'];
-    if ( 'signée' === $is_signed_mission && ! $forced ) {
+    /* ACDC 3.25.157 — Une fois le PDF archivé (sorti de l'application), la
+       suppression redevient possible : la pièce comptable existe ailleurs. */
+    if ( 'signée' === $is_signed_mission && ! $is_archived && ! $forced ) {
+      $msg_signed  = 'Cette mission est signée : son contrat est une pièce comptable à conserver. Cliquez d’abord sur « Archiver » dans la colonne Actions — le PDF sera téléchargé sur votre poste — puis relancez la suppression.';
       $back_signed = isset( $_GET['ctx'] ) && 'admin' === $_GET['ctx']
-        ? admin_url( 'admin.php?page=acdc-of-trainers&action=edit&item_id=' . $trainer_id . '&notice=' . rawurlencode( 'Cette mission est signée : son contrat est une pièce comptable à conserver. Archivez le PDF avant toute suppression.' ) . '&notice_type=error' )
-        : $this->portal_page_url( array( 'tab' => 'trainers', 'action' => 'edit', 'item_id' => $trainer_id, 'notice' => rawurlencode( 'Cette mission est signée : son contrat est une pièce comptable à conserver. Archivez le PDF avant toute suppression.' ), 'notice_type' => 'error' ) );
+        ? admin_url( 'admin.php?page=acdc-of-trainers&action=edit&item_id=' . $trainer_id . '&notice=' . rawurlencode( $msg_signed ) . '&notice_type=error' )
+        : $this->portal_page_url( array( 'tab' => 'trainers', 'action' => 'edit', 'item_id' => $trainer_id, 'notice' => rawurlencode( $msg_signed ), 'notice_type' => 'error' ) );
       wp_safe_redirect( $back_signed );
       exit;
     }
@@ -1859,20 +1870,8 @@ trait ACDC_Kernel_Actions_Trait {
       wp_die( esc_html( 'Document introuvable.' ) );
     }
 
-    /* Le chemin est reconstruit depuis l'URL stockée : on ne fait JAMAIS confiance à
-       un chemin fourni par la requête (traversée de répertoire). */
-    $url = $signed ? (string) $contract->signed_document_url : (string) $contract->contract_pdf_url;
-    if ( '' === $url ) {
-      wp_die( esc_html( 'Aucun document disponible pour cette mission.' ) );
-    }
-    $upload_dir = wp_upload_dir();
-    $path       = str_replace( trailingslashit( $upload_dir['baseurl'] ), trailingslashit( $upload_dir['basedir'] ), $url );
-
-    /* Verrou : le fichier doit résider dans le dossier des contrats de CETTE mission. */
-    $expected_dir = trailingslashit( $upload_dir['basedir'] ) . 'acdc-of-contracts/' . (int) $contract_id . '/';
-    $real_path    = realpath( $path );
-    $real_dir     = realpath( $expected_dir );
-    if ( ! $real_path || ! $real_dir || 0 !== strpos( $real_path, $real_dir ) || ! is_file( $real_path ) ) {
+    $real_path = $this->acdc_trainer_contract_file_path( $contract, $signed );
+    if ( '' === $real_path ) {
       wp_die( esc_html( 'Document introuvable.' ) );
     }
 
@@ -1902,6 +1901,120 @@ trait ACDC_Kernel_Actions_Trait {
     return wp_nonce_url(
       add_query_arg( $args, admin_url( 'admin-post.php' ) ),
       'acdc_serve_trainer_contract_' . (int) $contract_id
+    );
+  }
+
+  /**
+   * ACDC 3.25.157 — Chemin disque VÉRIFIÉ du PDF d'une mission.
+   *
+   * Le chemin est reconstruit depuis l'URL stockée en base : on ne fait JAMAIS
+   * confiance à un chemin fourni par la requête (traversée de répertoire). Le
+   * fichier doit en outre résider dans le dossier de CETTE mission.
+   *
+   * @param object $contract Ligne de la table des missions (id, contract_pdf_url,
+   *                         signed_document_url).
+   * @param bool   $signed   true pour l'exemplaire signé.
+   * @return string Chemin réel, ou '' si aucun fichier exploitable.
+   */
+  private function acdc_trainer_contract_file_path( $contract, $signed = false ) {
+    if ( ! is_object( $contract ) || empty( $contract->id ) ) {
+      return '';
+    }
+    $url = $signed ? (string) $contract->signed_document_url : (string) $contract->contract_pdf_url;
+    if ( '' === $url ) {
+      return '';
+    }
+    $upload_dir   = wp_upload_dir();
+    $path         = str_replace( trailingslashit( $upload_dir['baseurl'] ), trailingslashit( $upload_dir['basedir'] ), $url );
+    $expected_dir = trailingslashit( $upload_dir['basedir'] ) . 'acdc-of-contracts/' . (int) $contract->id . '/';
+    $real_path    = realpath( $path );
+    $real_dir     = realpath( $expected_dir );
+    if ( ! $real_path || ! $real_dir || 0 !== strpos( $real_path, $real_dir ) || ! is_file( $real_path ) ) {
+      return '';
+    }
+    return $real_path;
+  }
+
+  /**
+   * ACDC 3.25.157 — ARCHIVAGE d'un contrat formateur signé.
+   *
+   * Les gardes posées en 3.25.155 empêchaient de détruire une pièce comptable,
+   * mais renvoyaient vers un « archivage » qui n'existait nulle part : plus aucun
+   * chemin ne permettait de retirer un formateur une fois son contrat signé.
+   * Cette action comble le vide sans affaiblir la protection : le PDF est
+   * TÉLÉCHARGÉ (il sort de l'application, donc la conservation dix ans au titre de
+   * l'article L123-22 du Code de commerce est assurée hors ligne), puis horodaté
+   * en base. La suppression n'est alors plus un effacement sans copie.
+   */
+  public function handle_archive_trainer_contract() {
+    if ( ! current_user_can( 'manage_options' ) ) {
+      wp_die( esc_html( 'Accès refusé.' ) );
+    }
+    $contract_id = isset( $_GET['contract_id'] ) ? absint( wp_unslash( $_GET['contract_id'] ) ) : 0;
+    if ( ! $contract_id ) {
+      wp_die( esc_html( 'Document introuvable.' ) );
+    }
+    check_admin_referer( 'acdc_archive_trainer_contract_' . $contract_id );
+
+    global $wpdb;
+    $contract = $wpdb->get_row( $wpdb->prepare(
+      "SELECT id, trainer_id, contract_pdf_url, signed_document_url FROM {$this->trainer_contract_table} WHERE id = %d",
+      $contract_id
+    ) );
+    if ( ! $contract ) {
+      wp_die( esc_html( 'Document introuvable.' ) );
+    }
+
+    /* On archive l'exemplaire SIGNÉ ; à défaut, le contrat généré. */
+    $real_path = $this->acdc_trainer_contract_file_path( $contract, true );
+    if ( '' === $real_path ) {
+      $real_path = $this->acdc_trainer_contract_file_path( $contract, false );
+    }
+    if ( '' === $real_path ) {
+      /* Le PDF a disparu du disque : on refuse d'horodater un archivage qui n'a pas
+         eu lieu — sans quoi la garde se lèverait sur une pièce inexistante. */
+      $back = $this->portal_page_url( array(
+        'tab'         => 'trainers',
+        'action'      => 'edit',
+        'item_id'     => (int) $contract->trainer_id,
+        'notice'      => rawurlencode( 'Archivage impossible : le PDF de cette mission est introuvable sur le serveur. Régénérez-le avant d’archiver.' ),
+        'notice_type' => 'error',
+      ) );
+      wp_safe_redirect( $back );
+      exit;
+    }
+
+    $wpdb->update(
+      $this->trainer_contract_table,
+      array( 'archived_at' => current_time( 'mysql' ) ),
+      array( 'id' => $contract_id ),
+      array( '%s' ),
+      array( '%d' )
+    );
+    $this->log_action_event( 'archive', 'trainer_contract_pdf', $contract_id, 'success', array( 'file' => basename( $real_path ) ) );
+
+    while ( ob_get_level() ) { ob_end_clean(); }
+    nocache_headers();
+    header( 'Content-Type: application/pdf' );
+    header( 'Content-Disposition: attachment; filename="' . basename( $real_path ) . '"' );
+    header( 'Content-Length: ' . filesize( $real_path ) );
+    readfile( $real_path ); // phpcs:ignore WordPress.WP.AlternativeFunctions.file_system_operations_readfile
+    exit;
+  }
+
+  /**
+   * ACDC 3.25.157 — URL d'archivage (téléchargement + horodatage) d'un contrat.
+   *
+   * @param int $contract_id Identifiant de la mission.
+   * @return string URL nonce-ée.
+   */
+  private function acdc_trainer_contract_archive_url( $contract_id ) {
+    return wp_nonce_url(
+      add_query_arg(
+        array( 'action' => 'acdc_archive_trainer_contract', 'contract_id' => (int) $contract_id ),
+        admin_url( 'admin-post.php' )
+      ),
+      'acdc_archive_trainer_contract_' . (int) $contract_id
     );
   }
 

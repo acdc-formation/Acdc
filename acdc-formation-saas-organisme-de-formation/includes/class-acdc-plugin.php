@@ -391,6 +391,9 @@ class ACDC_Formation_SAAS_Plugin {
     add_action( 'admin_post_acdc_send_trainer_contract_email', array( $this, 'handle_send_trainer_contract_email' ) );
     /* ACDC 3.25.150 — F11 : consultation authentifiée des contrats (dossier /uploads interdit). */
     add_action( 'admin_post_acdc_serve_trainer_contract', array( $this, 'handle_serve_trainer_contract' ) );
+    /* ACDC 3.25.157 — Archivage explicite d'un contrat signé : le seul chemin qui
+       lève la protection de suppression posée en 3.25.155. */
+    add_action( 'admin_post_acdc_archive_trainer_contract', array( $this, 'handle_archive_trainer_contract' ) );
     /* ACDC 3.25.155 — Inventaire et nettoyage MANUEL des contrats orphelins.
        ACDC 3.25.156 — L'écran a été déplacé dans l'extranet (Paramètres →
        Documents orphelins) : plus de page wp-admin, seule l'action subsiste. */

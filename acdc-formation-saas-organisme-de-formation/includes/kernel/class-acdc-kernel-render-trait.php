@@ -7871,7 +7871,32 @@ trait ACDC_Kernel_Render_Trait {
                 ?>
                 <button type="button" class="acdc-row-action-icon" title="Aperçu" data-acdc-tc-preview="<?php echo esc_attr( $preview_data ); ?>"><?php echo $this->render_inline_icon( 'eye', 25 ); ?><span class="acdc-action-hub-sr screen-reader-text">Aperçu</span></button>
                 <a href="<?php echo esc_url( $edit_url ); ?>" class="acdc-row-action-icon" title="Modifier" data-acdc-iconized="1"><?php echo $this->render_inline_icon( 'edit-pencil', 25 ); ?><span class="acdc-action-hub-sr screen-reader-text">Modifier</span></a>
-                <a href="<?php echo esc_url( $delete_url ); ?>" class="acdc-row-action-icon acdc-row-delete-link" title="Supprimer" onclick="return confirm('Supprimer définitivement cette mission ?');" data-acdc-iconized="1"><?php echo $this->render_inline_icon( 'delete', 25 ); ?><span class="acdc-action-hub-sr screen-reader-text">Supprimer</span></a>
+                <?php
+                /* ACDC 3.25.157 — Archivage d'un contrat SIGNÉ. C'est le seul chemin qui
+                   lève la protection de suppression : sans lui, un formateur dont le
+                   contrat était signé ne pouvait plus être retiré du tout. Le clic
+                   télécharge le PDF ; la page se recharge ensuite pour afficher l'état. */
+                $c_signed_status = ( 'signée' === $sig_status );
+                $c_archived_at   = isset( $c->archived_at ) && ! empty( $c->archived_at ) ? (string) $c->archived_at : '';
+                if ( $c_signed_status && '' === $c_archived_at ) :
+                  $archive_url = $this->acdc_trainer_contract_archive_url( (int) $c->id );
+                ?>
+                <a href="<?php echo esc_url( $archive_url ); ?>" class="acdc-row-action-icon" title="Archiver (télécharge le PDF signé et autorise ensuite la suppression)" onclick="setTimeout(function(){ window.location.reload(); }, 2500);" data-acdc-iconized="1"><span aria-hidden="true" style="font-size:16px;line-height:25px;">⤓</span><span class="acdc-action-hub-sr screen-reader-text">Archiver</span></a>
+                <?php elseif ( $c_signed_status && '' !== $c_archived_at ) : ?>
+                <span class="acdc-row-action-icon" title="Contrat archivé le <?php echo esc_attr( date_i18n( 'd/m/Y à H\hi', strtotime( $c_archived_at ) ) ); ?> — suppression autorisée" style="cursor:default;"><span aria-hidden="true" style="font-size:16px;line-height:25px;">🗄️</span><span class="acdc-action-hub-sr screen-reader-text">Archivé</span></span>
+                <?php endif; ?>
+                <?php
+                if ( $c_signed_status && '' === $c_archived_at ) {
+                  /* Le serveur refuserait de toute façon : autant l'expliquer tout de
+                     suite plutôt que de faire faire un aller-retour à l'utilisateur. */
+                  $delete_onclick = 'alert(' . wp_json_encode( 'Cette mission est signée : son contrat est une pièce comptable. Cliquez d’abord sur « Archiver » (⤓) pour télécharger le PDF, la suppression sera alors autorisée.' ) . '); return false;';
+                } elseif ( $c_signed_status ) {
+                  $delete_onclick = 'return confirm(' . wp_json_encode( 'Ce contrat signé a été archivé le ' . date_i18n( 'd/m/Y', strtotime( $c_archived_at ) ) . '. Supprimer définitivement la mission et son PDF du serveur ?' ) . ');';
+                } else {
+                  $delete_onclick = 'return confirm(' . wp_json_encode( 'Supprimer définitivement cette mission ?' ) . ');';
+                }
+                ?>
+                <a href="<?php echo esc_url( $delete_url ); ?>" class="acdc-row-action-icon acdc-row-delete-link" title="Supprimer" onclick="<?php echo esc_attr( $delete_onclick ); ?>" data-acdc-iconized="1"><?php echo $this->render_inline_icon( 'delete', 25 ); ?><span class="acdc-action-hub-sr screen-reader-text">Supprimer</span></a>
               </td>
               <?php endif; ?>
             </tr>
