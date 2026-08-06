@@ -389,6 +389,8 @@ class ACDC_Formation_SAAS_Plugin {
     add_action( 'admin_post_acdc_generate_trainer_contract_pdf', array( $this, 'handle_generate_trainer_contract_pdf' ) );
     /* ACDC 3.25.148 — G4 : envoi du contrat au formateur, action séparée du téléchargement. */
     add_action( 'admin_post_acdc_send_trainer_contract_email', array( $this, 'handle_send_trainer_contract_email' ) );
+    /* ACDC 3.25.150 — F11 : consultation authentifiée des contrats (dossier /uploads interdit). */
+    add_action( 'admin_post_acdc_serve_trainer_contract', array( $this, 'handle_serve_trainer_contract' ) );
     /* ACDC 3.24.11 — Bilans compétences formateurs (ind. 21). */
     add_action( 'admin_post_acdc_save_trainer_evaluation',   array( $this, 'handle_save_trainer_evaluation' ) );
     add_action( 'admin_post_acdc_delete_trainer_evaluation', array( $this, 'handle_delete_trainer_evaluation' ) );

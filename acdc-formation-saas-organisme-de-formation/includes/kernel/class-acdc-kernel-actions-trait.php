@@ -1670,6 +1670,80 @@ trait ACDC_Kernel_Actions_Trait {
   }
 
   /**
+   * ACDC 3.25.150 — F11 (complément) : SERVICE AUTHENTIFIÉ des contrats formateurs.
+   *
+   * Le correctif 3.25.148 a rendu le dossier des contrats inaccessible en direct,
+   * mais l'interface continuait de pointer sur l'URL statique : le gestionnaire ne
+   * pouvait donc plus reconsulter un contrat déjà généré (403 même connecté).
+   * Ce handler sert le fichier après contrôle de capacité et de nonce.
+   */
+  public function handle_serve_trainer_contract() {
+    if ( ! current_user_can( 'manage_options' ) ) {
+      wp_die( esc_html( 'Accès refusé.' ) );
+    }
+    $contract_id = isset( $_GET['contract_id'] ) ? absint( wp_unslash( $_GET['contract_id'] ) ) : 0;
+    $signed      = isset( $_GET['signed'] ) && '1' === (string) $_GET['signed'];
+    if ( ! $contract_id ) {
+      wp_die( esc_html( 'Document introuvable.' ) );
+    }
+    check_admin_referer( 'acdc_serve_trainer_contract_' . $contract_id );
+
+    global $wpdb;
+    $contract = $wpdb->get_row( $wpdb->prepare(
+      "SELECT id, trainer_id, contract_pdf_url, signed_document_url FROM {$this->trainer_contract_table} WHERE id = %d",
+      $contract_id
+    ) );
+    if ( ! $contract ) {
+      wp_die( esc_html( 'Document introuvable.' ) );
+    }
+
+    /* Le chemin est reconstruit depuis l'URL stockée : on ne fait JAMAIS confiance à
+       un chemin fourni par la requête (traversée de répertoire). */
+    $url = $signed ? (string) $contract->signed_document_url : (string) $contract->contract_pdf_url;
+    if ( '' === $url ) {
+      wp_die( esc_html( 'Aucun document disponible pour cette mission.' ) );
+    }
+    $upload_dir = wp_upload_dir();
+    $path       = str_replace( trailingslashit( $upload_dir['baseurl'] ), trailingslashit( $upload_dir['basedir'] ), $url );
+
+    /* Verrou : le fichier doit résider dans le dossier des contrats de CETTE mission. */
+    $expected_dir = trailingslashit( $upload_dir['basedir'] ) . 'acdc-of-contracts/' . (int) $contract_id . '/';
+    $real_path    = realpath( $path );
+    $real_dir     = realpath( $expected_dir );
+    if ( ! $real_path || ! $real_dir || 0 !== strpos( $real_path, $real_dir ) || ! is_file( $real_path ) ) {
+      wp_die( esc_html( 'Document introuvable.' ) );
+    }
+
+    $this->log_action_event( 'view', 'trainer_contract_pdf', $contract_id );
+    while ( ob_get_level() ) { ob_end_clean(); }
+    nocache_headers();
+    header( 'Content-Type: application/pdf' );
+    header( 'Content-Disposition: inline; filename="' . basename( $real_path ) . '"' );
+    header( 'Content-Length: ' . filesize( $real_path ) );
+    readfile( $real_path ); // phpcs:ignore WordPress.WP.AlternativeFunctions.file_system_operations_readfile
+    exit;
+  }
+
+  /**
+   * ACDC 3.25.150 — URL de consultation authentifiée d'un contrat formateur.
+   * À utiliser partout à la place de l'URL brute dans /uploads (désormais interdite).
+   *
+   * @param int  $contract_id Identifiant de la mission.
+   * @param bool $signed      true pour l'exemplaire signé.
+   * @return string URL nonce-ée.
+   */
+  private function acdc_trainer_contract_view_url( $contract_id, $signed = false ) {
+    $args = array( 'action' => 'acdc_serve_trainer_contract', 'contract_id' => (int) $contract_id );
+    if ( $signed ) {
+      $args['signed'] = 1;
+    }
+    return wp_nonce_url(
+      add_query_arg( $args, admin_url( 'admin-post.php' ) ),
+      'acdc_serve_trainer_contract_' . (int) $contract_id
+    );
+  }
+
+  /**
    * ACDC 3.25.148 — F11 : nom de fichier NON DEVINABLE pour un contrat formateur.
    *
    * Le nom précédent (`contrat-formateur-4-5.pdf`) était entièrement prévisible :

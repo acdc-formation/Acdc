@@ -7697,7 +7697,11 @@ trait ACDC_Kernel_Render_Trait {
       <ul class="acdc-tdoc-list" style="margin-top:10px;">
         <?php foreach ( $contracts_docs as $cd ) :
           $is_signed  = 'signée' === (string) $cd->signature_status;
-          $pdf_url    = $is_signed && ! empty( $cd->signed_document_url ) ? (string) $cd->signed_document_url : (string) $cd->contract_pdf_url;
+          /* ACDC 3.25.150 — F11 : le dossier /uploads des contrats est désormais interdit
+             d'accès direct. On passe donc par le service authentifié, sinon le lien
+             renvoie 403 même pour un gestionnaire connecté. */
+          $cd_has_pdf = $is_signed ? ! empty( $cd->signed_document_url ) : ! empty( $cd->contract_pdf_url );
+          $pdf_url    = $cd_has_pdf ? $this->acdc_trainer_contract_view_url( (int) $cd->id, $is_signed && ! empty( $cd->signed_document_url ) ) : '';
           $badge_col  = $is_signed ? '#1a7d3b' : ( '' !== (string) $cd->signature_status ? '#a06b00' : '#5a6577' );
           $badge_bg   = $is_signed ? '#e7f4ec'  : ( '' !== (string) $cd->signature_status ? '#fff3d6'  : '#f0f4fa' );
           $badge_lbl  = $is_signed ? 'Signé'    : ( '' !== (string) $cd->signature_status ? ucfirst( (string) $cd->signature_status ) : 'Non signé' );
@@ -7849,7 +7853,11 @@ trait ACDC_Kernel_Render_Trait {
               <?php if ( ! $read_only ) : ?>
               <td style="white-space:nowrap;">
                 <?php
-                $preview_pdf  = isset( $c->signed_document_url ) && ! empty( $c->signed_document_url ) ? (string) $c->signed_document_url : ( ! empty( $c->contract_pdf_url ) ? (string) $c->contract_pdf_url : '' );
+                /* ACDC 3.25.150 — F11 : consultation via le service authentifié (l'URL
+                   /uploads est désormais refusée, y compris en session gestionnaire). */
+                $c_is_signed  = isset( $c->signed_document_url ) && ! empty( $c->signed_document_url );
+                $c_has_pdf    = $c_is_signed || ! empty( $c->contract_pdf_url );
+                $preview_pdf  = $c_has_pdf ? $this->acdc_trainer_contract_view_url( (int) $c->id, $c_is_signed ) : '';
                 $preview_data = wp_json_encode( array(
                   'label'        => (string) $c->label,
                   'formation'    => (string) $c->formation_ref,
