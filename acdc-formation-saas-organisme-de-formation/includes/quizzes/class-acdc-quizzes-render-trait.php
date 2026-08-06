@@ -1207,7 +1207,14 @@ trait ACDC_Quizzes_Render_Trait {
         ), $submit_url );
         ?>
         <div class="acdc-qz-public-wrapper acdc-qz-public-passation-wrapper acdc-qz-public-fullscreen">
-            <form method="post" action="<?php echo esc_url( $submit_url ); ?>" class="acdc-qz-public-form">
+            <?php /* ACDC 3.25.157 — novalidate : la validation native du navigateur prenait
+                     la main AVANT l'événement submit, si bien que notre propre contrôle (qui
+                     sait quelle question est affichée) n'était jamais atteint. Pire, les
+                     questions non affichées portent des champs required dans une section
+                     hidden : le navigateur refuse alors la soumission sans rien afficher,
+                     faute de pouvoir donner le focus au champ fautif. L'apprenant cliquait
+                     « Valider » et il ne se passait rien. */ ?>
+            <form method="post" action="<?php echo esc_url( $submit_url ); ?>" class="acdc-qz-public-form" novalidate>
                 <header class="acdc-qz-public-passation-header">
                     <h2><?php echo esc_html( $quiz->title ); ?></h2>
                     <div class="acdc-qz-public-progress">

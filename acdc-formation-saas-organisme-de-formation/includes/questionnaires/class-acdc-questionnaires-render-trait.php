@@ -1173,13 +1173,21 @@ public function render_quality_compliance_shortcode( $atts = array() ) {
       <p><label>Commentaire interne</label><textarea name="survey[survey_settings][internal_comment]" rows="3" <?php echo $read_only ? 'readonly' : ''; ?> placeholder="Note interne, règle métier, contexte d'envoi…"><?php echo esc_textarea( $settings['internal_comment'] ); ?></textarea></p>
       <?php $automation_labels = $this->get_survey_action_automation_rule_labels(); ?>
       <?php if ( ! $read_only ) : ?>
-      <p><label><input type="checkbox" name="survey[survey_settings][is_active]" value="1" <?php checked( $settings['is_active'], '1' ); ?>> Activer ce modèle pour la diffusion</label></p>
-      <p><label><input type="checkbox" name="survey[survey_settings][auto_create_actions]" value="1" <?php checked( $settings['auto_create_actions'], '1' ); ?>> Créer automatiquement certaines actions dès la validation d’une réponse en alerte</label></p>
+      <?php /* ACDC 3.25.157 — Les libellés de ce formulaire sont en display:block :
+               la case se retrouvait centrée AU-DESSUS de son texte, et l'on ne pouvait
+               plus dire quelle case allait avec quelle règle. Le DOM était correct, le
+               défaut était purement visuel : on rend ces labels-là en ligne. */ ?>
+      <style>
+        label.acdc-check-inline{display:flex;align-items:center;gap:8px;text-align:left;font-weight:400;}
+        label.acdc-check-inline input[type="checkbox"]{flex:0 0 auto;margin:0;width:auto;}
+      </style>
+      <p><label class="acdc-check-inline"><input type="checkbox" name="survey[survey_settings][is_active]" value="1" <?php checked( $settings['is_active'], '1' ); ?>> Activer ce modèle pour la diffusion</label></p>
+      <p><label class="acdc-check-inline"><input type="checkbox" name="survey[survey_settings][auto_create_actions]" value="1" <?php checked( $settings['auto_create_actions'], '1' ); ?>> Créer automatiquement certaines actions dès la validation d’une réponse en alerte</label></p>
       <div class="acdc-panel acdc-panel-block" style="margin-top:12px;">
         <strong>Règles d’automatisation des actions</strong>
         <div class="acdc-grid-2cols" style="margin-top:10px;">
           <?php foreach ( $automation_labels as $rule_key => $rule_label ) : ?>
-            <p style="margin:0;"><label><input type="checkbox" name="survey[survey_settings][auto_action_rules][]" value="<?php echo esc_attr( $rule_key ); ?>" <?php checked( in_array( $rule_key, (array) $settings['auto_action_rules'], true ) ); ?>> <?php echo esc_html( $rule_label ); ?></label></p>
+            <p style="margin:0;"><label class="acdc-check-inline"><input type="checkbox" name="survey[survey_settings][auto_action_rules][]" value="<?php echo esc_attr( $rule_key ); ?>" <?php checked( in_array( $rule_key, (array) $settings['auto_action_rules'], true ) ); ?>> <?php echo esc_html( $rule_label ); ?></label></p>
           <?php endforeach; ?>
         </div>
       </div>
@@ -1550,7 +1558,16 @@ public function render_quality_compliance_shortcode( $atts = array() ) {
                     <div class="acdc-row-menu-dropdown" data-acdc-row-menu-dropdown hidden>
                       <a href="<?php echo esc_url( $results_u ); ?>">Voir les r&#233;sultats</a>
                       <a href="<?php echo esc_url( $send_url ); ?>">G&#233;rer l&#8217;envoi</a>
-                      <a href="<?php echo esc_url( add_query_arg( array( 'srv_subtab' => 'envois' ), $base_url ) ); ?>">Relancer manuellement</a>
+                      <?php /* ACDC 3.25.157 — Seule entrée du menu à ne transmettre AUCUN
+                               identifiant : on quittait la ligne cliquée pour un onglet
+                               générique, incapable de savoir quelle enquête relancer.
+                               Constat vérifié sur tous les modules d'enquête, corrigé ici
+                               une fois pour toutes puisque le menu est mutualisé. */ ?>
+                      <a href="<?php echo esc_url( add_query_arg( array(
+                        'srv_subtab'  => 'envois',
+                        'source_type' => $this->get_survey_questionnaire_source_type( $survey_type ),
+                        'source_id'   => (int) $eid,
+                      ), $base_url ) ); ?>">Relancer manuellement</a>
                       <a href="<?php echo esc_url( $dup_url ); ?>">Dupliquer</a>
                       <a href="<?php echo esc_url( $results_u . '&export=csv' ); ?>">Exporter PDF / CSV</a>
                       <a href="<?php echo esc_url( $archive_url ); ?>">Archiver</a>
@@ -2436,7 +2453,7 @@ public function render_quality_compliance_shortcode( $atts = array() ) {
         <?php $this->render_questionnaire_session_animation_admin( $session ); ?>
       <?php else : ?>
       <div class="acdc-panel acdc-mb-18"><form method="post" action="<?php echo esc_url( admin_url( 'admin-post.php' ) ); ?>" class="acdc-form">
-        <?php wp_nonce_field( 'acdc_save_questionnaire_session' ); ?><input type="hidden" name="action" value="acdc_save_questionnaire_session"><input type="hidden" name="questionnaire_session_id" value="<?php echo $session ? (int) $session->id : 0; ?>"><?php if ( '' !== $prefill_source_type ) : ?><input type="hidden" name="redirect_source_type" value="<?php echo esc_attr( $prefill_source_type ); ?>"><?php endif; ?><?php if ( $prefill_source_id > 0 ) : ?><input type="hidden" name="redirect_source_id" value="<?php echo (int) $prefill_source_id; ?>"><?php endif; ?>
+        <?php wp_nonce_field( 'acdc_save_questionnaire_session' ); ?><input type="hidden" name="action" value="acdc_save_questionnaire_session"><?php /* ACDC 3.25.157 — Origine explicite du formulaire. Le handler tourne sous admin-post.php, où is_admin() vaut TOUJOURS true : sans ce marqueur, un enregistrement lancé depuis l'extranet renvoyait vers wp-admin, page à laquelle le gestionnaire n'a pas accès — il voyait « Vous n'avez pas l'autorisation » alors que sa session était bien enregistrée. */ ?><input type="hidden" name="acdc_origin" value="<?php echo esc_attr( is_admin() ? 'admin' : 'front' ); ?>"><input type="hidden" name="questionnaire_session_id" value="<?php echo $session ? (int) $session->id : 0; ?>"><?php if ( '' !== $prefill_source_type ) : ?><input type="hidden" name="redirect_source_type" value="<?php echo esc_attr( $prefill_source_type ); ?>"><?php endif; ?><?php if ( $prefill_source_id > 0 ) : ?><input type="hidden" name="redirect_source_id" value="<?php echo (int) $prefill_source_id; ?>"><?php endif; ?>
         <div class="acdc-section-head"><div><h3>Informations de session</h3><p>Le lien et le QR code de session sont générés automatiquement et peuvent être transmis aux apprenants.</p></div></div>
         <?php if ( $editing_source ) : ?>
           <div class="acdc-grid-3cols acdc-mb-18">
@@ -2481,10 +2498,15 @@ public function render_quality_compliance_shortcode( $atts = array() ) {
         <?php endif; ?>
 
         <?php if ( $session ) : $share_message = $this->build_questionnaire_session_share_message( $session, $editing_source ); $mailto_url = $this->build_questionnaire_session_mailto_url( $session, $editing_source ); $send_stats = $this->get_questionnaire_session_send_stats( $session ); $send_url = wp_nonce_url( admin_url( 'admin-post.php?action=acdc_send_questionnaire_session_emails&questionnaire_session_id=' . (int) $session->id . '&source_type=' . rawurlencode( (string) $prefill_source_type ) . '&source_id=' . (int) $prefill_source_id ), 'acdc_send_questionnaire_session_emails_' . (int) $session->id ); ?>
+          <?php /* ACDC 3.25.157 — Lien public et QR code masqués pour les enquêtes : le moteur exige un jeton personnel, ce lien ne mène qu'au mur « lien personnel et nominatif ». */ ?>
+          <?php if ( ! $this->is_survey_questionnaire_source_type( (string) $session->source_type ) ) : ?>
           <div class="acdc-grid-2cols acdc-mb-18">
             <div class="acdc-panel acdc-panel-block"><p><strong>Lien public</strong><br><a href="<?php echo esc_url( $session->public_url ); ?>" target="_blank" rel="noopener"><?php echo esc_html( $session->public_url ); ?></a></p><p class="acdc-mb-0 acdc-inline-wrap"><a class="acdc-button acdc-button-soft" href="<?php echo esc_url( $session->public_url ); ?>" target="_blank" rel="noopener">Ouvrir la page apprenant</a><a class="acdc-button acdc-button-soft" href="<?php echo esc_url( $session->public_url ); ?>" target="_blank" rel="noopener" download>Télécharger le lien</a></p></div>
             <div class="acdc-panel acdc-panel-block"><?php if ( ! empty( $session->qr_code_url ) ) : ?><p><strong>QR code</strong><br><img src="<?php echo esc_url( $session->qr_code_url ); ?>" alt="QR code" style="max-width:180px;height:auto;"></p><p class="acdc-mb-0"><a class="acdc-button acdc-button-soft" href="<?php echo esc_url( $session->qr_code_url ); ?>" target="_blank" rel="noopener">Ouvrir / télécharger le QR code</a></p><?php else : ?><p><strong>QR code</strong><br>Non généré.</p><?php endif; ?></div>
           </div>
+          <?php else : ?>
+          <div class="acdc-panel acdc-panel-block acdc-mb-18"><p><strong>Accès apprenant</strong><br>Cette enquête est nominative : chaque apprenant reçoit un lien personnel, généré par « Envoyer les accès ». Il n'existe pas de lien public ni de QR code utilisable pour y répondre.</p></div>
+          <?php endif; ?>
           <div class="acdc-panel acdc-panel-block acdc-mb-18"><h4 style="margin-top:0;">Diffusion de la session</h4>
             <p><?php echo esc_html( $session ? $this->get_questionnaire_delivery_targets_count( $session ) : count( $targeted_learners ) ); ?> destinataire(s) ciblé(s) pour la diffusion. Utilisez le message ci-dessous tel quel ou envoyez directement les accès depuis le plugin.</p>
             <?php if ( ! empty( $send_stats['last_sent_at'] ) ) : ?><p><strong>Dernier envoi</strong><br><?php echo esc_html( mysql2date( 'j F Y à H\hi', $send_stats['last_sent_at'] ) ); ?> — <?php echo esc_html( (string) $send_stats['sent_count'] ); ?> envoyé(s), <?php echo esc_html( (string) $send_stats['failed_count'] ); ?> en échec.</p><?php endif; ?>
@@ -2502,9 +2524,35 @@ public function render_quality_compliance_shortcode( $atts = array() ) {
         <?php if ( ! $is_trainer_survey_source && ! $is_company_survey_source && ! $is_funder_survey_source ) : ?><div class="acdc-panel acdc-panel-block acdc-mb-18"><h4 style="margin-top:0;">Apprenants ciblés</h4>
           <?php if ( ! empty( $registered_learners ) ) : ?>
             <input type="hidden" name="questionnaire_session[target_learner_ids_present]" value="1">
-            <p><?php echo esc_html( count( $registered_learners ) ); ?> apprenant(s) repéré(s) pour la formation sélectionnée. Cochez les apprenants réellement ciblés par cette session. Sans sélection spécifique, tous les apprenants listés seront considérés comme ciblés.</p>
+            <?php /* ACDC 3.25.157 — La consigne annonçait « sans sélection spécifique, tous
+                     les apprenants listés seront considérés comme ciblés » sans dire QUI se
+                     trouve dans cette liste : sur une session sans périmètre, elle contenait
+                     de vrais apprenants. Le périmètre est désormais borné à la séance ou à la
+                     formation liée (voir get_registered_learners_for_questionnaire_session),
+                     et la consigne le nomme explicitement. */ ?>
+            <p><?php echo esc_html( count( $registered_learners ) ); ?> apprenant(s) inscrit(s) à la formation liée à cette session. Cochez ceux réellement ciblés ; sans sélection spécifique, l’envoi portera sur les <?php echo esc_html( count( $registered_learners ) ); ?> apprenant(s) listé(s) ci-dessous. Aucun autre apprenant du site ne peut être atteint depuis cet écran.</p>
             <div class="acdc-table-wrap"><table class="acdc-table"><thead><tr><?php if ( 'view' !== $action ) : ?><th>Cibler</th><?php endif; ?><th>Apprenant</th><th>Email</th><th>Téléphone</th></tr></thead><tbody><?php foreach ( $registered_learners as $learner ) : $is_checked = empty( $selected_learner_ids ) || in_array( (int) $learner->id, $selected_learner_ids, true ); ?><tr><?php if ( 'view' !== $action ) : ?><td><input type="checkbox" name="questionnaire_session[target_learner_ids][]" value="<?php echo (int) $learner->id; ?>" <?php checked( $is_checked ); ?>></td><?php endif; ?><td><?php echo esc_html( trim( $learner->first_name . ' ' . $learner->last_name ) ); ?></td><td><?php echo esc_html( ! empty( $learner->email ) ? $learner->email : '—' ); ?></td><td><?php echo esc_html( ! empty( $learner->phone ) ? $learner->phone : '—' ); ?></td></tr><?php endforeach; ?></tbody></table></div>
-            <?php if ( ! empty( $targeted_learners ) ) : ?><p class="acdc-mt-8"><small><?php echo esc_html( count( $targeted_learners ) ); ?> apprenant(s) ciblé(s) actuellement pour la diffusion.</small></p><?php endif; ?>
+            <?php /* ACDC 3.25.157 — Ce compteur était figé au rendu : décocher un apprenant
+                     ne le faisait pas bouger, et l'écran affichait donc un nombre de
+                     destinataires faux au moment même où l'on ajuste le ciblage. */ ?>
+            <p class="acdc-mt-8"><small><strong id="acdc-qs-target-count"><?php echo esc_html( count( $targeted_learners ) ); ?></strong> apprenant(s) ciblé(s) actuellement pour la diffusion.</small></p>
+            <script>
+            (function(){
+              var box = document.getElementById('acdc-qs-target-count');
+              if ( ! box ) { return; }
+              var boxes = document.querySelectorAll('input[name="questionnaire_session[target_learner_ids][]"]');
+              if ( ! boxes.length ) { return; }
+              function refresh(){
+                var n = 0;
+                for ( var i = 0; i < boxes.length; i++ ) { if ( boxes[i].checked ) { n++; } }
+                /* Aucune case cochée = pas de restriction : la diffusion porte sur toute
+                   la liste. On affiche ce qui partira réellement, pas le nombre de coches. */
+                box.textContent = ( 0 === n ) ? boxes.length : n;
+              }
+              for ( var i = 0; i < boxes.length; i++ ) { boxes[i].addEventListener('change', refresh); }
+              refresh();
+            })();
+            </script>
           <?php else : ?>
             <p>Aucun apprenant inscrit n’a été repéré pour cette formation. Enregistrez d’abord la session avec une formation liée, puis revenez ici pour cibler les apprenants et préparer la diffusion.</p>
           <?php endif; ?>
@@ -2538,8 +2586,18 @@ public function render_quality_compliance_shortcode( $atts = array() ) {
     echo '<div class="acdc-panel acdc-mb-18"><div class="acdc-section-head"><div><h2>Animation — ' . esc_html( $session->session_title ) . '</h2><p>Le formateur pilote l’ouverture des questions et le passage à la suivante.</p></div></div>';
     echo '<div class="acdc-grid-2cols"><div>';
     echo '<p><strong>Statut</strong><br>' . esc_html( ucfirst( str_replace( '_', ' ', $session->status ) ) ) . '</p>';
-    echo '<p><strong>Lien public</strong><br><a href="' . esc_url( $session->public_url ) . '" target="_blank" rel="noopener">' . esc_html( $session->public_url ) . '</a></p>';
-    echo ! empty( $session->qr_code_url ) ? '<p><img src="' . esc_url( $session->qr_code_url ) . '" alt="QR code" style="max-width:180px;height:auto;"></p>' : '';
+    /* ACDC 3.25.157 — Le lien public et le QR code ne fonctionnent QUE pour les
+       sessions de questionnaire à connexion par pseudo. Pour une enquête, le moteur
+       exige un jeton personnel : le lien renvoyait donc systématiquement le mur
+       « Cette enquête utilise un lien personnel et nominatif », alors que l'écran
+       invitait à le transmettre aux apprenants. On ne propose plus ce qui ne peut
+       pas marcher, et on nomme le bon chemin. */
+    if ( $this->is_survey_questionnaire_source_type( (string) $session->source_type ) ) {
+      echo '<p><strong>Accès apprenant</strong><br>Cette enquête est nominative : chaque apprenant reçoit un lien personnel. Utilisez « Envoyer les accès » pour les générer et les transmettre — un lien public ou un QR code ne permettrait pas de répondre.</p>';
+    } else {
+      echo '<p><strong>Lien public</strong><br><a href="' . esc_url( $session->public_url ) . '" target="_blank" rel="noopener">' . esc_html( $session->public_url ) . '</a></p>';
+      echo ! empty( $session->qr_code_url ) ? '<p><img src="' . esc_url( $session->qr_code_url ) . '" alt="QR code" style="max-width:180px;height:auto;"></p>' : '';
+    }
     echo '</div><div><p><strong>Participants connectés</strong><br>' . esc_html( count( $participants ) ) . '</p><p><strong>Réponses sur la question en cours</strong><br>' . esc_html( $this->count_questionnaire_session_answers_for_index( $session->id, $index ) ) . '</p></div></div>';
     echo '<div class="acdc-panel acdc-panel-block"><h3>Question en cours</h3>';
     if ( $current ) {

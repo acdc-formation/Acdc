@@ -31,23 +31,46 @@
             window.scrollTo( { top: form.offsetTop - 20, behavior: 'smooth' } );
         }
 
+        /* ACDC 3.25.157 — Message d'erreur ANCRÉ à la question concernée.
+           L'alert() précédente n'était jamais atteinte (la validation native bloquait
+           en amont) et, même atteinte, ne désignait pas la question fautive. */
+        function clearQuestionError( q ) {
+            var box = q.querySelector( '.acdc-qz-public-q-error' );
+            if ( box ) { box.parentNode.removeChild( box ); }
+            q.classList.remove( 'acdc-qz-public-q-invalid' );
+        }
+
+        function showQuestionError( q, message ) {
+            clearQuestionError( q );
+            var box = document.createElement( 'p' );
+            box.className = 'acdc-qz-public-q-error';
+            box.setAttribute( 'role', 'alert' );
+            box.style.cssText = 'margin:12px 0 0;padding:10px 12px;border-radius:8px;background:#fee2e2;color:#991b1b;font-size:14px;font-weight:600;';
+            box.textContent = message;
+            var nav = q.querySelector( '.acdc-qz-public-q-nav' );
+            if ( nav ) { q.insertBefore( box, nav ); } else { q.appendChild( box ); }
+            q.classList.add( 'acdc-qz-public-q-invalid' );
+            box.scrollIntoView( { behavior: 'smooth', block: 'center' } );
+        }
+
         function validateCurrentQuestion() {
             var q = questions[ currentIndex ];
             if ( ! q ) { return true; }
+            clearQuestionError( q );
             // Cherche un input requis non rempli
             var radios = q.querySelectorAll( 'input[type="radio"][required]' );
             if ( radios.length > 0 ) {
                 var name = radios[0].name;
                 var checked = q.querySelector( 'input[type="radio"][name="' + CSS.escape( name ) + '"]:checked' );
                 if ( ! checked ) {
-                    alert( 'Merci de répondre à la question avant de continuer.' );
+                    showQuestionError( q, 'Sélectionnez une réponse avant de continuer.' );
                     return false;
                 }
             }
             var textareas = q.querySelectorAll( 'textarea[required]' );
             for ( var i = 0; i < textareas.length; i++ ) {
                 if ( ! textareas[i].value.trim() ) {
-                    alert( 'Merci de saisir votre réponse avant de continuer.' );
+                    showQuestionError( q, 'Saisissez votre réponse avant de continuer.' );
                     textareas[i].focus();
                     return false;
                 }
@@ -83,7 +106,7 @@
             // Vérifie qu'on est bien sur la dernière question
             if ( currentIndex !== questions.length - 1 ) {
                 e.preventDefault();
-                alert( 'Vous n\'êtes pas encore à la dernière question.' );
+                showQuestionError( questions[ currentIndex ], 'Répondez aux questions suivantes avant de valider.' );
                 return false;
             }
             if ( ! validateCurrentQuestion() ) {

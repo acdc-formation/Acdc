@@ -1089,6 +1089,31 @@ trait ACDC_Quizzes_Render_Results_Trait {
      * Helpers de formatage utilisés par les écrans résultats.
      * ==================================================================== */
 
+    /**
+     * ACDC 3.25.157 — Identifiant de FORMATEUR ACDC du compte connecté.
+     *
+     * Retourne 0 pour un gestionnaire (aucune restriction à appliquer) et pour
+     * tout compte sans fiche formateur. À n'utiliser que pour restreindre une vue :
+     * ne jamais confondre avec get_current_user_id().
+     *
+     * @return int Identifiant dans acdc_of_trainers, ou 0.
+     */
+    private function qz_current_user_trainer_id() {
+        if ( current_user_can( 'manage_options' ) ) {
+            return 0;
+        }
+        $user = wp_get_current_user();
+        if ( ! $user || empty( $user->user_email ) ) {
+            return 0;
+        }
+        global $wpdb;
+        $trainer_id = $wpdb->get_var( $wpdb->prepare(
+            "SELECT id FROM {$this->trainer_table} WHERE email = %s LIMIT 1",
+            $user->user_email
+        ) );
+        return (int) $trainer_id;
+    }
+
     private function qz_format_datetime( $value ) {
         if ( empty( $value ) || '0000-00-00 00:00:00' === $value ) {
             return '—';
@@ -1150,7 +1175,16 @@ trait ACDC_Quizzes_Render_Results_Trait {
      * @return void
      */
     public function render_qz_results_consolidated_screen() {
-        $trainer_id = get_current_user_id();
+        /* ACDC 3.25.157 — Cet écran passait get_current_user_id(), c'est-à-dire un
+           identifiant d'UTILISATEUR WORDPRESS, à un filtre qui le compare à
+           acdc_of_sessions.trainer_id, un identifiant de FORMATEUR ACDC. Les deux
+           numérotations n'ont aucun rapport : la clause EXISTS ne trouvait jamais
+           rien et l'écran affichait « 0 résultat » quels que soient les filtres,
+           alors que les passations existaient et s'affichaient dans les écrans par
+           module. C'est un écran de pilotage destiné au gestionnaire : il ne doit
+           pas être restreint à un formateur. La restriction n'est conservée que si
+           le compte connecté correspond effectivement à une fiche formateur. */
+        $trainer_id = $this->qz_current_user_trainer_id();
 
         // Filtres URL
         $purpose      = isset( $_GET['qz_purpose'] )      ? sanitize_key( wp_unslash( $_GET['qz_purpose'] ) )           : '';

@@ -1071,8 +1071,17 @@ trait ACDC_Questionnaires_Actions_Trait {
     $redirect_context_args = array();
     if ( '' !== $redirect_source_type ) { $redirect_context_args['source_type'] = $redirect_source_type; }
     if ( $redirect_source_id > 0 ) { $redirect_context_args['source_id'] = $redirect_source_id; }
+    /* ACDC 3.25.157 — Le retour doit revenir D'OÙ L'ON VIENT. Ce handler s'exécute
+       sous admin-post.php, où is_admin() est toujours vrai : on ne peut donc pas
+       déduire le contexte, il faut le lire sur le formulaire. */
+    $from_admin = isset( $_POST['acdc_origin'] ) && 'admin' === sanitize_key( wp_unslash( $_POST['acdc_origin'] ) );
     if ( isset( $_POST['save_and_animate'] ) && $session_id > 0 ) {
-      wp_safe_redirect( add_query_arg( array_merge( array( 'page' => 'acdc-of-questionnaire-sessions', 'action' => 'animate', 'item_id' => $session_id, 'notice' => rawurlencode( 'Session enregistrée. Animation ouverte.' ), 'notice_type' => 'success' ), $redirect_context_args ), admin_url( 'admin.php' ) ) );
+      $animate_args = array_merge( array( 'action' => 'animate', 'item_id' => $session_id, 'notice' => rawurlencode( 'Session enregistrée. Animation ouverte.' ), 'notice_type' => 'success' ), $redirect_context_args );
+      wp_safe_redirect(
+        $from_admin
+          ? add_query_arg( array_merge( array( 'page' => 'acdc-of-questionnaire-sessions' ), $animate_args ), admin_url( 'admin.php' ) )
+          : $this->portal_page_url( array_merge( array( 'tab' => 'questionnaire_sessions' ), $animate_args ) )
+      );
       exit;
     }
     if ( isset( $_POST['save_and_open_public'] ) && $saved_session && ! empty( $saved_session->public_url ) ) {
@@ -1085,7 +1094,11 @@ trait ACDC_Questionnaires_Actions_Trait {
     );
     if ( '' !== $redirect_source_type ) { $redirect_args['source_type'] = $redirect_source_type; }
     if ( $redirect_source_id > 0 ) { $redirect_args['source_id'] = $redirect_source_id; }
-    wp_safe_redirect( add_query_arg( $redirect_args, admin_url( 'admin.php?page=acdc-of-questionnaire-sessions' ) ) );
+    wp_safe_redirect(
+      $from_admin
+        ? add_query_arg( $redirect_args, admin_url( 'admin.php?page=acdc-of-questionnaire-sessions' ) )
+        : $this->portal_page_url( array_merge( array( 'tab' => 'questionnaire_sessions' ), $redirect_args ) )
+    );
     exit;
   }
 

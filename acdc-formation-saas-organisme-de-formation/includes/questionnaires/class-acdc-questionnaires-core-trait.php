@@ -2989,6 +2989,15 @@ Vos réponses nous permettront d’évaluer nos pratiques, d’identifier des ax
         return $session_learners;
       }
     }
+    /* ACDC 3.25.157 — Une session SANS PÉRIMÈTRE ne cible personne.
+       Sans séance ni formation liée, la boucle ci-dessous ne filtrait rien et
+       retenait les apprenants de TOUTES les inscriptions du site : une session
+       créée pour un essai arrivait avec de vrais apprenants déjà ciblés, et un
+       clic sur « Envoyer les accès » leur écrivait. Un périmètre vide doit
+       produire une cible vide, jamais l'annuaire entier. */
+    if ( ! $session_id && ! $formation_id ) {
+      return array();
+    }
     $learner_ids = array();
     $registrations = $wpdb->get_results( "SELECT learner_id, learner_ids, formation_id FROM {$this->training_registration_table} ORDER BY id DESC" );
     foreach ( (array) $registrations as $registration ) {
@@ -3002,9 +3011,10 @@ Vos réponses nous permettront d’évaluer nos pratiques, d’identifier des ax
       }
     }
     $learner_ids = array_values( array_unique( array_filter( array_map( 'absint', $learner_ids ) ) ) );
-    if ( empty( $learner_ids ) && $formation_id ) {
-      return $this->get_learners();
-    }
+    /* ACDC 3.25.157 — Une formation sans aucune inscription ne cible PERSONNE.
+       Le repli précédent renvoyait get_learners(), c'est-à-dire l'annuaire complet :
+       l'absence de destinataire était traitée comme « tous les destinataires »,
+       exactement l'inverse de l'intention. */
     if ( empty( $learner_ids ) ) { return array(); }
     $in = implode( ',', array_map( 'absint', $learner_ids ) );
     return $wpdb->get_results( "SELECT * FROM {$this->learner_table} WHERE id IN ($in) ORDER BY first_name ASC, last_name ASC" );
