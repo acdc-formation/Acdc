@@ -247,9 +247,12 @@ class ACDC_Sig_Public {
         $action_url  = esc_url( admin_url( 'admin-post.php' ) );
         $is_renforce = ( ACDC_Sig_Core::LEVEL_RENFORCE === $request->sig_level );
 
-        // Correction audit MOYEN : valider l'URL du document avant de la rendre dans une iframe
+        /* Correction audit MOYEN : valider l'URL du document avant de la rendre dans une iframe.
+           ACDC 3.25.151 : on ne pointe plus sur le fichier statique — le dossier des contrats
+           est désormais interdit d'accès direct (403), ce qui rendait l'aperçu illisible. Le
+           document transite par un service autorisé par le jeton de signature. */
         $safe_doc_url = ( $request->doc_url && $this->core->is_safe_doc_url( $request->doc_url ) )
-                        ? $request->doc_url
+                        ? $this->get_doc_view_url( $request->token )
                         : '';
 
         $refuse_url = esc_url( wp_nonce_url( add_query_arg( array( 'sig' => $request->token, 'refuse' => '1' ), $this->core->get_signature_page_url() ), 'acdc_sig_refuse_' . $request->token ) );
@@ -543,6 +546,90 @@ class ACDC_Sig_Public {
         }
 
         exit;
+    }
+
+    /* -----------------------------------------------------------------------
+     * ACDC 3.25.151 — Service du document à signer, autorisé PAR LE JETON.
+     *
+     * Depuis le verrouillage du dossier des contrats (.htaccess), l'aperçu de la
+     * page de signature renvoyait 403 : le signataire était invité à signer un
+     * document qu'il ne pouvait pas lire — ce qui vide la signature de sa valeur.
+     * Ce service est nécessairement NON authentifié au sens WordPress : c'est le
+     * jeton de signature (64 caractères) qui fait autorité, exactement comme pour
+     * l'accès à la page elle-même. Contrôles appliqués :
+     *   - jeton valide et demande existante ;
+     *   - demande non expirée, non révoquée, non refusée ;
+     *   - pour le niveau renforcé, OTP préalablement vérifié ;
+     *   - chemin confiné au dossier des téléversements (anti-traversée).
+     * -------------------------------------------------------------------- */
+
+    public function handle_serve_doc() {
+        global $wpdb;
+
+        $token = sanitize_text_field( wp_unslash( $_GET['sig'] ?? '' ) );
+        if ( '' === $token ) {
+            status_header( 404 );
+            exit;
+        }
+
+        $request = $wpdb->get_row(
+            $wpdb->prepare( "SELECT * FROM {$this->core->table_requests} WHERE token = %s", $token )
+        );
+        if ( ! $request ) {
+            status_header( 404 );
+            exit;
+        }
+
+        // Demande close ou périmée : plus aucun accès au document.
+        if ( in_array( (string) $request->status, array( 'refuse', 'revoque', 'expire' ), true ) ) {
+            status_header( 403 );
+            exit;
+        }
+        if ( ! empty( $request->expires_at ) && strtotime( (string) $request->expires_at ) < time() ) {
+            status_header( 403 );
+            exit;
+        }
+
+        // Niveau renforcé : le document ne s'ouvre qu'après vérification d'identité.
+        if ( ACDC_Sig_Core::LEVEL_RENFORCE === $request->sig_level && ! $this->core->is_otp_verified( $request->token ) ) {
+            status_header( 403 );
+            exit;
+        }
+
+        // Chemin : on privilégie doc_path, sinon on le reconstruit depuis doc_url.
+        $path = (string) $request->doc_path;
+        if ( '' === $path || ! file_exists( $path ) ) {
+            $uploads = wp_upload_dir();
+            $path    = str_replace( trailingslashit( $uploads['baseurl'] ), trailingslashit( $uploads['basedir'] ), (string) $request->doc_url );
+        }
+
+        $uploads   = wp_upload_dir();
+        $real_path = realpath( $path );
+        $real_base = realpath( $uploads['basedir'] );
+        if ( ! $real_path || ! $real_base || 0 !== strpos( $real_path, $real_base ) || ! is_file( $real_path ) ) {
+            status_header( 404 );
+            exit;
+        }
+
+        $ext  = strtolower( pathinfo( $real_path, PATHINFO_EXTENSION ) );
+        $mime = ( 'pdf' === $ext ) ? 'application/pdf' : ( 'html' === $ext || 'htm' === $ext ? 'text/html; charset=UTF-8' : 'application/octet-stream' );
+
+        while ( ob_get_level() ) { ob_end_clean(); }
+        nocache_headers();
+        header( 'Content-Type: ' . $mime );
+        header( 'Content-Disposition: inline; filename="' . basename( $real_path ) . '"' );
+        header( 'Content-Length: ' . filesize( $real_path ) );
+        header( 'X-Content-Type-Options: nosniff' );
+        readfile( $real_path ); // phpcs:ignore WordPress.WP.AlternativeFunctions.file_system_operations_readfile
+        exit;
+    }
+
+    /** URL de consultation du document à signer, portée par le jeton. */
+    public function get_doc_view_url( $token ) {
+        return add_query_arg(
+            array( 'action' => 'acdc_sig_doc', 'sig' => rawurlencode( (string) $token ) ),
+            admin_url( 'admin-post.php' )
+        );
     }
 
     /* -----------------------------------------------------------------------

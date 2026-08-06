@@ -123,6 +123,12 @@ class ACDC_Signature {
         add_action( 'admin_post_nopriv_acdc_sig_otp_resend', array( $this->pub, 'handle_otp_resend' ) );
         add_action( 'admin_post_acdc_sig_otp_resend',        array( $this->pub, 'handle_otp_resend' ) );
 
+        /* ACDC 3.25.151 — Service du document à signer (autorisé par le jeton de signature).
+           Indispensable depuis le verrouillage du dossier des contrats : sans lui, l'aperçu
+           de la page de signature renvoie 403 et le signataire ne peut pas lire le document. */
+        add_action( 'admin_post_nopriv_acdc_sig_doc',        array( $this->pub, 'handle_serve_doc' ) );
+        add_action( 'admin_post_acdc_sig_doc',               array( $this->pub, 'handle_serve_doc' ) );
+
         add_action( 'admin_menu', array( $this->admin, 'register_menu' ) );
 
         // Front-office portal
