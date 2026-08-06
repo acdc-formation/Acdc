@@ -4859,10 +4859,14 @@ public function handle_purge_plugin_data() {
     /* ACDC 3.25.148 — Garde-fou : refuser la suppression d'une thématique utilisée.
        Auparavant la suppression était inconditionnelle : les formations rattachées
        se retrouvaient avec une thématique orpheline, sans aucun avertissement. */
+    /* La table des formations ne possède QUE la colonne `thematique` (qui stocke le
+       CODE de la thématique). Une version antérieure de ce garde-fou testait aussi
+       `thematique_liee`, colonne qui appartient en réalité à la table des blocs de
+       recueil : MySQL levait « Unknown column », get_var() renvoyait null, et le
+       compteur retombait à 0 — le garde-fou ne se déclenchait donc jamais. */
     $code_t = (string) $t->code;
     $used   = (int) $wpdb->get_var( $wpdb->prepare(
-      "SELECT COUNT(*) FROM {$this->formation_table} WHERE thematique = %s OR thematique_liee = %s",
-      $code_t,
+      "SELECT COUNT(*) FROM {$this->formation_table} WHERE thematique = %s",
       $code_t
     ) );
     if ( $used > 0 ) {
