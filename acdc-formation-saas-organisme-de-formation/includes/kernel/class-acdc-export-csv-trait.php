@@ -42,6 +42,33 @@ trait ACDC_Export_CSV_Trait {
 	 * @param resource $handle
 	 * @param array    $row
 	 */
+	/**
+	 * ACDC 3.25.152 — Formatage sûr d'une date pour les exports.
+	 *
+	 * Les gardes existantes testaient uniquement la chaîne vide. Or MySQL stocke une
+	 * date non renseignée sous la forme « 0000-00-00 », qui est TRUTHY en PHP : elle
+	 * franchissait donc la garde et mysql2date() la rendait « 30/11/-0001 ».
+	 *
+	 * @param string $value  Date brute issue de la base.
+	 * @param string $format Format de sortie.
+	 * @return string Date formatée, ou chaîne vide si la date n'est pas renseignée.
+	 */
+	private function acdc_csv_date( $value, $format = 'd/m/Y' ) {
+		$value = trim( (string) $value );
+		if ( '' === $value ) {
+			return '';
+		}
+		// Dates « zéro » MySQL sous toutes leurs formes.
+		if ( 0 === strpos( $value, '0000-00-00' ) ) {
+			return '';
+		}
+		$ts = strtotime( $value );
+		if ( false === $ts || $ts <= 0 ) {
+			return '';
+		}
+		return mysql2date( $format, $value );
+	}
+
 	private function acdc_csv_row( $handle, $row ) {
 		$clean = array_map( function( $v ) {
 			$v = str_replace( array( "\r\n", "\r", "\n" ), ' ', (string) $v );
@@ -94,7 +121,7 @@ trait ACDC_Export_CSV_Trait {
 				$r->gender,
 				$r->email,
 				$r->phone,
-				$r->birth_date ? mysql2date( 'd/m/Y', $r->birth_date ) : '',
+				$this->acdc_csv_date( $r->birth_date ),
 				$r->city,
 				$r->postal_code,
 				isset( $r->company_name ) ? $r->company_name : '',
@@ -105,12 +132,12 @@ trait ACDC_Export_CSV_Trait {
 				$r->funding,
 				isset( $r->formation_title ) ? $r->formation_title : '',
 				isset( $r->session_title ) ? $r->session_title : '',
-				isset( $r->start_date ) && $r->start_date ? mysql2date( 'd/m/Y', $r->start_date ) : '',
-				isset( $r->end_date ) && $r->end_date ? mysql2date( 'd/m/Y', $r->end_date ) : '',
+				$this->acdc_csv_date( $r->start_date ?? '' ),
+				$this->acdc_csv_date( $r->end_date ?? '' ),
 				isset( $r->session_status ) ? $r->session_status : '',
 				$r->accessibility_needs,
-				mysql2date( 'd/m/Y H:i', $r->created_at ),
-				mysql2date( 'd/m/Y H:i', $r->updated_at ),
+				$this->acdc_csv_date( $r->created_at, 'd/m/Y H:i' ),
+				$this->acdc_csv_date( $r->updated_at, 'd/m/Y H:i' ),
 			) );
 		}
 
@@ -170,14 +197,14 @@ trait ACDC_Export_CSV_Trait {
 				$r->desired_training,
 				$r->status,
 				$r->source,
-				$r->rdv_at ? mysql2date( 'd/m/Y H:i', $r->rdv_at ) : '',
+				$this->acdc_csv_date( $r->rdv_at, 'd/m/Y H:i' ),
 				$r->last_followup,
 				$r->assigned_to,
 				$r->is_france_travail,
 				$r->accessibility_needs,
 				$r->comment_text,
-				mysql2date( 'd/m/Y H:i', $r->created_at ),
-				mysql2date( 'd/m/Y H:i', $r->updated_at ),
+				$this->acdc_csv_date( $r->created_at, 'd/m/Y H:i' ),
+				$this->acdc_csv_date( $r->updated_at, 'd/m/Y H:i' ),
 			) );
 		}
 
@@ -222,14 +249,14 @@ trait ACDC_Export_CSV_Trait {
 				$r->trainer_type,
 				$r->nda_number,
 				isset( $r->siret ) ? $r->siret : '',
-				$r->birth_date ? mysql2date( 'd/m/Y', $r->birth_date ) : '',
+				$this->acdc_csv_date( $r->birth_date ),
 				! empty( $r->is_self_trainer ) ? 'Oui' : 'Non',
 				! empty( $r->access_enabled ) ? 'Oui' : 'Non',
 				! empty( $r->session_reminder_enabled ) ? 'Oui' : 'Non',
 				! empty( $r->session_start_enabled ) ? 'Oui' : 'Non',
 				$r->comment_text,
-				mysql2date( 'd/m/Y H:i', $r->created_at ),
-				mysql2date( 'd/m/Y H:i', $r->updated_at ),
+				$this->acdc_csv_date( $r->created_at, 'd/m/Y H:i' ),
+				$this->acdc_csv_date( $r->updated_at, 'd/m/Y H:i' ),
 			) );
 		}
 
@@ -272,8 +299,8 @@ trait ACDC_Export_CSV_Trait {
 		) );
 
 		foreach ( (array) $rows as $r ) {
-			$start = ! empty( $r->start_date ) ? mysql2date( 'd/m/Y', $r->start_date ) : ( ! empty( $r->start_at ) ? mysql2date( 'd/m/Y H:i', $r->start_at ) : '' );
-			$end   = ! empty( $r->end_date ) ? mysql2date( 'd/m/Y', $r->end_date ) : ( ! empty( $r->end_at ) ? mysql2date( 'd/m/Y H:i', $r->end_at ) : '' );
+			$start = $this->acdc_csv_date( $r->start_date ?? '' ) ?: $this->acdc_csv_date( $r->start_at ?? '', 'd/m/Y H:i' );
+			$end   = $this->acdc_csv_date( $r->end_date ?? '' ) ?: $this->acdc_csv_date( $r->end_at ?? '', 'd/m/Y H:i' );
 			$lieu  = ! empty( $r->location ) ? $r->location : ( ! empty( $r->remote_link ) ? $r->remote_link : '' );
 			$formateur = trim( ( $r->trainer_first ?? '' ) . ' ' . ( $r->trainer_last ?? '' ) );
 
@@ -292,8 +319,8 @@ trait ACDC_Export_CSV_Trait {
 				$r->nb_apprenants,
 				$formateur,
 				$r->notes,
-				mysql2date( 'd/m/Y H:i', $r->created_at ),
-				mysql2date( 'd/m/Y H:i', $r->updated_at ),
+				$this->acdc_csv_date( $r->created_at, 'd/m/Y H:i' ),
+				$this->acdc_csv_date( $r->updated_at, 'd/m/Y H:i' ),
 			) );
 		}
 
@@ -348,7 +375,7 @@ trait ACDC_Export_CSV_Trait {
 			'Nom de naissance'   => $learner->birth_last_name,
 			'E-mail'             => $learner->email,
 			'Téléphone'          => $learner->phone,
-			'Date de naissance'  => $learner->birth_date ? mysql2date( 'd/m/Y', $learner->birth_date ) : '',
+			'Date de naissance'  => $this->acdc_csv_date( $learner->birth_date ),
 			'Lieu de naissance'  => $learner->birth_place,
 			'Adresse'            => $learner->address,
 			'Complément adresse' => $learner->address_extra,
@@ -366,8 +393,8 @@ trait ACDC_Export_CSV_Trait {
 			'Formation'          => isset( $learner->formation_title ) ? $learner->formation_title : '',
 			'Commentaire'        => $learner->comment_text,
 			'Notes'              => $learner->notes,
-			'Créé le'            => mysql2date( 'd/m/Y H:i', $learner->created_at ),
-			'Modifié le'         => mysql2date( 'd/m/Y H:i', $learner->updated_at ),
+			'Créé le'            => $this->acdc_csv_date( $learner->created_at, 'd/m/Y H:i' ),
+			'Modifié le'         => $this->acdc_csv_date( $learner->updated_at, 'd/m/Y H:i' ),
 		);
 		foreach ( $fields_identity as $label => $val ) {
 			$this->acdc_csv_row( $out, array( $label, (string) $val ) );
@@ -404,8 +431,8 @@ trait ACDC_Export_CSV_Trait {
 					$p->total_score,
 					$p->total_score_percentage,
 					$p->is_passed ? 'Oui' : 'Non',
-					$p->invited_at   ? mysql2date( 'd/m/Y H:i', $p->invited_at )   : '',
-					$p->completed_at ? mysql2date( 'd/m/Y H:i', $p->completed_at ) : '',
+					$this->acdc_csv_date( $p->invited_at, 'd/m/Y H:i' ),
+					$this->acdc_csv_date( $p->completed_at, 'd/m/Y H:i' ),
 					$p->is_anonymized ? 'Oui' : 'Non',
 				) );
 			}

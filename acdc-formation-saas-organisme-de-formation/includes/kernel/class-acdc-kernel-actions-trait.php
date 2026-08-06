@@ -1807,7 +1807,14 @@ trait ACDC_Kernel_Actions_Trait {
     if ( ! is_dir( $dir ) ) {
       return;
     }
-    foreach ( (array) glob( $dir . '*' ) as $f ) {
+    /* glob('*') n'attrape PAS les fichiers cachés : sans le motif .{*}, le .htaccess
+       posé par la protection restait en place et rmdir() échouait, laissant un dossier
+       vide derrière chaque mission supprimée. */
+    $files = array_merge(
+      (array) glob( $dir . '*' ),
+      (array) glob( $dir . '.*' )
+    );
+    foreach ( $files as $f ) {
       if ( is_file( $f ) ) {
         @unlink( $f ); // phpcs:ignore WordPress.PHP.NoSilencedErrors.Discouraged
       }
