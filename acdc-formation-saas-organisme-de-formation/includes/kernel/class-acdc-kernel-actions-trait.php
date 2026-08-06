@@ -1498,6 +1498,34 @@ trait ACDC_Kernel_Actions_Trait {
     }
     check_admin_referer( 'acdc_delete_trainer_' . $trainer_id );
     global $wpdb;
+
+    /* ACDC 3.25.155 — Un contrat de sous-traitance SIGNÉ est une pièce contractuelle
+       et comptable (conservation 10 ans, art. L123-22 du Code de commerce) dotée
+       d'une valeur probante. Supprimer le formateur détruisait jusqu'ici ces PDF
+       définitivement, en un clic et sans avertissement. On bloque donc la
+       suppression tant qu'une mission signée subsiste : à l'organisme de l'archiver
+       puis de la retirer sciemment. La minimisation RGPD ne prime pas sur une
+       obligation légale de conservation. */
+    $signed_count = (int) $wpdb->get_var( $wpdb->prepare(
+      "SELECT COUNT(*) FROM {$this->trainer_contract_table} WHERE trainer_id = %d AND signature_status = %s",
+      $trainer_id,
+      'signée'
+    ) );
+    if ( $signed_count > 0 ) {
+      $this->redirect_to_portal(
+        'trainers',
+        sprintf(
+          'Suppression impossible : ce formateur a %d contrat%s signé%s, à conserver comme pièce comptable. Archivez-le%s puis supprimez la mission correspondante avant de retirer le formateur.',
+          $signed_count,
+          $signed_count > 1 ? 's' : '',
+          $signed_count > 1 ? 's' : '',
+          $signed_count > 1 ? 's' : ''
+        ),
+        'error'
+      );
+      return;
+    }
+
     /* ACDC 3.25.148 — F11 : purger les PDF de TOUTES les missions du formateur
        avant de le supprimer (sinon les contrats restent sur le disque). */
     $contract_ids = (array) $wpdb->get_col( $wpdb->prepare(
@@ -1601,6 +1629,26 @@ trait ACDC_Kernel_Actions_Trait {
     }
     check_admin_referer( 'acdc_delete_trainer_contract_' . $contract_id );
     global $wpdb;
+
+    /* ACDC 3.25.155 — Même protection que sur la suppression du formateur : une
+       mission SIGNÉE ne se supprime pas d'un clic, son PDF est une pièce probante.
+       Sans ce garde-fou, celui posé sur le formateur se contournerait simplement
+       en supprimant d'abord ses missions. La suppression reste possible via une
+       confirmation explicite (paramètre force=1) pour les cas légitimes. */
+    $is_signed_mission = (string) $wpdb->get_var( $wpdb->prepare(
+      "SELECT signature_status FROM {$this->trainer_contract_table} WHERE id = %d AND trainer_id = %d",
+      $contract_id,
+      $trainer_id
+    ) );
+    $forced = isset( $_GET['force'] ) && '1' === (string) $_GET['force'];
+    if ( 'signée' === $is_signed_mission && ! $forced ) {
+      $back_signed = isset( $_GET['ctx'] ) && 'admin' === $_GET['ctx']
+        ? admin_url( 'admin.php?page=acdc-of-trainers&action=edit&item_id=' . $trainer_id . '&notice=' . rawurlencode( 'Cette mission est signée : son contrat est une pièce comptable à conserver. Archivez le PDF avant toute suppression.' ) . '&notice_type=error' )
+        : $this->portal_page_url( array( 'tab' => 'trainers', 'action' => 'edit', 'item_id' => $trainer_id, 'notice' => rawurlencode( 'Cette mission est signée : son contrat est une pièce comptable à conserver. Archivez le PDF avant toute suppression.' ), 'notice_type' => 'error' ) );
+      wp_safe_redirect( $back_signed );
+      exit;
+    }
+
     $wpdb->delete( $this->trainer_contract_table, array( 'id' => $contract_id, 'trainer_id' => $trainer_id ) );
     /* ACDC 3.25.148 — F11 : les PDF ne doivent pas survivre à la mission supprimée. */
     $this->acdc_purge_trainer_contract_files( $contract_id );
@@ -1685,6 +1733,160 @@ trait ACDC_Kernel_Actions_Trait {
     header( 'Content-Disposition: attachment; filename="' . $safe_name . '"' );
     header( 'Content-Length: ' . strlen( $pdf_content ) );
     echo $pdf_content; // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped -- binaire PDF
+    exit;
+  }
+
+  /* ====================================================================
+   * ACDC 3.25.155 — Contrats formateurs ORPHELINS (nettoyage manuel).
+   *
+   * Décision assumée : AUCUNE suppression automatique de document. Un contrat
+   * signé est une pièce probante et comptable ; le supprimer au démarrage du
+   * plugin serait irréversible et pris à la place de l'organisme.
+   * On fournit donc un écran qui INVENTORIE et laisse l'humain décider :
+   *   - contrats NON signés orphelins : suppression proposée (aucune valeur
+   *     juridique une fois la mission disparue — simple minimisation RGPD) ;
+   *   - contrats SIGNÉS orphelins : signalés « à conserver », suppression
+   *     possible seulement via une confirmation supplémentaire.
+   * ==================================================================== */
+
+  /** Inventaire des fichiers de contrats sans mission correspondante en base. */
+  private function acdc_scan_orphan_contract_files() {
+    global $wpdb;
+    $uploads = wp_upload_dir();
+    $root    = trailingslashit( $uploads['basedir'] ) . 'acdc-of-contracts/';
+    $out     = array();
+    if ( ! is_dir( $root ) ) {
+      return $out;
+    }
+
+    /* Fichiers à la racine (nommage « plat » historique) + un niveau de sous-dossiers. */
+    $candidates = (array) glob( $root . '*.pdf' );
+    foreach ( (array) glob( $root . '*', GLOB_ONLYDIR ) as $sub ) {
+      $candidates = array_merge( $candidates, (array) glob( trailingslashit( $sub ) . '*.pdf' ) );
+    }
+
+    foreach ( $candidates as $file ) {
+      if ( ! is_file( $file ) ) {
+        continue;
+      }
+      /* contrat-formateur-<trainer_id>-<contract_id>[-signe][-<jeton>].pdf */
+      if ( ! preg_match( '/contrat-formateur-(\d+)-(\d+)/', basename( $file ), $m ) ) {
+        continue;
+      }
+      $contract_id = (int) $m[2];
+      $exists = (int) $wpdb->get_var( $wpdb->prepare(
+        "SELECT COUNT(*) FROM {$this->trainer_contract_table} WHERE id = %d",
+        $contract_id
+      ) );
+      if ( $exists > 0 ) {
+        continue; // Mission bien présente : ce n'est pas un orphelin.
+      }
+      $out[] = array(
+        'path'        => $file,
+        'name'        => basename( $file ),
+        'size'        => (int) filesize( $file ),
+        'mtime'       => (int) filemtime( $file ),
+        'signed'      => ( false !== strpos( basename( $file ), '-signe' ) ),
+        'trainer_id'  => (int) $m[1],
+        'contract_id' => $contract_id,
+      );
+    }
+    return $out;
+  }
+
+  /** Écran d'administration : Réglages → ACDC Documents orphelins. */
+  public function register_orphan_docs_page() {
+    if ( ! function_exists( 'add_options_page' ) ) {
+      return;
+    }
+    add_options_page(
+      'ACDC Documents orphelins',
+      'ACDC Documents orphelins',
+      'manage_options',
+      'acdc-orphan-docs',
+      array( $this, 'render_orphan_docs_page' )
+    );
+  }
+
+  public function render_orphan_docs_page() {
+    if ( ! current_user_can( 'manage_options' ) ) {
+      wp_die( esc_html( 'Accès refusé.' ) );
+    }
+    $files  = $this->acdc_scan_orphan_contract_files();
+    $signed = array_filter( $files, function ( $f ) { return $f['signed']; } );
+
+    echo '<div class="wrap"><h1>Contrats formateurs orphelins</h1>';
+    echo '<p>Fichiers PDF présents sur le disque alors que la mission correspondante n\'existe plus en base. Ils ne sont <strong>pas accessibles publiquement</strong> (dossier protégé), mais ils constituent des données personnelles conservées.</p>';
+    echo '<p><strong>Aucune suppression automatique n\'est effectuée.</strong> Un contrat signé est une pièce comptable, à conserver 10 ans (art. L123-22 du Code de commerce) : archivez-le hors du serveur avant toute suppression.</p>';
+
+    if ( empty( $files ) ) {
+      echo '<div class="notice notice-success"><p>Aucun fichier orphelin. Rien à faire.</p></div></div>';
+      return;
+    }
+
+    printf(
+      '<p>%d fichier(s) orphelin(s), dont <strong>%d signé(s)</strong>.</p>',
+      count( $files ),
+      count( $signed )
+    );
+    echo '<table class="widefat striped" style="max-width:1000px;"><thead><tr><th>Fichier</th><th>Type</th><th>Taille</th><th>Date</th><th>Action</th></tr></thead><tbody>';
+    foreach ( $files as $f ) {
+      $del = wp_nonce_url(
+        add_query_arg(
+          array(
+            'action' => 'acdc_delete_orphan_contract_file',
+            'file'   => rawurlencode( $f['name'] ),
+            'cid'    => (int) $f['contract_id'],
+          ),
+          admin_url( 'admin-post.php' )
+        ),
+        'acdc_delete_orphan_contract_' . $f['name']
+      );
+      $confirm = $f['signed']
+        ? "Ce contrat est SIGNÉ : c'est une pièce comptable à conserver 10 ans. L'avez-vous archivé hors du serveur ? Cette suppression est définitive."
+        : 'Supprimer définitivement ce contrat non signé ?';
+      printf(
+        '<tr><td><code>%s</code></td><td>%s</td><td>%s</td><td>%s</td><td><a href="%s" class="button" onclick="return confirm(%s);">Supprimer</a></td></tr>',
+        esc_html( $f['name'] ),
+        $f['signed'] ? '<strong style="color:#b32d2e;">Signé — à conserver</strong>' : 'Non signé',
+        esc_html( size_format( $f['size'] ) ),
+        esc_html( date_i18n( 'd/m/Y H:i', $f['mtime'] ) ),
+        esc_url( $del ),
+        esc_attr( wp_json_encode( $confirm ) )
+      );
+    }
+    echo '</tbody></table></div>';
+  }
+
+  /** Suppression d'UN fichier orphelin, sur action volontaire de l'administrateur. */
+  public function handle_delete_orphan_contract_file() {
+    if ( ! current_user_can( 'manage_options' ) ) {
+      wp_die( esc_html( 'Accès refusé.' ) );
+    }
+    $name = isset( $_GET['file'] ) ? sanitize_file_name( wp_unslash( $_GET['file'] ) ) : '';
+    if ( '' === $name ) {
+      wp_die( esc_html( 'Fichier introuvable.' ) );
+    }
+    check_admin_referer( 'acdc_delete_orphan_contract_' . $name );
+
+    /* On ne supprime QUE ce que l'inventaire a reconnu comme orphelin : aucun
+       chemin ne provient de la requête. */
+    $target = '';
+    foreach ( $this->acdc_scan_orphan_contract_files() as $f ) {
+      if ( $f['name'] === $name ) {
+        $target = $f['path'];
+        break;
+      }
+    }
+    $back = admin_url( 'options-general.php?page=acdc-orphan-docs' );
+    if ( '' === $target || ! is_file( $target ) ) {
+      wp_safe_redirect( add_query_arg( array( 'notice' => rawurlencode( 'Fichier introuvable ou déjà supprimé.' ), 'notice_type' => 'error' ), $back ) );
+      exit;
+    }
+
+    @unlink( $target ); // phpcs:ignore WordPress.PHP.NoSilencedErrors.Discouraged
+    $this->log_action_event( 'delete', 'orphan_contract_file', 0, 'success', array( 'file' => $name ) );
+    wp_safe_redirect( add_query_arg( array( 'notice' => rawurlencode( 'Fichier supprimé.' ), 'notice_type' => 'success' ), $back ) );
     exit;
   }
 
