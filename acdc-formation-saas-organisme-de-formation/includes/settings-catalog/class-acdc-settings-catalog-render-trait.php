@@ -1141,6 +1141,9 @@ private function get_front_settings_sections() {
     'variables'      => 'Variables',
     'integrations'   => 'Intégrations IA',
     'propositions'   => 'Propositions commerciales',
+    /* ACDC 3.25.156 — Inventaire des contrats formateurs orphelins, déplacé depuis
+       wp-admin vers l'extranet pour rester dans l'outil de travail du gestionnaire. */
+    'orphan_docs'    => 'Documents orphelins',
   );
 }
 
@@ -1316,7 +1319,70 @@ private function render_front_settings_tab() {
     $this->render_front_settings_propositions_section();
     return;
   }
+  if ( 'orphan_docs' === $current_section ) {
+    $this->render_front_settings_orphan_docs_section();
+    return;
+  }
   $this->render_front_settings_general_section();
+}
+
+/**
+ * ACDC 3.25.156 — Contrats formateurs orphelins (extranet).
+ *
+ * Fichiers PDF encore sur le disque alors que leur mission n'existe plus en base.
+ * Aucune suppression automatique : un contrat signé est une pièce comptable
+ * (conservation 10 ans, art. L123-22 du Code de commerce). On inventorie, et
+ * l'organisme décide fichier par fichier.
+ */
+private function render_front_settings_orphan_docs_section() {
+  if ( ! current_user_can( 'manage_options' ) ) {
+    echo '<div class="acdc-panel"><h3>Documents orphelins</h3><p>Accès réservé aux administrateurs.</p></div>';
+    return;
+  }
+  $files  = method_exists( $this, 'acdc_scan_orphan_contract_files' ) ? $this->acdc_scan_orphan_contract_files() : array();
+  $signed = array_filter( $files, function ( $f ) { return ! empty( $f['signed'] ); } );
+
+  echo '<div class="acdc-panel acdc-profile-section"><h3>Contrats formateurs orphelins</h3>';
+  echo '<p>Fichiers PDF présents sur le disque alors que la mission correspondante n\'existe plus. Ils ne sont <strong>pas accessibles publiquement</strong> (dossier protégé), mais ils constituent des données personnelles conservées.</p>';
+  echo '<p><strong>Aucune suppression automatique n\'est effectuée.</strong> Un contrat signé est une pièce comptable à conserver 10 ans (art. L123-22 du Code de commerce) : archivez-le hors du serveur avant toute suppression.</p>';
+
+  if ( empty( $files ) ) {
+    echo '<p style="color:#1a7f37;font-weight:600;">Aucun fichier orphelin. Rien à faire.</p></div>';
+    return;
+  }
+
+  printf(
+    '<p>%d fichier(s) orphelin(s), dont <strong>%d signé(s)</strong>.</p>',
+    count( $files ),
+    count( $signed )
+  );
+  echo '<table class="acdc-table" style="width:100%;"><thead><tr><th>Fichier</th><th>Type</th><th>Taille</th><th>Date</th><th></th></tr></thead><tbody>';
+  foreach ( $files as $f ) {
+    $del = wp_nonce_url(
+      add_query_arg(
+        array(
+          'action' => 'acdc_delete_orphan_contract_file',
+          'file'   => rawurlencode( $f['name'] ),
+          'ctx'    => 'front',
+        ),
+        admin_url( 'admin-post.php' )
+      ),
+      'acdc_delete_orphan_contract_' . $f['name']
+    );
+    $confirm = ! empty( $f['signed'] )
+      ? "Ce contrat est SIGNÉ : c'est une pièce comptable à conserver 10 ans. L'avez-vous archivé hors du serveur ? Cette suppression est définitive."
+      : 'Supprimer définitivement ce contrat non signé ?';
+    printf(
+      '<tr><td><code style="font-size:12px;">%s</code></td><td>%s</td><td>%s</td><td>%s</td><td><a href="%s" class="acdc-button acdc-button-soft" onclick="return confirm(%s);">Supprimer</a></td></tr>',
+      esc_html( $f['name'] ),
+      ! empty( $f['signed'] ) ? '<strong style="color:#b32d2e;">Signé — à conserver</strong>' : 'Non signé',
+      esc_html( size_format( $f['size'] ) ),
+      esc_html( date_i18n( 'd/m/Y H:i', $f['mtime'] ) ),
+      esc_url( $del ),
+      esc_attr( wp_json_encode( $confirm ) )
+    );
+  }
+  echo '</tbody></table></div>';
 }
 
   private function render_front_settings_propositions_section() {

@@ -1794,70 +1794,6 @@ trait ACDC_Kernel_Actions_Trait {
     return $out;
   }
 
-  /** Écran d'administration : Réglages → ACDC Documents orphelins. */
-  public function register_orphan_docs_page() {
-    if ( ! function_exists( 'add_options_page' ) ) {
-      return;
-    }
-    add_options_page(
-      'ACDC Documents orphelins',
-      'ACDC Documents orphelins',
-      'manage_options',
-      'acdc-orphan-docs',
-      array( $this, 'render_orphan_docs_page' )
-    );
-  }
-
-  public function render_orphan_docs_page() {
-    if ( ! current_user_can( 'manage_options' ) ) {
-      wp_die( esc_html( 'Accès refusé.' ) );
-    }
-    $files  = $this->acdc_scan_orphan_contract_files();
-    $signed = array_filter( $files, function ( $f ) { return $f['signed']; } );
-
-    echo '<div class="wrap"><h1>Contrats formateurs orphelins</h1>';
-    echo '<p>Fichiers PDF présents sur le disque alors que la mission correspondante n\'existe plus en base. Ils ne sont <strong>pas accessibles publiquement</strong> (dossier protégé), mais ils constituent des données personnelles conservées.</p>';
-    echo '<p><strong>Aucune suppression automatique n\'est effectuée.</strong> Un contrat signé est une pièce comptable, à conserver 10 ans (art. L123-22 du Code de commerce) : archivez-le hors du serveur avant toute suppression.</p>';
-
-    if ( empty( $files ) ) {
-      echo '<div class="notice notice-success"><p>Aucun fichier orphelin. Rien à faire.</p></div></div>';
-      return;
-    }
-
-    printf(
-      '<p>%d fichier(s) orphelin(s), dont <strong>%d signé(s)</strong>.</p>',
-      count( $files ),
-      count( $signed )
-    );
-    echo '<table class="widefat striped" style="max-width:1000px;"><thead><tr><th>Fichier</th><th>Type</th><th>Taille</th><th>Date</th><th>Action</th></tr></thead><tbody>';
-    foreach ( $files as $f ) {
-      $del = wp_nonce_url(
-        add_query_arg(
-          array(
-            'action' => 'acdc_delete_orphan_contract_file',
-            'file'   => rawurlencode( $f['name'] ),
-            'cid'    => (int) $f['contract_id'],
-          ),
-          admin_url( 'admin-post.php' )
-        ),
-        'acdc_delete_orphan_contract_' . $f['name']
-      );
-      $confirm = $f['signed']
-        ? "Ce contrat est SIGNÉ : c'est une pièce comptable à conserver 10 ans. L'avez-vous archivé hors du serveur ? Cette suppression est définitive."
-        : 'Supprimer définitivement ce contrat non signé ?';
-      printf(
-        '<tr><td><code>%s</code></td><td>%s</td><td>%s</td><td>%s</td><td><a href="%s" class="button" onclick="return confirm(%s);">Supprimer</a></td></tr>',
-        esc_html( $f['name'] ),
-        $f['signed'] ? '<strong style="color:#b32d2e;">Signé — à conserver</strong>' : 'Non signé',
-        esc_html( size_format( $f['size'] ) ),
-        esc_html( date_i18n( 'd/m/Y H:i', $f['mtime'] ) ),
-        esc_url( $del ),
-        esc_attr( wp_json_encode( $confirm ) )
-      );
-    }
-    echo '</tbody></table></div>';
-  }
-
   /** Suppression d'UN fichier orphelin, sur action volontaire de l'administrateur. */
   public function handle_delete_orphan_contract_file() {
     if ( ! current_user_can( 'manage_options' ) ) {
@@ -1878,7 +1814,12 @@ trait ACDC_Kernel_Actions_Trait {
         break;
       }
     }
-    $back = admin_url( 'options-general.php?page=acdc-orphan-docs' );
+    /* ACDC 3.25.156 — L'écran vit désormais dans l'extranet (Paramètres →
+       Documents orphelins). On revient à l'endroit d'où l'action a été lancée. */
+    $from_front = isset( $_GET['ctx'] ) && 'front' === $_GET['ctx'];
+    $back = $from_front
+      ? $this->portal_page_url( array( 'tab' => 'settings', 'settings_section' => 'orphan_docs' ) )
+      : admin_url( 'options-general.php?page=acdc-orphan-docs' );
     if ( '' === $target || ! is_file( $target ) ) {
       wp_safe_redirect( add_query_arg( array( 'notice' => rawurlencode( 'Fichier introuvable ou déjà supprimé.' ), 'notice_type' => 'error' ), $back ) );
       exit;
