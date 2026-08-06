@@ -303,7 +303,11 @@ class ACDC_Sig_Core {
     public function verify_otp( $request_id, $otp ) {
         $stored = get_option( 'acdc_sig_otp_' . (int) $request_id );
         if ( ! is_array( $stored ) || empty( $stored['hash'] ) || empty( $stored['expires'] ) ) {
-            return 'expired';
+            /* ACDC 3.25.154 — On distingue « code CONSOMMÉ » (absent parce qu'il vient
+               d'être validé — cas d'une soumission en double) de « code PÉRIMÉ » (TTL
+               dépassé, ci-dessous). Les deux renvoyaient « expired », ce qui affichait
+               une erreur trompeuse au signataire dont l'identité venait d'être vérifiée. */
+            return 'consumed';
         }
         if ( time() > (int) $stored['expires'] ) {
             delete_option( 'acdc_sig_otp_' . (int) $request_id );
@@ -330,7 +334,15 @@ class ACDC_Sig_Core {
     /**
      * Vérifie si l'OTP a déjà été validé pour ce token.
      */
-    public function is_otp_verified( $token ) {
+    public function is_otp_verified( $token, $fresh = false ) {
+        /* ACDC 3.25.154 — $fresh force une relecture hors cache d'objet. Sous un cache
+           persistant (LiteSpeed, Redis…), deux requêtes quasi simultanées pouvaient lire
+           une valeur périmée : la seconde ne « voyait » pas encore la vérification que
+           la première venait d'écrire, et concluait à tort à un échec. */
+        if ( $fresh ) {
+            wp_cache_delete( 'acdc_sig_otpok_' . md5( (string) $token ), 'options' );
+            wp_cache_delete( 'notoptions', 'options' );
+        }
         $expires = (int) get_option( 'acdc_sig_otpok_' . md5( (string) $token ), 0 );
         if ( $expires <= 0 ) {
             return false;

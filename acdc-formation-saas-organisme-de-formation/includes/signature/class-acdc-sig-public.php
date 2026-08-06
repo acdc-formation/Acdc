@@ -205,15 +205,36 @@ class ACDC_Sig_Public {
         <script>
         (function(){
             var inp = document.getElementById('otp-code-input');
-            if ( inp ) {
-                // N'accepter que les chiffres, auto-submit à 6 caractères
-                inp.addEventListener('input', function(){
-                    this.value = this.value.replace(/[^0-9]/g, '').slice(0, 6);
-                    if ( this.value.length === 6 ) {
-                        this.closest('form').submit();
-                    }
+            if ( ! inp ) { return; }
+            var form = inp.closest('form');
+            /* ACDC 3.25.154 — Verrou anti double soumission.
+               L'auto-submit au 6e chiffre, suivi du clic de l'utilisateur sur
+               « Valider », envoyait DEUX POST quasi simultanés. Le premier validait
+               le code (verify_otp est à usage unique et le consomme), le second ne
+               trouvait plus rien et repartait en otp_error=expired — message trompeur
+               affiché au signataire alors que son identité venait d'être vérifiée. */
+            var submitted = false;
+            function submitOnce() {
+                if ( submitted ) { return; }
+                submitted = true;
+                if ( form ) {
+                    var btn = form.querySelector('button[type=submit], input[type=submit]');
+                    if ( btn ) { btn.disabled = true; }
+                    form.submit();
+                }
+            }
+            if ( form ) {
+                form.addEventListener('submit', function( e ){
+                    if ( submitted ) { e.preventDefault(); return; }
+                    submitted = true;
                 });
             }
+            inp.addEventListener('input', function(){
+                this.value = this.value.replace(/[^0-9]/g, '').slice(0, 6);
+                if ( this.value.length === 6 ) {
+                    submitOnce();
+                }
+            });
         })();
         </script>
         <?php
@@ -544,8 +565,14 @@ class ACDC_Sig_Public {
            dans la barre d'adresse du signataire.
            Si l'OTP est DÉJÀ marqué vérifié pour ce jeton, la vérification est un
            succès idempotent : on ne pose pas d'erreur. */
-        if ( 'ok' !== $result && $this->core->is_otp_verified( $request->token ) ) {
+        if ( 'ok' !== $result && $this->core->is_otp_verified( $request->token, true ) ) {
             $result = 'ok';
+        }
+        /* Un code « consommé » sans vérification enregistrée reste un échec, mais on le
+           présente comme périmé : c'est ce que l'utilisateur doit comprendre (redemander
+           un code), et cela évite d'exposer un état interne dans l'URL. */
+        if ( 'consumed' === $result ) {
+            $result = 'expired';
         }
 
         if ( 'ok' === $result ) {
