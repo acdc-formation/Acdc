@@ -62,7 +62,7 @@ trait ACDC_Sessions_Render_Trait {
     }
 
     $filters = array(
-      'search' => isset( $_GET['s'] ) ? sanitize_text_field( wp_unslash( $_GET['s'] ) ) : '',
+      'search' => isset( $_GET['q'] ) ? sanitize_text_field( wp_unslash( $_GET['q'] ) ) : ( isset( $_GET['s'] ) ? sanitize_text_field( wp_unslash( $_GET['s'] ) ) : '' ),
       'id' => isset( $_GET['filter_id'] ) ? sanitize_text_field( wp_unslash( $_GET['filter_id'] ) ) : '',
       'learner' => isset( $_GET['filter_learner'] ) ? sanitize_text_field( wp_unslash( $_GET['filter_learner'] ) ) : '',
       'group' => isset( $_GET['filter_group'] ) ? sanitize_text_field( wp_unslash( $_GET['filter_group'] ) ) : '',
@@ -102,7 +102,7 @@ trait ACDC_Sessions_Render_Trait {
         <?php endif; ?>
         <input type="hidden" name="tab" value="sessions_validated">
         <div class="acdc-search-row">
-          <input type="search" name="s" value="<?php echo esc_attr( $filters['search'] ); ?>" placeholder="Rechercher">
+          <input type="search" name="q" value="<?php echo esc_attr( $filters['search'] ); ?>" placeholder="Rechercher">
           <button type="button" class="acdc-filter-toggle" data-acdc-filter-toggle aria-expanded="false">FILTRES <?php echo $this->render_inline_icon( 'chevron-down', 16 ); ?></button>
         </div>
         <div class="acdc-sessions-filters-panel" data-acdc-filters-panel hidden>
@@ -1042,7 +1042,7 @@ trait ACDC_Sessions_Render_Trait {
       return;
     }
 
-    $search = isset( $_GET['s'] ) ? sanitize_text_field( wp_unslash( $_GET['s'] ) ) : '';
+    $search = isset( $_GET['q'] ) ? sanitize_text_field( wp_unslash( $_GET['q'] ) ) : ( isset( $_GET['s'] ) ? sanitize_text_field( wp_unslash( $_GET['s'] ) ) : '' );
     $items = $this->get_pending_sessions( $search );
     ?>
     <section class="acdc-section-head">
@@ -1062,7 +1062,7 @@ trait ACDC_Sessions_Render_Trait {
           <input type="hidden" name="tab" value="sessions_pending">
         <?php endif; ?>
         <input type="hidden" name="tab" value="sessions_pending">
-        <input type="search" name="s" value="<?php echo esc_attr( $search ); ?>" placeholder="Rechercher">
+        <input type="search" name="q" value="<?php echo esc_attr( $search ); ?>" placeholder="Rechercher">
         <button type="submit" class="acdc-button acdc-button-soft">Rechercher</button>
       </form>
     </div>

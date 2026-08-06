@@ -998,6 +998,24 @@ private function acdc_send_transactional_email( $to, $subject, $template_args = 
     global $wpdb;
     require_once ABSPATH . 'wp-admin/includes/upgrade.php';
 
+    /* ACDC 3.25.148 — F11 : verrouiller RÉTROACTIVEMENT le dossier des contrats
+       formateurs. Les fichiers générés avant ce correctif sont restés accessibles
+       publiquement (nom, e-mail et SIRET du formateur) ; on pose le .htaccess sur
+       la racine du dossier ainsi que sur chaque sous-dossier existant. */
+    $acdc_up   = wp_upload_dir();
+    $acdc_croot = trailingslashit( $acdc_up['basedir'] ) . 'acdc-of-contracts/';
+    if ( is_dir( $acdc_croot ) ) {
+      foreach ( array_merge( array( $acdc_croot ), (array) glob( $acdc_croot . '*', GLOB_ONLYDIR ) ) as $acdc_cdir ) {
+        $acdc_cdir = trailingslashit( (string) $acdc_cdir );
+        if ( ! file_exists( $acdc_cdir . '.htaccess' ) ) {
+          file_put_contents( $acdc_cdir . '.htaccess', "deny from all\n" ); // phpcs:ignore WordPress.WP.AlternativeFunctions.file_system_operations_file_put_contents
+        }
+        if ( ! file_exists( $acdc_cdir . 'index.php' ) ) {
+          file_put_contents( $acdc_cdir . 'index.php', "<?php // Silence is golden.\n" ); // phpcs:ignore WordPress.WP.AlternativeFunctions.file_system_operations_file_put_contents
+        }
+      }
+    }
+
     $charset_collate = $wpdb->get_charset_collate();
 
     $sql_companies = "CREATE TABLE {$this->company_table} (

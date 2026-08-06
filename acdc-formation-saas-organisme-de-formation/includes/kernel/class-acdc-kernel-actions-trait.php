@@ -1498,6 +1498,15 @@ trait ACDC_Kernel_Actions_Trait {
     }
     check_admin_referer( 'acdc_delete_trainer_' . $trainer_id );
     global $wpdb;
+    /* ACDC 3.25.148 — F11 : purger les PDF de TOUTES les missions du formateur
+       avant de le supprimer (sinon les contrats restent sur le disque). */
+    $contract_ids = (array) $wpdb->get_col( $wpdb->prepare(
+      "SELECT id FROM {$this->trainer_contract_table} WHERE trainer_id = %d",
+      $trainer_id
+    ) );
+    foreach ( $contract_ids as $cid ) {
+      $this->acdc_purge_trainer_contract_files( (int) $cid );
+    }
     $wpdb->delete( $this->trainer_table, array( 'id' => $trainer_id ) );
     $this->redirect_to_portal( 'trainers', 'Formateur supprimé.', 'success' );
   }
@@ -1574,6 +1583,8 @@ trait ACDC_Kernel_Actions_Trait {
     check_admin_referer( 'acdc_delete_trainer_contract_' . $contract_id );
     global $wpdb;
     $wpdb->delete( $this->trainer_contract_table, array( 'id' => $contract_id, 'trainer_id' => $trainer_id ) );
+    /* ACDC 3.25.148 — F11 : les PDF ne doivent pas survivre à la mission supprimée. */
+    $this->acdc_purge_trainer_contract_files( $contract_id );
     $msg = 'Mission supprimée.';
     $is_admin_ctx = isset( $_GET['ctx'] ) && 'admin' === $_GET['ctx'];
     $redirect = $is_admin_ctx
@@ -1629,38 +1640,207 @@ trait ACDC_Kernel_Actions_Trait {
       wp_die( esc_html( 'Génération PDF échouée.' ) );
     }
     $upload_dir = wp_upload_dir();
-    $safe_name  = 'contrat-formateur-' . $trainer_id . '-' . $contract_id . '.pdf';
+    $safe_name  = $this->acdc_trainer_contract_filename( $trainer_id, $contract_id );
     $dir_path   = trailingslashit( $upload_dir['basedir'] ) . 'acdc-of-contracts/' . $contract_id . '/';
     $file_path  = $dir_path . $safe_name;
     $file_url   = trailingslashit( $upload_dir['baseurl'] ) . 'acdc-of-contracts/' . $contract_id . '/' . $safe_name;
-    wp_mkdir_p( $dir_path );
-    file_put_contents( $file_path, $pdf_content );
+    /* ACDC 3.25.148 — F11 : le dossier est créé PROTÉGÉ (.htaccess + index.php).
+       Auparavant un simple wp_mkdir_p() laissait les contrats de sous-traitance
+       (nom, e-mail, SIRET du formateur) accessibles publiquement, sans
+       authentification, à une URL devinable — et ils survivaient à la suppression. */
+    $this->acdc_protect_contracts_dir( $dir_path );
+    file_put_contents( $file_path, $pdf_content ); // phpcs:ignore WordPress.WP.AlternativeFunctions.file_system_operations_file_put_contents
     $wpdb->update( $this->trainer_contract_table, array( 'contract_pdf_url' => esc_url_raw( $file_url ) ), array( 'id' => $contract_id ), array( '%s' ), array( '%d' ) );
-    // ── ACDC 3.22.5 — Envoi du contrat brut (non encore signé) au formateur ──
-    $tr_email_send = sanitize_email( (string) $trainer->email );
-    if ( '' !== $tr_email_send && is_email( $tr_email_send ) && file_exists( $file_path ) ) {
-      $tr_name_send = trim( (string) $trainer->first_name . ' ' . (string) $trainer->last_name );
-      $profile_mail = $this->get_company_profile_options();
-      $from_name    = ! empty( $profile_mail['enterprise_contact_name'] ) ? sanitize_text_field( (string) $profile_mail['enterprise_contact_name'] ) : get_bloginfo( 'name' );
-      $from_email   = ! empty( $profile_mail['enterprise_contact_email'] ) ? sanitize_email( (string) $profile_mail['enterprise_contact_email'] ) : sanitize_email( (string) get_option( 'admin_email' ) );
-      $subject = '📄 Votre contrat de sous-traitance — ' . wp_strip_all_tags( html_entity_decode( (string) $contract->label, ENT_QUOTES, 'UTF-8' ) );
-      $body    = '<div style="font-family:Arial,sans-serif;color:#24324a;max-width:600px;margin:0 auto;">'
-               . '<h2 style="color:#1f335d;">Votre contrat de sous-traitance</h2>'
-               . '<p>Bonjour ' . esc_html( $tr_name_send ) . ',</p>'
-               . '<p>Veuillez trouver en pièce jointe votre contrat de sous-traitance pour la mission <strong>' . esc_html( wp_strip_all_tags( html_entity_decode( (string) $contract->label, ENT_QUOTES, 'UTF-8' ) ) ) . '</strong>.</p>'
-               . '<p>Ce document vous sera renvoyé contresigné après validation.</p>'
-               . '</div>';
-      $headers = array(
-        'Content-Type: text/html; charset=UTF-8',
-        'From: ' . sanitize_text_field( $from_name ) . ' <' . $from_email . '>',
-      );
-      wp_mail( $tr_email_send, $subject, $body, $headers, array( $file_path ) );
-    }
+
+    /* ACDC 3.25.148 — G4 : ce handler NE FAIT PLUS QUE TÉLÉCHARGER.
+       Il envoyait auparavant le contrat par e-mail au formateur à chaque appel :
+       un bouton « Générer le PDF » expédiait donc un document contractuel à un
+       tiers, sans confirmation ni trace — et comme la réponse HTTP se perdait,
+       le gestionnaire recliquait et l'envoi était dupliqué.
+       L'envoi est désormais une action distincte et explicite :
+       acdc_send_trainer_contract_email (bouton dédié + confirmation). */
+    $this->log_action_event( 'download', 'trainer_contract_pdf', $contract_id );
+    while ( ob_get_level() ) { ob_end_clean(); }
+    nocache_headers();
     header( 'Content-Type: application/pdf' );
     header( 'Content-Disposition: attachment; filename="' . $safe_name . '"' );
     header( 'Content-Length: ' . strlen( $pdf_content ) );
-    echo $pdf_content;
+    echo $pdf_content; // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped -- binaire PDF
     exit;
+  }
+
+  /**
+   * ACDC 3.25.148 — F11 : nom de fichier NON DEVINABLE pour un contrat formateur.
+   *
+   * Le nom précédent (`contrat-formateur-4-5.pdf`) était entièrement prévisible :
+   * n'importe qui pouvait énumérer les identifiants et récupérer les contrats.
+   * On y adjoint un condensat dérivé des clés secrètes du site (wp_hash) :
+   * déterministe — donc une régénération retrouve le même fichier — mais
+   * impossible à deviner de l'extérieur.
+   *
+   * Cette protection vaut EN PLUS du .htaccess, et reste efficace sur les
+   * serveurs qui ignorent .htaccess (nginx notamment).
+   *
+   * @param int $trainer_id  Identifiant du formateur.
+   * @param int $contract_id Identifiant de la mission.
+   * @param string $suffix   Suffixe optionnel (ex. '-signe').
+   * @return string Nom de fichier.
+   */
+  private function acdc_trainer_contract_filename( $trainer_id, $contract_id, $suffix = '' ) {
+    $token = substr( wp_hash( 'acdc-trainer-contract-' . (int) $trainer_id . '-' . (int) $contract_id ), 0, 20 );
+    return 'contrat-formateur-' . (int) $trainer_id . '-' . (int) $contract_id . $suffix . '-' . $token . '.pdf';
+  }
+
+  /**
+   * ACDC 3.25.148 — F11 : rend un dossier de contrats inaccessible en direct.
+   * Même procédé que celui déjà employé pour les pièces d'identité de signature.
+   *
+   * @param string $dir_path Chemin du dossier à créer/protéger.
+   */
+  private function acdc_protect_contracts_dir( $dir_path ) {
+    wp_mkdir_p( $dir_path );
+    $ht = trailingslashit( $dir_path ) . '.htaccess';
+    if ( ! file_exists( $ht ) ) {
+      file_put_contents( $ht, "deny from all\n" ); // phpcs:ignore WordPress.WP.AlternativeFunctions.file_system_operations_file_put_contents
+    }
+    $idx = trailingslashit( $dir_path ) . 'index.php';
+    if ( ! file_exists( $idx ) ) {
+      file_put_contents( $idx, "<?php // Silence is golden.\n" ); // phpcs:ignore WordPress.WP.AlternativeFunctions.file_system_operations_file_put_contents
+    }
+    /* Protection de la racine acdc-of-contracts/ : couvre aussi les dossiers déjà
+       créés avant ce correctif (serveurs Apache), en une seule passe. */
+    $root = trailingslashit( dirname( untrailingslashit( $dir_path ) ) );
+    $ht_root = $root . '.htaccess';
+    if ( is_dir( $root ) && ! file_exists( $ht_root ) ) {
+      file_put_contents( $ht_root, "deny from all\n" ); // phpcs:ignore WordPress.WP.AlternativeFunctions.file_system_operations_file_put_contents
+    }
+  }
+
+  /**
+   * ACDC 3.25.148 — F11 : purge des PDF d'une mission (contrat + exemplaire signé).
+   * Appelée à la suppression d'une mission ou d'un formateur : les fichiers ne
+   * doivent pas survivre à la donnée qu'ils documentent.
+   *
+   * @param int $contract_id Identifiant de la mission.
+   */
+  private function acdc_purge_trainer_contract_files( $contract_id ) {
+    $contract_id = (int) $contract_id;
+    if ( ! $contract_id ) {
+      return;
+    }
+    $upload_dir = wp_upload_dir();
+    $dir        = trailingslashit( $upload_dir['basedir'] ) . 'acdc-of-contracts/' . $contract_id . '/';
+    if ( ! is_dir( $dir ) ) {
+      return;
+    }
+    foreach ( (array) glob( $dir . '*' ) as $f ) {
+      if ( is_file( $f ) ) {
+        @unlink( $f ); // phpcs:ignore WordPress.PHP.NoSilencedErrors.Discouraged
+      }
+    }
+    @rmdir( $dir ); // phpcs:ignore WordPress.PHP.NoSilencedErrors.Discouraged
+  }
+
+  /**
+   * ACDC 3.25.148 — G4 : envoi EXPLICITE du contrat au formateur.
+   * Action séparée du téléchargement, déclenchée par un bouton dédié avec
+   * confirmation. Génère le PDF s'il n'existe pas encore.
+   */
+  public function handle_send_trainer_contract_email() {
+    if ( ! current_user_can( 'manage_options' ) ) {
+      wp_die( esc_html( 'Accès refusé.' ) );
+    }
+    $trainer_id  = isset( $_POST['trainer_id'] )  ? absint( wp_unslash( $_POST['trainer_id'] ) )  : 0;
+    $contract_id = isset( $_POST['contract_id'] ) ? absint( wp_unslash( $_POST['contract_id'] ) ) : 0;
+    if ( ! $trainer_id || ! $contract_id ) {
+      wp_die( esc_html( 'Données manquantes.' ) );
+    }
+    check_admin_referer( 'acdc_send_trainer_contract_email_' . $trainer_id );
+
+    global $wpdb;
+    $trainer  = $this->get_trainer( $trainer_id );
+    $contract = $wpdb->get_row( $wpdb->prepare( "SELECT * FROM {$this->trainer_contract_table} WHERE id = %d AND trainer_id = %d", $contract_id, $trainer_id ) );
+    if ( ! $trainer || ! $contract ) {
+      wp_die( esc_html( 'Données introuvables.' ) );
+    }
+
+    $back = $this->acdc_trainer_contract_back_url( $trainer_id );
+
+    $tr_email_send = sanitize_email( (string) $trainer->email );
+    if ( '' === $tr_email_send || ! is_email( $tr_email_send ) ) {
+      wp_safe_redirect( add_query_arg( array( 'notice' => rawurlencode( 'Ce formateur n\'a pas d\'adresse e-mail valide.' ), 'notice_type' => 'error' ), $back ) );
+      exit;
+    }
+
+    /* Le PDF doit exister : on le régénère au besoin (sans rien envoyer d'autre). */
+    $upload_dir = wp_upload_dir();
+    $safe_name  = $this->acdc_trainer_contract_filename( $trainer_id, $contract_id );
+    $dir_path   = trailingslashit( $upload_dir['basedir'] ) . 'acdc-of-contracts/' . $contract_id . '/';
+    $file_path  = $dir_path . $safe_name;
+    if ( ! file_exists( $file_path ) ) {
+      $pages       = $this->build_trainer_contract_pdf_pages( $trainer, $contract );
+      $pdf_content = '';
+      if ( ! empty( $pages ) && class_exists( 'ACDC_Sig_Core' ) && class_exists( 'ACDC_Sig_PDF' ) ) {
+        $sig_core = new ACDC_Sig_Core();
+        $sig_core->init_tables();
+        $sig_pdf  = new ACDC_Sig_PDF( $sig_core );
+        $ref      = new ReflectionClass( $sig_pdf );
+        $method   = $ref->getMethod( 'render_to_string' );
+        $method->setAccessible( true );
+        $pdf_content = $method->invoke( $sig_pdf, $pages );
+      }
+      if ( ( ! is_string( $pdf_content ) || '' === $pdf_content ) && method_exists( $this, '_build_simple_pdf_string' ) ) {
+        $pdf_content = $this->_build_simple_pdf_string( $pages );
+      }
+      if ( '' === (string) $pdf_content ) {
+        wp_safe_redirect( add_query_arg( array( 'notice' => rawurlencode( 'Impossible de générer le contrat PDF.' ), 'notice_type' => 'error' ), $back ) );
+        exit;
+      }
+      $this->acdc_protect_contracts_dir( $dir_path );
+      file_put_contents( $file_path, $pdf_content ); // phpcs:ignore WordPress.WP.AlternativeFunctions.file_system_operations_file_put_contents
+    }
+
+    $tr_name_send = trim( (string) $trainer->first_name . ' ' . (string) $trainer->last_name );
+    $label        = wp_strip_all_tags( html_entity_decode( (string) $contract->label, ENT_QUOTES, 'UTF-8' ) );
+    $profile_mail = $this->get_company_profile_options();
+    $from_name    = ! empty( $profile_mail['enterprise_contact_name'] ) ? sanitize_text_field( (string) $profile_mail['enterprise_contact_name'] ) : get_bloginfo( 'name' );
+    $from_email   = ! empty( $profile_mail['enterprise_contact_email'] ) ? sanitize_email( (string) $profile_mail['enterprise_contact_email'] ) : sanitize_email( (string) get_option( 'admin_email' ) );
+
+    $subject = '📄 Votre contrat de sous-traitance — ' . $label;
+    $body    = '<div style="font-family:Arial,sans-serif;color:#24324a;max-width:600px;margin:0 auto;">'
+             . '<h2 style="color:#1f335d;">Votre contrat de sous-traitance</h2>'
+             . '<p>Bonjour ' . esc_html( $tr_name_send ) . ',</p>'
+             . '<p>Veuillez trouver en pièce jointe votre contrat de sous-traitance pour la mission <strong>' . esc_html( $label ) . '</strong>.</p>'
+             . '<p>Ce document vous sera renvoyé contresigné après validation.</p>'
+             . '</div>';
+    $headers = method_exists( $this, 'acdc_get_transactional_email_headers' )
+      ? $this->acdc_get_transactional_email_headers( array(
+          'source_module'       => 'trainers',
+          'source_action'       => 'trainer_contract_sent',
+          'related_entity_type' => 'trainer',
+          'related_entity_id'   => (int) $trainer_id,
+          'email_category'      => 'contractuel',
+          'email_audience'      => 'formateur',
+        ) )
+      : array( 'Content-Type: text/html; charset=UTF-8', 'From: ' . sanitize_text_field( $from_name ) . ' <' . $from_email . '>' );
+
+    $sent = wp_mail( $tr_email_send, $subject, $body, $headers, array( $file_path ) );
+    $this->log_action_event( 'send', 'trainer_contract_email', $contract_id, $sent ? 'success' : 'error' );
+
+    wp_safe_redirect( add_query_arg( array(
+      'notice'      => rawurlencode( $sent ? 'Contrat envoyé au formateur.' : 'L\'envoi du contrat a échoué.' ),
+      'notice_type' => $sent ? 'success' : 'error',
+    ), $back ) );
+    exit;
+  }
+
+  /** URL de retour de la fiche formateur (front-office ou wp-admin selon l'origine réelle). */
+  private function acdc_trainer_contract_back_url( $trainer_id ) {
+    $page = isset( $_REQUEST['page'] ) ? sanitize_key( wp_unslash( $_REQUEST['page'] ) ) : '';
+    if ( '' !== $page && 0 === strpos( $page, 'acdc-of-' ) ) {
+      return admin_url( 'admin.php?page=acdc-of-trainers&action=edit&item_id=' . (int) $trainer_id );
+    }
+    return $this->portal_page_url( array( 'tab' => 'trainers', 'action' => 'edit', 'item_id' => (int) $trainer_id ) );
   }
 
   /**
@@ -2067,12 +2247,14 @@ trait ACDC_Kernel_Actions_Trait {
     if ( '' === $pdf_c && method_exists( $this, '_build_simple_pdf_string' ) ) { $pdf_c = $this->_build_simple_pdf_string( $pages ); }
     $signed_url = ''; $signed_path = '';
     if ( '' !== $pdf_c ) {
-      $safe_name   = 'contrat-formateur-' . $trainer_id . '-' . $contract_id . '-signe.pdf';
+      /* ACDC 3.25.148 — F11 : même protection que le contrat non signé
+         (nom non devinable + dossier interdit d'accès direct). */
+      $safe_name   = $this->acdc_trainer_contract_filename( $trainer_id, $contract_id, '-signe' );
       $dir_path    = trailingslashit( $upload_dir['basedir'] ) . 'acdc-of-contracts/' . $contract_id . '/';
       $signed_path = $dir_path . $safe_name;
       $signed_url  = trailingslashit( $upload_dir['baseurl'] ) . 'acdc-of-contracts/' . $contract_id . '/' . $safe_name;
-      wp_mkdir_p( $dir_path );
-      file_put_contents( $signed_path, $pdf_c );
+      $this->acdc_protect_contracts_dir( $dir_path );
+      file_put_contents( $signed_path, $pdf_c ); // phpcs:ignore WordPress.WP.AlternativeFunctions.file_system_operations_file_put_contents
     }
     $wpdb->update( $this->trainer_contract_table, array(
       'signature_status'    => 'signée',
@@ -4599,7 +4781,7 @@ public function handle_purge_plugin_data() {
     $bloc_nad   = isset( $_POST['th_bloc_nad_id'] ) ? absint( wp_unslash( $_POST['th_bloc_nad_id'] ) )              : null;
     $ordre      = isset( $_POST['th_ordre'] )       ? absint( wp_unslash( $_POST['th_ordre'] ) )                    : 10;
     $actif      = isset( $_POST['th_actif'] )       ? (int) $_POST['th_actif']                                       : 1;
-    $base_url   = is_admin() ? admin_url( 'admin.php?page=acdc-of-thematiques' ) : $this->portal_page_url( array( 'tab' => 'thematiques' ) );
+    $base_url   = $this->acdc_thematiques_base_url();
 
     if ( '' === $label || '' === $code ) {
       wp_safe_redirect( add_query_arg( array( 'notice' => rawurlencode( 'Le code et le label sont obligatoires.' ), 'notice_type' => 'error' ), $base_url ) );
@@ -4637,17 +4819,62 @@ public function handle_purge_plugin_data() {
     exit;
   }
 
+  /**
+   * ACDC 3.25.148 — URL de retour de l'écran Thématiques.
+   *
+   * Corrige E2/E5 : le code utilisait `is_admin() ? admin_url('admin.php?page=acdc-of-thematiques') : …`.
+   * Deux défauts cumulés :
+   *   1. les actions passent par admin-post.php, qui EST dans /wp-admin/ → is_admin() est
+   *      toujours vrai, donc la branche front-office n'était jamais empruntée ;
+   *   2. la page « acdc-of-thematiques » n'est déclarée par aucun add_submenu_page().
+   * Résultat : l'écriture réussissait mais l'utilisateur atterrissait sur
+   * « Désolé, vous n'avez pas l'autorisation d'accéder à cette page » (403).
+   *
+   * On détecte donc la VRAIE origine via le paramètre `page` de la requête, et on
+   * pointe vers un écran qui existe réellement.
+   *
+   * @return string URL de retour.
+   */
+  private function acdc_thematiques_base_url() {
+    $page = isset( $_REQUEST['page'] ) ? sanitize_key( wp_unslash( $_REQUEST['page'] ) ) : '';
+    if ( '' !== $page && 0 === strpos( $page, 'acdc-of-' ) ) {
+      // Origine wp-admin : l'écran Thématiques est un onglet du tableau de bord.
+      return admin_url( 'admin.php?page=acdc-of-dashboard&tab=thematiques' );
+    }
+    return $this->portal_page_url( array( 'tab' => 'thematiques' ) );
+  }
+
   public function handle_delete_thematique() {
     if ( ! current_user_can( 'manage_options' ) ) { wp_die( 'Accès refusé.' ); }
     global $wpdb;
     $tid      = isset( $_GET['thematique_id'] ) ? absint( wp_unslash( $_GET['thematique_id'] ) ) : 0;
     check_admin_referer( 'acdc_delete_thematique_' . $tid );
-    $base_url = is_admin() ? admin_url( 'admin.php?page=acdc-of-thematiques' ) : $this->portal_page_url( array( 'tab' => 'thematiques' ) );
+    $base_url = $this->acdc_thematiques_base_url();
     $t = $this->get_thematique_by_id( $tid );
     if ( ! $t || (int) $t->verrouille ) {
       wp_safe_redirect( add_query_arg( array( 'notice' => rawurlencode( 'Impossible de supprimer cette thématique système.' ), 'notice_type' => 'error' ), $base_url ) );
       exit;
     }
+
+    /* ACDC 3.25.148 — Garde-fou : refuser la suppression d'une thématique utilisée.
+       Auparavant la suppression était inconditionnelle : les formations rattachées
+       se retrouvaient avec une thématique orpheline, sans aucun avertissement. */
+    $code_t = (string) $t->code;
+    $used   = (int) $wpdb->get_var( $wpdb->prepare(
+      "SELECT COUNT(*) FROM {$this->formation_table} WHERE thematique = %s OR thematique_liee = %s",
+      $code_t,
+      $code_t
+    ) );
+    if ( $used > 0 ) {
+      $msg = sprintf(
+        'Impossible de supprimer cette thématique : elle est utilisée par %d formation%s. Retirez-la de ces formations avant de la supprimer.',
+        $used,
+        $used > 1 ? 's' : ''
+      );
+      wp_safe_redirect( add_query_arg( array( 'notice' => rawurlencode( $msg ), 'notice_type' => 'error' ), $base_url ) );
+      exit;
+    }
+
     $wpdb->delete( $this->thematique_table, array( 'id' => $tid ) );
     wp_safe_redirect( add_query_arg( array( 'notice' => rawurlencode( 'Thématique supprimée.' ), 'notice_type' => 'success' ), $base_url ) );
     exit;

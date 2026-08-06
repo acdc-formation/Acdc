@@ -121,7 +121,7 @@ trait ACDC_Learners_Contacts_Render_Trait {
 
 
   private function render_front_learners_tab( $action, $item_id ) {
-    $search  = isset( $_GET['s'] ) ? sanitize_text_field( wp_unslash( $_GET['s'] ) ) : '';
+    $search  = isset( $_GET['q'] ) ? sanitize_text_field( wp_unslash( $_GET['q'] ) ) : ( isset( $_GET['s'] ) ? sanitize_text_field( wp_unslash( $_GET['s'] ) ) : '' );
     $learners = $this->get_learners( $search );
     $learner  = $item_id ? $this->get_learner( $item_id ) : null;
     $companies = $this->get_companies();
@@ -269,9 +269,11 @@ trait ACDC_Learners_Contacts_Render_Trait {
     <?php endif; ?>
     <?php if ( ! $is_view && ! $is_edit ) : ?>
     <div class="acdc-panel">
-      <form method="get" class="acdc-list-toolbar" style="display:flex;justify-content:space-between;gap:14px;flex-wrap:wrap;align-items:center;margin-bottom:18px;">
+      <?php /* ACDC 3.25.148 — attribut action explicite : sans lui le formulaire postait sur
+               l'URL courante, ce qui rendait la recherche dépendante du contexte de navigation. */ ?>
+      <form method="get" action="<?php echo esc_url( is_admin() ? admin_url( 'admin.php' ) : $this->portal_page_url() ); ?>" class="acdc-list-toolbar" style="display:flex;justify-content:space-between;gap:14px;flex-wrap:wrap;align-items:center;margin-bottom:18px;">
         <?php if ( is_admin() ) : ?><input type="hidden" name="page" value="acdc-of-learners"><?php else : ?><input type="hidden" name="tab" value="learners"><?php endif; ?>
-        <div style="flex:1 1 420px;"><input type="search" name="s" value="<?php echo esc_attr( $search ); ?>" placeholder="Rechercher" style="width:100%;"></div>
+        <div style="flex:1 1 420px;"><input type="search" name="q" value="<?php echo esc_attr( $search ); ?>" placeholder="Rechercher" style="width:100%;"></div>
       </form>
       <div class="acdc-table-wrap acdc-learners-table-wrap">
         <table class="acdc-table acdc-learners-table" data-acdc-table-id="learners-list">

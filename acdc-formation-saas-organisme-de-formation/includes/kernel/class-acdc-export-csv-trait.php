@@ -67,7 +67,7 @@ trait ACDC_Export_CSV_Trait {
 			        s.title AS session_title,
 			        s.start_date, s.end_date, s.status AS session_status,
 			        f.title AS formation_title,
-			        c.company_name
+			        c.name AS company_name
 			 FROM {$this->learner_table} l
 			 LEFT JOIN {$this->session_table} s ON s.id = l.session_id
 			 LEFT JOIN {$this->formation_table} f ON f.id = s.formation_id

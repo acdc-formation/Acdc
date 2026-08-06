@@ -7972,7 +7972,20 @@ trait ACDC_Kernel_Render_Trait {
             <input type="hidden" name="action"     value="acdc_send_trainer_contract_signature">
             <input type="hidden" name="trainer_id" value="<?php echo $tid; ?>">
             <?php if ( $is_admin ) : ?><input type="hidden" name="page" value="acdc-of-trainers"><?php endif; ?>
-            <input type="hidden" name="contract_id" id="acdc-tc-sig-contract-id" value="">
+            <?php /* ACDC 3.25.148 — G5 : ce champ était un hidden vide, renseigné par JS
+                     uniquement depuis le bouton de LIGNE. Ouvert via le bouton d'EN-TÊTE,
+                     il restait vide → « Données manquantes ». On expose donc un sélecteur
+                     de mission : le bouton d'en-tête devient utilisable, et le bouton de
+                     ligne continue de le pré-sélectionner via son id. */ ?>
+            <p style="margin:0 0 12px;">
+              <label for="acdc-tc-sig-contract-id" style="display:block;font-size:12px;font-weight:600;color:#0f2c52;margin-bottom:5px;">Mission concernée *</label>
+              <select name="contract_id" id="acdc-tc-sig-contract-id" required style="width:100%;height:38px;border-radius:8px;border:1px solid #dfe5ee;padding:0 10px;font-size:13px;">
+                <option value="">— Sélectionner une mission —</option>
+                <?php foreach ( (array) $contracts as $c_opt ) : ?>
+                  <option value="<?php echo (int) $c_opt->id; ?>"><?php echo esc_html( $c_opt->label ?: ( 'Mission #' . (int) $c_opt->id ) ); ?></option>
+                <?php endforeach; ?>
+              </select>
+            </p>
             <p style="color:#374151;font-size:13px;margin:0 0 14px;">Un lien de signature OTP sécurisé sera envoyé à <strong><?php echo esc_html( $trainer->email ?: 'e-mail non renseigné' ); ?></strong>.</p>
             <?php if ( empty( $trainer->email ) ) : ?>
             <p style="color:#c62828;font-size:12px;margin:0 0 12px;">⚠️ Ce formateur n'a pas d'e-mail. Complétez sa fiche avant d'envoyer.</p>
@@ -8009,10 +8022,35 @@ trait ACDC_Kernel_Render_Trait {
             if ( ! $has_clauses ) : ?>
             <p style="color:#c62828;font-size:12px;margin:0 0 12px;">⚠️ Les clauses du contrat ne sont pas configurées. <a href="<?php echo esc_url( is_admin() ? admin_url( 'admin.php?page=acdc-of-dossiers&tab=subcontract_parameters' ) : $this->portal_page_url( array( 'tab' => 'dossiers', 'subtab' => 'subcontract_parameters' ) ) ); ?>">Configurer les clauses</a></p>
             <?php endif; ?>
+            <?php /* ACDC 3.25.148 — G4 : « Générer le PDF » ne fait plus QUE télécharger.
+                     Ce bouton envoyait auparavant AUSSI le contrat par e-mail au formateur,
+                     sans confirmation ni retour visible — d'où des doubles envois. L'envoi
+                     est désormais un bouton distinct, explicite et confirmé (ci-dessous). */ ?>
+            <p style="color:#4b5563;font-size:12px;margin:0 0 12px;">Le téléchargement n'envoie <strong>aucun e-mail</strong>.</p>
             <div class="acdc-tc-modal-actions">
               <button type="button" class="acdc-button acdc-button-soft" id="acdc-tc-modal-cancel">Annuler</button>
-              <button type="submit" class="acdc-button acdc-button-primary">Générer le PDF</button>
+              <button type="submit" class="acdc-button acdc-button-primary">⬇️ Télécharger le PDF</button>
             </div>
+          </form>
+
+          <?php /* Action SÉPARÉE : envoi du contrat au formateur, avec confirmation explicite. */ ?>
+          <form method="post" action="<?php echo esc_url( admin_url( 'admin-post.php' ) ); ?>" style="margin-top:14px;border-top:1px solid #e5e7eb;padding-top:14px;">
+            <?php wp_nonce_field( 'acdc_send_trainer_contract_email_' . $tid ); ?>
+            <input type="hidden" name="action"     value="acdc_send_trainer_contract_email">
+            <input type="hidden" name="trainer_id" value="<?php echo $tid; ?>">
+            <?php if ( is_admin() ) : ?><input type="hidden" name="page" value="acdc-of-trainers"><?php endif; ?>
+            <label for="acdc-tc-send-mission" style="display:block;font-size:12px;font-weight:600;color:#0f2c52;margin-bottom:5px;">Envoyer le contrat au formateur</label>
+            <select id="acdc-tc-send-mission" name="contract_id" required style="width:100%;height:38px;border-radius:8px;border:1px solid #dfe5ee;padding:0 10px;font-size:13px;margin-bottom:10px;">
+              <option value="">— Sélectionner une mission —</option>
+              <?php foreach ( $contracts as $c_send ) : ?>
+              <option value="<?php echo (int) $c_send->id; ?>"><?php echo esc_html( $c_send->label ?: ( 'Mission #' . (int) $c_send->id ) ); ?></option>
+              <?php endforeach; ?>
+            </select>
+            <button type="submit" class="acdc-button acdc-button-soft" <?php echo empty( $trainer->email ) ? 'disabled' : ''; ?>
+              onclick="return confirm('Envoyer le contrat par e-mail à <?php echo esc_attr( $trainer->email ?: '' ); ?> ?');">✉️ Envoyer au formateur</button>
+            <?php if ( empty( $trainer->email ) ) : ?>
+            <p style="color:#c62828;font-size:12px;margin:8px 0 0;">⚠️ Ce formateur n'a pas d'e-mail.</p>
+            <?php endif; ?>
           </form>
         </div>
       </div>
@@ -10884,7 +10922,7 @@ trait ACDC_Kernel_Render_Trait {
     </tbody></table></div></div>
     <?php
   }private function render_front_training_programs_tab() {
-    $search = isset( $_GET['s'] ) ? sanitize_text_field( wp_unslash( $_GET['s'] ) ) : '';
+    $search = isset( $_GET['q'] ) ? sanitize_text_field( wp_unslash( $_GET['q'] ) ) : ( isset( $_GET['s'] ) ? sanitize_text_field( wp_unslash( $_GET['s'] ) ) : '' );
     $per_page = isset( $_GET['per_page'] ) ? absint( $_GET['per_page'] ) : 25;
     if ( ! in_array( $per_page, array( 25, 50, 100 ), true ) ) {
       $per_page = 25;
@@ -10928,7 +10966,7 @@ trait ACDC_Kernel_Render_Trait {
         <?php endif; ?>
         <input type="hidden" name="tab" value="training_programs">
         <div class="acdc-search-row">
-          <input type="search" name="s" value="<?php echo esc_attr( $search ); ?>" placeholder="Rechercher">
+          <input type="search" name="q" value="<?php echo esc_attr( $search ); ?>" placeholder="Rechercher">
           <button type="button" class="acdc-filter-toggle acdc-filter-toggle-icons-only" data-acdc-filter-toggle aria-expanded="false" title="Filtres"><?php echo $this->render_inline_icon( 'filter', 18 ); ?> <?php echo $this->render_inline_icon( 'chevron-down', 16 ); ?></button>
         </div>
         <div class="acdc-sessions-filters-panel acdc-documents-filters-panel" data-acdc-filters-panel hidden>
@@ -11179,7 +11217,7 @@ trait ACDC_Kernel_Render_Trait {
       return;
     }
 
-    $search = isset( $_GET['s'] ) ? sanitize_text_field( wp_unslash( $_GET['s'] ) ) : '';
+    $search = isset( $_GET['q'] ) ? sanitize_text_field( wp_unslash( $_GET['q'] ) ) : ( isset( $_GET['s'] ) ? sanitize_text_field( wp_unslash( $_GET['s'] ) ) : '' );
     $items = $this->get_attendance_sheet_entries( $search );
     ?>
     <section class="acdc-section-head">
@@ -11197,7 +11235,7 @@ trait ACDC_Kernel_Render_Trait {
         <?php endif; ?>
         <input type="hidden" name="tab" value="attendance_sheets">
         <div class="acdc-search-row">
-          <input type="search" name="s" value="<?php echo esc_attr( $search ); ?>" placeholder="Rechercher">
+          <input type="search" name="q" value="<?php echo esc_attr( $search ); ?>" placeholder="Rechercher">
           <button type="button" class="acdc-filter-toggle acdc-filter-toggle-icons-only" data-acdc-filter-toggle aria-expanded="false" title="Filtres"><?php echo $this->render_inline_icon( 'filter', 18 ); ?> <?php echo $this->render_inline_icon( 'chevron-down', 16 ); ?></button>
         </div>
         <div class="acdc-sessions-filters-panel acdc-documents-filters-panel" data-acdc-filters-panel hidden>
@@ -13549,7 +13587,7 @@ Nb de questions réussies / Nb de questions : <?php echo esc_html( (int) $contex
     }
 
     if ( 'list' === $action ) {
-      $search = isset( $_GET['s'] ) ? sanitize_text_field( wp_unslash( $_GET['s'] ) ) : '';
+      $search = isset( $_GET['q'] ) ? sanitize_text_field( wp_unslash( $_GET['q'] ) ) : ( isset( $_GET['s'] ) ? sanitize_text_field( wp_unslash( $_GET['s'] ) ) : '' );
       $items = $this->get_pre_meetings( $search );
       $base_new_url = is_admin() ? admin_url( 'admin.php?page=acdc-of-pre-meetings&action=new' ) : $this->portal_page_url( array( 'tab' => 'pre_meetings', 'action' => 'new' ) );
       $search_url = is_admin() ? admin_url( 'admin.php?page=acdc-of-pre-meetings' ) : $this->portal_page_url( array( 'tab' => 'pre_meetings' ) );
@@ -13566,7 +13604,7 @@ Nb de questions réussies / Nb de questions : <?php echo esc_html( (int) $contex
       <div class="acdc-panel acdc-mb-18">
         <form class="acdc-search-bar" method="get" action="<?php echo esc_url( $search_url ); ?>">
           <?php if ( is_admin() ) : ?><input type="hidden" name="page" value="acdc-of-pre-meetings"><?php else : ?><input type="hidden" name="tab" value="pre_meetings"><?php endif; ?>
-          <input type="search" name="s" value="<?php echo esc_attr( $search ); ?>" placeholder="Rechercher">
+          <input type="search" name="q" value="<?php echo esc_attr( $search ); ?>" placeholder="Rechercher">
           <button type="submit" class="acdc-button acdc-button-soft">Rechercher</button>
         </form>
       </div>
