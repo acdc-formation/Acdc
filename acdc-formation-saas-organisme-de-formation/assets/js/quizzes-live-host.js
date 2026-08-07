@@ -218,7 +218,7 @@
             if (!state.hasShownReveal) {
                 state.hasShownReveal = true;
                 ajax('acdc_of_qz_host_lobby_state', {}, function(j) {
-                    if (j.success) { renderReveal(j.data); showState('reveal'); playSound('reveal'); }
+                    if (j.success) { renderReveal(j.data); showState('reveal'); playSound('reveal'); refreshRevealCounts(j.data.current_q_id); }
                 });
             }
         }
@@ -236,6 +236,27 @@
             html += '<div class="acdc-qz-host-answer-tile acdc-qz-host-answer-tile-' + i + '"><span class="acdc-qz-host-answer-letter">' + (letters[i]||(i+1)) + '</span><span class="acdc-qz-host-answer-label">' + esc(a.label) + '</span></div>';
         });
         document.getElementById('acdc-qz-host-q-answers').innerHTML = html;
+    }
+
+    /* ACDC 3.25.157 — Le compte affiché au reveal était un INSTANTANÉ pris une seule
+       fois, jamais rafraîchi. Le chronomètre de l'écran formateur et celui de
+       l'apprenant ne sont pas la même horloge : une réponse partie dans les dernières
+       secondes arrive après cet instantané, et l'écran formateur affichait alors
+       « 0 bonne réponse sur 0 répondant » pendant que la base enregistrait bien la
+       passation. On rejoue donc la lecture quelques instants après le reveal, et on
+       ne redessine que si l'on est toujours sur la même question. */
+    function refreshRevealCounts( questionId ) {
+        [ 1500, 4000 ].forEach( function( delay ) {
+            setTimeout( function() {
+                if ( ! state.hasShownReveal ) { return; }
+                ajax( 'acdc_of_qz_host_lobby_state', {}, function( j ) {
+                    if ( ! j.success || ! j.data || ! j.data.current_question ) { return; }
+                    if ( parseInt( j.data.current_q_id, 10 ) !== parseInt( questionId, 10 ) ) { return; }
+                    if ( ! state.hasShownReveal ) { return; }
+                    renderReveal( j.data );
+                } );
+            }, delay );
+        } );
     }
 
     function renderReveal(data) {
@@ -506,7 +527,7 @@
         state.hasShownReveal = true;
         stopHostTimer();
         ajax('acdc_of_qz_host_lobby_state',{},function(j){
-            if (j.success && j.data.current_question) { renderReveal(j.data); showState('reveal'); playSound('reveal'); }
+            if (j.success && j.data.current_question) { renderReveal(j.data); showState('reveal'); playSound('reveal'); refreshRevealCounts(j.data.current_q_id); }
         });
     });
 

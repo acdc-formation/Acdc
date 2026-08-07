@@ -521,7 +521,7 @@ trait ACDC_Quizzes_Render_Trait {
 
                     <p>
                         <label>
-                            <span class="acdc-required"><?php esc_html_e( 'Formation rattachée', 'acdc-formation-saas' ); ?> *</span>
+                            <span class="acdc-required"><?php esc_html_e( 'Formation rattachée', 'acdc-formation-saas' ); ?></span>
                             <select name="formation_id" required>
                                 <option value="0">— <?php esc_html_e( 'Sélectionner', 'acdc-formation-saas' ); ?> —</option>
                                 <?php foreach ( $formations as $f ) : ?>
@@ -956,7 +956,7 @@ trait ACDC_Quizzes_Render_Trait {
 
                         <p>
                             <label>
-                                <span class="acdc-required"><?php esc_html_e( 'Quiz source', 'acdc-formation-saas' ); ?> *</span>
+                                <span class="acdc-required"><?php esc_html_e( 'Quiz source', 'acdc-formation-saas' ); ?></span>
                                 <select name="source_quiz_id" required>
                                     <option value="0">— <?php esc_html_e( 'Sélectionner', 'acdc-formation-saas' ); ?> —</option>
                                     <?php foreach ( $sources as $s ) :
@@ -977,7 +977,7 @@ trait ACDC_Quizzes_Render_Trait {
 
                         <p>
                             <label>
-                                <span class="acdc-required"><?php esc_html_e( 'Formation cible', 'acdc-formation-saas' ); ?> *</span>
+                                <span class="acdc-required"><?php esc_html_e( 'Formation cible', 'acdc-formation-saas' ); ?></span>
                                 <select name="target_formation_id" required>
                                     <option value="0">— <?php esc_html_e( 'Sélectionner', 'acdc-formation-saas' ); ?> —</option>
                                     <?php foreach ( $formations as $f ) : ?>
