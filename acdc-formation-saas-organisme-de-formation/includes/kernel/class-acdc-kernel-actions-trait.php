@@ -1751,13 +1751,24 @@ trait ACDC_Kernel_Actions_Trait {
        le gestionnaire recliquait et l'envoi était dupliqué.
        L'envoi est désormais une action distincte et explicite :
        acdc_send_trainer_contract_email (bouton dédié + confirmation). */
-    $this->log_action_event( 'download', 'trainer_contract_pdf', $contract_id );
-    while ( ob_get_level() ) { ob_end_clean(); }
-    nocache_headers();
-    header( 'Content-Type: application/pdf' );
-    header( 'Content-Disposition: attachment; filename="' . $safe_name . '"' );
-    header( 'Content-Length: ' . strlen( $pdf_content ) );
-    echo $pdf_content; // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped -- binaire PDF
+    /* ACDC 3.25.159 — CE HANDLER NE DIFFUSE PLUS LE PDF.
+       Il écrivait le fichier puis le renvoyait en pièce jointe : le fichier
+       arrivait bien sur le disque, mais la réponse HTTP retombait en 503 — même
+       symptôme que l'archivage, et contrairement au service de consultation qui
+       répond 200 sur le même fichier. Conséquences observées en recette : le
+       gestionnaire croit la génération échouée, reclique, et surtout la chaîne
+       s'arrête là puisque « Envoyer pour signature » exige un PDF existant.
+       Le handler enregistre désormais et redirige avec un avis ; la consultation
+       et le téléchargement passent par acdc_serve_trainer_contract, seul chemin
+       dont on sait qu'il aboutit. */
+    $this->log_action_event( 'generate', 'trainer_contract_pdf', $contract_id, 'success', array( 'file' => $safe_name, 'bytes' => strlen( $pdf_content ) ) );
+    wp_safe_redirect( add_query_arg(
+      array(
+        'notice'      => rawurlencode( 'Contrat PDF généré. Utilisez « Voir » pour le consulter ou l’enregistrer.' ),
+        'notice_type' => 'success',
+      ),
+      $this->acdc_trainer_contract_back_url( $trainer_id )
+    ) );
     exit;
   }
 

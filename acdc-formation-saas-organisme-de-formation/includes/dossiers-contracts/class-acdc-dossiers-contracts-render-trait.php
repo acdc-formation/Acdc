@@ -2407,7 +2407,13 @@ public function render_admin_registration_contract_page() { $this->render_admin_
              OR ( ( tr.company_id IS NULL OR tr.company_id = 0 )
                   AND EXISTS ( SELECT 1 FROM {$this->registration_contract_table} rc
                                WHERE rc.id = tr.autofill_contract_id AND rc.company_id = co.id ) )
-           WHERE co.is_archived = 0 OR co.is_archived IS NULL
+           /* ACDC 3.25.159 — La clause « WHERE co.is_archived = 0 OR co.is_archived
+              IS NULL » a été retirée : cette colonne N'EXISTE PAS sur la table des
+              commanditaires. MySQL rejetait donc la requête entière, get_results()
+              renvoyait un tableau vide, et l'écran affichait « Aucun commanditaire
+              trouvé » — une erreur SQL silencieuse, présentée comme une absence de
+              données. C'est ce qui explique que la vue « Par apprenant », dépourvue
+              de cette clause, se soit corrigée alors que celle-ci non. */
            ORDER BY co.name ASC
            LIMIT 500"
         );
