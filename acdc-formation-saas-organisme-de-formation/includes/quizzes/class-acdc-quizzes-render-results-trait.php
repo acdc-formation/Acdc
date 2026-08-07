@@ -863,7 +863,11 @@ trait ACDC_Quizzes_Render_Results_Trait {
         // 3.21.04.1-hotfix5 — Nom complet + email distinct, statut traduit en français
         $full_name = trim( (string) $p->full_name );
         $email     = trim( (string) $p->email );
-        $title     = $full_name !== '' ? $full_name : ( $email !== '' ? $email : 'Apprenant' );
+        /* ACDC 3.25.157 — En quiz live, le participant n'a ni nom ni e-mail : il se
+           connecte sous un pseudo. Sans ce repli, l'entête affichait « Apprenant »
+           suivi du vide, alors que la liste montrait bien le pseudo. */
+        $nickname  = trim( (string) ( $p->nickname ?? '' ) );
+        $title     = $full_name !== '' ? $full_name : ( $nickname !== '' ? $nickname : ( $email !== '' ? $email : 'Apprenant' ) );
         $status_fr = array(
             'pending'     => 'En attente',
             'invited'     => 'Invité',
@@ -891,11 +895,16 @@ trait ACDC_Quizzes_Render_Results_Trait {
             <?php endif; ?>
             <p class="acdc-qz-results-hero-meta">
                 <strong>Score :</strong>
-                <?php if ( null === $p->total_score_percentage ) : ?>
-                    —
-                <?php else : ?>
-                    <?php echo esc_html( number_format( (float) $p->total_score_percentage, 1, ',', ' ' ) ); ?>%
-                <?php endif; ?>
+                <?php
+                /* ACDC 3.25.157 — Ce rendu avait été oublié lors de la correction du
+                   zéro : il ne lisait que total_score_percentage, toujours NULL en
+                   quiz live où le score est en points bruts. D'où « Score : — » sur
+                   la fiche, alors que tous les autres écrans affichaient « 0 pts ». */
+                if ( 'live' === (string) $session->quiz_purpose ) :
+                    if ( null === $p->total_score ) : ?>—<?php
+                    else : echo esc_html( number_format( (float) $p->total_score, 0, ',', ' ' ) ); ?> pts<?php endif;
+                elseif ( null === $p->total_score_percentage ) : ?>—<?php
+                else : echo esc_html( number_format( (float) $p->total_score_percentage, 1, ',', ' ' ) ); ?>%<?php endif; ?>
                 &nbsp;·&nbsp;
                 <strong>Statut :</strong> <?php echo esc_html( $status_label ); ?>
                 <?php if ( ! empty( $p->completed_at ) ) : ?>
@@ -1280,7 +1289,12 @@ trait ACDC_Quizzes_Render_Results_Trait {
                         <?php foreach ( $results as $r ) :
                             $name    = trim( (string) $r->full_name ) ?: trim( (string) $r->nickname ) ?: (string) $r->email ?: '—';
                             $p_label = $purpose_labels[ $r->quiz_purpose ] ?? ucfirst( (string) $r->quiz_purpose );
-                            $date    = ! empty( $r->completed_at ) ? wp_date( 'd/m/Y H:i', strtotime( $r->completed_at ) ) : '—';
+                            /* ACDC 3.25.157 — wp_date(strtotime()) appliquait le fuseau DEUX
+                               fois : les horodatages sont stockés en heure locale WordPress,
+                               strtotime() les interprétait comme UTC, puis wp_date ajoutait
+                               de nouveau le décalage — d'où +2 h sur ce seul écran. On passe
+                               par le formateur commun, qui lit déjà dans le bon fuseau. */
+                            $date    = $this->qz_format_datetime( $r->completed_at );
                             $score   = null !== $r->total_score_percentage
                                 ? number_format( (float) $r->total_score_percentage, 1, ',', ' ' ) . ' %'
                                 : ( 'live' === $r->quiz_purpose && null !== $r->total_score
