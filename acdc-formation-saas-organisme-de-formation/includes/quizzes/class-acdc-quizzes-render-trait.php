@@ -402,9 +402,16 @@ trait ACDC_Quizzes_Render_Trait {
                                     </button>
                                 </li>
                             <?php else : ?>
+                                <?php /* ACDC 3.25.159 — L'entrée désactivée ne portait qu'un title :
+                                         au clic il ne se passait rien, aucune requête, aucun message, et
+                                         l'utilisateur pouvait croire à une panne. La raison est désormais
+                                         écrite à l'écran, et le clic l'explique. */ ?>
                                 <li class="acdc-qz-menu-disabled">
-                                    <span title="<?php esc_attr_e( 'Activez le quiz pour pouvoir le lancer en live', 'acdc-formation-saas' ); ?>">
+                                    <span title="<?php esc_attr_e( 'Activez le quiz pour pouvoir le lancer en live', 'acdc-formation-saas' ); ?>"
+                                          onclick="alert('Ce quiz est en brouillon. Activez-le depuis ses paramètres pour pouvoir le lancer en session live.');"
+                                          style="cursor:help;">
                                         <?php esc_html_e( '▶ Lancer en live', 'acdc-formation-saas' ); ?>
+                                        <small style="display:block;font-size:11px;opacity:.75;"><?php esc_html_e( 'Activez le quiz au préalable', 'acdc-formation-saas' ); ?></small>
                                     </span>
                                 </li>
                             <?php endif; ?>
