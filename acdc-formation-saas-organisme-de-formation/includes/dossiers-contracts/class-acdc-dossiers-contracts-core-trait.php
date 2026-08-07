@@ -375,7 +375,22 @@ trait ACDC_Dossiers_Contracts_Core_Trait {
          contient des doublons — d'où une formation et un tarif erronés sur la convention. */
       $desired_formation_id = isset( $prospect->desired_formation_id ) ? (int) $prospect->desired_formation_id : 0;
       if ( $desired_formation_id ) {
-        $linked_formation = $this->get_formation( $desired_formation_id );
+        /* ACDC 3.25.163 — Le catalogue est DÉJÀ chargé et passé en argument : le
+           réinterroger ici déclenchait une requête par appel. Or l'écran des
+           conventions appelle ce préremplissage une fois par prospect pour alimenter
+           son sélecteur — plusieurs centaines de requêtes pour un seul affichage,
+           d'où la lenteur constatée à l'ouverture. On lit d'abord la liste en
+           mémoire, la requête ne servant plus que de repli. */
+        $linked_formation = null;
+        foreach ( (array) $formations as $catalog_formation ) {
+          if ( isset( $catalog_formation->id ) && (int) $catalog_formation->id === $desired_formation_id ) {
+            $linked_formation = $catalog_formation;
+            break;
+          }
+        }
+        if ( ! $linked_formation ) {
+          $linked_formation = $this->get_formation( $desired_formation_id );
+        }
         if ( $linked_formation ) {
           $prefill['formation_id']    = $desired_formation_id;
           $prefill['objectives_text'] = isset( $linked_formation->objectives ) ? wp_strip_all_tags( (string) $linked_formation->objectives ) : '';

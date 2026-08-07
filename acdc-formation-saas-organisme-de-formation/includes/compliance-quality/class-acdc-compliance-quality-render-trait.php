@@ -338,13 +338,32 @@ trait ACDC_Compliance_Quality_Render_Trait {
 
       <?php /* ===== SOUS-TRAITANTS IND. 28 — ACDC 3.24.14 ===== */ ?>
       <div class="acdc-qhub-section-label" style="margin-top:8px;">Sous-traitants &mdash; indicateur 28</div>
-      <div style="background:<?php echo 'green' === $subcontractors_status ? '#dff6e5' : '#fee2e2'; ?>;border:1px solid <?php echo 'green' === $subcontractors_status ? '#86efac' : '#fca5a5'; ?>;border-radius:10px;padding:14px 18px;display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:12px;margin-bottom:24px;">
+      <?php
+      /* ACDC 3.25.163 — Trois états : non applicable (gris), conforme (vert),
+         non conforme (rouge). Le gris n'est pas une alerte atténuée, c'est
+         l'absence d'obligation : sans formateur externe, l'indicateur 28 ne
+         s'applique pas. */
+      $sc_bg     = 'green' === $subcontractors_status ? '#dff6e5' : ( 'grey' === $subcontractors_status ? '#f1f5f9' : '#fee2e2' );
+      $sc_border = 'green' === $subcontractors_status ? '#86efac' : ( 'grey' === $subcontractors_status ? '#cbd5e1' : '#fca5a5' );
+      $sc_dot    = 'green' === $subcontractors_status ? '#22c55e' : ( 'grey' === $subcontractors_status ? '#94a3b8' : '#ef4444' );
+      if ( 'green' === $subcontractors_status ) {
+        $sc_label = 'Conforme — sous-traitants enregistrés';
+        $sc_hint  = $subcontractors_count . ' sous-traitant(s) référencé(s)';
+      } elseif ( 'grey' === $subcontractors_status ) {
+        $sc_label = 'Non applicable — aucun recours à la sous-traitance';
+        $sc_hint  = 'Aucun formateur externe enregistré : cet indicateur ne vous concerne pas.';
+      } else {
+        $sc_label = 'Non conforme — formateurs externes non référencés';
+        $sc_hint  = 'Des formateurs externes existent, mais aucun sous-traitant n’est référencé.';
+      }
+      ?>
+      <div style="background:<?php echo esc_attr( $sc_bg ); ?>;border:1px solid <?php echo esc_attr( $sc_border ); ?>;border-radius:10px;padding:14px 18px;display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:12px;margin-bottom:24px;">
         <div>
           <strong style="font-size:15px;color:#3d3d3d;display:flex;align-items:center;gap:8px;">
-            <span style="width:10px;height:10px;border-radius:50%;background:<?php echo 'green' === $subcontractors_status ? '#22c55e' : '#ef4444'; ?>;display:inline-block;flex-shrink:0;"></span>
-            <?php echo 'green' === $subcontractors_status ? 'Conforme — sous-traitants enregistrés' : 'Non conforme — aucun sous-traitant enregistré'; ?>
+            <span style="width:10px;height:10px;border-radius:50%;background:<?php echo esc_attr( $sc_dot ); ?>;display:inline-block;flex-shrink:0;"></span>
+            <?php echo esc_html( $sc_label ); ?>
           </strong>
-          <p style="font-size:12px;color:#4b5d76;margin:3px 0 0;"><?php echo $subcontractors_count; ?> sous-traitant(s) référencé(s)</p>
+          <p style="font-size:12px;color:#4b5d76;margin:3px 0 0;"><?php echo esc_html( $sc_hint ); ?></p>
         </div>
         <a href="<?php echo esc_url( $url_subcontractors ); ?>" class="acdc-button acdc-button-soft">Gérer les sous-traitants</a>
       </div>
@@ -2813,8 +2832,29 @@ trait ACDC_Compliance_Quality_Render_Trait {
   /**
    * Statut conformité ind. 28 : 'green' si au moins 1 sous-traitant enregistré, 'red' sinon.
    */
+  /**
+   * ACDC 3.25.163 — Indicateur 28 : trois états, pas deux.
+   *
+   * La règle précédente était « registre vide = non conforme ». Elle déclarait donc
+   * non conforme un organisme qui ne sous-traite pas — l'inverse de l'esprit de
+   * l'indicateur, qui ne s'applique qu'en cas de recours à la sous-traitance. Elle
+   * punissait aussi le bon geste : nettoyer des entrées erronées faisait basculer
+   * l'indicateur au rouge.
+   *
+   * Le signal existe déjà en base : un formateur externe (is_self_trainer = 0) est
+   * un sous-traitant. Aucun formateur externe, aucune obligation.
+   *
+   * @return string 'grey' non applicable · 'green' conforme · 'red' non conforme.
+   */
   private function get_subcontractors_compliance_status() {
-    return count( $this->get_subcontractors() ) > 0 ? 'green' : 'red';
+    if ( count( $this->get_subcontractors() ) > 0 ) {
+      return 'green';
+    }
+    global $wpdb;
+    $external_trainers = (int) $wpdb->get_var(
+      "SELECT COUNT(*) FROM {$this->trainer_table} WHERE COALESCE(is_self_trainer, 0) = 0"
+    );
+    return $external_trainers > 0 ? 'red' : 'grey';
   }
 
   public function render_front_subcontractors_tab() {

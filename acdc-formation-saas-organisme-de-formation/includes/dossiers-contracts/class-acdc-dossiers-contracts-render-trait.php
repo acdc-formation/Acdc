@@ -2410,14 +2410,22 @@ public function render_admin_registration_contract_page() { $this->render_admin_
            renvoyait alors « Aucun commanditaire trouvé » alors que des conventions
            existaient bel et bien — l'écran Dossiers de formation, lui, affichait le
            bon nom parce qu'il remonte à la convention. On accepte les deux chemins. */
+        /* ACDC 3.25.163 — Cet écran s'intitule « Conventions / Contrats » : il doit
+           donc partir des CONVENTIONS, pas des inscriptions. Le regroupement par
+           inscription masquait toute convention sans apprenant rattaché — la recette
+           en a produit une, signée électroniquement, invisible ici. Un commanditaire
+           apparaît désormais s'il porte une convention OU une inscription. */
         $rows = $wpdb->get_results(
           "SELECT DISTINCT co.id, co.name, COALESCE(co.city,'') AS city
            FROM {$this->company_table} co
-           INNER JOIN {$this->training_registration_table} tr
+           LEFT JOIN {$this->training_registration_table} tr
              ON tr.company_id = co.id
              OR ( ( tr.company_id IS NULL OR tr.company_id = 0 )
                   AND EXISTS ( SELECT 1 FROM {$this->registration_contract_table} rc
                                WHERE rc.id = tr.autofill_contract_id AND rc.company_id = co.id ) )
+           WHERE ( tr.id IS NOT NULL
+                   OR EXISTS ( SELECT 1 FROM {$this->registration_contract_table} rc2
+                               WHERE rc2.company_id = co.id ) )
            /* ACDC 3.25.159 — La clause « WHERE co.is_archived = 0 OR co.is_archived
               IS NULL » a été retirée : cette colonne N'EXISTE PAS sur la table des
               commanditaires. MySQL rejetait donc la requête entière, get_results()
