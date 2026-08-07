@@ -607,7 +607,23 @@
             var $ind = $( '.acdc-qz-autosave-indicator' );
             $ind.attr( 'hidden', null ).removeAttr( 'hidden' );
             $ind.find( '> span' ).attr( 'hidden', 'hidden' );
-            $ind.find( '.acdc-qz-autosave-' + state ).attr( 'hidden', null ).removeAttr( 'hidden' );
+            var $slot = $ind.find( '.acdc-qz-autosave-' + state );
+            $slot.attr( 'hidden', null ).removeAttr( 'hidden' );
+            /* ACDC 3.25.160 — Le motif du refus était reçu du serveur puis jeté : le
+               paramètre msg n'était jamais rendu. Sur un quiz verrouillé, l'éditeur
+               affichait donc « Erreur » sans rien d'autre, et la raison — « créez une
+               nouvelle version » — n'apparaissait qu'après rechargement de la page.
+               Un refus légitime qui ne se justifie pas se lit comme une panne. */
+            if ( 'error' === state ) {
+                var $why = $ind.find( '.acdc-qz-autosave-error-reason' );
+                if ( ! $why.length ) {
+                    $why = $( '<span class="acdc-qz-autosave-error-reason" style="margin-left:6px;"></span>' );
+                    $slot.after( $why );
+                }
+                $why.text( msg ? ( '— ' + msg ) : '' );
+            } else {
+                $ind.find( '.acdc-qz-autosave-error-reason' ).text( '' );
+            }
             if ( state === 'saved' ) {
                 setTimeout( function() {
                     $ind.attr( 'hidden', 'hidden' );
