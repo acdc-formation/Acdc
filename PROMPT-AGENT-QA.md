@@ -4,7 +4,7 @@
 (mémoire vierge). C'est le seul message que David écrit ailleurs que dans le chat
 Claude Code.
 
-**Dernière mise à jour : 7 août 2026 — version en ligne 3.25.159.**
+**Dernière mise à jour : 7 août 2026 — version en ligne 3.25.161.**
 
 ---
 
@@ -177,15 +177,20 @@ Relève dans l'onglet Réseau la réponse JSON brute de
   - status
 Puis compare current_q_id à l'identifiant de la question réellement répondue.
 
-OBSERVATION EN SUSPENS — QUIZ LIVE, RETOUR AU LOBBY
-À l'expiration du chronomètre d'une question, l'écran formateur retombe sur le
-lobby au lieu d'afficher le dévoilement. Le serveur est hors de cause : le relevé
-JSON montre status « in_progress », le bon identifiant de question et des
-compteurs justes ; l'écran affiche donc autre chose que ce que la logique désigne,
-ce qui pointe une exception JavaScript.
-CE QU'IL MANQUE, une seule donnée : les ERREURS DE LA CONSOLE du navigateur au
-moment précis de l'expiration, sur l'écran formateur. Inutile de reconstruire un
-scénario pour cela — relève-les au prochain test de quiz live.
+POINT CLOS, NE PAS LE ROUVRIR SANS RAISON — QUIZ LIVE
+Un défaut d'affichage du dévoilement (compteur figé à « 0 sur 0 », puis tuiles
+vides, puis retour au lobby) a occupé quatre versions. Il est corrigé en 3.25.161
+et vérifié sur deux sessions, avec un collecteur d'erreurs installé AVANT le
+démarrage : aucune exception.
+Le mécanisme du retour au lobby n'a jamais été démontré — le symptôme a disparu
+avec le correctif. S'IL RÉAPPARAÎT : installe un collecteur sur console.error,
+window.onerror et unhandledrejection AVANT de lancer la session, et capture le
+dernier acdc_of_qz_host_lobby_state. C'est la seule donnée qui manquait.
+
+À SAVOIR SUR CE MODULE : le serveur ne ferme jamais une question. Après expiration
+du chronomètre, status reste « in_progress » et current_q_elapsed_seconds continue
+de croître ; c'est le client seul qui bascule en dévoilement. Un « 0 sur 0 » n'est
+donc pas nécessairement un bug — vérifie d'abord ce que renvoie le serveur.
 
 ────────────────────────────────────────────────
 COMPTE-RENDU
