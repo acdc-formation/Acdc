@@ -177,8 +177,15 @@ Relève dans l'onglet Réseau la réponse JSON brute de
   - status
 Puis compare current_q_id à l'identifiant de la question réellement répondue.
 
-RESTE CONNU, NON CORRIGÉ : la génération du PDF de contrat formateur répond 503
-alors que le fichier est bien écrit. Inutile de le re-signaler, sauf évolution.
+OBSERVATION EN SUSPENS — QUIZ LIVE, RETOUR AU LOBBY
+À l'expiration du chronomètre d'une question, l'écran formateur retombe sur le
+lobby au lieu d'afficher le dévoilement. Le serveur est hors de cause : le relevé
+JSON montre status « in_progress », le bon identifiant de question et des
+compteurs justes ; l'écran affiche donc autre chose que ce que la logique désigne,
+ce qui pointe une exception JavaScript.
+CE QU'IL MANQUE, une seule donnée : les ERREURS DE LA CONSOLE du navigateur au
+moment précis de l'expiration, sur l'écran formateur. Inutile de reconstruire un
+scénario pour cela — relève-les au prochain test de quiz live.
 
 ────────────────────────────────────────────────
 COMPTE-RENDU

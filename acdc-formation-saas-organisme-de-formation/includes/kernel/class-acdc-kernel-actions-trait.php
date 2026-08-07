@@ -1476,6 +1476,10 @@ trait ACDC_Kernel_Actions_Trait {
         if ( ! $already_exists ) {
           $sc_records[] = array(
             'id'             => 'sc_' . wp_generate_uuid4(),
+            /* ACDC 3.25.161 — On mémorise le formateur d'origine : sans ce lien,
+               l'entrée créée automatiquement survivait à la suppression de la fiche
+               et laissait un orphelin dans un registre Qualiopi (indicateur 28). */
+            'trainer_id'     => (int) $trainer_id,
             'nom'            => $sc_nom,
             'siret'          => $sc_siret,
             'type'           => 'independant',
@@ -1544,6 +1548,32 @@ trait ACDC_Kernel_Actions_Trait {
         'error'
       );
       return;
+    }
+
+    /* ACDC 3.25.161 — Retirer l'entrée du registre des sous-traitants créée
+       AUTOMATIQUEMENT depuis cette fiche. La garde posée plus haut interdit déjà de
+       supprimer un formateur ayant un contrat signé : un formateur supprimable n'a
+       donc aucune sous-traitance à attester, et son entrée n'est que du bruit dans
+       un registre auditable. On ne touche JAMAIS à une entrée saisie à la main —
+       seules celles portant le lien au formateur, ou à défaut son nom exact ET la
+       mention d'ajout automatique, sont retirées. */
+    $sc_registry = get_option( 'acdc_of_subcontractors', array() );
+    if ( is_array( $sc_registry ) && ! empty( $sc_registry ) ) {
+      $trainer_row  = $this->get_trainer( $trainer_id );
+      $trainer_name = $trainer_row ? strtolower( trim( (string) $trainer_row->first_name . ' ' . (string) $trainer_row->last_name ) ) : '';
+      $sc_kept      = array();
+      foreach ( $sc_registry as $sc_entry ) {
+        $auto_note = isset( $sc_entry['notes'] ) && false !== stripos( (string) $sc_entry['notes'], 'automatiquement depuis la fiche formateur' );
+        $by_id     = isset( $sc_entry['trainer_id'] ) && (int) $sc_entry['trainer_id'] === (int) $trainer_id;
+        $by_name   = '' !== $trainer_name && isset( $sc_entry['nom'] ) && strtolower( trim( (string) $sc_entry['nom'] ) ) === $trainer_name && $auto_note;
+        if ( $by_id || $by_name ) {
+          continue;
+        }
+        $sc_kept[] = $sc_entry;
+      }
+      if ( count( $sc_kept ) !== count( $sc_registry ) ) {
+        update_option( 'acdc_of_subcontractors', array_values( $sc_kept ), false );
+      }
     }
 
     /* ACDC 3.25.148 — F11 : purger les PDF de TOUTES les missions du formateur
