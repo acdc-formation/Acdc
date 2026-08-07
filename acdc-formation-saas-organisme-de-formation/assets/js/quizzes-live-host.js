@@ -142,8 +142,21 @@
                     showState('question');
                 }
             }
-            // Quand hasShownReveal = true : on est sur le reveal, ne rien faire
-            // Pas de auto-reveal sur all_answered — timer et bouton "Réponse" gèrent ça
+            /* ACDC 3.25.159 — Tant que la question reste ouverte, la révélation SUIT
+               le serveur. Auparavant, une fois la révélation affichée, la boucle de
+               scrutation ne redessinait plus rien : le décompte restait figé sur les
+               valeurs du seul appel qui l'avait déclenchée. Or l'horloge de l'écran
+               formateur et celle de l'apprenant sont indépendantes — si celle du
+               formateur arrive à zéro en avance, la révélation est calculée avant
+               que la réponse ne soit enregistrée, et plus rien ne la corrige ensuite.
+               La recette a mesuré ce figement à T+5s, T+10s et T+30s. On redessine
+               donc à chaque scrutation, tant que la question n'est pas close et que
+               l'on est bien sur la même. Le rendu est idempotent : réécrire les mêmes
+               valeurs ne coûte rien. */
+            else if ( state.hasShownReveal && data.current_question
+                      && parseInt( data.current_q_id, 10 ) === parseInt( state.lastQuestionId, 10 ) ) {
+                renderReveal( data );
+            }
         } else if (data.status === 'ended') {
             stopHostTimer();
             if (!state.podiumAnimated) {
