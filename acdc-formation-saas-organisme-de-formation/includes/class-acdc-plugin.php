@@ -541,6 +541,10 @@ class ACDC_Formation_SAAS_Plugin {
     add_action( 'acdc_sig_request_signed', array( $this, 'handle_contract_signed_by_learner' ), 10, 2 );
     /* ACDC 3.21.13 — Auto-création analyses du besoin après signature convention. */
     add_action( 'acdc_sig_request_signed', array( $this, 'handle_nad_auto_create_from_signature' ), 20, 2 );
+    /* ACDC 3.25.157 — Un prospect ne devient commanditaire qu'à la SIGNATURE de sa
+       convention : c'est la signature qui fait le client, pas l'ouverture d'un
+       formulaire ni l'enregistrement d'un brouillon. */
+    add_action( 'acdc_sig_request_signed', array( $this, 'handle_registration_contract_signed_company' ), 25, 2 );
     add_action( 'wp_ajax_acdc_nad_public_submit',        array( $this, 'handle_nad_public_submit' ) );
     add_action( 'wp_ajax_nopriv_acdc_nad_public_submit', array( $this, 'handle_nad_public_submit' ) );
     add_filter( 'template_include', array( $this, 'nad_maybe_override_template' ) );

@@ -551,13 +551,15 @@ public function handle_save_registration_contract() {
   $new_learners_input = isset( $input['new_learners'] ) && is_array( $input['new_learners'] ) ? $input['new_learners'] : array();
   $created_learner_ids = array();
 
-  /* Si aucun commanditaire (company_id = 0) mais qu'un prospect source existe,
-     créer ou retrouver automatiquement le commanditaire dans acdc_of_companies */
+  /* ACDC 3.25.157 — Règle métier : seul un prospect ayant SIGNÉ une convention
+     devient commanditaire. L'enregistrement de la convention se contente donc de
+     RETROUVER une fiche existante ; la création est portée par
+     handle_registration_contract_signed_company(), branché sur la signature. */
   $effective_company_id = $company_id;
-  if ( ! $effective_company_id && $source_prospect_id && method_exists( $this, 'acdc_ensure_company_from_prospect' ) ) {
+  if ( ! $effective_company_id && $source_prospect_id && method_exists( $this, 'acdc_find_company_id_from_prospect' ) ) {
     $source_prospect_obj = $this->get_prospect( $source_prospect_id );
     if ( $source_prospect_obj ) {
-      $effective_company_id = (int) $this->acdc_ensure_company_from_prospect( $source_prospect_obj );
+      $effective_company_id = (int) $this->acdc_find_company_id_from_prospect( $source_prospect_obj );
       /* Si un commanditaire vient d'être créé ou retrouvé, mettre à jour la convention */
       if ( $effective_company_id && ! $company_id ) {
         $wpdb->update(
@@ -1432,6 +1434,44 @@ public function handle_update_registration_contract_document() {
        inaccessible aux utilisateurs sans manage_options natif. */
     $this->redirect_to_portal( 'registrations', $message, 'success' );
     exit;
+  }
+
+
+  /* ACDC 3.25.157 — Le prospect devient commanditaire À LA SIGNATURE de la
+     convention, et pas avant : c'est la signature qui fait le client.
+     Déclenché par acdc_sig_request_signed (priorité 25, après la conversion du
+     statut prospect et avant la génération des analyses du besoin).
+     Idempotent : une convention déjà rattachée à un commanditaire ne crée rien. */
+  public function handle_registration_contract_signed_company( $request_id, $request ) {
+    global $wpdb;
+    $request_id = absint( $request_id );
+    if ( ! $request_id ) { return; }
+
+    $contract = $wpdb->get_row( $wpdb->prepare(
+      "SELECT id, company_id, source_prospect_id FROM {$this->registration_contract_table} WHERE signature_request_id = %d LIMIT 1",
+      $request_id
+    ) );
+    if ( ! $contract ) { return; }                       // La requête ne porte pas sur une convention.
+    if ( (int) $contract->company_id > 0 ) { return; }   // Commanditaire déjà rattaché.
+    $prospect_id = (int) $contract->source_prospect_id;
+    if ( ! $prospect_id ) { return; }                    // Convention sans prospect source.
+
+    $prospect = $this->get_prospect( $prospect_id );
+    if ( ! $prospect ) { return; }
+
+    $company_id = (int) $this->acdc_ensure_company_from_prospect( $prospect );
+    if ( ! $company_id ) { return; }                     // Prospect particulier, ou raison sociale absente.
+
+    $wpdb->update(
+      $this->registration_contract_table,
+      array( 'company_id' => $company_id ),
+      array( 'id' => (int) $contract->id ),
+      array( '%d' ),
+      array( '%d' )
+    );
+    if ( method_exists( $this, 'log_action_event' ) ) {
+      $this->log_action_event( 'create', 'company_from_signed_contract', $company_id, 'success', array( 'contract_id' => (int) $contract->id, 'prospect_id' => $prospect_id ) );
+    }
   }
 
 }
