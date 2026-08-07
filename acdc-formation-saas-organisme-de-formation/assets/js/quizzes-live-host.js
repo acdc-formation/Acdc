@@ -155,7 +155,13 @@
                valeurs ne coûte rien. */
             else if ( state.hasShownReveal && data.current_question
                       && parseInt( data.current_q_id, 10 ) === parseInt( state.lastQuestionId, 10 ) ) {
-                renderReveal( data );
+                /* ACDC 3.25.160 — Mise à jour NON DESTRUCTIVE. Rappeler renderReveal()
+                   à chaque scrutation reconstruisait tout le bloc de réponses et
+                   relançait ses animations d'entrée, qui partent d'une opacité nulle :
+                   à 1,5 s d'intervalle, les tuiles pouvaient ne jamais devenir
+                   visibles. On se contente donc de rafraîchir les nombres déjà
+                   affichés, sans toucher au balisage. */
+                updateRevealCounts( data.current_question );
             }
         } else if (data.status === 'ended') {
             stopHostTimer();
@@ -270,6 +276,32 @@
                 } );
             }, delay );
         } );
+    }
+
+    /* ACDC 3.25.160 — Rafraîchit les compteurs d'une révélation DÉJÀ affichée.
+       Ne reconstruit rien : si le balisage attendu n'est pas là, on ne fait rien
+       plutôt que de redessiner et de casser l'affichage en place. */
+    function updateRevealCounts( q ) {
+        if ( ! q || ! q.reveal_answers || ! q.reveal_answers.length ) { return; }
+        var container = document.getElementById('acdc-qz-host-reveal-answers');
+        if ( ! container ) { return; }
+        var tiles = container.querySelectorAll('.acdc-qz-host-reveal-tile');
+        if ( tiles.length !== q.reveal_answers.length ) { return; }
+        q.reveal_answers.forEach( function( a, i ) {
+            var tile  = tiles[i];
+            if ( ! tile ) { return; }
+            var label = tile.querySelector('.acdc-qz-host-reveal-bar-label');
+            var bar   = tile.querySelector('.acdc-qz-host-reveal-bar');
+            if ( label ) { label.innerHTML = a.count + '&nbsp;(' + (a.percent||0) + '%)'; }
+            if ( bar )   { bar.dataset.pct = (a.percent||0); bar.style.width = (a.percent||0) + '%'; }
+        } );
+        var statsEl = document.getElementById('acdc-qz-host-reveal-stats');
+        if ( statsEl && q.count_total_parts !== undefined ) {
+            var c = q.count_correct_parts || 0, t = q.count_total_parts || 0;
+            if ( 'poll' !== ( q.type || '' ) && 'open_text' !== ( q.type || '' ) ) {
+                statsEl.textContent = c + ' bonne' + (c > 1 ? 's' : '') + ' réponse' + (c > 1 ? 's' : '') + ' sur ' + t + ' répondant' + (t > 1 ? 's' : '');
+            }
+        }
     }
 
     function renderReveal(data) {
