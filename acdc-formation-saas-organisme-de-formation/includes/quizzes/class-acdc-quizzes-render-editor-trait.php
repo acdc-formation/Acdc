@@ -180,16 +180,20 @@ trait ACDC_Quizzes_Render_Editor_Trait {
                         <?php esc_html_e( "Vous pouvez encore modifier ce quiz. Mais dès qu'un apprenant cliquera son lien, le quiz sera automatiquement verrouillé pour traçabilité Qualiopi. Les apprenants suivants verront alors la version au moment du verrouillage.", 'acdc-formation-saas' ); ?>
                     </p>
                 </div>
-            <?php elseif ( ! $is_locked && $invited_count > 0 && $clicked_count > 0 ) :
-                // Ce cas est théoriquement impossible (le verrouillage devrait s'être déclenché),
-                // mais sécurité défensive si jamais le hook a échoué.
+            <?php elseif ( ! $is_locked && $invited_count > 0 && $clicked_count > 0 && self::ACDC_OF_QZ_DELIVERY_LIVE_SYNC !== $quiz->delivery_mode ) :
+                /* Ce cas est théoriquement impossible en passation asynchrone : le
+                   verrouillage se déclenche au premier clic. Il l'est en revanche tout
+                   à fait NORMAL en quiz live, où l'on joue sans lien d'invitation —
+                   l'alerte se déclenchait donc après chaque session live et signalait
+                   une incohérence qui n'en était pas une. Le mode live est exclu.
+                   ACDC 3.25.158 — le pluriel était en outre figé (« 1 apprenants »). */
                 ?>
                 <div class="acdc-qz-pending-banner acdc-qz-pending-banner-warning">
                     <strong>⚠️ <?php esc_html_e( 'État incohérent détecté.', 'acdc-formation-saas' ); ?></strong>
                     <span>
                         <?php
                         printf(
-                            esc_html__( '%1$d apprenants ont commencé, mais le quiz n\'est pas verrouillé.', 'acdc-formation-saas' ),
+                            esc_html( _n( '%1$d apprenant a commencé, mais le quiz n\'est pas verrouillé.', '%1$d apprenants ont commencé, mais le quiz n\'est pas verrouillé.', $clicked_count, 'acdc-formation-saas' ) ),
                             $clicked_count
                         );
                         ?>

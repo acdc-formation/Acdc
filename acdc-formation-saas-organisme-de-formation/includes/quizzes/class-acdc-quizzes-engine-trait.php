@@ -455,7 +455,16 @@ trait ACDC_Quizzes_Engine_Trait {
             );
         }
         // Détails de la question courante si pertinent
-        if ( in_array( $session->status, array( 'in_progress' ), true ) && $session->current_question_id ) {
+        /* ACDC 3.25.158 — La question courante et ses agrégats n'étaient émis que
+           tant que la session était « in_progress ». Or l'écran formateur affiche la
+           révélation APRÈS la fin du temps imparti, moment où la session peut déjà
+           être passée à « ended » : l'état renvoyé ne contenait alors plus de
+           question, le rendu s'interrompait sans rien mettre à jour, et le décompte
+           restait figé sur la valeur initiale — y compris trente secondes plus tard,
+           comme la recette l'a observé. Les mêmes données sont désormais fournies sur
+           une session terminée : c'est un état de lecture, il ne change rien au
+           déroulé. */
+        if ( in_array( $session->status, array( 'in_progress', 'ended' ), true ) && $session->current_question_id ) {
             $q = $this->get_qz_question( (int) $session->current_question_id );
             if ( $q ) {
                 $answers_pub = $this->get_qz_answers_for_question_public( (int) $q->id );
