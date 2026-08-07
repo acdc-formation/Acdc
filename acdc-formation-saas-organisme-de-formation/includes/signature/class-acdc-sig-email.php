@@ -216,9 +216,14 @@ class ACDC_Sig_Email {
         $headers[] = 'X-ACDC-Email-Audience: externe';
         $sig_notes = isset( $request->notes ) ? json_decode( (string) $request->notes, true ) : null;
         if ( is_array( $sig_notes ) ) {
+            /* ACDC 3.25.161 — La demande de signature porte son propre entity_type
+               (« registration_contract » pour une convention). L'ignorer et déduire le
+               type de la seule clé contract_id étiquetait une convention comme contrat
+               formateur. On lit d'abord ce que la demande déclare. */
+            $declared_type = isset( $sig_notes['entity_type'] ) ? sanitize_key( (string) $sig_notes['entity_type'] ) : '';
             foreach ( array( 'contract_id' => 'trainer_contract', 'quote_id' => 'quote', 'invoice_id' => 'invoice', 'entity_id' => 'document' ) as $note_key => $entity_type ) {
                 if ( ! empty( $sig_notes[ $note_key ] ) ) {
-                    $headers[] = 'X-ACDC-Related-Entity-Type: ' . $entity_type;
+                    $headers[] = 'X-ACDC-Related-Entity-Type: ' . ( '' !== $declared_type ? $declared_type : $entity_type );
                     $headers[] = 'X-ACDC-Related-Entity-Id: ' . (int) $sig_notes[ $note_key ];
                     break;
                 }

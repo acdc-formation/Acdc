@@ -948,8 +948,16 @@
          le 7 — l'adresse ayant été réutilisée. Deux verrous : un e-mail déjà attribué
          à quelqu'un d'autre n'est jamais repêché, et un e-mail antérieur à la création
          de la fiche ne l'est pas non plus. */
-      $claimed_by_other = ! empty( $entry['related_entity_id'] )
-        && ! ( 'prospect' === (string) ( $entry['related_entity_type'] ?? '' ) && (int) $entry['related_entity_id'] === (int) $prospect->id );
+      /* ACDC 3.25.161 — On ne compare que ce qui est comparable : un e-mail rattaché
+         à UN AUTRE PROSPECT n'a rien à faire ici, mais un e-mail rattaché à une
+         convention ou à un devis concerne parfaitement ce prospect. La première
+         écriture excluait tout e-mail portant une entité liée, quelle qu'elle soit :
+         la demande de signature d'une convention disparaissait donc du journal alors
+         que les autres e-mails du même parcours y figuraient. */
+      $entry_entity_type = (string) ( $entry['related_entity_type'] ?? '' );
+      $claimed_by_other = ( 'prospect' === $entry_entity_type )
+        && ! empty( $entry['related_entity_id'] )
+        && (int) $entry['related_entity_id'] !== (int) $prospect->id;
 
       $predates_prospect = false;
       if ( ! empty( $prospect->created_at ) && ! empty( $entry['sent_at'] ) ) {
