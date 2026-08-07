@@ -540,6 +540,31 @@ trait ACDC_Documents_Billing_Render_Trait {
           $row['formation_city']        = (string) ( $prefill_prospect->city ?? '' );
         }
       }
+
+      /* ACDC 3.25.157 — LOT 2 : company_id était un PARAMÈTRE MORT. Le menu ⋯ des
+         commanditaires le transmettait, aucun formulaire ne le lisait : on arrivait
+         sur un devis vierge, sans trace du commanditaire d'où l'on venait. Même
+         logique que le préremplissage prospect ci-dessus, appliquée au répertoire
+         des commanditaires. */
+      $prefill_company_id = isset( $_GET['company_id'] ) ? absint( wp_unslash( $_GET['company_id'] ) ) : 0;
+      if ( empty( $row['proposal_id'] ) && empty( $row['source_prospect_id'] ) && $prefill_company_id && method_exists( $this, 'get_company' ) ) {
+        $prefill_company = $this->get_company( $prefill_company_id );
+        if ( $prefill_company ) {
+          $row['company_id']         = $prefill_company_id;
+          $row['commanditaire_type'] = 'Entreprise';
+          $row['client_company']     = (string) ( $prefill_company->name ?? '' );
+          $row['client_siret']       = (string) ( $prefill_company->siret ?? '' );
+          $row['address']            = (string) ( $prefill_company->address ?? '' );
+          $row['postal_code']        = (string) ( $prefill_company->postal_code ?? '' );
+          $row['city']               = (string) ( $prefill_company->city ?? '' );
+          if ( empty( $row['apprenant_email'] ) && ! empty( $prefill_company->email ) ) {
+            $row['apprenant_email'] = (string) $prefill_company->email;
+          }
+          $row['formation_address']     = (string) ( $prefill_company->address ?? '' );
+          $row['formation_postal_code'] = (string) ( $prefill_company->postal_code ?? '' );
+          $row['formation_city']        = (string) ( $prefill_company->city ?? '' );
+        }
+      }
     }
     $page_title = $is_edit ? 'Modifier un devis' : 'Créer un devis';
     $page_desc  = $is_edit ? 'Modifiez les informations du devis puis enregistrez.' : 'Remplissez les informations ci-dessous pour générer un nouveau devis.';

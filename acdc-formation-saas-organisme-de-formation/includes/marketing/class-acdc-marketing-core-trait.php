@@ -814,9 +814,25 @@ ACDC-Formation",
       'bcc' => array(),
       'clean_headers' => array(),
     );
+    /* ACDC 3.25.157 — LOT 2 : les en-têtes X-ACDC-* étaient correctement émis mais
+       jamais lus. wp_mail() réécrit $headers en TABLEAU ASSOCIATIF avant de déclencher
+       wp_mail_succeeded (pluggable.php : `$headers[trim($name)] = trim($content)`),
+       alors que cette fonction n'acceptait que des lignes « Nom: valeur ». Aucune
+       ligne ne contenait plus de « : », toutes tombaient dans clean_headers, et
+       l'attribution repartait à zéro : colonne Source figée sur « plugin / wp_mail »
+       et destinataire résolu par adresse au lieu de l'entité. On normalise donc les
+       deux formes vers des lignes avant analyse. */
     $header_lines = array();
     if ( is_array( $headers ) ) {
-      $header_lines = $headers;
+      foreach ( $headers as $key => $value ) {
+        if ( is_int( $key ) ) {
+          $header_lines[] = $value;
+          continue;
+        }
+        /* Clé = nom d'en-tête. La valeur peut être un tableau (cc/bcc). */
+        $value = is_array( $value ) ? implode( ', ', array_map( 'strval', $value ) ) : (string) $value;
+        $header_lines[] = $key . ': ' . $value;
+      }
     } elseif ( is_string( $headers ) && '' !== trim( $headers ) ) {
       $header_lines = preg_split( '/
 |
@@ -984,6 +1000,14 @@ ACDC-Formation",
 
   public function handle_wp_mail_succeeded_for_archive( $mail_data ) {
     $args = is_array( $mail_data ) ? $mail_data : $this->acdc_last_wp_mail_args;
+    /* ACDC 3.25.157 — LOT 2 : wp_mail() extrait From, Cc, Bcc et Reply-To de $headers
+       et ne les remet PAS dans le tableau transmis à wp_mail_succeeded. Les en-têtes
+       bruts capturés en amont sur le filtre `wp_mail` sont donc plus complets : on les
+       préfère quand ils portent sur le même envoi. */
+    $captured = is_array( $this->acdc_last_wp_mail_args ) ? $this->acdc_last_wp_mail_args : array();
+    if ( is_array( $args ) && ! empty( $captured['headers'] ) ) {
+      $args['headers'] = $captured['headers'];
+    }
     $this->archive_email_event( $args, 'sent', '', is_array( $mail_data ) ? $mail_data : array() );
     $this->acdc_last_wp_mail_args = null;
   }

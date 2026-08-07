@@ -728,6 +728,20 @@ trait ACDC_Kernel_Actions_Trait {
       $this->redirect_to_portal( 'companies', 'Merci de renseigner les champs obligatoires.', 'error', array( 'action' => $company_id ? 'edit' : 'new', 'item_id' => $company_id ) );
     }
 
+    /* ACDC 3.25.157 — LOT 2 : contrôle du format SIRET, absent ici alors que le
+       formulaire Prospect impose strictement 14 chiffres. Un commanditaire à 13
+       chiffres passait, et se retrouvait ensuite sur les devis et les conventions.
+       Le SIRET est également NORMALISÉ (espaces et points retirés) : le répertoire
+       contenait les deux graphies, ce qui empêchait tout rapprochement fiable. */
+    $siret_digits = preg_replace( '/\D/', '', (string) $form_input['siret'] );
+    if ( '' !== trim( (string) $form_input['siret'] ) && 14 !== strlen( $siret_digits ) ) {
+      $this->acdc_store_form_state( 'company', $form_input, array( 'siret' ) );
+      $this->redirect_to_portal( 'companies', 'Le SIRET doit contenir exactement 14 chiffres.', 'error', array( 'action' => $company_id ? 'edit' : 'new', 'item_id' => $company_id ) );
+    }
+    if ( 14 === strlen( $siret_digits ) ) {
+      $form_input['siret'] = $siret_digits;
+    }
+
     $email = sanitize_email( (string) $form_input['email'] );
     if ( '' === $email || ! is_email( $email ) ) {
       $this->acdc_store_form_state( 'company', $form_input, array( 'email' ) );

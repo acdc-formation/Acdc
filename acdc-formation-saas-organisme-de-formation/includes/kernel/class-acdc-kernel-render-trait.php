@@ -11863,7 +11863,39 @@ Nb de questions réussies / Nb de questions : <?php echo esc_html( (int) $contex
       $this->render_front_company_form( $company, $action );
       return;
     }
+
+    /* ACDC 3.25.157 — LOT 2 : cet onglet affichait ses 191 lignes d'un bloc, sans
+       champ de recherche ni pagination, alors que les sept autres répertoires en
+       disposent. Même barre et même pagination que les autres onglets. */
+    $c_search    = isset( $_GET['q'] ) ? sanitize_text_field( wp_unslash( $_GET['q'] ) ) : '';
+    $c_per_page  = isset( $_GET['per_page'] ) ? absint( wp_unslash( $_GET['per_page'] ) ) : 25;
+    if ( ! in_array( $c_per_page, array( 25, 50, 100 ), true ) ) { $c_per_page = 25; }
+    $c_total     = (int) $this->get_companies( array( 'search' => $c_search, 'count' => true ) );
+    $c_total_pg  = max( 1, (int) ceil( $c_total / $c_per_page ) );
+    $c_paged     = isset( $_GET['paged'] ) ? max( 1, absint( wp_unslash( $_GET['paged'] ) ) ) : 1;
+    if ( $c_paged > $c_total_pg ) { $c_paged = $c_total_pg; }
+    $c_offset    = ( $c_paged - 1 ) * $c_per_page;
+    $c_base_url  = is_admin() ? $this->admin_tab_url( 'companies' ) : $this->portal_page_url( array( 'tab' => 'companies' ) );
+    $companies   = $this->get_companies( array( 'search' => $c_search, 'limit' => $c_per_page, 'offset' => $c_offset ) );
     ?>
+    <div class="acdc-panel acdc-mb-18">
+      <form class="acdc-search-bar" method="get" action="<?php echo esc_url( $c_base_url ); ?>">
+        <?php if ( is_admin() ) : ?><input type="hidden" name="page" value="acdc-of-dashboard"><?php endif; ?>
+        <input type="hidden" name="tab" value="companies">
+        <div class="acdc-search-row">
+          <input type="search" name="q" value="<?php echo esc_attr( $c_search ); ?>" placeholder="Rechercher un nom, un SIRET, une ville, un e-mail">
+          <select name="per_page" aria-label="Résultats par page">
+            <?php foreach ( array( 25, 50, 100 ) as $c_size ) : ?>
+              <option value="<?php echo esc_attr( $c_size ); ?>" <?php selected( $c_per_page, $c_size ); ?>><?php echo esc_html( $c_size ); ?> / page</option>
+            <?php endforeach; ?>
+          </select>
+          <button type="submit" class="acdc-button acdc-button-primary">Rechercher</button>
+          <?php if ( '' !== $c_search ) : ?>
+            <a class="acdc-button acdc-button-soft" href="<?php echo esc_url( $c_base_url ); ?>">Réinitialiser</a>
+          <?php endif; ?>
+        </div>
+      </form>
+    </div>
     <div class="acdc-panel acdc-companies-list-panel">
       <div class="acdc-table-wrap">
         <table class="acdc-table acdc-companies-table" data-acdc-table-id="companies-list">
@@ -11898,8 +11930,18 @@ Nb de questions réussies / Nb de questions : <?php echo esc_html( (int) $contex
                 $is_prospect = isset( $entry->is_prospect ) ? (bool) $entry->is_prospect : ( isset( $entry->prospect ) ? (bool) $entry->prospect : false );
                 $base = is_admin() ? admin_url( 'admin.php?page=acdc-of-companies' ) : $this->portal_page_url( array( 'tab' => 'companies' ) );
                 $need_url = is_admin() ? admin_url( 'admin.php?page=acdc-of-need-analyses&action=new&company_id=' . (int) $entry->id ) : $this->portal_page_url( array( 'tab' => 'need_analyses', 'action' => 'new', 'company_id' => (int) $entry->id ) );
-                $quote_url = is_admin() ? admin_url( 'admin.php?page=acdc-of-quotes&action=new&company_id=' . (int) $entry->id ) : $this->portal_page_url( array( 'tab' => 'quotes', 'action' => 'new', 'company_id' => (int) $entry->id ) );
-                $contract_url = is_admin() ? admin_url( 'admin.php?page=acdc-of-contracts&action=new&company_id=' . (int) $entry->id ) : $this->portal_page_url( array( 'tab' => 'contracts', 'action' => 'new', 'company_id' => (int) $entry->id ) );
+                /* ACDC 3.25.157 — LOT 2 : deux slugs inexistants dans ce menu.
+                   « Devis » passait action=new, paramètre que l'onglet Devis n'écoute
+                   pas (il attend scope=action&quote_action=create) : on retombait sur la
+                   liste. « Convention/Contrat » pointait tab=contracts, slug qui n'existe
+                   pas — l'onglet réel est registration_contract — d'où le retour au
+                   tableau de bord. */
+                $quote_url = is_admin()
+                  ? admin_url( 'admin.php?page=acdc-of-dashboard&tab=quotes&scope=action&quote_action=create&company_id=' . (int) $entry->id )
+                  : $this->portal_page_url( array( 'tab' => 'quotes', 'scope' => 'action', 'quote_action' => 'create', 'company_id' => (int) $entry->id ) );
+                $contract_url = is_admin()
+                  ? admin_url( 'admin.php?page=acdc-of-dashboard&tab=registration_contract&action=new&company_id=' . (int) $entry->id )
+                  : $this->portal_page_url( array( 'tab' => 'registration_contract', 'action' => 'new', 'company_id' => (int) $entry->id ) );
                 $register_url = is_admin() ? admin_url( 'admin.php?page=acdc-of-register-training&action=new&company_id=' . (int) $entry->id ) : $this->portal_page_url( array( 'tab' => 'register_training', 'action' => 'new', 'company_id' => (int) $entry->id ) );
               ?>
               <tr>
@@ -11933,11 +11975,23 @@ Nb de questions réussies / Nb de questions : <?php echo esc_html( (int) $contex
               </tr>
             <?php endforeach; ?>
           <?php else : ?>
-            <tr><td colspan="12">Aucune entreprise enregistrée.</td></tr>
+            <tr><td colspan="12"><?php echo esc_html( '' !== $c_search ? 'Aucune entreprise ne correspond à cette recherche.' : 'Aucune entreprise enregistrée.' ); ?></td></tr>
           <?php endif; ?>
           </tbody>
         </table>
       </div>
+      <?php if ( $c_total > 0 ) : ?>
+      <div class="acdc-pagination-wrap">
+        <?php if ( $c_total_pg > 1 ) : ?>
+        <div class="acdc-pagination">
+          <?php for ( $c_page = 1; $c_page <= $c_total_pg; $c_page++ ) : ?>
+            <a class="<?php echo $c_page === $c_paged ? 'is-active' : ''; ?>" href="<?php echo esc_url( add_query_arg( array( 'q' => $c_search, 'per_page' => $c_per_page, 'paged' => $c_page ), $c_base_url ) ); ?>"><?php echo esc_html( $c_page ); ?></a>
+          <?php endfor; ?>
+        </div>
+        <?php endif; ?>
+        <div class="acdc-pagination-summary"><?php echo esc_html( sprintf( '%d-%d de %d', $c_offset + 1, min( $c_offset + $c_per_page, $c_total ), $c_total ) ); ?></div>
+      </div>
+      <?php endif; ?>
     </div>
     </div>
     <?php

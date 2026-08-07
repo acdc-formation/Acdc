@@ -4108,9 +4108,38 @@ dbDelta( $sql_companies );
       'learners'   => (int) $wpdb->get_var( "SELECT COUNT(*) FROM {$this->learner_table}" ),
       'prospects'  => $prospects_count,
     );
-  }  private function get_companies() {
+  }  /**
+   * ACDC 3.25.157 — LOT 2 : recherche et pagination des commanditaires.
+   * Sans arguments, le comportement est inchangé (toutes les lignes, triées par nom) :
+   * les appelants existants ne bougent pas.
+   *
+   * @param array $args search (string), limit (int), offset (int), count (bool).
+   * @return array|int Lignes, ou total si count.
+   */
+  private function get_companies( $args = array() ) {
     global $wpdb;
-    return $wpdb->get_results( "SELECT * FROM {$this->company_table} ORDER BY name ASC" );
+    $search = isset( $args['search'] ) ? trim( (string) $args['search'] ) : '';
+    $where  = '';
+    $params = array();
+    if ( '' !== $search ) {
+      $like   = '%' . $wpdb->esc_like( $search ) . '%';
+      /* Le SIRET est recherché sur ses chiffres seuls : le répertoire contient les
+         deux graphies (avec et sans espaces), une recherche littérale en manquerait. */
+      $digits = preg_replace( '/\D/', '', $search );
+      $where  = " WHERE ( name LIKE %s OR city LIKE %s OR postal_code LIKE %s OR email LIKE %s OR REPLACE(REPLACE(siret,' ',''),'.','') LIKE %s )";
+      $params = array( $like, $like, $like, $like, '%' . $wpdb->esc_like( '' !== $digits ? $digits : $search ) . '%' );
+    }
+    if ( ! empty( $args['count'] ) ) {
+      $sql = "SELECT COUNT(*) FROM {$this->company_table}{$where}";
+      return (int) ( empty( $params ) ? $wpdb->get_var( $sql ) : $wpdb->get_var( $wpdb->prepare( $sql, $params ) ) );
+    }
+    $sql = "SELECT * FROM {$this->company_table}{$where} ORDER BY name ASC";
+    if ( isset( $args['limit'] ) && (int) $args['limit'] > 0 ) {
+      $sql     .= ' LIMIT %d OFFSET %d';
+      $params[] = (int) $args['limit'];
+      $params[] = isset( $args['offset'] ) ? max( 0, (int) $args['offset'] ) : 0;
+    }
+    return empty( $params ) ? $wpdb->get_results( $sql ) : $wpdb->get_results( $wpdb->prepare( $sql, $params ) );
   }  private function get_company( $id ) {
     global $wpdb;
     return $wpdb->get_row( $wpdb->prepare( "SELECT * FROM {$this->company_table} WHERE id = %d", $id ) );
