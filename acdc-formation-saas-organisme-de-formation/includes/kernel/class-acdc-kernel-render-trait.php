@@ -7890,8 +7890,14 @@ trait ACDC_Kernel_Render_Trait {
                   $view_signed_url = $this->acdc_trainer_contract_view_url( (int) $c->id, true );
                   $archive_url     = $this->acdc_trainer_contract_archive_url( (int) $c->id );
                 ?>
-                <a href="<?php echo esc_url( $view_signed_url ); ?>" target="_blank" rel="noopener" class="acdc-row-action-icon" title="1. Ouvrir le contrat signé pour l'enregistrer sur votre poste" onclick="var n=document.getElementById('acdc-archive-step2-<?php echo (int) $c->id; ?>'); if(n){n.hidden=false;}" data-acdc-iconized="1"><span aria-hidden="true" style="font-size:16px;line-height:25px;">⤓</span><span class="acdc-action-hub-sr screen-reader-text">Ouvrir le PDF à archiver</span></a>
-                <span id="acdc-archive-step2-<?php echo (int) $c->id; ?>" hidden style="display:block;margin-top:4px;font-size:11px;color:#6b7280;">
+                <a href="<?php echo esc_url( $view_signed_url ); ?>" target="_blank" rel="noopener" class="acdc-row-action-icon" title="1. Ouvrir le contrat signé pour l'enregistrer sur votre poste" onclick="var n=document.getElementById('acdc-archive-step2-<?php echo (int) $c->id; ?>'); if(n){n.hidden=false;n.style.display='block';}" data-acdc-iconized="1"><span aria-hidden="true" style="font-size:16px;line-height:25px;">⤓</span><span class="acdc-action-hub-sr screen-reader-text">Ouvrir le PDF à archiver</span></a>
+                <?php /* ACDC 3.25.160 — « display:block » en style en ligne l'emportait sur
+                         l'attribut hidden : la mention et son lien étaient visibles dès le
+                         chargement, avant tout clic. L'enchaînement annoncé n'était donc pas
+                         celui que voyait l'utilisateur, et l'archivage pouvait être confirmé
+                         sans avoir jamais ouvert le contrat. L'affichage est rétabli par le
+                         clic, pas par la feuille de style. */ ?>
+                <span id="acdc-archive-step2-<?php echo (int) $c->id; ?>" hidden style="margin-top:4px;font-size:11px;color:#6b7280;">
                   PDF ouvert dans un nouvel onglet. Une fois enregistré sur votre poste :
                   <a href="<?php echo esc_url( $archive_url ); ?>" onclick="return confirm('Confirmez-vous avoir enregistré ce contrat signé sur votre poste ? La suppression de la mission sera alors autorisée.');">confirmer l’archivage</a>.
                 </span>
