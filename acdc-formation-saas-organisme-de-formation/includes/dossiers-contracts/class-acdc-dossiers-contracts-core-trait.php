@@ -1009,15 +1009,15 @@ trait ACDC_Dossiers_Contracts_Core_Trait {
     } elseif ( $contract && ! empty( $contract->company_id ) ) {
       $fallback_company_id = (int) $contract->company_id;
     }
-    if ( empty( $learners ) && $fallback_company_id ) {
-      $rows = $wpdb->get_results( $wpdb->prepare( "SELECT id FROM {$this->learner_table} WHERE company_id = %d ORDER BY created_at ASC, id ASC LIMIT 12", $fallback_company_id ) );
-      foreach ( $rows as $row ) {
-        $learner = $this->get_learner( (int) $row->id );
-        if ( $learner ) {
-          $learners[] = $learner;
-        }
-      }
-    }
+    /* ACDC 3.25.159 — REPLI SUPPRIMÉ. Faute d'apprenant nommé, la convention
+       listait jusqu'à DOUZE apprenants du commanditaire comme « apprenants à
+       former ». Sur un document contractuel, ces noms ne sont pas une suggestion :
+       ils engagent. Une convention ne liste que les apprenants qu'elle nomme ;
+       aucun apprenant nommé signifie aucun apprenant, pas « tous ceux de la
+       maison ». Ce repli restait sans effet ici — la convention de recette n'avait
+       pas de commanditaire — mais il produisait la même erreur dès qu'un
+       commanditaire était rattaché. */
+    unset( $fallback_company_id );
     return $learners;
   }
 
