@@ -1535,7 +1535,7 @@ trait ACDC_Kernel_Actions_Trait {
       $this->redirect_to_portal(
         'trainers',
         sprintf(
-          'Suppression impossible : ce formateur a %d contrat%s signé%s non archivé%s, à conserver comme pièce comptable. Ouvrez sa fiche, cliquez sur « Archiver » dans la colonne Actions de chaque mission signée (le PDF est téléchargé sur votre poste), puis relancez la suppression.',
+          'Suppression impossible : ce formateur a %d contrat%s signé%s non archivé%s, à conserver comme pièce comptable. Ouvrez sa fiche, et pour chaque mission signée : ouvrez le contrat avec « ⤓ », enregistrez-le sur votre poste, puis cliquez sur « confirmer l’archivage ». Relancez ensuite la suppression.',
           $signed_count,
           $signed_count > 1 ? 's' : '',
           $signed_count > 1 ? 's' : '',
@@ -1666,7 +1666,7 @@ trait ACDC_Kernel_Actions_Trait {
     /* ACDC 3.25.157 — Une fois le PDF archivé (sorti de l'application), la
        suppression redevient possible : la pièce comptable existe ailleurs. */
     if ( 'signée' === $is_signed_mission && ! $is_archived && ! $forced ) {
-      $msg_signed  = 'Cette mission est signée : son contrat est une pièce comptable à conserver. Cliquez d’abord sur « Archiver » dans la colonne Actions — le PDF sera téléchargé sur votre poste — puis relancez la suppression.';
+      $msg_signed  = 'Cette mission est signée : son contrat est une pièce comptable à conserver. Ouvrez d’abord le contrat avec « ⤓ » dans la colonne Actions, enregistrez-le sur votre poste, puis cliquez sur « confirmer l’archivage ». La suppression sera alors autorisée.';
       $back_signed = isset( $_GET['ctx'] ) && 'admin' === $_GET['ctx']
         ? admin_url( 'admin.php?page=acdc-of-trainers&action=edit&item_id=' . $trainer_id . '&notice=' . rawurlencode( $msg_signed ) . '&notice_type=error' )
         : $this->portal_page_url( array( 'tab' => 'trainers', 'action' => 'edit', 'item_id' => $trainer_id, 'notice' => rawurlencode( $msg_signed ), 'notice_type' => 'error' ) );
