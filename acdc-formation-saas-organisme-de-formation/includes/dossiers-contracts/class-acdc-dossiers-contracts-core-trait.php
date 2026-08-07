@@ -957,12 +957,16 @@ trait ACDC_Dossiers_Contracts_Core_Trait {
     if ( $registration ) {
       return $registration;
     }
-    if ( ! empty( $contract->formation_id ) ) {
-      $registration = $wpdb->get_row( $wpdb->prepare( "SELECT * FROM {$this->training_registration_table} WHERE formation_id = %d ORDER BY updated_at DESC, id DESC LIMIT 1", (int) $contract->formation_id ) );
-      if ( $registration ) {
-        return $registration;
-      }
-    }
+    /* ACDC 3.25.159 — REPLI SUPPRIMÉ, ET C'ÉTAIT LE PLUS CONTAMINANT DE TOUS.
+       À défaut d'inscription propre, cette fonction reprenait LA DERNIÈRE
+       INSCRIPTION DE LA MÊME FORMATION, quel que soit son client. Une seule ligne
+       étrangère suffisait à empoisonner tout l'affichage de la convention : son
+       company_id devenait le commanditaire (raison sociale, siège, code postal,
+       ville, représentant) et son learner_id devenait l'apprenant à former — d'où
+       un apprenant listé sur une convention qui n'en comportait aucun.
+       L'écriture, elle, était correcte : seule la lecture était fausse, ce qui
+       explique que la fiche en édition affichait le bon nom et la liste un autre.
+       Une convention n'a d'inscription que la sienne. */
     return null;
   }
 
@@ -1292,7 +1296,18 @@ trait ACDC_Dossiers_Contracts_Core_Trait {
       global $wpdb;
       $like_title = '%' . $wpdb->esc_like( (string) $contract->formation_title ) . '%';
       $rows = $wpdb->get_results( $wpdb->prepare( "SELECT * FROM {$this->document_table} WHERE (document_type LIKE %s OR title LIKE %s) ORDER BY id DESC LIMIT 10", '%Convention%', '%Convention%' ) );
+      /* ACDC 3.25.159 — Ce repli retrouve un document par RESSEMBLANCE DE TITRE.
+         Deux conventions portant la même formation pour deux clients différents se
+         ressemblent forcément : sans contrôle du commanditaire, on risquait de
+         rattacher à ce dossier la convention de quelqu'un d'autre. On exige donc
+         que le document appartienne au même commanditaire — ou à aucun, si le
+         dossier n'en a pas encore. */
+      $doc_company_id = isset( $contract->company_id ) ? (int) $contract->company_id : 0;
       foreach ( (array) $rows as $row ) {
+        $row_company_id = isset( $row->company_id ) ? (int) $row->company_id : 0;
+        if ( $row_company_id !== $doc_company_id ) {
+          continue;
+        }
         $match = false;
         if ( ! empty( $contract->formation_title ) && false !== stripos( (string) $row->title, (string) $contract->formation_title ) ) {
           $match = true;
