@@ -1648,14 +1648,15 @@ private function get_contract_pdf_context( $request ) {
   $company  = $company_id ? $this->get_company( $company_id ) : null;
   $formation = $formation_id ? $this->get_formation( $formation_id ) : null;
 
-  if ( ! $company ) {
-    $companies = $this->get_companies();
-    $company = ! empty( $companies ) ? $companies[0] : null;
-  }
-  if ( ! $formation ) {
-    $formations = $this->get_formations();
-    $formation = ! empty( $formations ) ? $formations[0] : null;
-  }
+  /* ACDC 3.25.158 — REPLIS SUPPRIMÉS : ils prenaient la PREMIÈRE LIGNE du
+     répertoire quand le lien manquait. Une convention sans commanditaire rattaché
+     portait donc le siège social, le SIRET et le représentant légal d'un AUTRE
+     client — seule la raison sociale venait du bon dossier. Ce n'est pas un défaut
+     d'affichage : le document est faux et divulgue les données d'un tiers.
+     Laisser ces variables à null est la bonne réponse : les replis légitimes plus
+     bas (prospect, puis apprenant) reprennent la main, et tous les usages en aval
+     sont protégés par ?? / isset(). Un champ vide est récupérable ; un champ
+     rempli avec les données de quelqu'un d'autre ne l'est pas. */
   if ( ! $session ) {
     $sessions = $this->get_sessions();
     foreach ( $sessions as $candidate ) {
@@ -1668,9 +1669,8 @@ private function get_contract_pdf_context( $request ) {
       $session = $candidate;
       break;
     }
-    if ( ! $session && ! empty( $sessions ) ) {
-      $session = $sessions[0];
-    }
+    /* ACDC 3.25.158 — Même repli, même conséquence : les dates et le lieu d'une
+       session appartenant à un autre dossier se seraient imprimés sur la convention. */
   }
   if ( ! $learner ) {
     global $wpdb;
@@ -1686,10 +1686,8 @@ private function get_contract_pdf_context( $request ) {
         $learner = $this->get_learner( $learner->id );
       }
     }
-    if ( ! $learner ) {
-      $learners = $this->get_learners();
-      $learner = ! empty( $learners ) ? $learners[0] : null;
-    }
+    /* ACDC 3.25.158 — Même repli : il désignait un apprenant réel pris au hasard
+       comme bénéficiaire de la convention. */
   }
 
   $learners = array();
@@ -1783,6 +1781,12 @@ private function get_contract_pdf_context( $request ) {
   }
   if ( '' === $commanditaire_representant && '' !== $learner_full_name ) {
     $commanditaire_representant = $learner_full_name;
+  }
+  /* ACDC 3.25.158 — Sans fiche commanditaire, la qualité du signataire doit venir
+     du prospect, comme son nom : sans cela le document affichait « Entreprise » là
+     où il faut « Gérant », « Président », etc. */
+  if ( '' === $commanditaire_qualite && $prospect && ! empty( $prospect->signer_quality ) ) {
+    $commanditaire_qualite = trim( (string) $prospect->signer_quality );
   }
   if ( '' === $commanditaire_qualite && $contract && ! empty( $contract->commanditaire_type ) ) {
     $commanditaire_qualite = (string) $contract->commanditaire_type;
