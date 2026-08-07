@@ -11,6 +11,30 @@ if ( ! defined( 'ABSPATH' ) ) {
 
 trait ACDC_Questionnaires_Actions_Trait {
 
+  /**
+   * ACDC 3.25.157 — Cible de retour d'une action questionnaire.
+   *
+   * Ces actions s'exécutent sous admin-post.php, où is_admin() vaut TOUJOURS vrai :
+   * le contexte ne peut pas être déduit, il doit être transmis. Et les pages
+   * wp-admin de ce module sont retirées du menu (remove_submenu_page), si bien
+   * qu'y rediriger produit « Vous n'avez pas l'autorisation » alors même que
+   * l'écriture a réussi. Le module vit dans l'extranet : c'est la cible par
+   * défaut, et wp-admin n'est retenu que sur demande explicite (ctx=admin).
+   *
+   * @param string $admin_page Slug wp-admin correspondant.
+   * @param string $front_tab  Onglet extranet correspondant.
+   * @param array  $args       Paramètres additionnels (notice, source_type…).
+   * @return string
+   */
+  private function acdc_questionnaire_return_url( $admin_page, $front_tab, $args = array() ) {
+    $ctx        = isset( $_REQUEST['ctx'] ) ? sanitize_key( wp_unslash( $_REQUEST['ctx'] ) ) : '';
+    $origin     = isset( $_POST['acdc_origin'] ) ? sanitize_key( wp_unslash( $_POST['acdc_origin'] ) ) : '';
+    $from_admin = ( 'admin' === $ctx || 'admin' === $origin );
+    return $from_admin
+      ? add_query_arg( array_merge( array( 'page' => $admin_page ), $args ), admin_url( 'admin.php' ) )
+      : $this->portal_page_url( array_merge( array( 'tab' => $front_tab ), $args ) );
+  }
+
   public function handle_download_mid_survey_document() {
     if ( ! is_user_logged_in() || ! $this->is_admin_manager() ) {
       wp_die( esc_html( 'Accès refusé.' ) );
@@ -979,7 +1003,7 @@ trait ACDC_Questionnaires_Actions_Trait {
     }
     $source = $this->get_questionnaire_source_data( $source_type, $source_id );
     if ( ! $source ) {
-      wp_safe_redirect( admin_url( 'admin.php?page=acdc-of-questionnaire-sessions&notice=' . rawurlencode( 'Questionnaire source introuvable.' ) . '&notice_type=error' ) );
+      wp_safe_redirect( $this->acdc_questionnaire_return_url( 'acdc-of-questionnaire-sessions', 'questionnaire_sessions', array( 'notice' => rawurlencode( 'Questionnaire source introuvable.' ), 'notice_type' => 'error' ) ) );
       exit;
     }
     $questionnaire_settings = get_option( 'acdc_of_questionnaire_settings', array() );
@@ -1074,14 +1098,9 @@ trait ACDC_Questionnaires_Actions_Trait {
     /* ACDC 3.25.157 — Le retour doit revenir D'OÙ L'ON VIENT. Ce handler s'exécute
        sous admin-post.php, où is_admin() est toujours vrai : on ne peut donc pas
        déduire le contexte, il faut le lire sur le formulaire. */
-    $from_admin = isset( $_POST['acdc_origin'] ) && 'admin' === sanitize_key( wp_unslash( $_POST['acdc_origin'] ) );
     if ( isset( $_POST['save_and_animate'] ) && $session_id > 0 ) {
       $animate_args = array_merge( array( 'action' => 'animate', 'item_id' => $session_id, 'notice' => rawurlencode( 'Session enregistrée. Animation ouverte.' ), 'notice_type' => 'success' ), $redirect_context_args );
-      wp_safe_redirect(
-        $from_admin
-          ? add_query_arg( array_merge( array( 'page' => 'acdc-of-questionnaire-sessions' ), $animate_args ), admin_url( 'admin.php' ) )
-          : $this->portal_page_url( array_merge( array( 'tab' => 'questionnaire_sessions' ), $animate_args ) )
-      );
+      wp_safe_redirect( $this->acdc_questionnaire_return_url( 'acdc-of-questionnaire-sessions', 'questionnaire_sessions', $animate_args ) );
       exit;
     }
     if ( isset( $_POST['save_and_open_public'] ) && $saved_session && ! empty( $saved_session->public_url ) ) {
@@ -1094,11 +1113,7 @@ trait ACDC_Questionnaires_Actions_Trait {
     );
     if ( '' !== $redirect_source_type ) { $redirect_args['source_type'] = $redirect_source_type; }
     if ( $redirect_source_id > 0 ) { $redirect_args['source_id'] = $redirect_source_id; }
-    wp_safe_redirect(
-      $from_admin
-        ? add_query_arg( $redirect_args, admin_url( 'admin.php?page=acdc-of-questionnaire-sessions' ) )
-        : $this->portal_page_url( array_merge( array( 'tab' => 'questionnaire_sessions' ), $redirect_args ) )
-    );
+    wp_safe_redirect( $this->acdc_questionnaire_return_url( 'acdc-of-questionnaire-sessions', 'questionnaire_sessions', $redirect_args ) );
     exit;
   }
 
@@ -1109,7 +1124,7 @@ trait ACDC_Questionnaires_Actions_Trait {
     check_admin_referer( 'acdc_send_questionnaire_session_emails_' . $session_id );
     $session = $this->get_questionnaire_session( $session_id );
     if ( ! $session ) {
-      wp_safe_redirect( admin_url( 'admin.php?page=acdc-of-questionnaire-sessions&notice=' . rawurlencode( 'Session introuvable.' ) . '&notice_type=error' ) );
+      wp_safe_redirect( $this->acdc_questionnaire_return_url( 'acdc-of-questionnaire-sessions', 'questionnaire_sessions', array( 'notice' => rawurlencode( 'Session introuvable.' ), 'notice_type' => 'error' ) ) );
       exit;
     }
     $source = $this->get_questionnaire_source_data( $session->source_type, $session->source_id );
@@ -1147,7 +1162,7 @@ trait ACDC_Questionnaires_Actions_Trait {
     $wpdb->delete( $this->questionnaire_answer_table, array( 'session_id' => $session_id ) );
     $wpdb->delete( $this->questionnaire_participant_table, array( 'session_id' => $session_id ) );
     $wpdb->delete( $this->questionnaire_session_table, array( 'id' => $session_id ) );
-    $redirect = admin_url( 'admin.php?page=acdc-of-questionnaire-sessions&notice=' . rawurlencode( 'Session questionnaire supprimée.' ) . '&notice_type=success' ); if ( ! empty( $_GET['source_type'] ) ) { $redirect = add_query_arg( array( 'source_type' => sanitize_text_field( wp_unslash( $_GET['source_type'] ) ) ), $redirect ); } if ( ! empty( $_GET['source_id'] ) ) { $redirect = add_query_arg( array( 'source_id' => absint( wp_unslash( $_GET['source_id'] ) ) ), $redirect ); } wp_safe_redirect( $redirect ); exit;
+    $redirect = $this->acdc_questionnaire_return_url( 'acdc-of-questionnaire-sessions', 'questionnaire_sessions', array( 'notice' => rawurlencode( 'Session questionnaire supprimée.' ), 'notice_type' => 'success' ) ); if ( ! empty( $_GET['source_type'] ) ) { $redirect = add_query_arg( array( 'source_type' => sanitize_text_field( wp_unslash( $_GET['source_type'] ) ) ), $redirect ); } if ( ! empty( $_GET['source_id'] ) ) { $redirect = add_query_arg( array( 'source_id' => absint( wp_unslash( $_GET['source_id'] ) ) ), $redirect ); } wp_safe_redirect( $redirect ); exit;
   }
 
 
@@ -1248,7 +1263,7 @@ trait ACDC_Questionnaires_Actions_Trait {
     $source_type = isset( $_POST['source_type'] ) ? sanitize_text_field( wp_unslash( $_POST['source_type'] ) ) : '';
     $survey_type = method_exists( $this, 'get_survey_engine_type_key_from_source_type' ) ? $this->get_survey_engine_type_key_from_source_type( $source_type ) : '';
     if ( '' === $survey_type ) {
-      wp_safe_redirect( admin_url( 'admin.php?page=acdc-of-questionnaire-settings&notice=' . rawurlencode( 'Type d’enquête introuvable.' ) . '&notice_type=error' ) );
+      wp_safe_redirect( $this->acdc_questionnaire_return_url( 'acdc-of-questionnaire-settings', 'questionnaire_settings', array( 'notice' => rawurlencode( 'Type d’enquête introuvable.' ), 'notice_type' => 'error' ) ) );
       exit;
     }
 
@@ -1265,7 +1280,7 @@ trait ACDC_Questionnaires_Actions_Trait {
       'subtypes' => array(),
     ) );
 
-    $redirect = admin_url( 'admin.php?page=acdc-of-questionnaire-settings&source_type=' . rawurlencode( $source_type ) );
+    $redirect = $this->acdc_questionnaire_return_url( 'acdc-of-questionnaire-settings', 'questionnaire_settings', array( 'source_type' => $source_type ) );
     $redirect = add_query_arg( array(
       'notice' => rawurlencode( $saved ? 'Paramètres du moteur d’enquête enregistrés.' : 'Enregistrement impossible.' ),
       'notice_type' => $saved ? 'success' : 'error',
@@ -1282,7 +1297,7 @@ trait ACDC_Questionnaires_Actions_Trait {
     $settings = isset( $_POST['questionnaire_settings'] ) && is_array( $_POST['questionnaire_settings'] ) ? wp_unslash( $_POST['questionnaire_settings'] ) : array();
     $context  = isset( $_POST['questionnaire_settings_context'] ) ? sanitize_text_field( wp_unslash( $_POST['questionnaire_settings_context'] ) ) : '';
     update_option( 'acdc_of_questionnaire_settings', array( 'show_final_score_default' => empty( $settings['show_final_score_default'] ) ? '0' : '1', 'pseudo_required_default' => empty( $settings['pseudo_required_default'] ) ? '0' : '1', 'restrict_to_registered_default' => empty( $settings['restrict_to_registered_default'] ) ? '0' : '1', 'new_session_status_default' => ( isset( $settings['new_session_status_default'] ) && 'prete' === $settings['new_session_status_default'] ) ? 'prete' : 'brouillon' ), false );
-    $redirect = admin_url( 'admin.php?page=acdc-of-questionnaire-settings&notice=' . rawurlencode( 'Paramètres questionnaires enregistrés.' ) . '&notice_type=success' );
+    $redirect = $this->acdc_questionnaire_return_url( 'acdc-of-questionnaire-settings', 'questionnaire_settings', array( 'notice' => rawurlencode( 'Paramètres questionnaires enregistrés.' ), 'notice_type' => 'success' ) );
     if ( '' !== $context ) {
       $redirect = add_query_arg( array( 'from_context' => $context ), $redirect );
     }
