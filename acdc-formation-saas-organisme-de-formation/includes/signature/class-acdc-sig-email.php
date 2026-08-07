@@ -271,6 +271,12 @@ class ACDC_Sig_Email {
             'Content-Type: text/html; charset=UTF-8',
             'From: ' . sanitize_text_field( $from_name ) . ' <' . sanitize_email( $from_email ) . '>',
         );
+        /* ACDC 3.25.159 — Attribution d'archive : sans ces en-têtes, cet envoi
+           retombait sur la source par défaut « plugin / wp_mail ». */
+        $headers[] = 'X-ACDC-Source-Module: signature';
+        $headers[] = 'X-ACDC-Source-Action: signed_copy';
+        $headers[] = 'X-ACDC-Email-Category: signature';
+        $headers[] = 'X-ACDC-Email-Audience: externe';
 
         return wp_mail(
             $request->signer_email,
@@ -325,6 +331,11 @@ class ACDC_Sig_Email {
             'Content-Type: text/html; charset=UTF-8',
             'From: ' . sanitize_text_field( $from_name ) . ' <' . sanitize_email( $from_email ) . '>',
         );
+        /* ACDC 3.25.159 — Même correctif d'attribution pour le code de vérification. */
+        $headers[] = 'X-ACDC-Source-Module: signature';
+        $headers[] = 'X-ACDC-Source-Action: otp_code';
+        $headers[] = 'X-ACDC-Email-Category: signature';
+        $headers[] = 'X-ACDC-Email-Audience: externe';
 
         $sent = wp_mail(
             $request->signer_email,
