@@ -234,6 +234,12 @@ class ACDC_Formation_SAAS_Plugin {
     $this->learner_portal_log_table     = $wpdb->prefix . 'acdc_of_learner_portal_logs';
 
     add_action( 'init', array( $this, 'maybe_upgrade' ) );
+    /* ACDC 3.25.157 — Les pages wp-admin du plugin sont enregistrées puis retirées
+       du menu : y rediriger produit « Vous n'avez pas l'autorisation » alors que
+       l'action a réussi. Ce filtre réoriente ces redirections vers l'onglet
+       extranet équivalent quand la demande ne vient pas de wp-admin. Il couvre
+       les 126 redirections existantes et celles à venir. */
+    add_filter( 'wp_redirect', array( $this, 'acdc_redirect_hidden_admin_page_to_front' ), 5, 1 );
     add_action( 'admin_init', array( $this, 'enforce_plugin_request_permissions' ), 1 );
     add_action( 'init', array( $this, 'maybe_repair_runtime_state' ), 6 );
     add_action( 'init', array( $this, 'maybe_repair_learner_portal_runtime_state' ), 7 );

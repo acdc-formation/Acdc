@@ -413,7 +413,124 @@ private function acdc_send_transactional_email( $to, $subject, $template_args = 
         );
       }
     }
-  }  public function maybe_upgrade() {
+  }
+  /**
+   * ACDC 3.25.157 — Correspondance page wp-admin masquée → onglet extranet.
+   *
+   * register_admin_menu() enregistre une trentaine de sous-pages puis les retire
+   * aussitôt du menu (remove_submenu_page). Toute redirection vers l'une d'elles
+   * est donc un cul-de-sac : l'écriture réussit, et l'utilisateur atterrit sur
+   * « Vous n'avez pas l'autorisation d'accéder à cette page ». Le plugin comptait
+   * 126 redirections de ce type, écrites à la main dans quatorze fichiers.
+   *
+   * Seuls figurent ici les slugs dont l'onglet extranet équivalent existe
+   * réellement (vérifié dans le répartiteur d'onglets). Les autres — écrans
+   * purement techniques comme le système d'icônes ou l'espace signatures —
+   * restent volontairement absents : mieux vaut une page wp-admin qu'une
+   * redirection vers un onglet inexistant.
+   *
+   * @return array slug wp-admin => onglet extranet.
+   */
+  private function acdc_admin_slug_to_front_tab_map() {
+    return array(
+      'acdc-of-needs'                  => 'needs',
+      'acdc-of-calendar'               => 'calendar',
+      'acdc-of-sessions-calendar'      => 'sessions_calendar',
+      'acdc-of-pre-meetings'           => 'pre_meetings',
+      'acdc-of-sessions-pending'       => 'sessions_pending',
+      'acdc-of-sessions-validated'     => 'sessions_validated',
+      'acdc-of-prospects'              => 'prospects',
+      'acdc-of-prospect-followup'      => 'prospect_followup',
+      'acdc-of-learners'               => 'learners',
+      'acdc-of-formations'             => 'formations',
+      'acdc-of-groups'                 => 'groups',
+      'acdc-of-companies'              => 'companies',
+      'acdc-of-funders'                => 'funders',
+      'acdc-of-trainers'               => 'trainers',
+      'acdc-of-quiz'                   => 'quiz',
+      'acdc-of-positioning-tests'      => 'positioning_tests',
+      'acdc-of-need-analyses'          => 'need_analyses',
+      'acdc-of-training-files'         => 'training_files',
+      'acdc-of-registration-contract'  => 'registration_contract',
+      'acdc-of-register-training'      => 'register_training',
+      'acdc-of-mid-surveys'            => 'mid_surveys',
+      'acdc-of-hot-surveys'            => 'hot_surveys',
+      'acdc-of-cold-surveys'           => 'cold_surveys',
+      'acdc-of-trainer-surveys'        => 'trainer_surveys',
+      'acdc-of-company-surveys'        => 'company_surveys',
+      'acdc-of-funder-surveys'         => 'funder_surveys',
+      'acdc-of-evaluations'            => 'evaluations',
+      'acdc-of-complaints'             => 'complaints',
+      'acdc-of-questionnaire-sessions' => 'questionnaire_sessions',
+      'acdc-of-questionnaire-results'  => 'questionnaire_results',
+      'acdc-of-questionnaire-settings' => 'questionnaire_settings',
+      'acdc-of-users'                  => 'users',
+      'acdc-of-contacts'               => 'contacts',
+      'acdc-of-documents'              => 'documents',
+      'acdc-of-settings'               => 'settings',
+    );
+  }
+
+  /**
+   * ACDC 3.25.157 — Réoriente vers l'extranet une redirection visant une page
+   * wp-admin masquée, quand la demande ne vient pas de wp-admin.
+   *
+   * Branché sur le filtre `wp_redirect`, ce correctif vaut pour les 126 appels
+   * existants ET pour ceux à venir : corriger les appels un par un laisserait
+   * fatalement des chemins derrière, comme la recette l'a montré deux fois.
+   *
+   * L'origine est déterminée dans cet ordre : paramètre `ctx` explicite, puis
+   * référent HTTP. Sous admin-post.php, is_admin() vaut toujours vrai et ne peut
+   * donc pas servir de critère.
+   *
+   * @param string $location URL de destination.
+   * @return string
+   */
+  public function acdc_redirect_hidden_admin_page_to_front( $location ) {
+    if ( ! is_string( $location ) || false === strpos( $location, 'page=acdc-of-' ) ) {
+      return $location;
+    }
+    if ( ! preg_match( '~[?&]page=(acdc-of-[a-z0-9-]+)~', $location, $m ) ) {
+      return $location;
+    }
+    $map = $this->acdc_admin_slug_to_front_tab_map();
+    if ( ! isset( $map[ $m[1] ] ) ) {
+      return $location; // Page non masquée, ou sans équivalent extranet : on ne touche à rien.
+    }
+
+    /* Navigation réelle dans wp-admin : on respecte la destination. is_admin() n'est
+       trompeur que sous admin-post.php et admin-ajax.php, qui sont précisément les
+       points d'entrée des actions lancées depuis l'extranet — on les exclut. */
+    $script = isset( $_SERVER['SCRIPT_NAME'] ) ? basename( sanitize_text_field( wp_unslash( $_SERVER['SCRIPT_NAME'] ) ) ) : '';
+    if ( is_admin() && ! in_array( $script, array( 'admin-post.php', 'admin-ajax.php' ), true ) ) {
+      return $location;
+    }
+
+    /* Demande explicitement issue de wp-admin : on respecte la destination. */
+    $ctx = isset( $_REQUEST['ctx'] ) ? sanitize_key( wp_unslash( $_REQUEST['ctx'] ) ) : '';
+    if ( 'admin' === $ctx ) {
+      return $location;
+    }
+    if ( '' === $ctx ) {
+      $referer = wp_get_referer();
+      if ( $referer && false !== strpos( $referer, '/wp-admin/' ) ) {
+        return $location;
+      }
+    }
+
+    /* On conserve tous les paramètres d'origine (notice, item_id, action…) en
+       remplaçant seulement l'adresse de base et la clé `page` par `tab`. */
+    $query = wp_parse_url( $location, PHP_URL_QUERY );
+    $args  = array();
+    if ( $query ) {
+      wp_parse_str( $query, $args );
+    }
+    unset( $args['page'] );
+    $args['tab'] = $map[ $m[1] ];
+    return $this->portal_page_url( $args );
+  }
+
+  public function maybe_upgrade() {
     $installed = get_option( 'acdc_of_saas_version' );
     if ( ACDC_OF_SAAS_VERSION !== $installed ) {
       if ( ! empty( $installed ) ) {
