@@ -3321,6 +3321,11 @@ trait ACDC_Quizzes_Core_Trait {
             $mail_error = $wp_error->get_error_message();
         };
         add_action( 'wp_mail_failed', $error_handler );
+        /* ACDC 3.25.161 — Attribution d'archive : sans ces en-têtes, l'envoi
+           s'affiche « plugin / wp_mail » dans l'archive, sans module identifiable. */
+        $headers[] = 'X-ACDC-Source-Module: quizzes';
+        $headers[] = 'X-ACDC-Source-Action: quiz_email';
+        $headers[] = 'X-ACDC-Email-Category: quizzes';
         $sent = wp_mail( $to, $subject, $html_body, $headers );
         remove_action( 'wp_mail_failed', $error_handler );
         if ( ! $sent && $mail_error ) {

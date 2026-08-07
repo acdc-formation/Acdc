@@ -595,6 +595,11 @@ trait Acdc_Proposals_Actions_Trait {
       'related_entity_id'   => (int) $proposal_id,
     ) );
 
+        /* ACDC 3.25.161 — Attribution d'archive : sans ces en-têtes, l'envoi
+           s'affiche « plugin / wp_mail » dans l'archive, sans module identifiable. */
+        $headers[] = 'X-ACDC-Source-Module: proposals';
+        $headers[] = 'X-ACDC-Source-Action: proposal_sent';
+        $headers[] = 'X-ACDC-Email-Category: proposals';
     $sent = wp_mail( $recipient_email, wp_strip_all_tags( $subject ), $html, $headers, $attachments );
 
     if ( $sent ) {

@@ -5959,11 +5959,19 @@ public function handle_purge_plugin_data() {
     }
     $body .= '<p><a href="' . esc_url( $portal_url ) . '" style="background:#d6a353;color:#fff;padding:10px 20px;border-radius:8px;text-decoration:none;font-weight:600;">Voir le prospect dans le SAAS</a></p>';
 
+    /* ACDC 3.25.161 — Attribution d'archive de la notification de nouveau prospect. */
     wp_mail(
       $admin_email,
       $subject,
       $body,
-      array( 'Content-Type: text/html; charset=UTF-8', 'From: ' . $company . ' <' . $admin_email . '>' )
+      array(
+        'Content-Type: text/html; charset=UTF-8',
+        'From: ' . $company . ' <' . $admin_email . '>',
+        'X-ACDC-Source-Module: crm',
+        'X-ACDC-Source-Action: new_prospect_notice',
+        'X-ACDC-Email-Category: crm',
+        'X-ACDC-Email-Audience: interne',
+      )
     );
   }
 

@@ -939,8 +939,25 @@
       $is_name_match  = $this->is_marketing_archive_name_match_for_prospect( $entry, $prospect );
       $is_unique_email_match = $is_email_match ? $this->is_marketing_archive_email_match_unique_for_prospect( $prospect, $entry_emails ) : false;
 
+      /* ACDC 3.25.161 — L'IDENTIFIANT PRIME SUR L'ADRESSE.
+         Le rattachement par adresse e-mail servait de repêchage pour les échanges
+         antérieurs à la création de la fiche. Mais il s'appliquait aussi quand
+         l'e-mail était DÉJÀ rattaché explicitement à une autre entité, et quand il
+         était antérieur au prospect lui-même : la recette a vu deux e-mails du 6 août,
+         appartenant à une autre entité, apparaître dans le journal d'un prospect créé
+         le 7 — l'adresse ayant été réutilisée. Deux verrous : un e-mail déjà attribué
+         à quelqu'un d'autre n'est jamais repêché, et un e-mail antérieur à la création
+         de la fiche ne l'est pas non plus. */
+      $claimed_by_other = ! empty( $entry['related_entity_id'] )
+        && ! ( 'prospect' === (string) ( $entry['related_entity_type'] ?? '' ) && (int) $entry['related_entity_id'] === (int) $prospect->id );
+
+      $predates_prospect = false;
+      if ( ! empty( $prospect->created_at ) && ! empty( $entry['sent_at'] ) ) {
+        $predates_prospect = strtotime( (string) $entry['sent_at'] ) < strtotime( (string) $prospect->created_at );
+      }
+
       $is_fallback_match = false;
-      if ( ! $is_direct_match ) {
+      if ( ! $is_direct_match && ! $claimed_by_other && ! $predates_prospect ) {
         if ( $is_email_match && $is_unique_email_match ) {
           $is_fallback_match = true;
         } elseif ( $is_email_match && $is_name_match ) {

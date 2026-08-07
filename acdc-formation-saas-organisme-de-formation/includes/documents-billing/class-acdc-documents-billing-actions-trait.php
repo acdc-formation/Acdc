@@ -1209,6 +1209,11 @@ trait ACDC_Documents_Billing_Actions_Trait {
         }
       }
 
+      /* ACDC 3.25.161 — Attribution d'archive : cet envoi client partait sans en-tête
+         de module et s'affichait « plugin / wp_mail ». */
+      $headers_c[] = 'X-ACDC-Source-Module: billing';
+      $headers_c[] = 'X-ACDC-Source-Action: document_to_client';
+      $headers_c[] = 'X-ACDC-Email-Category: billing';
       wp_mail( $client_email, $subj_client, $body_client, $headers_c, $attachments );
 
       if ( '' !== $tmp_pdf && file_exists( $tmp_pdf ) ) {

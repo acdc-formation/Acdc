@@ -656,6 +656,32 @@ public function handle_save_registration_contract() {
     );
     $messages[] = count( $created_learner_ids ) . ' apprenant(s) créé(s) dans le répertoire Apprenants.';
   }
+  /* ACDC 3.25.161 — Le PDF n'était généré qu'à la CRÉATION. Toute correction
+     apportée ensuite laissait donc un document contractuel périmé, sans qu'aucune
+     action « Régénérer » n'existe : la recette a constaté qu'une convention
+     modifiée conservait indéfiniment son ancien bénéficiaire.
+     Il est désormais régénéré à l'enregistrement — mais JAMAIS si la convention est
+     signée : le document signé est la pièce probante, l'écraser détruirait la
+     signature. Dans ce cas on le dit, plutôt que de laisser croire à une mise à
+     jour silencieuse. */
+  if ( ! $is_new_contract ) {
+    $sig_row = $wpdb->get_row( $wpdb->prepare(
+      "SELECT signature_status, signed_document_url FROM {$this->registration_contract_table} WHERE id = %d",
+      $contract_id
+    ) );
+    $is_signed_contract = $sig_row && (
+      ! empty( $sig_row->signed_document_url )
+      || in_array( (string) $sig_row->signature_status, array( 'completed', 'signe', 'signée' ), true )
+    );
+    if ( $is_signed_contract ) {
+      $messages[] = 'Convention signée : le PDF n’a pas été régénéré, le document signé fait foi.';
+    } else {
+      $pdf_result = $this->generate_registration_contract_pdf_file( $contract_id );
+      if ( ! empty( $pdf_result['path'] ) ) {
+        $messages[] = 'PDF de la convention / du contrat régénéré.';
+      }
+    }
+  }
   if ( $is_new_contract ) {
     if ( in_array( $generate_mode, array( 'generate_blank', 'generate_blank_email', 'generate_blank_esign' ), true ) ) {
       $pdf_result = $this->generate_registration_contract_pdf_file( $contract_id );
@@ -1205,6 +1231,11 @@ public function handle_update_registration_contract_document() {
     );
 
     // Envoi à l'organisme
+        /* ACDC 3.25.161 — Attribution d'archive : sans ces en-têtes, l'envoi
+           s'affiche « plugin / wp_mail » dans l'archive, sans module identifiable. */
+        $headers[] = 'X-ACDC-Source-Module: dossiers';
+        $headers[] = 'X-ACDC-Source-Action: contract_sent';
+        $headers[] = 'X-ACDC-Email-Category: dossiers';
     $sent = wp_mail( $to, $subject, $body, $headers, array( (string) $pdf_result['path'] ) );
 
     // Log debug dans error_log pour diagnostic
@@ -1236,6 +1267,11 @@ public function handle_update_registration_contract_document() {
                       . '<p>Veuillez trouver en pièce jointe votre exemplaire ' . esc_html( $doc_phrase ) . ' le <strong>' . esc_html( $signed_at ) . '</strong>.</p>'
                       . '<p>Conservez ce document pour vos archives.</p>'
                       . '</div>';
+        /* ACDC 3.25.161 — Attribution d'archive : sans ces en-têtes, l'envoi
+           s'affiche « plugin / wp_mail » dans l'archive, sans module identifiable. */
+        $headers[] = 'X-ACDC-Source-Module: dossiers';
+        $headers[] = 'X-ACDC-Source-Action: contract_to_signer';
+        $headers[] = 'X-ACDC-Email-Category: dossiers';
       wp_mail( $signer_email_addr, $signer_subject, $signer_body, $headers, array( (string) $pdf_result['path'] ) );
     }
   }

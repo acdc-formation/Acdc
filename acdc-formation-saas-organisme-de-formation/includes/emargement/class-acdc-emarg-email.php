@@ -91,6 +91,11 @@ class ACDC_Emarg_Email {
             'Content-Type: text/html; charset=UTF-8',
             'From: ' . $from['name'] . ' <' . $from['email'] . '>',
         );
+        /* ACDC 3.25.161 — Attribution d'archive : sans ces en-têtes, l'envoi
+           s'affiche « plugin / wp_mail » dans l'archive, sans module identifiable. */
+        $headers[] = 'X-ACDC-Source-Module: emargement';
+        $headers[] = 'X-ACDC-Source-Action: session_to_open';
+        $headers[] = 'X-ACDC-Email-Category: emargement';
         wp_mail( $emarg_session->trainer_email, 'Séance à ouvrir — ' . $session_label, $html, $headers );
     }
 
@@ -128,6 +133,11 @@ class ACDC_Emarg_Email {
             'Content-Type: text/html; charset=UTF-8',
             'From: ' . $from['name'] . ' <' . $from['email'] . '>',
         );
+        /* ACDC 3.25.161 — Attribution d'archive : sans ces en-têtes, l'envoi
+           s'affiche « plugin / wp_mail » dans l'archive, sans module identifiable. */
+        $headers[] = 'X-ACDC-Source-Module: emargement';
+        $headers[] = 'X-ACDC-Source-Action: learner_signature';
+        $headers[] = 'X-ACDC-Email-Category: emargement';
         wp_mail( $learner_row->learner_email, 'Émargement — ' . $session_label, $html, $headers );
     }
 }

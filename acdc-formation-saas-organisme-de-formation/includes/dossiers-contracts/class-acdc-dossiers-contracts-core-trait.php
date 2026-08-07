@@ -787,6 +787,11 @@ trait ACDC_Dossiers_Contracts_Core_Trait {
       'footer_notice' => 'Cet e-mail contient des documents contractuels relatifs à votre formation.',
     ) );
     $headers = $this->acdc_get_transactional_email_headers( $header_args );
+        /* ACDC 3.25.161 — Attribution d'archive : sans ces en-têtes, l'envoi
+           s'affiche « plugin / wp_mail » dans l'archive, sans module identifiable. */
+        $headers[] = 'X-ACDC-Source-Module: dossiers';
+        $headers[] = 'X-ACDC-Source-Action: contract_bundle';
+        $headers[] = 'X-ACDC-Email-Category: dossiers';
     $sent = wp_mail( $to, wp_strip_all_tags( $subject ), $html, $headers, $package['attachments'] );
 
     return array(
@@ -922,6 +927,11 @@ trait ACDC_Dossiers_Contracts_Core_Trait {
         'Content-Type: text/html; charset=UTF-8',
         'From: ' . sanitize_text_field( $from_name ) . ' <' . sanitize_email( get_option( 'admin_email' ) ) . '>',
       );
+        /* ACDC 3.25.161 — Attribution d'archive : sans ces en-têtes, l'envoi
+           s'affiche « plugin / wp_mail » dans l'archive, sans module identifiable. */
+        $headers[] = 'X-ACDC-Source-Module: dossiers';
+        $headers[] = 'X-ACDC-Source-Action: signed_delivery';
+        $headers[] = 'X-ACDC-Email-Category: dossiers';
       wp_mail( $delivery_email, $subject, $body, $headers, array( $signed_path ) );
     }
   }
