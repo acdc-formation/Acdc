@@ -734,6 +734,33 @@ public function handle_delete_registration_contract() {
   }
   check_admin_referer( 'acdc_delete_registration_contract_' . $contract_id );
   global $wpdb;
+
+  /* ACDC 3.25.162 — Une convention SIGNÉE ne se supprime pas d'un clic.
+     Asymétrie relevée en recette : la mission d'un formateur est protégée depuis la
+     3.25.155 — son contrat signé est une pièce comptable — alors que la convention
+     de formation, qui engage l'organisme et son client et relève de la même
+     obligation de conservation, se supprimait sans le moindre contrôle. Le document
+     signé et sa preuve de signature disparaissaient avec elle.
+     La suppression reste possible via un paramètre explicite (force=1) pour les cas
+     légitimes, comme pour les missions formateur. */
+  $rc_sig = $wpdb->get_row( $wpdb->prepare(
+    "SELECT signature_status, signed_document_url FROM {$this->registration_contract_table} WHERE id = %d",
+    $contract_id
+  ) );
+  $rc_is_signed = $rc_sig && (
+    ! empty( $rc_sig->signed_document_url )
+    || in_array( (string) $rc_sig->signature_status, array( 'completed', 'signe', 'signée' ), true )
+  );
+  $rc_forced = isset( $_GET['force'] ) && '1' === (string) $_GET['force'];
+  if ( $rc_is_signed && ! $rc_forced ) {
+    $this->redirect_to_portal(
+      'registration_contract',
+      'Cette convention est signée : elle constitue une pièce à conserver, ainsi que sa preuve de signature. Téléchargez le document signé et conservez-le avant toute suppression.',
+      'error'
+    );
+    return;
+  }
+
   $wpdb->delete( $this->registration_contract_table, array( 'id' => $contract_id ) );
   if ( is_admin() && isset( $_REQUEST['page'] ) && 'acdc-of-registration-contract' === $_REQUEST['page'] ) {
     wp_safe_redirect( admin_url( 'admin.php?page=acdc-of-registration-contract&notice=' . rawurlencode( 'Convention / contrat supprimé.' ) . '&notice_type=success' ) );
