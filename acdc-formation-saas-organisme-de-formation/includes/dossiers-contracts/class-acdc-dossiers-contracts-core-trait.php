@@ -302,7 +302,14 @@ trait ACDC_Dossiers_Contracts_Core_Trait {
     }
   }
 
-  private function acdc_get_contract_prefill_from_prospect( $prospect, $formations = array(), $proposal = null ) {
+  /**
+   * @param object $prospect
+   * @param array  $formations
+   * @param object $proposal
+   * @param bool   $create_company ACDC 3.25.157 — false = LECTURE SEULE (par défaut).
+   *                               Voir le commentaire sur company_id plus bas.
+   */
+  private function acdc_get_contract_prefill_from_prospect( $prospect, $formations = array(), $proposal = null, $create_company = false ) {
     $prefill = array(
       'commanditaire_type' => '',
       'company_id'         => 0,
@@ -320,7 +327,27 @@ trait ACDC_Dossiers_Contracts_Core_Trait {
 
     $profile_type = isset( $prospect->profile_type ) ? (string) $prospect->profile_type : '';
     $prefill['commanditaire_type'] = $this->is_individual_prospect_profile( $profile_type ) ? 'Particulier' : 'Entreprise';
-    $prefill['company_id'] = (int) $this->acdc_ensure_company_from_prospect( $prospect );
+    /* ACDC 3.25.157 — Ce préremplissage est un CHEMIN DE LECTURE : il alimente un
+       formulaire et un sélecteur, il ne doit rien écrire. Il appelait
+       acdc_ensure_company_from_prospect(), qui CRÉE la fiche commanditaire. Or le
+       sélecteur de prospect de la convention boucle sur TOUS les prospects et
+       appelle ce préremplissage pour chacun : ouvrir « Créer une convention »
+       créait donc, en une seule page, un commanditaire par prospect existant.
+       C'est l'origine des 191 commanditaires pour une seule convention signée.
+       La création reste possible, mais uniquement à l'ENREGISTREMENT de la
+       convention, où elle est explicitement demandée. */
+    if ( $create_company ) {
+      $prefill['company_id'] = (int) $this->acdc_ensure_company_from_prospect( $prospect );
+    } else {
+      /* Le sélecteur appelle ce préremplissage une fois par prospect. Sans cette
+         mémorisation, chaque tour relirait toute la table des commanditaires.
+         La branche lecture n'insérant rien, la liste ne peut pas se périmer. */
+      static $companies_cache = null;
+      if ( null === $companies_cache ) {
+        $companies_cache = $this->get_companies();
+      }
+      $prefill['company_id'] = (int) $this->acdc_find_company_id_from_prospect( $prospect, $companies_cache );
+    }
 
     /* Si une proposition est fournie, elle est prioritaire sur la formation catalogue */
     if ( $proposal && ! empty( $proposal->id ) ) {
