@@ -2264,9 +2264,20 @@ trait ACDC_Dossiers_Contracts_Render_Trait {
               <div class="acdc-contract-detail-label">Programme de formation utilisé</div><div><?php echo esc_html( ! empty( $formation->title ) ? $formation->title : 'Programme par défaut' ); ?></div>
               <div class="acdc-contract-detail-label">Commanditaire</div><div><?php $this->render_registration_contract_commanditaire_markup( $row['commanditaire_display'] ); ?></div>
               <div class="acdc-contract-detail-label">Formation</div><div><?php echo esc_html( $row['formation_label'] ); ?></div>
-              <div class="acdc-contract-detail-label">Adresse</div><div><?php echo esc_html( $company && ! empty( $company->address ) ? $company->address : '—' ); ?></div>
-              <div class="acdc-contract-detail-label">Code postal</div><div><?php echo esc_html( $company && ! empty( $company->postal_code ) ? $company->postal_code : '—' ); ?></div>
-              <div class="acdc-contract-detail-label">Ville</div><div><?php echo esc_html( $company && ! empty( $company->city ) ? $company->city : '—' ); ?></div>
+              <?php
+              /* ACDC 3.25.160 — Ces trois champs ne lisaient QUE la fiche commanditaire.
+                 Depuis que la convention n'en emprunte plus une au hasard, une convention
+                 non signée n'en a plus : les valeurs du prospect source existent pourtant
+                 et doivent prendre le relais, sinon l'écran affiche trois tirets là où
+                 l'information est connue. */
+              $cmd_prospect = isset( $row['context']['prospect'] ) ? $row['context']['prospect'] : null;
+              $cmd_addr = $company && ! empty( $company->address ) ? $company->address : ( $cmd_prospect && ! empty( $cmd_prospect->address ) ? $cmd_prospect->address : '' );
+              $cmd_cp   = $company && ! empty( $company->postal_code ) ? $company->postal_code : ( $cmd_prospect && ! empty( $cmd_prospect->postal_code ) ? $cmd_prospect->postal_code : '' );
+              $cmd_city = $company && ! empty( $company->city ) ? $company->city : ( $cmd_prospect && ! empty( $cmd_prospect->city ) ? $cmd_prospect->city : '' );
+              ?>
+              <div class="acdc-contract-detail-label">Adresse</div><div><?php echo esc_html( '' !== $cmd_addr ? $cmd_addr : '—' ); ?></div>
+              <div class="acdc-contract-detail-label">Code postal</div><div><?php echo esc_html( '' !== $cmd_cp ? $cmd_cp : '—' ); ?></div>
+              <div class="acdc-contract-detail-label">Ville</div><div><?php echo esc_html( '' !== $cmd_city ? $cmd_city : '—' ); ?></div>
               <div class="acdc-contract-detail-label">Dates des séances</div><div><?php echo nl2br( esc_html( $this->acdc_format_seances_dates_for_display( $entry ) ) ); ?></div>
               <div class="acdc-contract-detail-label">Nombre d'apprenants à former</div><div><?php echo esc_html( count( $learners ) ); ?></div>
               <div class="acdc-contract-detail-label">Apprenants</div><div><?php if ( ! empty( $learners ) ) { foreach ( $learners as $learner ) { echo esc_html( trim( $learner->first_name . ' ' . ( ! empty( $learner->usage_last_name ) ? $learner->usage_last_name : $learner->last_name ) ) ) . '<br>'; } } else { echo '—'; } ?></div>

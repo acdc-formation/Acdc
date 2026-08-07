@@ -1049,9 +1049,13 @@ trait ACDC_Dossiers_Contracts_Core_Trait {
       if ( ! empty( $contract->start_date ) && ! empty( $contract->end_date ) ) {
         $session = $wpdb->get_row( $wpdb->prepare( "SELECT * FROM {$this->session_table} WHERE formation_id = %d AND start_date = %s AND end_date = %s ORDER BY id DESC LIMIT 1", (int) $formation->id, (string) $contract->start_date, (string) $contract->end_date ) );
       }
-      if ( ! $session ) {
-        $session = $wpdb->get_row( $wpdb->prepare( "SELECT * FROM {$this->session_table} WHERE formation_id = %d ORDER BY start_date DESC, id DESC LIMIT 1", (int) $formation->id ) );
-      }
+      /* ACDC 3.25.160 — Repli supprimé : à défaut de séance aux dates de la
+         convention, il prenait LA DERNIÈRE SÉANCE DE LA FORMATION, celle de
+         n'importe quel client. Cette séance étrangère alimentait ensuite un
+         apprenant étranger, dont le company_id redevenait le commanditaire — c'est
+         la seconde chaîne d'emprunt, celle qui subsistait après la première série
+         de correctifs et qui expliquait le siège, le SIRET, le représentant et la
+         qualité encore fuités. */
     }
     $learners = $this->get_registration_contract_learners( $contract, $registration );
 
@@ -1672,21 +1676,10 @@ private function get_contract_pdf_context( $request ) {
      bas (prospect, puis apprenant) reprennent la main, et tous les usages en aval
      sont protégés par ?? / isset(). Un champ vide est récupérable ; un champ
      rempli avec les données de quelqu'un d'autre ne l'est pas. */
-  if ( ! $session ) {
-    $sessions = $this->get_sessions();
-    foreach ( $sessions as $candidate ) {
-      if ( $formation && ! empty( $candidate->formation_id ) && (int) $candidate->formation_id !== (int) $formation->id ) {
-        continue;
-      }
-      if ( $company && ! empty( $candidate->company_id ) && (int) $candidate->company_id !== (int) $company->id ) {
-        continue;
-      }
-      $session = $candidate;
-      break;
-    }
-    /* ACDC 3.25.158 — Même repli, même conséquence : les dates et le lieu d'une
-       session appartenant à un autre dossier se seraient imprimés sur la convention. */
-  }
+  /* ACDC 3.25.160 — Même repli, second exemplaire : cette boucle retenait la
+     première séance de la même formation, sans exiger qu'elle appartienne au
+     dossier. Elle servait ensuite à désigner un apprenant, puis un commanditaire.
+     Une convention n'emprunte pas la séance d'un autre dossier. */
   if ( ! $learner ) {
     global $wpdb;
     if ( $session ) {
@@ -1718,7 +1711,19 @@ private function get_contract_pdf_context( $request ) {
   $registration = isset( $related['registration'] ) ? $related['registration'] : null;
   $prospect = isset( $related['prospect'] ) ? $related['prospect'] : null;
 
-  if ( ! $company && $learner && ! empty( $learner->company_id ) ) {
+  /* ACDC 3.25.160 — Le commanditaire ne se déduit que d'un apprenant RATTACHÉ à
+     cette convention. Auparavant, n'importe quel apprenant retrouvé au fil des
+     replis suffisait à réintroduire son entreprise comme bénéficiaire du document. */
+  $learner_is_attached = false;
+  if ( $learner && ! empty( $related['learners'] ) && is_array( $related['learners'] ) ) {
+    foreach ( $related['learners'] as $attached ) {
+      if ( ! empty( $attached->id ) && (int) $attached->id === (int) $learner->id ) {
+        $learner_is_attached = true;
+        break;
+      }
+    }
+  }
+  if ( ! $company && $learner_is_attached && ! empty( $learner->company_id ) ) {
     $company = $this->get_company( (int) $learner->company_id );
   }
 
