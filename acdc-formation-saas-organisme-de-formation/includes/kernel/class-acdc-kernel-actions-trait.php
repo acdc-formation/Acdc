@@ -2675,6 +2675,16 @@ trait ACDC_Kernel_Actions_Trait {
     $from_name_s  = ! empty( $profile_s['enterprise_contact_name'] )  ? sanitize_text_field( (string) $profile_s['enterprise_contact_name'] )  : get_bloginfo( 'name' );
     $from_email_s = ! empty( $profile_s['enterprise_contact_email'] ) ? sanitize_email( (string) $profile_s['enterprise_contact_email'] )       : sanitize_email( (string) get_option( 'admin_email' ) );
     $headers_s    = array( 'Content-Type: text/html; charset=UTF-8', 'From: ' . sanitize_text_field( $from_name_s ) . ' <' . $from_email_s . '>' );
+    /* ACDC 3.25.160 — L'exemplaire contresigné du contrat formateur part d'ICI, et
+       non du module signature : les en-têtes ajoutés là-bas ne l'atteignaient donc
+       pas, et la recette l'a vu retomber sur « plugin / wp_mail » alors que les
+       deux autres e-mails du parcours étaient qualifiés. Ces deux envois — copie
+       organisme et copie formateur — portent désormais leur attribution. */
+    $headers_s[] = 'X-ACDC-Source-Module: signature';
+    $headers_s[] = 'X-ACDC-Source-Action: signed_copy';
+    $headers_s[] = 'X-ACDC-Email-Category: signature';
+    $headers_s[] = 'X-ACDC-Related-Entity-Type: trainer_contract';
+    $headers_s[] = 'X-ACDC-Related-Entity-Id: ' . (int) $contract_id;
     $attachment_s = ( '' !== $signed_path && file_exists( $signed_path ) ) ? array( $signed_path ) : array();
     // Notifier l'organisme (admin)
     $admin_email = sanitize_email( (string) get_option( 'admin_email' ) );
