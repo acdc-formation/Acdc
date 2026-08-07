@@ -1998,76 +1998,48 @@ trait ACDC_Kernel_Actions_Trait {
       exit;
     }
 
-    /* ACDC 3.25.157 — L'HORODATAGE VIENT APRÈS LA LIVRAISON, JAMAIS AVANT.
-       La première écriture de cette action estampillait archived_at puis diffusait
-       le PDF. Si la diffusion échouait — et une réponse 503 a été observée en
-       recette — la garde de suppression se levait alors qu'aucune copie n'était
-       parvenue à l'organisme : exactement ce que ce garde-fou existe pour empêcher.
-       On ne marque donc l'archivage qu'une fois les octets réellement écrits. */
-    $size = (int) filesize( $real_path );
-    if ( $size <= 0 ) {
+    /* ACDC 3.25.158 — L'ARCHIVAGE NE DIFFUSE PLUS LE FICHIER.
+       Version précédente : cette action diffusait le PDF puis n'horodatait qu'après
+       avoir compté les octets émis. En recette, la réponse HTTP retombait malgré
+       tout en 503 — comme la génération du PDF, et contrairement au service de
+       consultation qui répond 200 sur le même fichier — alors que PHP, lui, voyait
+       une diffusion complète et une connexion normale. Le garde-fou mesurait donc
+       une chose que PHP ne peut pas observer : un échec survenu dans la couche
+       serveur après la fin du script.
+       Le téléchargement et l'horodatage sont désormais deux gestes distincts :
+       l'organisme ouvre le PDF par le service de consultation — celui qui
+       fonctionne — puis confirme explicitement l'archivage. La confirmation a du
+       sens, puisqu'elle suit la consultation effective du document. Cette action
+       ne produit plus aucune sortie binaire : il ne reste rien qui puisse casser
+       la réponse. */
+    if ( ! is_file( $real_path ) || filesize( $real_path ) <= 0 ) {
       $back_empty = $this->portal_page_url( array(
         'tab'         => 'trainers',
         'action'      => 'edit',
         'item_id'     => (int) $contract->trainer_id,
-        'notice'      => rawurlencode( 'Archivage impossible : le PDF de cette mission est vide sur le serveur. Régénérez-le avant d’archiver.' ),
+        'notice'      => rawurlencode( 'Archivage impossible : le PDF de cette mission est introuvable ou vide sur le serveur. Régénérez-le avant d’archiver.' ),
         'notice_type' => 'error',
       ) );
       wp_safe_redirect( $back_empty );
       exit;
     }
 
-    /* La diffusion ne doit pas être interrompue par un temps d'exécution trop court
-       ni par une déconnexion : on veut aller au bout, et surtout SAVOIR si on y est
-       allé. ignore_user_abort permet à connection_status() d'être significatif. */
-    @set_time_limit( 0 ); // phpcs:ignore WordPress.PHP.NoSilencedErrors.Discouraged
-    ignore_user_abort( true );
+    $wpdb->update(
+      $this->trainer_contract_table,
+      array( 'archived_at' => current_time( 'mysql' ) ),
+      array( 'id' => $contract_id ),
+      array( '%s' ),
+      array( '%d' )
+    );
+    $this->log_action_event( 'archive', 'trainer_contract_pdf', $contract_id, 'success', array( 'file' => basename( $real_path ), 'bytes' => (int) filesize( $real_path ) ) );
 
-    while ( ob_get_level() ) { ob_end_clean(); }
-    /* Si des octets ont déjà été émis (avertissement PHP, sortie parasite d'un
-       greffon), l'en-tête Content-Length serait faux et la réponse corrompue :
-       mieux vaut refuser proprement que livrer un PDF illisible. */
-    if ( headers_sent() ) {
-      wp_die( esc_html( 'Archivage impossible : la réponse a déjà commencé à être envoyée. Signalez cette anomalie.' ) );
-    }
-
-    nocache_headers();
-    header( 'Content-Type: application/pdf' );
-    header( 'Content-Disposition: attachment; filename="' . basename( $real_path ) . '"' );
-    header( 'Content-Length: ' . $size );
-
-    /* Diffusion par blocs plutôt que readfile() : la mémoire reste plate et le
-       nombre d'octets réellement transmis est mesurable. */
-    $sent   = 0;
-    $handle = fopen( $real_path, 'rb' ); // phpcs:ignore WordPress.WP.AlternativeFunctions.file_system_operations_fopen
-    if ( $handle ) {
-      while ( ! feof( $handle ) ) {
-        $chunk = fread( $handle, 262144 ); // phpcs:ignore WordPress.WP.AlternativeFunctions.file_system_operations_fread
-        if ( false === $chunk || '' === $chunk ) {
-          break;
-        }
-        echo $chunk; // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped
-        $sent += strlen( $chunk );
-        flush();
-      }
-      fclose( $handle ); // phpcs:ignore WordPress.WP.AlternativeFunctions.file_system_operations_fclose
-    }
-
-    /* Archivage acquis seulement si le fichier est parti EN ENTIER et que la
-       connexion tenait encore. Sinon la mission reste protégée et l'organisme
-       pourra réessayer — un échec doit laisser la garde en place. */
-    if ( $sent === $size && CONNECTION_NORMAL === connection_status() ) {
-      $wpdb->update(
-        $this->trainer_contract_table,
-        array( 'archived_at' => current_time( 'mysql' ) ),
-        array( 'id' => $contract_id ),
-        array( '%s' ),
-        array( '%d' )
-      );
-      $this->log_action_event( 'archive', 'trainer_contract_pdf', $contract_id, 'success', array( 'file' => basename( $real_path ), 'bytes' => $sent ) );
-    } else {
-      $this->log_action_event( 'archive', 'trainer_contract_pdf', $contract_id, 'error', array( 'file' => basename( $real_path ), 'bytes' => $sent, 'expected' => $size ) );
-    }
+    wp_safe_redirect( $this->portal_page_url( array(
+      'tab'         => 'trainers',
+      'action'      => 'edit',
+      'item_id'     => (int) $contract->trainer_id,
+      'notice'      => rawurlencode( 'Contrat archivé. La suppression de cette mission est désormais autorisée.' ),
+      'notice_type' => 'success',
+    ) ) );
     exit;
   }
 

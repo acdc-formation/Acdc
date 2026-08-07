@@ -2379,19 +2379,34 @@ public function render_admin_registration_contract_page() { $this->render_admin_
           "SELECT DISTINCT l.id,
              CONCAT(COALESCE(l.first_name,''), ' ', COALESCE(l.last_name,'')) AS name,
              l.email,
-             COALESCE(c.name,'') AS company_name
+             COALESCE(c.name, cc.name, '') AS company_name
            FROM {$this->learner_table} l
-           LEFT JOIN {$this->company_table} c ON c.id = l.company_id
            INNER JOIN {$this->training_registration_table} tr ON tr.learner_id = l.id
+           LEFT JOIN {$this->company_table} c ON c.id = l.company_id
+           /* ACDC 3.25.158 — Colonne ENTREPRISE vide alors que le dossier était bien
+              rattaché : l'apprenant ne porte pas toujours company_id, le lien vit sur
+              l'inscription ou sur la convention. On remonte la chaîne. */
+           LEFT JOIN {$this->registration_contract_table} rc ON rc.id = tr.autofill_contract_id
+           LEFT JOIN {$this->company_table} cc ON cc.id = COALESCE( NULLIF( tr.company_id, 0 ), rc.company_id )
            ORDER BY l.last_name ASC, l.first_name ASC
            LIMIT 500"
         );
         break;
       case 'company':
+        /* ACDC 3.25.158 — Le rattachement ne se lit pas uniquement sur l'inscription :
+           quand une inscription est créée depuis une convention, c'est la CONVENTION
+           qui porte company_id, et tr.company_id reste vide. La jointure stricte
+           renvoyait alors « Aucun commanditaire trouvé » alors que des conventions
+           existaient bel et bien — l'écran Dossiers de formation, lui, affichait le
+           bon nom parce qu'il remonte à la convention. On accepte les deux chemins. */
         $rows = $wpdb->get_results(
           "SELECT DISTINCT co.id, co.name, COALESCE(co.city,'') AS city
            FROM {$this->company_table} co
-           INNER JOIN {$this->training_registration_table} tr ON tr.company_id = co.id
+           INNER JOIN {$this->training_registration_table} tr
+             ON tr.company_id = co.id
+             OR ( ( tr.company_id IS NULL OR tr.company_id = 0 )
+                  AND EXISTS ( SELECT 1 FROM {$this->registration_contract_table} rc
+                               WHERE rc.id = tr.autofill_contract_id AND rc.company_id = co.id ) )
            WHERE co.is_archived = 0 OR co.is_archived IS NULL
            ORDER BY co.name ASC
            LIMIT 500"

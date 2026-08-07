@@ -205,6 +205,26 @@ class ACDC_Sig_Email {
             $headers[] = 'Reply-To: ' . sanitize_email( $b['reply_to'] );
         }
 
+        /* ACDC 3.25.158 — L'invitation à signer ne portait AUCUN en-tête X-ACDC :
+           elle arrivait donc dans l'archive avec la source par défaut
+           « plugin / wp_mail », sans rapport avec le module qui l'a émise. Le
+           correctif d'analyse des en-têtes n'y pouvait rien — il n'y avait rien à
+           lire. Seule la notification interne en posait. */
+        $headers[] = 'X-ACDC-Source-Module: signature';
+        $headers[] = 'X-ACDC-Source-Action: signature_request';
+        $headers[] = 'X-ACDC-Email-Category: signature';
+        $headers[] = 'X-ACDC-Email-Audience: externe';
+        $sig_notes = isset( $request->notes ) ? json_decode( (string) $request->notes, true ) : null;
+        if ( is_array( $sig_notes ) ) {
+            foreach ( array( 'contract_id' => 'trainer_contract', 'quote_id' => 'quote', 'invoice_id' => 'invoice', 'entity_id' => 'document' ) as $note_key => $entity_type ) {
+                if ( ! empty( $sig_notes[ $note_key ] ) ) {
+                    $headers[] = 'X-ACDC-Related-Entity-Type: ' . $entity_type;
+                    $headers[] = 'X-ACDC-Related-Entity-Id: ' . (int) $sig_notes[ $note_key ];
+                    break;
+                }
+            }
+        }
+
         $sent = wp_mail( $request->signer_email, $subject, $body, $headers );
 
         $this->core->log_event(

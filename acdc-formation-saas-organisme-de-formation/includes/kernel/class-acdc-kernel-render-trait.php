@@ -7881,14 +7881,20 @@ trait ACDC_Kernel_Render_Trait {
                 if ( $c_signed_status && '' === $c_archived_at ) :
                   $archive_url = $this->acdc_trainer_contract_archive_url( (int) $c->id );
                 ?>
-                <?php /* ACDC 3.25.157 — Le rechargement automatique à 2,5 s a été RETIRÉ.
-                         Il déclenchait une nouvelle navigation pendant que le PDF était
-                         encore en cours de diffusion, ce qui interrompait la requête —
-                         d'où le 503 observé en recette. Le confort d'un rafraîchissement
-                         ne vaut pas le risque d'un archivage tronqué : la page se
-                         rafraîchit désormais à la demande. */ ?>
-                <a href="<?php echo esc_url( $archive_url ); ?>" class="acdc-row-action-icon" title="Archiver (télécharge le PDF signé et autorise ensuite la suppression)" onclick="var n=document.getElementById('acdc-archive-hint-<?php echo (int) $c->id; ?>'); if(n){n.hidden=false;}" data-acdc-iconized="1"><span aria-hidden="true" style="font-size:16px;line-height:25px;">⤓</span><span class="acdc-action-hub-sr screen-reader-text">Archiver</span></a>
-                <span id="acdc-archive-hint-<?php echo (int) $c->id; ?>" hidden style="display:block;margin-top:4px;font-size:11px;color:#6b7280;">Téléchargement lancé — <a href="<?php echo esc_url( $is_admin ? admin_url( 'admin.php?page=acdc-of-trainers&action=edit&item_id=' . $tid ) : $this->portal_page_url( array( 'tab' => 'trainers', 'action' => 'edit', 'item_id' => $tid ) ) ); ?>">actualisez</a> une fois le PDF enregistré.</span>
+                <?php /* ACDC 3.25.158 — Archivage en DEUX GESTES. Le premier lien ouvre le
+                         PDF par le service de consultation, celui qui répond correctement ;
+                         le second horodate l'archivage. Faire diffuser le fichier par
+                         l'action d'archivage elle-même produisait une réponse 503 côté
+                         serveur, invisible depuis PHP, si bien que la garde se levait sur
+                         un téléchargement qui n'avait pas abouti. */
+                  $view_signed_url = $this->acdc_trainer_contract_view_url( (int) $c->id, true );
+                  $archive_url     = $this->acdc_trainer_contract_archive_url( (int) $c->id );
+                ?>
+                <a href="<?php echo esc_url( $view_signed_url ); ?>" target="_blank" rel="noopener" class="acdc-row-action-icon" title="1. Ouvrir le contrat signé pour l'enregistrer sur votre poste" onclick="var n=document.getElementById('acdc-archive-step2-<?php echo (int) $c->id; ?>'); if(n){n.hidden=false;}" data-acdc-iconized="1"><span aria-hidden="true" style="font-size:16px;line-height:25px;">⤓</span><span class="acdc-action-hub-sr screen-reader-text">Ouvrir le PDF à archiver</span></a>
+                <span id="acdc-archive-step2-<?php echo (int) $c->id; ?>" hidden style="display:block;margin-top:4px;font-size:11px;color:#6b7280;">
+                  PDF ouvert dans un nouvel onglet. Une fois enregistré sur votre poste :
+                  <a href="<?php echo esc_url( $archive_url ); ?>" onclick="return confirm('Confirmez-vous avoir enregistré ce contrat signé sur votre poste ? La suppression de la mission sera alors autorisée.');">confirmer l’archivage</a>.
+                </span>
                 <?php elseif ( $c_signed_status && '' !== $c_archived_at ) : ?>
                 <span class="acdc-row-action-icon" title="Contrat archivé le <?php echo esc_attr( date_i18n( 'd/m/Y à H\hi', strtotime( $c_archived_at ) ) ); ?> — suppression autorisée" style="cursor:default;"><span aria-hidden="true" style="font-size:16px;line-height:25px;">🗄️</span><span class="acdc-action-hub-sr screen-reader-text">Archivé</span></span>
                 <?php endif; ?>
