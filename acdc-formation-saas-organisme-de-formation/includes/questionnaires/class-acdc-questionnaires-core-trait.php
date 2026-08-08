@@ -9010,6 +9010,15 @@ private function maybe_auto_create_questionnaire_actions_from_response( $session
    */
   public function acdc_backfill_survey_session_targets() {
     global $wpdb;
+    /* ACDC 3.25.177 — Mêmes garde-fous que la reprise des parts de réussite : jamais
+       sur une page publique, réservée à l'administration, et par petits lots. Cette
+       routine était accrochée à « init », donc exécutée pour chaque visiteur. */
+    if ( wp_doing_ajax() || wp_doing_cron() || ( defined( 'REST_REQUEST' ) && REST_REQUEST ) ) {
+      return 0;
+    }
+    if ( ! is_admin() || ! current_user_can( 'manage_options' ) ) {
+      return 0;
+    }
     if ( 'done' === get_option( 'acdc_of_survey_targets_backfilled', '' ) ) {
       return 0;
     }
@@ -9019,8 +9028,12 @@ private function maybe_auto_create_questionnaire_actions_from_response( $session
         WHERE is_survey_session = 1
           AND source_type IN ('company_survey','trainer_survey','funder_survey')
           AND ( COALESCE(formateur_id,0) = 0 OR COALESCE(company_id,0) = 0 )
-        LIMIT 500"
+        LIMIT 50"
     );
+    if ( empty( $rows ) ) {
+      update_option( 'acdc_of_survey_targets_backfilled', 'done', false );
+      return 0;
+    }
     $fixed = 0;
     foreach ( (array) $rows as $row ) {
       $seance = null;
@@ -9048,7 +9061,6 @@ private function maybe_auto_create_questionnaire_actions_from_response( $session
       $wpdb->update( $this->questionnaire_session_table, $update, array( 'id' => absint( $row->id ) ) );
       $fixed++;
     }
-    update_option( 'acdc_of_survey_targets_backfilled', 'done', false );
     return $fixed;
   }
 

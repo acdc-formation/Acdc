@@ -491,15 +491,16 @@ trait ACDC_Quizzes_Core_Trait {
             dbDelta( $sql );
         }
 
-        /* ACDC 3.25.174 — Reprise des parts de réussite. Toutes les réponses
-           enregistrées avant l'arrivée du barème au prorata portent une part vide : les
-           écrans d'analyse — « Par question », « Par objectif », « Questions les plus
-           faibles » — retombent alors sur l'ancien tout-ou-rien et contredisent le score
-           du participant, qui, lui, a bien été calculé au prorata. On recalcule ces
-           parts à partir des réponses réellement cochées, une fois pour toutes. Sans
-           cela, il faudrait rejouer chaque passation pour obtenir une analyse juste. */
-        $this->qz_backfill_missing_score_ratios();
-
+        /* ACDC 3.25.177 — Le drapeau de version est écrit ICI, immédiatement après
+           dbDelta, et AVANT toute autre chose.
+           En 3.25.176 il était écrit après une reprise de données qui pouvait boucler
+           sur plusieurs milliers de lignes. Quand cette reprise dépassait le temps
+           d'exécution, le drapeau n'était jamais posé : la requête suivante recommençait
+           tout, depuis le début. Comme le tout était accroché à « init », chaque
+           visiteur relançait le calcul complet — le site a cessé de répondre, seuls les
+           fichiers statiques passaient encore. Un drapeau doit être posé avant le
+           travail qu'il protège, jamais après : perdre une reprise est rattrapable,
+           perdre le site ne l'est pas. */
         update_option( $this->qz_db_version_option, $this->qz_db_version );
     }
 
@@ -861,6 +862,34 @@ trait ACDC_Quizzes_Core_Trait {
      *
      * @return int Nombre de lignes reprises.
      */
+    public function maybe_run_qz_score_ratio_backfill() {
+        /* ACDC 3.25.177 — Cette reprise ne tourne plus QUE dans l'administration, par
+           petits lots, et se souvient de son avancement. Trois garde-fous que la
+           3.25.176 n'avait pas :
+             — jamais sur une page publique, ni en AJAX, ni en REST : un visiteur ne doit
+               pas payer une migration ;
+             — cent lignes par passage, donc un coût borné et prévisible ;
+             — un drapeau posé dès qu'il ne reste rien à faire, et un compteur de
+               passages qui coupe court au bout de cinquante lots, pour qu'un cas
+               pathologique s'arrête de lui-même au lieu de tourner sans fin. */
+        if ( wp_doing_ajax() || wp_doing_cron() || ( defined( 'REST_REQUEST' ) && REST_REQUEST ) ) {
+            return 0;
+        }
+        if ( ! is_admin() || ! current_user_can( 'manage_options' ) ) {
+            return 0;
+        }
+        if ( 'done' === get_option( 'acdc_of_qz_ratio_backfill', '' ) ) {
+            return 0;
+        }
+        $passes = (int) get_option( 'acdc_of_qz_ratio_backfill_passes', 0 );
+        if ( $passes >= 50 ) {
+            update_option( 'acdc_of_qz_ratio_backfill', 'done', false );
+            return 0;
+        }
+        update_option( 'acdc_of_qz_ratio_backfill_passes', $passes + 1, false );
+        return $this->qz_backfill_missing_score_ratios();
+    }
+
     private function qz_backfill_missing_score_ratios() {
         global $wpdb;
         $tbl_pa = $this->get_qz_table( 'player_answers' );
@@ -879,9 +908,11 @@ trait ACDC_Quizzes_Core_Trait {
              FROM {$tbl_pa} pa
              INNER JOIN {$tbl_q} q ON q.id = pa.question_id
              WHERE pa.score_ratio IS NULL AND pa.is_correct IS NOT NULL
-             LIMIT 5000"
+             LIMIT 100"
         );
         if ( empty( $rows ) ) {
+            // Plus rien à reprendre : on ne repassera plus jamais ici.
+            update_option( 'acdc_of_qz_ratio_backfill', 'done', false );
             return 0;
         }
 
