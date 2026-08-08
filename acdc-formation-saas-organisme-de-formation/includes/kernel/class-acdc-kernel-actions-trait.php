@@ -2941,6 +2941,60 @@ trait ACDC_Kernel_Actions_Trait {
   }
 
   /**
+   * ACDC 3.25.169 — Affiche le lien d'activation d'un accès formateur, sans e-mail.
+   *
+   * Le pendant exact de « Obtenir le lien d'activation » côté apprenant. Le portail
+   * formateur a la même mécanique : un unique lien envoyé par courriel. Si cet
+   * envoi échoue, le compte reste « jamais activé » et la page de connexion oppose
+   * un refus qui renvoie à un e-mail inexistant. On donne donc au gestionnaire
+   * déjà authentifié le lien qu'il aurait relayé depuis sa messagerie.
+   *
+   * @return void
+   */
+  public function handle_open_trainer_extranet_access() {
+    if ( ! current_user_can( 'manage_options' ) ) {
+      wp_die( esc_html( 'Accès refusé.' ) );
+    }
+    $trainer_id = isset( $_POST['trainer_id'] ) ? absint( wp_unslash( $_POST['trainer_id'] ) ) : 0;
+    if ( ! $trainer_id ) {
+      $this->redirect_to_portal( 'trainers', 'Formateur introuvable.', 'error' );
+    }
+    check_admin_referer( 'acdc_open_trainer_access_' . $trainer_id );
+
+    global $wpdb;
+    $trainer = $this->get_trainer( $trainer_id );
+    if ( ! $trainer ) {
+      $this->redirect_to_portal( 'trainers', 'Formateur introuvable.', 'error' );
+    }
+
+    $account = $wpdb->get_row( $wpdb->prepare(
+      "SELECT * FROM {$this->trainer_portal_account_table} WHERE trainer_id = %d",
+      (int) $trainer_id
+    ) );
+    if ( ! $account ) {
+      $this->redirect_back_to_trainer_edit( $trainer_id, "Aucun compte formateur n'existe encore. Cliquez d'abord sur « Inviter le formateur ».", 'error' );
+      return;
+    }
+
+    $activation_url = method_exists( $this, 'trainer_portal_build_activation_url' )
+      ? $this->trainer_portal_build_activation_url( $account )
+      : '';
+    if ( '' === $activation_url ) {
+      $this->redirect_back_to_trainer_edit( $trainer_id, "Le lien d'activation n'a pas pu être généré.", 'error' );
+      return;
+    }
+
+    $this->trainer_portal_log_event( (int) $account->id, 'activation_link_revealed', array( 'by_admin' => true ), (int) $trainer_id );
+
+    $return_url = is_admin()
+      ? admin_url( 'admin.php?page=acdc-of-trainers&action=edit&item_id=' . (int) $trainer_id )
+      : $this->portal_page_url( array( 'tab' => 'trainers', 'action' => 'edit', 'item_id' => (int) $trainer_id ) );
+
+    $this->acdc_render_learner_activation_link_page( (string) $account->email, $activation_url, $return_url, 'formateur' );
+    exit;
+  }
+
+  /**
    * ACDC 3.20.82 — Helper : redirige vers la page d’édition du formateur, admin ou portail selon contexte.
    */
   private function redirect_back_to_trainer_edit( $trainer_id, $message, $type = 'success' ) {

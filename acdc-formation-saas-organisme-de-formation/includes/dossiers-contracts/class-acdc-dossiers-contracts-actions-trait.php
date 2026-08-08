@@ -1203,14 +1203,17 @@ public function handle_update_registration_contract_document() {
    *
    * Volontairement hors du gabarit de l'extranet : cette page n'est ni indexable
    * ni mise en cache, et elle porte le lien en clair pour qu'il soit copiable.
+   * Commune aux accès apprenant et formateur : les deux portails ont la même
+   * mécanique d'activation, donc la même impasse quand l'e-mail se perd.
    *
-   * @param string $email          Adresse de l'apprenant.
+   * @param string $email          Adresse du destinataire.
    * @param string $activation_url Lien d'activation à usage unique.
    * @param string $return_url     Retour vers la fiche.
+   * @param string $audience       'apprenant' ou 'formateur'.
    *
    * @return void
    */
-  private function acdc_render_learner_activation_link_page( $email, $activation_url, $return_url ) {
+  private function acdc_render_learner_activation_link_page( $email, $activation_url, $return_url, $audience = 'apprenant' ) {
     if ( ! headers_sent() ) {
       nocache_headers();
       header( 'X-Robots-Tag: noindex, nofollow', true );
@@ -1233,15 +1236,16 @@ public function handle_update_registration_contract_document() {
  .primary{background:#D7A24B;color:#0B0706;} .soft{background:#f3f4f6;color:#374151;border:1px solid #d1d5db;}
 </style></head><body>
 <div class="card">
-  <h1>Accès apprenant — lien d'activation</h1>
-  <p class="sub">Ce lien remplace l'e-mail d'ouverture. Il fait choisir son mot de passe à l'apprenant.</p>
+  <h1>Accès <?php echo esc_html( $audience ); ?> — lien d'activation</h1>
+  <p class="sub">Ce lien remplace l'e-mail d'ouverture. Il fait choisir son mot de passe au destinataire.</p>
   <div class="lbl">Identifiant de connexion</div>
   <div class="val"><?php echo esc_html( $email ); ?></div>
   <div class="lbl">Lien d'activation — valable 7 jours</div>
   <textarea rows="3" readonly onclick="this.select();"><?php echo esc_textarea( $activation_url ); ?></textarea>
   <div class="warn">
-    Ce lien vaut ouverture de compte : il permet de définir le mot de passe de cet
-    apprenant. Ne le transmettez qu'à lui, et par un canal sûr.
+    Ce lien vaut ouverture de compte : il permet de définir le mot de passe de ce
+    compte <?php echo esc_html( $audience ); ?>. Ne le transmettez qu'à son
+    titulaire, et par un canal sûr.
   </div>
   <div class="actions">
     <a class="btn primary" href="<?php echo esc_url( $activation_url ); ?>" target="_blank" rel="noopener">Ouvrir le lien</a>

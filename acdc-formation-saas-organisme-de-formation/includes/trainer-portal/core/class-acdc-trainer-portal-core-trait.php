@@ -409,9 +409,20 @@ trait ACDC_Trainer_Portal_Core_Trait {
   /**
    * Envoi de l'e-mail d'activation à un formateur invité.
    */
-  private function trainer_portal_send_activation_email( $account, $trainer ) {
-    if ( ! $account || ! $trainer ) {
-      return false;
+  /**
+   * ACDC 3.25.169 — Construit le lien d'activation d'un compte formateur.
+   *
+   * Extrait de l'envoi d'e-mail pour que l'administration puisse afficher ce lien
+   * à l'écran, comme du côté apprenant : quand le courriel se perd, le compte
+   * reste « jamais activé » et rien ne permet plus d'y entrer.
+   *
+   * @param object $account Compte portail formateur.
+   *
+   * @return string URL d'activation, ou chaîne vide.
+   */
+  private function trainer_portal_build_activation_url( $account ) {
+    if ( ! $account ) {
+      return '';
     }
     $token = $this->trainer_portal_create_token(
       $account->id,
@@ -419,8 +430,15 @@ trait ACDC_Trainer_Portal_Core_Trait {
       wp_date( 'Y-m-d H:i:s', strtotime( '+7 days', current_time( 'timestamp' ) ) ),
       array( 'purpose' => 'first_activation' )
     );
+    return $this->trainer_portal_login_url( array( 'view' => 'activate', 'token' => rawurlencode( $token ) ) );
+  }
+
+  private function trainer_portal_send_activation_email( $account, $trainer ) {
+    if ( ! $account || ! $trainer ) {
+      return false;
+    }
     $display_name   = trim( (string) $trainer->first_name . ' ' . (string) $trainer->last_name );
-    $activation_url = $this->trainer_portal_login_url( array( 'view' => 'activate', 'token' => rawurlencode( $token ) ) );
+    $activation_url = $this->trainer_portal_build_activation_url( $account );
 
     $body  = '<p>Bonjour ' . esc_html( $display_name ) . ',</p>';
     $body .= '<p>Votre accès à l’espace formateur ACDC Formation a été créé.</p>';

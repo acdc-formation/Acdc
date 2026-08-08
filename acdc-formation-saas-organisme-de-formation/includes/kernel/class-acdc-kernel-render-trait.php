@@ -7019,6 +7019,21 @@ trait ACDC_Kernel_Render_Trait {
             <?php echo $has_account ? 'Renvoyer l’invitation' : 'Inviter le formateur'; ?>
           </button>
         </form>
+        <?php if ( $has_account ) : ?>
+          <?php /* ACDC 3.25.169 — Sortie de secours, identique à celle des accès
+                   apprenants : si l'e-mail d'activation ne parvient jamais, le compte
+                   reste « jamais activé » et la page de connexion renvoie à un
+                   courriel qui n'existe pas. Ce bouton affiche le lien à l'écran. */ ?>
+          <form method="post" action="<?php echo esc_url( admin_url( 'admin-post.php' ) ); ?>" style="flex:none;">
+            <?php wp_nonce_field( 'acdc_open_trainer_access_' . (int) $trainer->id ); ?>
+            <input type="hidden" name="action" value="acdc_open_trainer_access">
+            <input type="hidden" name="trainer_id" value="<?php echo (int) $trainer->id; ?>">
+            <?php if ( is_admin() ) : ?><input type="hidden" name="page" value="acdc-of-trainers"><?php endif; ?>
+            <button type="submit" class="acdc-button acdc-button-soft" title="Affiche le lien d'activation à l'écran, sans passer par la messagerie">
+              🔑 Obtenir le lien d'activation
+            </button>
+          </form>
+        <?php endif; ?>
       </div>
     </div>
     <?php endif; ?>

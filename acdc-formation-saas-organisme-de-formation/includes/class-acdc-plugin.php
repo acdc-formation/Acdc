@@ -559,6 +559,8 @@ class ACDC_Formation_SAAS_Plugin {
     add_action( 'admin_post_acdc_bulk_enroll_from_contract',  array( $this, 'handle_bulk_enroll_from_contract' ) );
     /* ACDC 3.21.05-hotfix4 — Renvoi e-mail ouverture extranet depuis la fiche inscription */
     add_action( 'admin_post_acdc_resend_learner_extranet_email', array( $this, 'handle_resend_learner_extranet_email' ) );
+    // ACDC 3.25.169 — Lien d'activation formateur affiché à l'écran, sans e-mail.
+    add_action( 'admin_post_acdc_open_trainer_access', array( $this, 'handle_open_trainer_extranet_access' ) );
     add_action( 'admin_post_acdc_delete_training_registration', array( $this, 'handle_delete_training_registration' ) );
     add_action( 'admin_post_acdc_save_training_file_profile', array( $this, 'handle_save_training_file_profile' ) );
     /* ACDC 3.24.16 — R-15 : Sous-traitants par dossier (indicateur 15 Qualiopi). */
