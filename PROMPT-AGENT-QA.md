@@ -9,11 +9,11 @@ Claude Code.
 
 ---
 
-## ⚠️ AVANT DE COLLER — David remplit le bloc IDENTIFIANTS
+## Rien à remplir avant de coller
 
-Six lignes à renseigner : l'e-mail et le mot de passe du compte formateur, et
-ceux de deux comptes apprenants. Sans elles, deux des quatre rôles restent
-injouables.
+David a ouvert les six sessions et les a laissées dans les onglets accessibles
+à l'agent : le portail formateur de David Contal et les trois espaces
+apprenants sont déjà connectés. Le prompt se colle tel quel.
 
 ---
 
@@ -58,6 +58,23 @@ pas une maladresse.
                Ilona Rossa
   FINANCEUR    TEST-QA Financeur Essai
 
+QUI FAIT QUOI, précisément :
+
+  Skil Conseil              l'entreprise cliente. C'est elle qui commande la
+                            formation, c'est elle qui répond aux enquêtes
+                            entreprises, et c'est son nom qui doit apparaître
+                            sur les documents de la formation.
+  David Contal              le formateur. Il anime les sessions, il lance les
+                            passations en salle, il corrige les réponses
+                            rédigées et il répond aux enquêtes formateurs.
+  Bérengère Valeriano       apprenante. À privilégier pour les parcours longs
+                            (passation complète, portail, documents).
+  Léandra Rossa             apprenante.
+  Ilona Rossa               apprenante. Avec Léandra, c'est ton couple de test
+                            pour tout ce qui touche à l'identification.
+  TEST-QA Financeur Essai   le financeur. Il ne fait qu'une chose : recevoir et
+                            remplir une enquête financeur. Rien d'autre.
+
 Trois choses à savoir sur cette distribution :
 
 - Léandra Rossa et Ilona Rossa portent le MÊME nom de famille. Sers-t'en :
@@ -71,24 +88,32 @@ Trois choses à savoir sur cette distribution :
   ni ses coordonnées, ni ses documents.
 
 ────────────────────────────────────────────────
-IDENTIFIANTS FOURNIS PAR DAVID
+TES ACCÈS — DÉJÀ OUVERTS, DANS TES ONGLETS
 ────────────────────────────────────────────────
-Portail formateur — https://acdcformation.com/extranet-formateur/
-   David Contal
-   e-mail        : ⟨à compléter⟩
-   mot de passe  : ⟨à compléter⟩
+Tu n'as aucun identifiant à saisir. David a ouvert toutes les sessions et les a
+laissées dans les onglets auxquels tu as accès. Repère-les au démarrage et
+garde-les ouvertes : c'est ta seule porte d'entrée dans chaque rôle.
 
-Portail apprenant — https://acdcformation.com/espace-apprenant/
-   Apprenant n° 1 : ⟨nom⟩
-   e-mail        : ⟨à compléter⟩
-   mot de passe  : ⟨à compléter⟩
+  Extranet gestionnaire   administrateur — tu es déjà connecté
+     https://acdcformation.com/extranet/tableau-de-bord/?tab=dashboard
+  Portail formateur       David Contal
+     https://acdcformation.com/extranet-formateur/
+  Portail apprenant       Bérengère Valeriano
+  Portail apprenant       Léandra Rossa
+  Portail apprenant       Ilona Rossa
+     https://acdcformation.com/espace-apprenant/
 
-   Apprenant n° 2 : ⟨nom⟩
-   e-mail        : ⟨à compléter⟩
-   mot de passe  : ⟨à compléter⟩
-
-Ne change JAMAIS le mot de passe de ces comptes : tu te fermerais la porte, et
-David devrait tout rouvrir.
+RÈGLES SUR CES SESSIONS — elles sont fragiles, traite-les comme telles :
+- Ne te DÉCONNECTE d'aucune, jamais. Tu ne saurais pas te reconnecter : tu n'as
+  pas les mots de passe, et David devrait rouvrir l'accès un par un.
+- Ne change AUCUN mot de passe, pour la même raison.
+- Les trois espaces apprenants sont sur le même domaine : ouvrir deux comptes
+  apprenants dans deux onglets ordinaires te fera probablement perdre le
+  premier. Travaille sur UN apprenant à la fois, ou sers-toi de fenêtres
+  distinctes si tu en disposes. Si une session est tombée, ne tente pas de la
+  rétablir : signale-le à Claude Code et poursuis avec les autres rôles.
+- Si tu dois ouvrir une page publique en anonyme (lien d'enquête, écran joueur
+  d'un quiz live), utilise une fenêtre privée pour ne pas écraser une session.
 
 ────────────────────────────────────────────────
 PROTOCOLE DE COMMUNICATION  ⚠️ LIS CECI EN PREMIER
@@ -259,8 +284,9 @@ Elle doit maintenant présenter les mêmes blocs que « Résultats —
 Positionnement » et « Résultats — Évaluations ».
 
 ═════ ACTE 2 — LE FORMATEUR : animer et lire ═════
-Connecte-toi au portail formateur avec le compte David Contal. Tu n'es plus
-administrateur : tu es un formateur.
+Bascule sur l'onglet du portail formateur, déjà connecté sous David Contal. Tu
+n'es plus administrateur : tu es un formateur, et tu ne dois voir que ce qu'un
+formateur a le droit de voir.
 
 a. CLOISONNEMENT — le point le plus sensible du module. Compare la liste
    « Mes quiz » du portail à la liste complète côté administration. Le
@@ -308,10 +334,12 @@ pour avoir deux répondants — c'est le seul moyen de contrôler les compteurs.
   - Le retour affiché après ta réponse dit-il la même chose que le score qui
     sera enregistré ?
 
-CHEMIN 2 — LE PORTAIL APPRENANT (comptes fournis)
-Connecte-toi avec chacun des deux comptes, l'un après l'autre.
-  - Chaque apprenant retrouve-t-il SES passations, et seulement les siennes ?
-    Vérifie ce point avec un soin particulier sur les deux Rossa.
+CHEMIN 2 — LE PORTAIL APPRENANT (trois sessions déjà ouvertes)
+Passe sur chacun des trois onglets apprenants, l'un après l'autre : Bérengère
+Valeriano, Léandra Rossa, Ilona Rossa. Ne te déconnecte d'aucun.
+  - Chaque apprenante retrouve-t-elle SES passations, et seulement les siennes ?
+    Vérifie ce point avec un soin particulier sur les deux Rossa : c'est le
+    couple qui révélera une confusion d'identité si elle existe.
   - Les scores, dates et libellés sont-ils justes et lisibles par quelqu'un qui
     n'y connaît rien ?
   - Une réponse en partie juste est-elle présentée comme telle, ou comme
@@ -397,8 +425,10 @@ final :
    trou masqué.
 
 COMMENCE MAINTENANT par ton handshake à Claude Code, préfixé [QA-VERIF], en
-confirmant le numéro de version lu dans wp-admin > Extensions et en indiquant
-si le bloc IDENTIFIANTS est bien renseigné.
+donnant trois choses : le numéro de version lu dans wp-admin > Extensions, la
+liste des sessions que tu as effectivement trouvées ouvertes dans tes onglets
+(gestionnaire, formateur, et lesquels des trois apprenants), et l'acte par
+lequel tu comptes commencer.
 ```
 
 ---
