@@ -630,6 +630,29 @@ trait ACDC_Learner_Portal_Core_Trait {
    * @param string $email
    * @return array
    */
+  /**
+   * ACDC 3.25.175 — Nom affiché d'un apprenant, nom d'usage ou nom de naissance.
+   *
+   * Le portail concaténait first_name et usage_last_name sans repli : un apprenant
+   * dont le nom d'usage n'est pas saisi s'affichait sous son SEUL prénom. Deux
+   * apprenantes qui partagent un nom de famille — et a fortiori un prénom — en
+   * deviennent indiscernables, sur des écrans qui portent des résultats d'évaluation.
+   *
+   * @param object $learner
+   *
+   * @return string
+   */
+  public function learner_portal_display_name( $learner ) {
+    if ( ! is_object( $learner ) ) {
+      return '';
+    }
+    $last = trim( (string) ( $learner->usage_last_name ?? '' ) );
+    if ( '' === $last ) {
+      $last = trim( (string) ( $learner->last_name ?? '' ) );
+    }
+    return trim( trim( (string) ( $learner->first_name ?? '' ) ) . ' ' . $last );
+  }
+
   public function get_learner_completed_quizzes( $email ) {
     global $wpdb;
     $email = sanitize_email( $email );
@@ -734,7 +757,23 @@ trait ACDC_Learner_Portal_Core_Trait {
 
     return $wpdb->get_results(
       $wpdb->prepare(
-        "SELECT l.*, c.name AS company_name, s.title AS session_title, s.start_date, s.end_date, s.start_at, s.end_at, s.location, s.remote_link, s.notes AS session_notes, s.status AS session_status, f.title AS formation_title, f.description_text AS formation_description, f.objectives, f.duration, f.program_file_url, f.shared_docs, f.shared_links, f.address AS formation_address, f.city AS formation_city, f.postal_code AS formation_postal_code, f.notes AS formation_notes
+        /* ACDC 3.25.175 — L'entreprise n'était lue que sur la FICHE APPRENANT, où elle
+           n'est presque jamais renseignée : c'est le DOSSIER D'INSCRIPTION qui la porte.
+           Le gestionnaire voyait donc « Skill Conseil » sur les trois inscriptions
+           pendant que l'apprenante lisait « Entreprise liée : Non renseignée » — alors
+           que c'est ce nom qui doit figurer sur ses documents de formation.
+           On retombe sur l'entreprise du dossier, puis sur son libellé libre. */
+        "SELECT l.*,
+                COALESCE(
+                  NULLIF(c.name,''),
+                  (SELECT COALESCE(NULLIF(rc.name,''), NULLIF(r.company_label,''))
+                     FROM {$this->training_registration_table} r
+                     LEFT JOIN {$this->company_table} rc ON rc.id = r.company_id
+                    WHERE r.learner_id = l.id AND r.is_draft = 0
+                    ORDER BY r.updated_at DESC, r.id DESC LIMIT 1)
+                ) AS company_name,
+                s.title AS session_title, s.start_date, s.end_date, s.start_at, s.end_at, s.location, s.remote_link, s.notes AS session_notes, s.status AS session_status,
+                f.title AS formation_title, f.description_text AS formation_description, f.objectives, f.duration, f.program_file_url, f.shared_docs, f.shared_links, f.address AS formation_address, f.city AS formation_city, f.postal_code AS formation_postal_code, f.notes AS formation_notes, f.modality
          FROM {$this->learner_table} l
          LEFT JOIN {$this->company_table} c ON c.id = l.company_id
          LEFT JOIN {$this->session_table} s ON s.id = l.session_id

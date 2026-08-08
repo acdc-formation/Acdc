@@ -1359,7 +1359,12 @@ trait ACDC_Quizzes_Render_Results_Trait {
                                 ?: trim( (string) $r->nickname )
                                 ?: (string) $r->email
                                 ?: '—';
-                            $unlinked = empty( $r->learner_id ) && '' === trim( (string) $r->email );
+                            $unlinked   = empty( $r->learner_id ) && '' === trim( (string) $r->email );
+                            $anonymized = ! empty( $r->is_anonymized );
+                            if ( $anonymized ) {
+                                $name     = 'Apprenant anonymisé';
+                                $unlinked = false;
+                            }
                             $p_label = $purpose_labels[ $r->quiz_purpose ] ?? ucfirst( (string) $r->quiz_purpose );
                             /* ACDC 3.25.157 — wp_date(strtotime()) appliquait le fuseau DEUX
                                fois : les horodatages sont stockés en heure locale WordPress,
@@ -1381,7 +1386,9 @@ trait ACDC_Quizzes_Render_Results_Trait {
                             <tr>
                                 <td>
                                     <strong><?php echo esc_html( $name ); ?></strong>
-                                    <?php if ( ! empty( $r->email ) ) : ?>
+                                    <?php if ( $anonymized ) : ?>
+                                        <br><small style="color:#6b7280;">Données personnelles effacées (rétention RGPD)</small>
+                                    <?php elseif ( ! empty( $r->email ) ) : ?>
                                         <br><small style="color:#6b7280;"><?php echo esc_html( $r->email ); ?></small>
                                     <?php endif; ?>
                                     <?php if ( $unlinked ) : ?>

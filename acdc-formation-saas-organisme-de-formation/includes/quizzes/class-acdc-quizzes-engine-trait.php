@@ -628,7 +628,13 @@ trait ACDC_Quizzes_Engine_Trait {
         $has_result_col = ! empty( $wpdb->get_col( "SHOW COLUMNS FROM {$tbl_p} LIKE 'result_document_url'" ) );
         $result_col_sql = $has_result_col ? 'p.result_document_url,' : "'' AS result_document_url,";
 
-        $where  = array( "p.status = 'completed'", 'p.is_anonymized = 0' );
+        /* ACDC 3.25.175 — Les passations anonymisées par la rétention RGPD étaient
+           purement et simplement exclues de cet écran, alors que les écrans par finalité
+           continuent de les compter. Le gestionnaire lisait donc « 1 participant, 20 % »
+           d'un côté et aucune ligne de l'autre, sans moyen de comprendre. Une donnée
+           dépersonnalisée n'est pas une donnée disparue : la passation a bien eu lieu et
+           reste une preuve de réalisation. On l'affiche, en disant ce qu'elle est. */
+        $where  = array( "p.status = 'completed'" );
         $params = array();
 
         if ( (int) $trainer_id > 0 ) {
@@ -680,7 +686,7 @@ trait ACDC_Quizzes_Engine_Trait {
            depuis la fiche apprenant quand elle est rattachée. */
         $tbl_l = $this->learner_table;
         $sql = "SELECT p.id AS participant_id,
-                       p.full_name, p.email, p.nickname, p.learner_id,
+                       p.full_name, p.email, p.nickname, p.learner_id, p.is_anonymized,
                        TRIM(CONCAT(COALESCE(l.first_name,''), ' ', COALESCE(NULLIF(l.usage_last_name,''), l.last_name, ''))) AS learner_full_name,
                        p.total_score, p.total_score_percentage, p.is_passed,
                        p.completed_at, p.started_at, p.status,

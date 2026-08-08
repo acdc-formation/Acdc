@@ -140,7 +140,7 @@ trait ACDC_Learner_Portal_Render_Trait {
         <main class="acdc-portal-content acdc-learner-portal-content">
           <div class="acdc-extranet-topbar acdc-learner-topbar">
             <div>
-              <strong><?php echo esc_html( $primary ? trim( $primary->first_name . ' ' . $primary->usage_last_name ) : $account->email ); ?></strong>
+              <strong><?php echo esc_html( $primary ? $this->learner_portal_display_name( $primary ) : $account->email ); ?></strong>
               <div class="acdc-login-secondary-link">Statut : <?php echo esc_html( $this->learner_portal_status_label( $account->status ) ); ?></div>
             </div>
             <a class="acdc-button acdc-button-soft" href="<?php echo esc_url( wp_nonce_url( add_query_arg( array( 'action' => 'acdc_learner_logout' ), admin_url( 'admin-post.php' ) ), 'acdc_learner_logout' ) ); ?>">Se déconnecter</a>
@@ -230,7 +230,7 @@ trait ACDC_Learner_Portal_Render_Trait {
     $sessions      = $this->learner_portal_get_upcoming_sessions( $account->email, 5 );
     $notifications = $this->learner_portal_get_access_notifications( $account->email );
     $new_items_count = $this->learner_portal_get_new_items_count( $account->email, (int) $account->id );
-    $display_name  = $primary ? trim( $primary->first_name . ' ' . $primary->usage_last_name ) : $account->email;
+    $display_name  = $primary ? $this->learner_portal_display_name( $primary ) : $account->email;
     ?>
     <section class="acdc-section-head">
       <div>
@@ -857,7 +857,20 @@ trait ACDC_Learner_Portal_Render_Trait {
           <p><strong>Informations pratiques :</strong></p>
           <p>Adresse : <?php echo esc_html( $formation && ! empty( $formation->formation_address ) ? $formation->formation_address : ( $session && ! empty( $session->location ) ? $session->location : 'Non renseignée' ) ); ?></p>
           <p>Code postal / Ville : <?php echo esc_html( trim( ( $formation && ! empty( $formation->formation_postal_code ) ? $formation->formation_postal_code : '' ) . ' ' . ( $formation && ! empty( $formation->formation_city ) ? $formation->formation_city : '' ) ) ?: 'Non renseignés' ); ?></p>
-          <p>Lien distanciel : <?php echo ! empty( $session->remote_link ) ? '<a href="' . esc_url( $session->remote_link ) . '" target="_blank" rel="noopener">Ouvrir le lien</a>' : 'Non renseigné'; ?></p>
+          <?php
+          /* ACDC 3.25.175 — « Lien distanciel : Non renseigné » s'affichait sur une
+             formation en PRÉSENTIEL, où ce lien n'a aucune raison d'exister : le champ
+             faisait croire à un oubli de l'organisme. On ne montre la ligne que
+             lorsqu'un lien existe, ou lorsque la formation comporte effectivement une
+             part à distance. */
+          $lp_modality = strtolower( (string) ( $formation->modality ?? '' ) );
+          $lp_is_remote = ( '' !== $lp_modality && false === strpos( $lp_modality, 'présentiel' ) && false === strpos( $lp_modality, 'presentiel' ) );
+          ?>
+          <?php if ( ! empty( $session->remote_link ) ) : ?>
+            <p>Lien distanciel : <a href="<?php echo esc_url( $session->remote_link ); ?>" target="_blank" rel="noopener">Ouvrir le lien</a></p>
+          <?php elseif ( $lp_is_remote ) : ?>
+            <p>Lien distanciel : Non renseigné</p>
+          <?php endif; ?>
           <p>Entreprise liée : <?php echo esc_html( ! empty( $item['learner']->company_name ) ? $item['learner']->company_name : ( ! empty( $item['registration']->company_label ) ? $item['registration']->company_label : 'Non renseignée' ) ); ?></p>
         </div>
       </div>
@@ -1230,7 +1243,7 @@ trait ACDC_Learner_Portal_Render_Trait {
 
   private function render_learner_portal_profile_tab( $account, $primary ) {
     $photo_url = ! empty( $account->photo_url ) ? $account->photo_url : '';
-    $display_name = $primary ? trim( $primary->first_name . ' ' . $primary->usage_last_name ) : $account->email;
+    $display_name = $primary ? $this->learner_portal_display_name( $primary ) : $account->email;
     $initials = $primary ? strtoupper( substr( $primary->first_name, 0, 1 ) . substr( $primary->usage_last_name, 0, 1 ) ) : strtoupper( substr( $account->email, 0, 2 ) );
     $items = $this->learner_portal_get_access_items_for_email( $account->email );
     ?>
