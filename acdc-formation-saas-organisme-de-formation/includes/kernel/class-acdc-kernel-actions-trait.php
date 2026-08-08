@@ -1458,40 +1458,13 @@ trait ACDC_Kernel_Actions_Trait {
       $result = $wpdb->insert( $this->trainer_table, $data );
       $trainer_id = (int) $wpdb->insert_id;
       $message = 'Formateur enregistré.';
-      /* ACDC 3.24.15 — Auto-ajout sous-traitant pour tout formateur externe (ind. 28).
-         Condition : formateur externe uniquement (is_self_trainer = 0).
-         Anti-doublon : on vérifie si un sous-traitant avec ce nom exact existe déjà. */
-      if ( 0 === (int) $data['is_self_trainer'] && $trainer_id ) {
-        $sc_nom     = trim( $first_name . ' ' . $last_name );
-        $sc_siret   = preg_replace( '/[^0-9]/', '', $data['siret'] ?? '' );
-        $sc_records = get_option( 'acdc_of_subcontractors', array() );
-        if ( ! is_array( $sc_records ) ) { $sc_records = array(); }
-        $already_exists = false;
-        foreach ( $sc_records as $sc_r ) {
-          if ( isset( $sc_r['nom'] ) && strtolower( $sc_r['nom'] ) === strtolower( $sc_nom ) ) {
-            $already_exists = true;
-            break;
-          }
-        }
-        if ( ! $already_exists ) {
-          $sc_records[] = array(
-            'id'             => 'sc_' . wp_generate_uuid4(),
-            /* ACDC 3.25.161 — On mémorise le formateur d'origine : sans ce lien,
-               l'entrée créée automatiquement survivait à la suppression de la fiche
-               et laissait un orphelin dans un registre Qualiopi (indicateur 28). */
-            'trainer_id'     => (int) $trainer_id,
-            'nom'            => $sc_nom,
-            'siret'          => $sc_siret,
-            'type'           => 'independant',
-            'qualifications' => '',
-            'date_debut'     => '',
-            'date_fin'       => '',
-            'notes'          => 'Ajouté automatiquement depuis la fiche formateur.',
-            'updated_at'     => current_time( 'mysql' ),
-          );
-          update_option( 'acdc_of_subcontractors', array_values( $sc_records ), false );
-        }
-      }
+    }
+    /* ACDC 3.25.164 — La synchronisation du registre des sous-traitants ne se
+       faisait QU'À LA CRÉATION : passer un formateur existant en « Externe » ne
+       l'y inscrivait pas, et le repasser en « Interne » ne l'en retirait pas. Elle
+       s'applique désormais dans les deux sens, à chaque enregistrement. */
+    if ( false !== $result && $trainer_id ) {
+      $this->acdc_sync_subcontractor_for_trainer( (int) $trainer_id, (int) $data['is_self_trainer'], $first_name, $last_name, isset( $data['siret'] ) ? (string) $data['siret'] : '' );
     }
     if ( false === $result ) {
       $this->acdc_store_form_state( 'trainer', $input );
@@ -1957,6 +1930,94 @@ trait ACDC_Kernel_Actions_Trait {
       add_query_arg( $args, admin_url( 'admin-post.php' ) ),
       'acdc_serve_trainer_contract_' . (int) $contract_id
     );
+  }
+
+
+  /**
+   * ACDC 3.25.164 — Aligne le registre des sous-traitants sur le type du formateur.
+   *
+   * Un formateur EXTERNE est un sous-traitant : il doit figurer au registre de
+   * l'indicateur 28. Un formateur INTERNE n'en est pas un : son entrée créée
+   * automatiquement doit disparaître s'il change de type.
+   *
+   * On ne touche JAMAIS à une entrée saisie à la main — seules celles portant le
+   * lien au formateur, ou à défaut son nom exact ET la mention d'ajout automatique,
+   * sont gérées ici.
+   *
+   * @param int    $trainer_id
+   * @param int    $is_self_trainer 1 = interne, 0 = externe.
+   * @param string $first_name
+   * @param string $last_name
+   * @param string $siret
+   */
+  private function acdc_sync_subcontractor_for_trainer( $trainer_id, $is_self_trainer, $first_name, $last_name, $siret = '' ) {
+    $records = get_option( 'acdc_of_subcontractors', array() );
+    if ( ! is_array( $records ) ) {
+      $records = array();
+    }
+    $name       = trim( (string) $first_name . ' ' . (string) $last_name );
+    $name_key   = strtolower( $name );
+    $found_key  = null;
+
+    foreach ( $records as $key => $entry ) {
+      $auto_note = isset( $entry['notes'] ) && false !== stripos( (string) $entry['notes'], 'automatiquement depuis la fiche formateur' );
+      $by_id     = isset( $entry['trainer_id'] ) && (int) $entry['trainer_id'] === (int) $trainer_id;
+      $by_name   = '' !== $name_key && isset( $entry['nom'] ) && strtolower( trim( (string) $entry['nom'] ) ) === $name_key && $auto_note;
+      if ( $by_id || $by_name ) {
+        $found_key = $key;
+        break;
+      }
+    }
+
+    if ( 0 !== (int) $is_self_trainer ) {
+      /* Formateur interne : retirer l'entrée automatique s'il en avait une. */
+      if ( null !== $found_key ) {
+        unset( $records[ $found_key ] );
+        update_option( 'acdc_of_subcontractors', array_values( $records ), false );
+      }
+      return;
+    }
+
+    if ( '' === $name ) {
+      return;
+    }
+
+    $clean_siret = preg_replace( '/[^0-9]/', '', (string) $siret );
+    if ( null !== $found_key ) {
+      /* Entrée déjà présente : on rafraîchit le lien et les identifiants, sans
+         écraser ce que l'organisme aurait complété à la main (qualifications,
+         dates, notes). */
+      $records[ $found_key ]['trainer_id'] = (int) $trainer_id;
+      $records[ $found_key ]['nom']        = $name;
+      if ( '' !== $clean_siret ) {
+        $records[ $found_key ]['siret'] = $clean_siret;
+      }
+      $records[ $found_key ]['updated_at'] = current_time( 'mysql' );
+      update_option( 'acdc_of_subcontractors', array_values( $records ), false );
+      return;
+    }
+
+    /* Anti-doublon sur le nom, y compris pour une entrée saisie à la main : on ne
+       crée pas un second sous-traitant portant le même nom. */
+    foreach ( $records as $entry ) {
+      if ( isset( $entry['nom'] ) && strtolower( trim( (string) $entry['nom'] ) ) === $name_key ) {
+        return;
+      }
+    }
+
+    $records[] = array(
+      'id'             => 'sc_' . wp_generate_uuid4(),
+      'trainer_id'     => (int) $trainer_id,
+      'nom'            => $name,
+      'siret'          => $clean_siret,
+      'type'           => 'independant',
+      'qualifications' => '',
+      'date_debut'     => '',
+      'date_fin'       => '',
+      'notes'          => 'Ajouté automatiquement depuis la fiche formateur.',
+      'updated_at'     => current_time( 'mysql' ),
+    );
+    update_option( 'acdc_of_subcontractors', array_values( $records ), false );
   }
 
   /**
