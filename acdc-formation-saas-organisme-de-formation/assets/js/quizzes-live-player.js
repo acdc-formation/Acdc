@@ -488,6 +488,13 @@
         if (!el) { return; }
         var multi  = (type === 'qcm_multiple' || type === 'poll');
         var single = (type === 'qcm_single' || type === 'true_false');
+        // ACDC 3.25.174 — La remise en ordre ne portait aucune consigne du tout.
+        if (type === 'puzzle') {
+            el.className = 'acdc-qz-answer-instruction is-single';
+            el.textContent = '↕ Remettez TOUS les éléments dans le bon ordre';
+            el.style.display = '';
+            return;
+        }
         if (!multi && !single) { el.style.display = 'none'; return; }
         el.className = 'acdc-qz-answer-instruction ' + (multi ? 'is-multi' : 'is-single');
         el.textContent = multi

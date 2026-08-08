@@ -1369,8 +1369,20 @@ trait ACDC_Quizzes_Render_Trait {
      * @return void
      */
     private function render_qz_answer_instruction( $type ) {
-        $multi = in_array( $type, array( self::ACDC_OF_QZ_QTYPE_QCM_MULTIPLE, self::ACDC_OF_QZ_QTYPE_POLL ), true );
+        $multi  = in_array( $type, array( self::ACDC_OF_QZ_QTYPE_QCM_MULTIPLE, self::ACDC_OF_QZ_QTYPE_POLL ), true );
         $single = in_array( $type, array( self::ACDC_OF_QZ_QTYPE_QCM_SINGLE, self::ACDC_OF_QZ_QTYPE_TRUE_FALSE ), true );
+        /* ACDC 3.25.174 — La question de remise en ordre ne portait AUCUNE consigne : ni
+           « une seule », ni « plusieurs », rien. L'apprenant découvrait qu'il fallait
+           faire glisser cinq éléments, et devait le comprendre seul. */
+        if ( self::ACDC_OF_QZ_QTYPE_PUZZLE === $type ) {
+            ?>
+            <p class="acdc-qz-answer-instruction is-single">
+                <span aria-hidden="true">↕</span>
+                <?php esc_html_e( 'Remettez TOUS les éléments dans le bon ordre', 'acdc-formation-saas' ); ?>
+            </p>
+            <?php
+            return;
+        }
         if ( ! $multi && ! $single ) {
             return;
         }

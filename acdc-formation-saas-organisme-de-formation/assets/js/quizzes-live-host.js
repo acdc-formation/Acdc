@@ -288,6 +288,13 @@
         if (!el) { return; }
         var multi  = (type === 'qcm_multiple' || type === 'poll');
         var single = (type === 'qcm_single' || type === 'true_false');
+        // ACDC 3.25.174 — La remise en ordre ne portait aucune consigne du tout.
+        if (type === 'puzzle') {
+            el.className = 'acdc-qz-answer-instruction is-single';
+            el.textContent = '↕ Remettez TOUS les éléments dans le bon ordre';
+            el.style.display = '';
+            return;
+        }
         if (!multi && !single) { el.style.display = 'none'; return; }
         el.className = 'acdc-qz-answer-instruction ' + (multi ? 'is-multi' : 'is-single');
         el.textContent = multi
@@ -361,7 +368,20 @@
         if ( statsEl && q.count_total_parts !== undefined ) {
             var c = q.count_correct_parts || 0, t = q.count_total_parts || 0;
             if ( 'poll' !== ( q.type || '' ) && 'open_text' !== ( q.type || '' ) ) {
-                statsEl.textContent = c + ' bonne' + (c > 1 ? 's' : '') + ' réponse' + (c > 1 ? 's' : '') + ' sur ' + t + ' répondant' + (t > 1 ? 's' : '');
+                /* ACDC 3.25.174 — Ce rafraîchissement réécrivait la phrase SANS tenir
+                   compte du type de question, écrasant celle que renderReveal() avait
+                   posée. Une réponse rédigée, affichée d'abord « Réponses corrigées par
+                   le formateur », devenait donc « 1 bonne réponse sur 1 répondant »
+                   une seconde et demie plus tard — comptée juste alors que personne ne
+                   l'avait encore lue. Même formulation que renderReveal(). */
+                var t2 = ( q.type || '' );
+                if ( t2 === 'poll' ) {
+                    statsEl.textContent = 'Résultat du sondage — ' + t + ' apprenant' + (t > 1 ? 's' : '') + ' ont répondu';
+                } else if ( t2 === 'open_text' ) {
+                    statsEl.textContent = 'En attente de correction par le formateur — ' + t + ' apprenant' + (t > 1 ? 's' : '') + ' ont répondu';
+                } else {
+                    statsEl.textContent = c + ' bonne' + (c > 1 ? 's' : '') + ' réponse' + (c > 1 ? 's' : '') + ' sur ' + t + ' répondant' + (t > 1 ? 's' : '');
+                }
             }
         }
     }
@@ -492,7 +512,9 @@
                 if (type === 'poll') {
                     statsEl.textContent = 'Résultat du sondage — ' + countTotal + ' apprenant' + (countTotal > 1 ? 's' : '') + ' ont répondu';
                 } else if (type === 'open_text') {
-                    statsEl.textContent = 'Réponses corrigées par le formateur — ' + countTotal + ' apprenant' + (countTotal > 1 ? 's' : '') + ' ont répondu';
+                    // ACDC 3.25.174 — « corrigées » laissait croire que la correction
+                    // était faite : elle est au contraire encore à faire.
+                    statsEl.textContent = 'En attente de correction par le formateur — ' + countTotal + ' apprenant' + (countTotal > 1 ? 's' : '') + ' ont répondu';
                 } else {
                     /* ACDC 3.25.157 — countTotal compte les RÉPONDANTS, pas les
                        participants connectés : « sur 0 apprenant » s'affichait alors

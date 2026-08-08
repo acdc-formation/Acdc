@@ -1189,6 +1189,17 @@ trait ACDC_Quizzes_Actions_Trait {
             );
         }
 
+        /* ACDC 3.25.174 — Une remise en ordre demande autant de gestes qu'elle a
+           d'éléments, sur un écran tactile et souvent debout. Le réglage par défaut de
+           20 secondes est celui d'un QCM : la recette a mesuré qu'à 18 secondes pour
+           cinq éléments, PERSONNE ne finit — la question s'est soldée par zéro
+           répondant. On garantit donc un minimum de 15 secondes par élément, sans
+           jamais raccourcir un réglage volontairement plus long. */
+        if ( self::ACDC_OF_QZ_QTYPE_PUZZLE === $type && $time_limit > 0 ) {
+            $items_count = max( 1, count( $answers ) );
+            $time_limit  = max( $time_limit, min( 600, 15 * $items_count ) );
+        }
+
         $payload = array(
             'id'           => $question_id,
             'type'         => $type,

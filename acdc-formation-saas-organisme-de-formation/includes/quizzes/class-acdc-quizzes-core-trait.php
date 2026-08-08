@@ -36,8 +36,9 @@ trait ACDC_Quizzes_Core_Trait {
     /* -------------------------------------------------------------------- */
 
     /** @var string Version SQL courante du module Quizzes (utilisée pour dbDelta).
-     *  1.1.0 — ACDC 3.25.168 : colonne score_ratio sur player_answers (barème partiel). */
-    private $qz_db_version = '1.1.0';
+     *  1.1.0 — ACDC 3.25.168 : colonne score_ratio sur player_answers (barème partiel).
+     *  1.2.0 — ACDC 3.25.174 : reprise des parts de réussite manquantes. */
+    private $qz_db_version = '1.2.0';
 
     /** @var string Option WP qui stocke la version SQL appliquée. */
     private $qz_db_version_option = 'acdc_of_qz_db_version';
@@ -490,6 +491,15 @@ trait ACDC_Quizzes_Core_Trait {
             dbDelta( $sql );
         }
 
+        /* ACDC 3.25.174 — Reprise des parts de réussite. Toutes les réponses
+           enregistrées avant l'arrivée du barème au prorata portent une part vide : les
+           écrans d'analyse — « Par question », « Par objectif », « Questions les plus
+           faibles » — retombent alors sur l'ancien tout-ou-rien et contredisent le score
+           du participant, qui, lui, a bien été calculé au prorata. On recalcule ces
+           parts à partir des réponses réellement cochées, une fois pour toutes. Sans
+           cela, il faudrait rejouer chaque passation pour obtenir une analyse juste. */
+        $this->qz_backfill_missing_score_ratios();
+
         update_option( $this->qz_db_version_option, $this->qz_db_version );
     }
 
@@ -840,6 +850,70 @@ trait ACDC_Quizzes_Core_Trait {
             'is_correct' => ( $ratio >= 1.0 ) ? 1 : 0,
             'partial'    => ( $ratio > 0.0 && $ratio < 1.0 ),
         );
+    }
+
+    /**
+     * ACDC 3.25.174 — Recalcule les parts de réussite absentes de player_answers.
+     *
+     * Corrige l'historique sans toucher aux scores déjà établis : on n'écrit que la
+     * colonne score_ratio, et seulement là où elle est vide. Une réponse en attente de
+     * correction manuelle reste à NULL — c'est sa valeur juste.
+     *
+     * @return int Nombre de lignes reprises.
+     */
+    private function qz_backfill_missing_score_ratios() {
+        global $wpdb;
+        $tbl_pa = $this->get_qz_table( 'player_answers' );
+        $tbl_q  = $this->get_qz_table( 'questions' );
+        if ( '' === $tbl_pa || '' === $tbl_q ) {
+            return 0;
+        }
+        // La colonne doit exister : dbDelta vient de passer, mais on ne présume rien.
+        $cols = $wpdb->get_col( "SHOW COLUMNS FROM {$tbl_pa} LIKE 'score_ratio'" );
+        if ( empty( $cols ) ) {
+            return 0;
+        }
+
+        $rows = $wpdb->get_results(
+            "SELECT pa.id, pa.question_id, pa.answer_ids_json, pa.is_correct
+             FROM {$tbl_pa} pa
+             INNER JOIN {$tbl_q} q ON q.id = pa.question_id
+             WHERE pa.score_ratio IS NULL AND pa.is_correct IS NOT NULL
+             LIMIT 5000"
+        );
+        if ( empty( $rows ) ) {
+            return 0;
+        }
+
+        $questions = array();
+        $done      = 0;
+        foreach ( $rows as $r ) {
+            $qid = (int) $r->question_id;
+            if ( ! isset( $questions[ $qid ] ) ) {
+                $questions[ $qid ] = $this->get_qz_question( $qid );
+            }
+            if ( ! $questions[ $qid ] ) {
+                continue;
+            }
+            $ids = json_decode( (string) $r->answer_ids_json, true );
+            if ( ! is_array( $ids ) ) {
+                preg_match_all( '/\d+/', (string) $r->answer_ids_json, $m );
+                $ids = isset( $m[0] ) ? $m[0] : array();
+            }
+            $verdict = $this->qz_grade_answer_set( $questions[ $qid ], $ids );
+            if ( null === $verdict['is_correct'] ) {
+                continue; // non corrigeable automatiquement : la part reste vide.
+            }
+            $wpdb->update(
+                $tbl_pa,
+                array( 'score_ratio' => (float) $verdict['ratio'] ),
+                array( 'id' => (int) $r->id ),
+                array( '%f' ),
+                array( '%d' )
+            );
+            $done++;
+        }
+        return $done;
     }
 
     /**
