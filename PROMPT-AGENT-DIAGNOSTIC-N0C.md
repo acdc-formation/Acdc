@@ -44,7 +44,48 @@ dans un journal que tu cites, remplace-la par [MASQUÉ].
 Si tu hésites sur une action, NE LA FAIS PAS : décris-la et demande.
 
 ────────────────────────────────────────────────
-CE QUE TU DOIS RAPPORTER — six points, dans cet ordre
+PRIORITÉ ABSOLUE — LES DONNÉES SONT-ELLES ENCORE LÀ ?
+────────────────────────────────────────────────
+David constate que les écrans ne montrent plus aucun prospect, aucune formation,
+aucun quiz. Il faut savoir, AVANT TOUTE AUTRE CHOSE, s'il s'agit d'un affichage
+vide ou d'une perte réelle. Les deux se ressemblent à l'écran et n'ont rien à
+voir en gravité.
+
+Ce que l'analyse du code établit déjà : le plugin ne contient AUCUNE instruction
+de suppression de table, sauf dans sa routine de désinstallation, laquelle sort
+sans rien faire tant qu'une option réglée sur « conserver » — sa valeur par
+défaut, posée à l'installation — n'a pas été changée. Une perte réelle est donc
+très improbable. Il faut le prouver, pas l'espérer.
+
+EXCEPTION AU GARDE-FOU HABITUEL — tu es autorisé à ouvrir phpMyAdmin, pour
+LIRE, et uniquement pour cela :
+  - onglet SQL, et tu exécutes EXACTEMENT ces requêtes, une par une :
+
+      SELECT COUNT(*) FROM wp_acdc_of_prospects;
+      SELECT COUNT(*) FROM wp_acdc_of_formations;
+      SELECT COUNT(*) FROM wp_acdc_of_quizzes;
+      SELECT COUNT(*) FROM wp_acdc_of_learners;
+      SELECT COUNT(*) FROM wp_acdc_of_training_registrations;
+
+  - si le préfixe des tables n'est pas « wp_ », relève le préfixe réel dans la
+    liste des tables et adapte-le ;
+  - si une table n'existe plus, la requête renverra une erreur : recopie cette
+    erreur telle quelle, c'est une information capitale.
+
+STRICTEMENT INTERDIT dans phpMyAdmin, sans aucune exception :
+  UPDATE, INSERT, DELETE, DROP, TRUNCATE, ALTER, RENAME, l'onglet Opérations,
+  l'import, l'export, la réparation de table, et toute modification de structure.
+  Tu ne tapes QUE des SELECT COUNT(*). Rien d'autre. Si une requête que tu
+  t'apprêtes à écrire ne commence pas par SELECT, ne l'écris pas.
+
+Rapporte les cinq nombres. C'est le relevé le plus important de ta mission :
+  - des nombres non nuls  → les données sont intactes, c'est un problème
+    d'affichage ou de chargement du plugin, et rien n'est perdu ;
+  - des tables vides ou absentes → il faut arrêter tout net et ne plus rien
+    écrire sur ce site avant décision de David.
+
+────────────────────────────────────────────────
+CE QUE TU DOIS RAPPORTER ENSUITE — six points, dans cet ordre
 ────────────────────────────────────────────────
 
 1. ÉTAT DU SITE, mesuré et non supposé.
@@ -109,8 +150,15 @@ journal mot pour mot plutôt que de les résumer. Si tu n'as pas pu accéder à 
 point, écris « non accessible » et pourquoi — un trou déclaré vaut mieux qu'une
 supposition.
 
-Le point 2 est prioritaire. Si tu ne dois en rapporter qu'un seul, c'est
-celui-là : le numéro de version lu sur le disque.
+Si tu ne dois rapporter qu'une seule chose, ce sont les CINQ NOMBRES de la
+priorité absolue. Le numéro de version lu sur le disque vient juste après.
+
+Et une consigne qui prime sur toutes les autres : tant que l'état des données
+n'est pas établi, tu n'exécutes AUCUNE action qui écrit quoi que ce soit, ni sur
+le site, ni dans le panneau, ni dans la base. Pas de réactivation d'extension,
+pas de restauration de sauvegarde, pas de réparation automatique proposée par un
+outil. Si un écran te propose un bouton « réparer », « restaurer » ou
+« optimiser », ne le touche pas et signale-le.
 ```
 
 ---
