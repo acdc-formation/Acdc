@@ -1061,9 +1061,17 @@ public function handle_update_registration_contract_document() {
       wp_die( esc_html__( 'Lien invalide ou expiré. Rechargez la page et réessayez.', 'acdc-formation-saas' ) );
     }
 
+    /* ACDC 3.25.169 — On revient sur l'onglet d'où vient le clic. Le retour était
+       câblé en dur sur « registrations », si bien qu'un clic depuis « Apprenants
+       inscrits » renvoyait sur un autre écran : impossible de savoir si l'action
+       avait abouti. */
+    $return_tab = isset( $_GET['return_tab'] ) ? sanitize_key( wp_unslash( $_GET['return_tab'] ) ) : '';
+    if ( '' === $return_tab ) {
+      $return_tab = 'registrations';
+    }
     $return_url = is_admin()
       ? admin_url( 'admin.php?page=acdc-of-register-training&tab=registrations&action=edit&item_id=' . $registration_id )
-      : $this->portal_page_url( array( 'tab' => 'registrations', 'action' => 'edit', 'item_id' => $registration_id ) );
+      : $this->portal_page_url( array( 'tab' => $return_tab, 'action' => 'edit', 'item_id' => $registration_id ) );
 
     if ( $registration_id <= 0 ) {
       wp_safe_redirect( add_query_arg( $this->acdc_append_notice_args( array(), 'Inscription introuvable.', 'error' ), $return_url ) );
@@ -1118,6 +1126,130 @@ public function handle_update_registration_contract_document() {
     exit;
   }
 
+
+  /**
+   * ACDC 3.25.169 — Ouvre un accès apprenant SANS passer par la boîte e-mail.
+   *
+   * Le seul chemin d'activation était le lien reçu par courriel. Quand cet envoi
+   * échoue — ou quand le gestionnaire doit ouvrir un accès sur-le-champ — le compte
+   * reste bloqué sur « jamais activé », et l'apprenant se voit répondre « votre
+   * accès doit d'abord être activé depuis le lien reçu par e-mail » sans qu'aucun
+   * e-mail n'existe. Impasse.
+   *
+   * On affiche donc le lien d'activation à l'écran, au gestionnaire déjà
+   * authentifié : c'est exactement l'information qu'il aurait relayée à la main
+   * depuis sa messagerie, et il est habilité à administrer ces comptes.
+   *
+   * @return void
+   */
+  public function handle_open_learner_extranet_access() {
+    if ( ! is_user_logged_in() || ! $this->is_admin_manager() ) {
+      $this->redirect_to_login( 'Accès réservé aux administrateurs.', 'error' );
+    }
+
+    $registration_id = isset( $_GET['registration_id'] ) ? absint( wp_unslash( $_GET['registration_id'] ) ) : 0;
+    $nonce = isset( $_GET['_wpnonce'] ) ? sanitize_text_field( wp_unslash( $_GET['_wpnonce'] ) ) : '';
+    if ( ! wp_verify_nonce( $nonce, 'acdc_open_learner_extranet_access_' . $registration_id ) ) {
+      wp_die( esc_html__( 'Lien invalide ou expiré. Rechargez la page et réessayez.', 'acdc-formation-saas' ) );
+    }
+
+    $return_tab = isset( $_GET['return_tab'] ) ? sanitize_key( wp_unslash( $_GET['return_tab'] ) ) : 'registrations';
+    $return_url = $this->portal_page_url( array( 'tab' => $return_tab, 'action' => 'edit', 'item_id' => $registration_id ) );
+
+    global $wpdb;
+    $registration = $wpdb->get_row( $wpdb->prepare(
+      "SELECT id, learner_id FROM {$this->training_registration_table} WHERE id = %d LIMIT 1",
+      $registration_id
+    ) );
+    if ( ! $registration || empty( $registration->learner_id ) ) {
+      wp_safe_redirect( add_query_arg( $this->acdc_append_notice_args( array(), 'Apprenant non trouvé sur cette inscription.', 'error' ), $return_url ) );
+      exit;
+    }
+
+    $email = (string) $wpdb->get_var( $wpdb->prepare(
+      "SELECT email FROM {$this->learner_table} WHERE id = %d LIMIT 1",
+      (int) $registration->learner_id
+    ) );
+    if ( ! is_email( $email ) ) {
+      wp_safe_redirect( add_query_arg( $this->acdc_append_notice_args( array(), "Cet apprenant n'a pas d'adresse e-mail valide.", 'error' ), $return_url ) );
+      exit;
+    }
+
+    if ( method_exists( $this, 'learner_portal_sync_accounts' ) ) {
+      $this->learner_portal_sync_accounts( true );
+    }
+    $account = method_exists( $this, 'learner_portal_get_account_by_email' )
+      ? $this->learner_portal_get_account_by_email( $email )
+      : null;
+    if ( ! $account ) {
+      wp_safe_redirect( add_query_arg( $this->acdc_append_notice_args( array(), "Aucun compte extranet pour {$email}. Vérifiez que l'accès extranet est activé et que le dossier n'est pas en brouillon.", 'error' ), $return_url ) );
+      exit;
+    }
+
+    $activation_url = method_exists( $this, 'learner_portal_build_activation_url' )
+      ? $this->learner_portal_build_activation_url( $account )
+      : '';
+    if ( '' === $activation_url ) {
+      wp_safe_redirect( add_query_arg( $this->acdc_append_notice_args( array(), "Le lien d'activation n'a pas pu être généré.", 'error' ), $return_url ) );
+      exit;
+    }
+
+    $this->acdc_render_learner_activation_link_page( $email, $activation_url, $return_url );
+    exit;
+  }
+
+  /**
+   * ACDC 3.25.169 — Page intercalaire qui présente le lien d'activation.
+   *
+   * Volontairement hors du gabarit de l'extranet : cette page n'est ni indexable
+   * ni mise en cache, et elle porte le lien en clair pour qu'il soit copiable.
+   *
+   * @param string $email          Adresse de l'apprenant.
+   * @param string $activation_url Lien d'activation à usage unique.
+   * @param string $return_url     Retour vers la fiche.
+   *
+   * @return void
+   */
+  private function acdc_render_learner_activation_link_page( $email, $activation_url, $return_url ) {
+    if ( ! headers_sent() ) {
+      nocache_headers();
+      header( 'X-Robots-Tag: noindex, nofollow', true );
+      header( 'Content-Type: text/html; charset=utf-8' );
+    }
+    ?><!doctype html>
+<html lang="fr"><head><meta charset="utf-8"><meta name="robots" content="noindex,nofollow">
+<title>Ouverture d'un accès apprenant</title>
+<style>
+ body{font-family:system-ui,-apple-system,"Segoe UI",sans-serif;background:#f6f7f9;margin:0;padding:40px 20px;color:#111827;}
+ .card{max-width:760px;margin:0 auto;background:#fff;border:1px solid #e5e7eb;border-radius:14px;padding:28px 30px;}
+ h1{font-size:20px;margin:0 0 6px;}
+ .sub{color:#6b7280;font-size:14px;margin:0 0 22px;}
+ .lbl{font-size:12px;font-weight:700;text-transform:uppercase;letter-spacing:.04em;color:#6b7280;margin:18px 0 6px;}
+ .val{font-size:15px;font-weight:600;}
+ textarea{width:100%;box-sizing:border-box;font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:13px;padding:12px;border:1px solid #d1d5db;border-radius:8px;background:#f9fafb;resize:vertical;}
+ .warn{margin:22px 0 0;padding:12px 14px;border-radius:8px;background:#fef3c7;border:1px solid #fde68a;color:#92400e;font-size:14px;}
+ .actions{margin-top:22px;display:flex;gap:10px;flex-wrap:wrap;}
+ a.btn{display:inline-block;padding:10px 18px;border-radius:8px;text-decoration:none;font-weight:600;font-size:14px;}
+ .primary{background:#D7A24B;color:#0B0706;} .soft{background:#f3f4f6;color:#374151;border:1px solid #d1d5db;}
+</style></head><body>
+<div class="card">
+  <h1>Accès apprenant — lien d'activation</h1>
+  <p class="sub">Ce lien remplace l'e-mail d'ouverture. Il fait choisir son mot de passe à l'apprenant.</p>
+  <div class="lbl">Identifiant de connexion</div>
+  <div class="val"><?php echo esc_html( $email ); ?></div>
+  <div class="lbl">Lien d'activation — valable 7 jours</div>
+  <textarea rows="3" readonly onclick="this.select();"><?php echo esc_textarea( $activation_url ); ?></textarea>
+  <div class="warn">
+    Ce lien vaut ouverture de compte : il permet de définir le mot de passe de cet
+    apprenant. Ne le transmettez qu'à lui, et par un canal sûr.
+  </div>
+  <div class="actions">
+    <a class="btn primary" href="<?php echo esc_url( $activation_url ); ?>" target="_blank" rel="noopener">Ouvrir le lien</a>
+    <a class="btn soft" href="<?php echo esc_url( $return_url ); ?>">Retour à la fiche</a>
+  </div>
+</div>
+</body></html><?php
+  }
 
   /**
    * ACDC 3.21.08 — Après signature électronique d'une convention :

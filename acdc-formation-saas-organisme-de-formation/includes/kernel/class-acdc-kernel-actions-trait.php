@@ -6690,9 +6690,34 @@ public function handle_purge_plugin_data() {
     if ( is_admin() ) { return; }
     if ( ! isset( $_GET['trf_action'] ) ) { return; }
     $trf_action = sanitize_key( wp_unslash( $_GET['trf_action'] ) );
-    if ( ! in_array( $trf_action, array( 'delete_file', 'delete_formation', 'delete_complaint', 'delete_archive_email', 'delete_proposal' ), true ) ) { return; }
+    /* ACDC 3.25.169 — 'resend_extranet' et 'open_extranet_access' rejoignent ce
+       dispatcher central. Le renvoi de l'e-mail d'ouverture n'était traité qu'à
+       l'intérieur de render_front_register_training_tab() : l'URL du bouton ne
+       portait aucun paramètre « tab », l'onglet retombait donc sur le tableau de
+       bord et le code de renvoi n'était JAMAIS exécuté. Le clic renvoyait
+       silencieusement à l'accueil, sans e-mail et sans message d'erreur. Ici, on
+       s'exécute sur template_redirect, avant tout rendu, quel que soit l'onglet. */
+    if ( ! in_array( $trf_action, array( 'delete_file', 'delete_formation', 'delete_complaint', 'delete_archive_email', 'delete_proposal', 'resend_extranet', 'open_extranet_access' ), true ) ) { return; }
     if ( ! is_user_logged_in() || ! $this->is_admin_manager() ) { return; }
     global $wpdb;
+
+    if ( 'resend_extranet' === $trf_action || 'open_extranet_access' === $trf_action ) {
+      $rid    = isset( $_GET['registration_id'] ) ? absint( wp_unslash( $_GET['registration_id'] ) ) : 0;
+      $rnonce = isset( $_REQUEST['_wpnonce'] ) ? sanitize_text_field( wp_unslash( $_REQUEST['_wpnonce'] ) ) : '';
+      $nonce_action = ( 'resend_extranet' === $trf_action )
+        ? 'acdc_resend_learner_extranet_email_' . $rid
+        : 'acdc_open_learner_extranet_access_' . $rid;
+      if ( ! $rid || ! wp_verify_nonce( $rnonce, $nonce_action ) ) {
+        wp_safe_redirect( $this->portal_page_url( array( 'tab' => 'trf_apprenants', 'notice' => rawurlencode( 'Lien expiré. Rechargez la page et réessayez.' ), 'notice_type' => 'error' ) ) );
+        exit;
+      }
+      if ( 'resend_extranet' === $trf_action ) {
+        $this->handle_resend_learner_extranet_email();
+      } else {
+        $this->handle_open_learner_extranet_access();
+      }
+      exit;
+    }
 
     if ( 'delete_proposal' === $trf_action ) {
       $pid    = isset( $_GET['proposal_id'] ) ? absint( wp_unslash( $_GET['proposal_id'] ) ) : 0;

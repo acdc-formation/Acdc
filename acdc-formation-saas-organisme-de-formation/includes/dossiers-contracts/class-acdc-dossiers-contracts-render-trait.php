@@ -662,17 +662,38 @@ trait ACDC_Dossiers_Contracts_Render_Trait {
                       'acdc_resend_learner_extranet_email_' . (int) $registration->id
                     );
                   } else {
+                    /* ACDC 3.25.169 — L'URL ne portait aucun onglet : l'extranet
+                       retombait sur le tableau de bord et l'action de renvoi, qui
+                       n'était branchée qu'à l'intérieur d'un onglet précis, n'était
+                       jamais exécutée. Aucun e-mail, aucun message. On transmet
+                       l'onglet courant, pour partir ET pour revenir au bon endroit. */
+                    $cur_tab = isset( $_GET['tab'] ) ? sanitize_key( wp_unslash( $_GET['tab'] ) ) : 'registrations';
                     $renvoi_url = wp_nonce_url(
-                      $this->portal_page_url( array( 'trf_action' => 'resend_extranet', 'registration_id' => (int) $registration->id ) ),
+                      $this->portal_page_url( array( 'tab' => $cur_tab, 'trf_action' => 'resend_extranet', 'registration_id' => (int) $registration->id, 'return_tab' => $cur_tab ) ),
                       'acdc_resend_learner_extranet_email_' . (int) $registration->id
                     );
                   }
+                  $cur_tab_open = isset( $_GET['tab'] ) ? sanitize_key( wp_unslash( $_GET['tab'] ) ) : 'registrations';
+                  $open_url = wp_nonce_url(
+                    $this->portal_page_url( array( 'tab' => $cur_tab_open, 'trf_action' => 'open_extranet_access', 'registration_id' => (int) $registration->id, 'return_tab' => $cur_tab_open ) ),
+                    'acdc_open_learner_extranet_access_' . (int) $registration->id
+                  );
             ?>
               <p style="margin-top:8px;">
                 <a href="<?php echo esc_url( $renvoi_url ); ?>" class="acdc-button acdc-button-soft" style="height:32px;padding:0 14px;font-size:12px;display:inline-flex;align-items:center;border-radius:8px;" onclick="return confirm('Renvoyer l\'e-mail d\'ouverture à <?php echo esc_js( $renvoi_email ); ?> ?');">
                   ✉ Renvoyer l'e-mail d'ouverture
                 </a>
                 <span style="margin-left:10px;font-size:12px;color:#5a6577;">Statut compte : <strong><?php echo esc_html( $portal_account->status ); ?></strong></span>
+              </p>
+              <?php /* ACDC 3.25.169 — Sortie de secours quand l'e-mail n'arrive pas :
+                       le compte reste « jamais activé », et l'apprenant lit « votre accès
+                       doit d'abord être activé depuis le lien reçu par e-mail » alors
+                       qu'aucun e-mail n'existe. Ce bouton affiche ce lien à l'écran. */ ?>
+              <p style="margin-top:6px;">
+                <a href="<?php echo esc_url( $open_url ); ?>" class="acdc-button acdc-button-soft" style="height:32px;padding:0 14px;font-size:12px;display:inline-flex;align-items:center;border-radius:8px;">
+                  🔑 Obtenir le lien d'activation
+                </a>
+                <span style="margin-left:10px;font-size:12px;color:#5a6577;">Sans passer par la messagerie — le lien s'affiche à l'écran.</span>
               </p>
             <?php
                 endif;

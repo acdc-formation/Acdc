@@ -233,31 +233,62 @@ trait ACDC_Learner_Portal_Core_Trait {
     );
   }
 
-  private function learner_portal_send_activation_email( $account ) {
+  /**
+   * ACDC 3.25.169 — Construit le lien d'activation d'un compte apprenant.
+   *
+   * Extrait de l'envoi d'e-mail pour que l'administration puisse afficher ce lien
+   * à l'écran : sans cela, ouvrir un accès apprenant supposait obligatoirement de
+   * passer par une boîte de réception.
+   *
+   * @param object $account Compte portail apprenant.
+   *
+   * @return string URL d'activation, ou chaîne vide.
+   */
+  private function learner_portal_build_activation_url( $account ) {
     if ( ! $account ) {
-      return false;
+      return '';
     }
-
     $token = $this->learner_portal_create_token(
       $account->id,
       'activation',
       wp_date( 'Y-m-d H:i:s', strtotime( '+7 days', current_time( 'timestamp' ) ) ),
       array( 'purpose' => 'first_activation' )
     );
+    return $this->learner_portal_login_url( array( 'view' => 'activate', 'token' => rawurlencode( $token ) ) );
+  }
+
+  private function learner_portal_send_activation_email( $account, $activation_url = '' ) {
+    if ( ! $account ) {
+      return false;
+    }
+
+    if ( '' === $activation_url ) {
+      $activation_url = $this->learner_portal_build_activation_url( $account );
+    }
 
     $primary = $this->learner_portal_get_primary_learner_profile( $account->email );
     $display_name = $primary ? trim( $primary->first_name . ' ' . $primary->usage_last_name ) : $account->email;
-    $activation_url = $this->learner_portal_login_url( array( 'view' => 'activate', 'token' => rawurlencode( $token ) ) );
-    $temp_password = ! empty( $account->temp_password_plain ) ? $account->temp_password_plain : 'Mot de passe temporaire déjà généré';
 
     $body  = '<p>Votre accès à l’extranet apprenant ACDC Formation est ouvert.</p>';
     $body .= '<div style="margin:18px 0;padding:16px;border:1px solid #E9C77C;border-radius:10px;background:#fbf8f7;">';
     $body .= '<p style="margin:0 0 8px;"><strong>Identifiant de connexion :</strong> ' . esc_html( $account->email ) . '</p>';
-    $body .= '<p style="margin:0 0 8px;"><strong>Mot de passe temporaire :</strong> ' . esc_html( $temp_password ) . '</p>';
+    /* ACDC 3.25.169 — Le mot de passe temporaire n'est gardé en mémoire qu'à la
+       création du compte : il n'est jamais stocké. Un e-mail RENVOYÉ affichait donc
+       « Mot de passe temporaire déjà généré » à la place du mot de passe, comme si
+       c'était le mot de passe lui-même. L'apprenant essayait de le saisir et
+       échouait. On n'annonce plus un mot de passe qu'on n'a pas : le lien
+       d'activation suffit, puisqu'il fait choisir le mot de passe. */
+    if ( ! empty( $account->temp_password_plain ) ) {
+      $body .= '<p style="margin:0 0 8px;"><strong>Mot de passe temporaire :</strong> ' . esc_html( $account->temp_password_plain ) . '</p>';
+    }
     $body .= '<p style="margin:0;"><strong>Durée de validité de l’accès :</strong> jusqu’au ' . esc_html( $this->learner_portal_format_date( $account->access_expires_at, true ) ) . '</p>';
     $body .= '</div>';
     $body .= '<p><a href="' . esc_url( $activation_url ) . '" style="display:inline-block;padding:12px 18px;border-radius:10px;background:#D7A24B;color:#0B0706;text-decoration:none;font-weight:600;">Activer mon accès</a></p>';
-    $body .= '<p>Le changement du mot de passe est obligatoire lors de la première connexion.</p>';
+    if ( empty( $account->temp_password_plain ) ) {
+      $body .= '<p>Ce lien vous permet de choisir vous-même votre mot de passe. Il est valable 7 jours.</p>';
+    } else {
+      $body .= '<p>Le changement du mot de passe est obligatoire lors de la première connexion.</p>';
+    }
     $body .= '<p>Si vous rencontrez une difficulté, vous pouvez nous contacter à ' . esc_html( $this->learner_portal_contact_email() ) . '.</p>';
 
     return $this->learner_portal_send_email( $account->email, 'Ouverture de votre accès extranet apprenant', $body, $display_name );
