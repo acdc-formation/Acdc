@@ -717,6 +717,8 @@ class ACDC_Formation_SAAS_Plugin {
     /* ACDC 3.21.00 — Initialisation du moteur Quizzes (mode parallèle au legacy). */
     $this->init_quizzes_module_tables();
     add_action( 'init', array( $this, 'maybe_run_qz_db_upgrade' ), 9 );
+    // ACDC 3.25.176 — Réparation du ciblage des enquêtes créées sans cible.
+    add_action( 'init', array( $this, 'acdc_backfill_survey_session_targets' ), 9 );
     add_action( 'init', array( $this, 'ensure_quiz_async_public_page' ), 11 );
     // hotfix52 — Migration rétroactive PDF positionnement / évaluation
     add_action( 'init', array( $this, 'maybe_run_qz_retroactive_pdf_migration' ), 12 );

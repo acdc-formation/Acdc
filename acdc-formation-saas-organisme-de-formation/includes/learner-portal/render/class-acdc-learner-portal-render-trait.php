@@ -392,6 +392,24 @@ trait ACDC_Learner_Portal_Render_Trait {
     </div>
     <?php endif; ?>
 
+    <?php if ( empty( $completed ) ) : ?>
+      <?php /* ACDC 3.25.176 — La section « Complétés » n'existait QUE si l'apprenant
+               avait au moins une passation : sans elle, la page ne montrait rien et rien
+               n'indiquait qu'un historique existe. Un apprenant — et la recette — en
+               concluait que la consultation de ses résultats n'était pas prévue. */ ?>
+      <div class="acdc-results-section">
+        <div class="acdc-results-eyebrow">MES RÉSULTATS</div>
+        <div class="acdc-results-inner" style="padding:18px 20px;">
+          <p style="margin:0 0 6px;">Aucune passation terminée pour le moment.</p>
+          <p style="margin:0;color:#5a6577;font-size:13px;">
+            Vos résultats apparaîtront ici dès qu'un test ou une évaluation aura été
+            passé et corrigé. Une évaluation passée en salle n'y figure que si vous vous
+            êtes identifié en rejoignant la session.
+          </p>
+        </div>
+      </div>
+    <?php endif; ?>
+
     <?php if ( ! empty( $completed ) ) : ?>
     <div class="acdc-results-section">
       <?php echo $this->qz_section_lock_svg(); ?>

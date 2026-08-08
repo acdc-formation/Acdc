@@ -8990,6 +8990,122 @@ private function maybe_auto_create_questionnaire_actions_from_response( $session
     return ! empty( $wpdb->get_var( $wpdb->prepare( "SELECT id FROM {$this->questionnaire_session_table} WHERE source_type = %s AND source_id = %d AND seance_id = %d LIMIT 1", 'funder_survey', absint( $survey_id ), absint( $training_session_id ) ) ) );
   }
 
+  /**
+   * ACDC 3.25.176 — Formateur d'une séance, pour le ciblage d'une enquête.
+   *
+   * @param object $training_session Séance de formation.
+   *
+   * @return int 0 si aucun formateur n'est rattaché.
+   */
+  /**
+   * ACDC 3.25.176 — Répare le ciblage des sessions d'enquête déjà créées sans cible.
+   *
+   * Ne touche NI au statut NI aux dates : une session expirée reste expirée et
+   * n'enverra rien. On se contente de renseigner le formateur et l'entreprise qui
+   * auraient dû l'être, pour que le gestionnaire voie enfin ce qui était visé et
+   * puisse décider lui-même d'un nouvel envoi. Relancer automatiquement six enquêtes
+   * périmées enverrait du courrier à des tiers sans que personne ne l'ait demandé.
+   *
+   * @return int Nombre de sessions réparées.
+   */
+  public function acdc_backfill_survey_session_targets() {
+    global $wpdb;
+    if ( 'done' === get_option( 'acdc_of_survey_targets_backfilled', '' ) ) {
+      return 0;
+    }
+    $rows = $wpdb->get_results(
+      "SELECT id, seance_id, formation_id, formateur_id, company_id
+         FROM {$this->questionnaire_session_table}
+        WHERE is_survey_session = 1
+          AND source_type IN ('company_survey','trainer_survey','funder_survey')
+          AND ( COALESCE(formateur_id,0) = 0 OR COALESCE(company_id,0) = 0 )
+        LIMIT 500"
+    );
+    $fixed = 0;
+    foreach ( (array) $rows as $row ) {
+      $seance = null;
+      if ( ! empty( $row->seance_id ) ) {
+        $seance = $wpdb->get_row( $wpdb->prepare(
+          "SELECT * FROM {$this->session_table} WHERE id = %d LIMIT 1", absint( $row->seance_id )
+        ) );
+      }
+      if ( ! $seance ) {
+        $seance = (object) array( 'id' => 0, 'formation_id' => absint( $row->formation_id ), 'company_id' => null, 'trainer_id' => null );
+      }
+      $update = array();
+      if ( empty( $row->formateur_id ) ) {
+        $trainer_id = $this->acdc_resolve_survey_trainer_id( $seance );
+        if ( $trainer_id > 0 ) { $update['formateur_id'] = $trainer_id; }
+      }
+      if ( empty( $row->company_id ) ) {
+        $company_id = $this->acdc_resolve_survey_company_id( $seance );
+        if ( ! empty( $company_id ) ) { $update['company_id'] = absint( $company_id ); }
+      }
+      if ( empty( $update ) ) {
+        continue;
+      }
+      $update['updated_at'] = $this->now_mysql();
+      $wpdb->update( $this->questionnaire_session_table, $update, array( 'id' => absint( $row->id ) ) );
+      $fixed++;
+    }
+    update_option( 'acdc_of_survey_targets_backfilled', 'done', false );
+    return $fixed;
+  }
+
+  private function acdc_resolve_survey_trainer_id( $training_session ) {
+    if ( ! empty( $training_session->trainer_id ) ) {
+      return absint( $training_session->trainer_id );
+    }
+    return 0;
+  }
+
+  /**
+   * ACDC 3.25.176 — Entreprise cliente d'une séance, pour le ciblage d'une enquête.
+   *
+   * La séance porte une colonne company_id, mais elle n'est presque jamais remplie :
+   * l'entreprise est portée par les dossiers d'inscription. On retombe donc sur
+   * l'entreprise des inscriptions non brouillonnes rattachées à cette séance, puis à
+   * défaut à cette formation.
+   *
+   * @param object $training_session Séance de formation.
+   *
+   * @return int|null
+   */
+  private function acdc_resolve_survey_company_id( $training_session ) {
+    global $wpdb;
+    if ( ! empty( $training_session->company_id ) ) {
+      return absint( $training_session->company_id );
+    }
+    $seance_id    = ! empty( $training_session->id ) ? absint( $training_session->id ) : 0;
+    $formation_id = ! empty( $training_session->formation_id ) ? absint( $training_session->formation_id ) : 0;
+
+    if ( $seance_id > 0 ) {
+      $company_id = (int) $wpdb->get_var( $wpdb->prepare(
+        "SELECT r.company_id
+           FROM {$this->training_registration_table} r
+           INNER JOIN {$this->learner_table} l ON l.id = r.learner_id
+          WHERE l.session_id = %d AND r.is_draft = 0 AND r.company_id IS NOT NULL AND r.company_id > 0
+          ORDER BY r.updated_at DESC, r.id DESC LIMIT 1",
+        $seance_id
+      ) );
+      if ( $company_id > 0 ) {
+        return $company_id;
+      }
+    }
+    if ( $formation_id > 0 ) {
+      $company_id = (int) $wpdb->get_var( $wpdb->prepare(
+        "SELECT company_id FROM {$this->training_registration_table}
+          WHERE formation_id = %d AND is_draft = 0 AND company_id IS NOT NULL AND company_id > 0
+          ORDER BY updated_at DESC, id DESC LIMIT 1",
+        $formation_id
+      ) );
+      if ( $company_id > 0 ) {
+        return $company_id;
+      }
+    }
+    return null;
+  }
+
   private function create_generic_survey_automated_session( $source_type, $survey, $training_session, $survey_settings, $scheduled_at ) {
     global $wpdb;
     if ( empty( $scheduled_at ) || empty( $survey ) || empty( $training_session ) ) { return 0; }
@@ -9014,8 +9130,18 @@ private function maybe_auto_create_questionnaire_actions_from_response( $session
       'session_title'       => $session_title,
       'formation_id'        => ! empty( $training_session->formation_id ) ? absint( $training_session->formation_id ) : 0,
       'seance_id'           => ! empty( $training_session->id ) ? absint( $training_session->id ) : 0,
-      'formateur_id'        => 0,
-      'company_id'          => ! empty( $training_session->company_id ) ? absint( $training_session->company_id ) : null,
+      /* ACDC 3.25.176 — LA CAUSE DES ENQUÊTES SANS DESTINATAIRE.
+         formateur_id était écrit en dur à zéro, alors que la séance porte bien un
+         trainer_id ; et company_id n'était lu que sur la séance, où il est rarement
+         renseigné — c'est le DOSSIER D'INSCRIPTION qui porte l'entreprise. Les sessions
+         d'enquête formateurs et entreprises naissaient donc sans cible, expiraient en
+         silence sans qu'un seul courriel ne parte, et l'écran affichait pourtant un
+         bandeau « Traçabilité Qualiopi : chaque envoi est horodaté ». Une preuve était
+         réputée collectée alors que rien n'était jamais parti.
+         Les enquêtes à chaud, à froid et intermédiaires n'étaient pas touchées : elles
+         se résolvent sur la liste des apprenants inscrits, pas sur une entité tierce. */
+      'formateur_id'        => $this->acdc_resolve_survey_trainer_id( $training_session ),
+      'company_id'          => $this->acdc_resolve_survey_company_id( $training_session ),
       'send_mode'           => 'scheduled',
       'session_date'        => $scheduled_at,
       'scheduled_at'        => $scheduled_at,
