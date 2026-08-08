@@ -351,6 +351,10 @@
        Ne reconstruit rien : si le balisage attendu n'est pas là, on ne fait rien
        plutôt que de redessiner et de casser l'affichage en place. */
     function updateRevealCounts( q ) {
+        /* ACDC 3.25.183 — La phrase se met à jour AVANT le retour anticipé : une
+           question sans propositions — réponse rédigée — sortait d'ici sans que rien
+           ne l'ait jamais réécrite. */
+        setRevealStats( q );
         if ( ! q || ! q.reveal_answers || ! q.reveal_answers.length ) { return; }
         var container = document.getElementById('acdc-qz-host-reveal-answers');
         if ( ! container ) { return; }
@@ -405,10 +409,34 @@
         }, 700);
     }
 
+    /* ACDC 3.25.183 — Phrase de statistiques du dévoilement, posée pour TOUS les types
+       de question. Elle n'était écrite que dans la branche des questions à choix : sur
+       une réponse rédigée ou un puzzle, l'élément gardait le texte de la question
+       PRÉCÉDENTE. L'animateur lisait donc « 1 bonne réponse sur 1 répondant » devant sa
+       salle, sur une réponse que personne n'avait encore corrigée — un reste
+       d'affichage, pas un mauvais calcul, mais annoncé à voix haute c'est pire. */
+    function setRevealStats( q ) {
+        var statsEl = document.getElementById('acdc-qz-host-reveal-stats');
+        if ( ! statsEl || ! q ) { return; }
+        var t = ( q.count_total_parts !== undefined ) ? q.count_total_parts : 0;
+        var c = ( q.count_correct_parts !== undefined ) ? q.count_correct_parts : 0;
+        var type = q.type || '';
+        var pluriel = ( t > 1 ) ? 's' : '';
+        if ( type === 'poll' ) {
+            statsEl.textContent = 'Résultat du sondage — ' + t + ' apprenant' + pluriel + ' ont répondu';
+        } else if ( type === 'open_text' ) {
+            statsEl.textContent = 'En attente de correction par le formateur — ' + t + ' apprenant' + pluriel + ' ont répondu';
+        } else {
+            statsEl.textContent = c + ' bonne' + (c > 1 ? 's' : '') + ' réponse' + (c > 1 ? 's' : '') + ' sur ' + t + ' répondant' + pluriel;
+        }
+        statsEl.style.display = 'block';
+    }
+
     function renderReveal(data) {
         var q = data.current_question;
         if (!q) return;
         var letters = ['A','B','C','D','E','F'];
+        setRevealStats( q );
         var revealAnswers = (q.reveal_answers && q.reveal_answers.length)
             ? q.reveal_answers
             : (q.answers||[]).map(function(a){ return {id:a.id, label:a.label, is_correct:0, count:0, percent:0}; });

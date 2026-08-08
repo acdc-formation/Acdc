@@ -283,6 +283,35 @@ trait ACDC_Quizzes_Engine_Trait {
     }
 
     /**
+     * ACDC 3.25.183 — Temps réellement accordé à une question, à la lecture.
+     *
+     * Les règles de durée sont appliquées à l'enregistrement, mais une question créée
+     * avant leur introduction garde son ancien réglage tant qu'on ne la rouvre pas. On
+     * les applique donc aussi au moment de servir la question, pour que les quiz déjà
+     * en place en bénéficient sans reprise manuelle.
+     *
+     * @param object $question
+     *
+     * @return int Secondes, 0 pour « pas de limite ».
+     */
+    private function qz_effective_time_limit( $question ) {
+        $type  = (string) $question->type;
+        $limit = (int) $question->time_limit;
+
+        // Une réponse à rédiger ne se chronomètre pas.
+        if ( self::ACDC_OF_QZ_QTYPE_OPEN_TEXT === $type ) {
+            return 0;
+        }
+        // Une remise en ordre demande autant de gestes qu'elle a d'éléments.
+        if ( self::ACDC_OF_QZ_QTYPE_PUZZLE === $type && $limit > 0 ) {
+            $items = count( (array) $this->get_qz_answers_for_question_db( (int) $question->id ) );
+            $items = max( 1, $items );
+            return max( $limit, min( 600, 15 * $items ) );
+        }
+        return $limit;
+    }
+
+    /**
      * Termine la session live, calcule le leaderboard.
      */
     public function end_qz_live_session( $session_id ) {
@@ -500,8 +529,13 @@ trait ACDC_Quizzes_Engine_Trait {
                     'type_label' => isset( $type_labels[ $q->type ] ) ? $type_labels[ $q->type ] : 'Question',
                     /* ACDC 3.25.168 — Une question à rédiger n'est jamais chronométrée,
                        y compris celles créées avant cette règle : on neutralise à la
-                       lecture plutôt que d'exiger une reprise de tous les quiz. */
-                    'time_limit' => ( self::ACDC_OF_QZ_QTYPE_OPEN_TEXT === (string) $q->type ) ? 0 : (int) $q->time_limit,
+                       lecture plutôt que d'exiger une reprise de tous les quiz.
+                       ACDC 3.25.183 — Même traitement pour la remise en ordre. Le
+                       plancher de quinze secondes par élément n'était appliqué qu'à
+                       l'ENREGISTREMENT : les questions existantes gardaient leur réglage
+                       de QCM, et la recette a mesuré 18 secondes pour cinq éléments à
+                       faire glisser, soit 3,6 secondes chacun. Personne ne termine. */
+                    'time_limit' => $this->qz_effective_time_limit( $q ),
                     'answers'        => array_map( function( $a ) {
                         return array(
                             'id'    => (int) $a->id,
