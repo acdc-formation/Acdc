@@ -3639,6 +3639,8 @@ dbDelta( $sql_companies );
 
     $this->create_safety_backup_snapshot( 'restore_backup', array( 'user_id' => get_current_user_id() ) );
 
+    $report = array();
+
     $dir = dirname( $manifest_path );
     $map = $this->get_plugin_table_map();
     $allowed = array();
@@ -3663,12 +3665,44 @@ dbDelta( $sql_companies );
       if ( ! is_array( $payload ) || ! isset( $payload['rows'] ) || ! is_array( $payload['rows'] ) ) {
         continue;
       }
+      /* ACDC 3.25.179 — Le résultat de l'insertion n'était JAMAIS vérifié. La table
+         était vidée, ses lignes échouaient une à une en silence, et la restauration
+         s'annonçait réussie sur une table restée vide. C'est exactement ce qui est
+         arrivé aux apprenants lors de la récupération du 9 août : leurs données
+         étaient bien dans l'archive, et personne n'a su qu'elles n'étaient pas
+         reparties. Une restauration qui échoue à moitié doit le dire. */
       $wpdb->query( "DELETE FROM {$table}" );
+      $ok = 0;
+      $ko = 0;
+      $first_error = '';
       foreach ( $payload['rows'] as $row ) {
         if ( ! is_array( $row ) || empty( $row ) ) {
           continue;
         }
-        $wpdb->insert( $table, $row );
+        $inserted = $wpdb->insert( $table, $row );
+        if ( false === $inserted ) {
+          $ko++;
+          if ( '' === $first_error ) {
+            $first_error = (string) $wpdb->last_error;
+          }
+          continue;
+        }
+        $ok++;
+      }
+      $report[] = array(
+        'label'   => $label,
+        'table'   => $table,
+        'ok'      => $ok,
+        'ko'      => $ko,
+        'error'   => $first_error,
+      );
+      if ( $ko > 0 ) {
+        $this->log_error( 'restore_backup', 'Lignes non restaurées.', array(
+          'table'   => $table,
+          'echecs'  => $ko,
+          'reussis' => $ok,
+          'erreur'  => $first_error,
+        ) );
       }
     }
 
@@ -3680,8 +3714,26 @@ dbDelta( $sql_companies );
       }
     }
 
-    $this->log_action_event( 'restore_backup', 'settings', 0, 'success', array( 'manifest' => basename( dirname( $manifest_path ) ) . '/manifest.json' ) );
-    return array( 'success' => true, 'manifest' => basename( dirname( $manifest_path ) ) . '/manifest.json' );
+    /* ACDC 3.25.179 — Le compte rendu remonte jusqu'à l'écran : une table vidée puis
+       non repeuplée ne doit plus passer pour une réussite. */
+    $failed = array();
+    foreach ( $report as $line ) {
+      if ( $line['ko'] > 0 ) {
+        $failed[] = $line['label'] . ' (' . $line['ko'] . ' ligne(s) refusée(s))';
+      }
+    }
+    $status = empty( $failed ) ? 'success' : 'partial';
+    $this->log_action_event( 'restore_backup', 'settings', 0, $status, array(
+      'manifest' => basename( dirname( $manifest_path ) ) . '/manifest.json',
+      'rapport'  => $report,
+    ) );
+    return array(
+      'success'  => true,
+      'partial'  => ! empty( $failed ),
+      'failed'   => $failed,
+      'report'   => $report,
+      'manifest' => basename( dirname( $manifest_path ) ) . '/manifest.json',
+    );
   }
 
   private function backup_data_snapshot( $label, $extra_manifest = array() ) {

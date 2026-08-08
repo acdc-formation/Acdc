@@ -4818,6 +4818,20 @@ public function handle_restore_backup_import() {
     $this->redirect_to_portal( 'settings', 'Restauration impossible : ' . $result->get_error_message(), 'error' );
   }
 
+  /* ACDC 3.25.179 — L'écran annonçait « restaurée avec succès » quel que soit le
+     nombre de lignes réellement remises. Une table vidée puis refusée en insertion
+     passait donc pour une réussite, et l'utilisateur ne découvrait le trou que des
+     jours plus tard, quand il cherchait une donnée. On nomme les tables incomplètes. */
+  if ( ! empty( $result['partial'] ) && ! empty( $result['failed'] ) ) {
+    $this->redirect_to_portal(
+      'settings',
+      'Restauration TERMINÉE MAIS INCOMPLÈTE. Tables non entièrement restaurées : '
+        . implode( ', ', array_map( 'sanitize_text_field', (array) $result['failed'] ) )
+        . '. Conservez l\'archive : ces lignes n\'ont pas été remises en base.',
+      'warning'
+    );
+  }
+
   $this->redirect_to_portal( 'settings', 'Sauvegarde importée et restaurée avec succès.', 'success' );
 }
 
