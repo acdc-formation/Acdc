@@ -4832,6 +4832,16 @@ public function handle_restore_backup_import() {
     );
   }
 
+  if ( ! empty( $result['adapted'] ) ) {
+    // ACDC 3.25.180 — On dit aussi ce qui a été restauré en s'adaptant au schéma.
+    $this->redirect_to_portal(
+      'settings',
+      'Sauvegarde restaurée. Colonnes absentes de la base, ignorées : '
+        . implode( ' · ', array_map( 'sanitize_text_field', (array) $result['adapted'] ) ),
+      'warning'
+    );
+  }
+
   $this->redirect_to_portal( 'settings', 'Sauvegarde importée et restaurée avec succès.', 'success' );
 }
 

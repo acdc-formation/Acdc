@@ -3671,6 +3671,23 @@ dbDelta( $sql_companies );
          arrivé aux apprenants lors de la récupération du 9 août : leurs données
          étaient bien dans l'archive, et personne n'a su qu'elles n'étaient pas
          reparties. Une restauration qui échoue à moitié doit le dire. */
+      /* ACDC 3.25.180 — La restauration exigeait une correspondance EXACTE des
+         colonnes. Une seule colonne présente dans l'archive et absente de la table —
+         parce que le schéma a évolué entre la sauvegarde et la restauration — et
+         MySQL refuse la ligne entière : « Unknown column ». La table venait pourtant
+         d'être vidée. C'est ainsi que les 3 apprenants et les 9 rendez-vous du
+         9 août ont disparu alors qu'ils figuraient bien dans l'archive.
+         On restaure désormais l'intersection : les colonnes que la table connaît
+         réellement, et l'on nomme celles qu'on a dû laisser de côté. Restaurer une
+         ligne amputée d'un champ vaut infiniment mieux que ne pas la restaurer. */
+      $live_columns = array();
+      foreach ( (array) $wpdb->get_results( "SHOW COLUMNS FROM {$table}", ARRAY_A ) as $col ) {
+        if ( ! empty( $col['Field'] ) ) {
+          $live_columns[ $col['Field'] ] = true;
+        }
+      }
+      $dropped = array();
+
       $wpdb->query( "DELETE FROM {$table}" );
       $ok = 0;
       $ko = 0;
@@ -3678,6 +3695,18 @@ dbDelta( $sql_companies );
       foreach ( $payload['rows'] as $row ) {
         if ( ! is_array( $row ) || empty( $row ) ) {
           continue;
+        }
+        if ( ! empty( $live_columns ) ) {
+          foreach ( array_keys( $row ) as $col_name ) {
+            if ( ! isset( $live_columns[ $col_name ] ) ) {
+              $dropped[ $col_name ] = true;
+              unset( $row[ $col_name ] );
+            }
+          }
+          if ( empty( $row ) ) {
+            $ko++;
+            continue;
+          }
         }
         $inserted = $wpdb->insert( $table, $row );
         if ( false === $inserted ) {
@@ -3695,7 +3724,14 @@ dbDelta( $sql_companies );
         'ok'      => $ok,
         'ko'      => $ko,
         'error'   => $first_error,
+        'dropped' => array_keys( $dropped ),
       );
+      if ( ! empty( $dropped ) ) {
+        $this->log_error( 'restore_backup', 'Colonnes absentes de la table, ignorées.', array(
+          'table'    => $table,
+          'colonnes' => array_keys( $dropped ),
+        ) );
+      }
       if ( $ko > 0 ) {
         $this->log_error( 'restore_backup', 'Lignes non restaurées.', array(
           'table'   => $table,
@@ -3717,9 +3753,13 @@ dbDelta( $sql_companies );
     /* ACDC 3.25.179 — Le compte rendu remonte jusqu'à l'écran : une table vidée puis
        non repeuplée ne doit plus passer pour une réussite. */
     $failed = array();
+    $adapted = array();
     foreach ( $report as $line ) {
       if ( $line['ko'] > 0 ) {
         $failed[] = $line['label'] . ' (' . $line['ko'] . ' ligne(s) refusée(s))';
+      }
+      if ( ! empty( $line['dropped'] ) ) {
+        $adapted[] = $line['label'] . ' : ' . implode( ', ', $line['dropped'] );
       }
     }
     $status = empty( $failed ) ? 'success' : 'partial';
@@ -3731,6 +3771,7 @@ dbDelta( $sql_companies );
       'success'  => true,
       'partial'  => ! empty( $failed ),
       'failed'   => $failed,
+      'adapted'  => $adapted,
       'report'   => $report,
       'manifest' => basename( dirname( $manifest_path ) ) . '/manifest.json',
     );
