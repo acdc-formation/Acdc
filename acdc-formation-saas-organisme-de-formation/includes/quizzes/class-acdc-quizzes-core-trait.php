@@ -843,6 +843,27 @@ trait ACDC_Quizzes_Core_Trait {
     }
 
     /**
+     * ACDC 3.25.171 — Seuil de réussite applicable à un quiz.
+     *
+     * Le seuil est facultatif sur la fiche du quiz. À défaut, 70 % — la valeur que le
+     * PDF d'attestation appliquait déjà en dur de son côté. On la centralise pour que
+     * l'écran, le PDF et la colonne « Résultat » disent tous la même chose.
+     *
+     * @param int $quiz_id
+     *
+     * @return float
+     */
+    public function qz_pass_threshold_for_quiz( $quiz_id ) {
+        global $wpdb;
+        $tbl = $this->get_qz_table( 'quizzes' );
+        if ( '' === $tbl || (int) $quiz_id <= 0 ) {
+            return 70.0;
+        }
+        $raw = $wpdb->get_var( $wpdb->prepare( "SELECT pass_threshold FROM {$tbl} WHERE id = %d", (int) $quiz_id ) );
+        return ( null !== $raw && '' !== $raw ) ? (float) $raw : 70.0;
+    }
+
+    /**
      * ACDC 3.25.168 — Libellé de correction d'une réponse, part de réussite comprise.
      *
      * @param int|null   $is_correct  Colonne is_correct de la réponse.
@@ -3116,6 +3137,15 @@ trait ACDC_Quizzes_Core_Trait {
         );
         if ( null !== $score ) {
             $update['total_score_percentage'] = (float) $score;
+            // ACDC 3.25.171 — Même règle que pour la passation en salle : le verdict est
+            // arrêté au moment où le score l'est.
+            $tbl_s   = $this->get_qz_table( 'sessions' );
+            $quiz_id = (int) $wpdb->get_var( $wpdb->prepare(
+                "SELECT s.quiz_id FROM {$tbl_s} s
+                 INNER JOIN {$tbl} p ON p.session_id = s.id WHERE p.id = %d LIMIT 1",
+                (int) $participant_id
+            ) );
+            $update['is_passed'] = ( (float) $score >= $this->qz_pass_threshold_for_quiz( $quiz_id ) ) ? 1 : 0;
         }
         // ACDC 3.25.110 — persister aussi le score brut (points) pour les passations async,
         // sinon le PDF de résultat et l'export CSV affichent « 0 pts ».
@@ -3860,6 +3890,7 @@ trait ACDC_Quizzes_Core_Trait {
         $tbl_qz_parts    = $this->get_qz_table( 'participants' );
         $tbl_formations  = $wpdb->prefix . 'acdc_of_formations';
         $tbl_of_sessions = $wpdb->prefix . 'acdc_of_sessions';
+        $tbl_trainers    = $this->trainer_table;
 
         $where  = array();
         $params = array();
@@ -3895,12 +3926,21 @@ trait ACDC_Quizzes_Core_Trait {
                 f.title AS formation_title,
                 f.code AS formation_code,
                 f.modality AS formation_modality,
+                /* ACDC 3.25.171 — Nom du formateur. La colonne « Formateur » lisait
+                   s.created_by : ce champ n'existe PAS sur la table des sessions de
+                   passation (il appartient à la table des quiz). La colonne était donc
+                   vide sur les quatre écrans de résultats, et « Animé par » l'était
+                   aussi sur le PDF. Le formateur d'une passation, c'est celui de la
+                   séance de formation à laquelle elle est rattachée. */
+                TRIM(CONCAT(COALESCE(tr.first_name,''), ' ', COALESCE(tr.last_name,''))) AS trainer_name,
                 (SELECT COUNT(*) FROM {$tbl_qz_parts} p WHERE p.session_id = s.id) AS count_invited,
                 (SELECT COUNT(*) FROM {$tbl_qz_parts} p WHERE p.session_id = s.id AND p.status = 'completed') AS count_completed,
                 (SELECT AVG(p.total_score_percentage) FROM {$tbl_qz_parts} p WHERE p.session_id = s.id AND p.status = 'completed' AND p.total_score_percentage IS NOT NULL) AS avg_score
             FROM {$tbl_qz_sessions} s
             INNER JOIN {$tbl_qz_quizzes} q ON q.id = s.quiz_id
             LEFT JOIN {$tbl_formations} f ON f.id = s.formation_id
+            LEFT JOIN {$tbl_of_sessions} fsx ON fsx.id = s.formation_session_id
+            LEFT JOIN {$tbl_trainers} tr ON tr.id = fsx.trainer_id
             {$where_clause}
             ORDER BY s.{$orderby} {$order}
             LIMIT %d OFFSET %d
@@ -3936,6 +3976,8 @@ trait ACDC_Quizzes_Core_Trait {
         $tbl_qz_quizzes  = $this->get_qz_table( 'quizzes' );
         $tbl_qz_parts    = $this->get_qz_table( 'participants' );
         $tbl_formations  = $wpdb->prefix . 'acdc_of_formations';
+        $tbl_of_sessions = $wpdb->prefix . 'acdc_of_sessions';
+        $tbl_trainers    = $this->trainer_table;
         $sql = "
             SELECT
                 s.*,
@@ -3946,12 +3988,21 @@ trait ACDC_Quizzes_Core_Trait {
                 f.title AS formation_title,
                 f.code AS formation_code,
                 f.modality AS formation_modality,
+                /* ACDC 3.25.171 — Nom du formateur. La colonne « Formateur » lisait
+                   s.created_by : ce champ n'existe PAS sur la table des sessions de
+                   passation (il appartient à la table des quiz). La colonne était donc
+                   vide sur les quatre écrans de résultats, et « Animé par » l'était
+                   aussi sur le PDF. Le formateur d'une passation, c'est celui de la
+                   séance de formation à laquelle elle est rattachée. */
+                TRIM(CONCAT(COALESCE(tr.first_name,''), ' ', COALESCE(tr.last_name,''))) AS trainer_name,
                 (SELECT COUNT(*) FROM {$tbl_qz_parts} p WHERE p.session_id = s.id) AS count_invited,
                 (SELECT COUNT(*) FROM {$tbl_qz_parts} p WHERE p.session_id = s.id AND p.status = 'completed') AS count_completed,
                 (SELECT AVG(p.total_score_percentage) FROM {$tbl_qz_parts} p WHERE p.session_id = s.id AND p.status = 'completed' AND p.total_score_percentage IS NOT NULL) AS avg_score
             FROM {$tbl_qz_sessions} s
             INNER JOIN {$tbl_qz_quizzes} q ON q.id = s.quiz_id
             LEFT JOIN {$tbl_formations} f ON f.id = s.formation_id
+            LEFT JOIN {$tbl_of_sessions} fsx ON fsx.id = s.formation_session_id
+            LEFT JOIN {$tbl_trainers} tr ON tr.id = fsx.trainer_id
             WHERE s.id = %d
             LIMIT 1
         ";
@@ -4019,8 +4070,18 @@ trait ACDC_Quizzes_Core_Trait {
         if ( $session_id <= 0 ) {
             return array();
         }
-        $tbl = $this->get_qz_table( 'participants' );
-        $sql = "SELECT * FROM {$tbl} WHERE session_id = %d ORDER BY full_name ASC, email ASC";
+        $tbl   = $this->get_qz_table( 'participants' );
+        $tbl_l = $this->learner_table;
+        /* ACDC 3.25.171 — Même correction que sur l'écran consolidé : en salle,
+           full_name reste vide et nickname ne porte que le prénom. La liste des
+           participants affichait donc « David » au lieu de « David Contal », et deux
+           apprenants de même prénom y étaient indiscernables. */
+        $sql = "SELECT p.*,
+                       TRIM(CONCAT(COALESCE(l.first_name,''), ' ', COALESCE(NULLIF(l.usage_last_name,''), l.last_name, ''))) AS learner_full_name
+                FROM {$tbl} p
+                LEFT JOIN {$tbl_l} l ON l.id = p.learner_id
+                WHERE p.session_id = %d
+                ORDER BY p.full_name ASC, p.email ASC";
         $rows = $wpdb->get_results( $wpdb->prepare( $sql, $session_id ) );
         return is_array( $rows ) ? $rows : array();
     }
@@ -4317,14 +4378,31 @@ trait ACDC_Quizzes_Core_Trait {
         $possible = (float) $row->possible;
         $pct = ( $possible > 0 ) ? round( ( $earned / $possible ) * 100, 2 ) : null;
 
+        /* ACDC 3.25.171 — is_passed était une colonne que RIEN n'écrivait : lue à
+           plusieurs endroits, jamais remplie. La colonne « Résultat » de l'écran
+           consolidé affichait donc « — » pour tout le monde, y compris pour des
+           passations parfaitement notées. On la calcule ici, au moment même où le
+           pourcentage est établi, pour que les deux ne puissent jamais diverger. */
+        $is_passed = null;
+        if ( null !== $pct ) {
+            $tbl_s   = $this->get_qz_table( 'sessions' );
+            $quiz_id = (int) $wpdb->get_var( $wpdb->prepare(
+                "SELECT s.quiz_id FROM {$tbl_s} s
+                 INNER JOIN {$tbl_p} p ON p.session_id = s.id WHERE p.id = %d LIMIT 1",
+                $participant_id
+            ) );
+            $is_passed = ( $pct >= $this->qz_pass_threshold_for_quiz( $quiz_id ) ) ? 1 : 0;
+        }
+
         $wpdb->update(
             $tbl_p,
             array(
                 'total_score'            => $earned,
                 'total_score_percentage' => $pct,
+                'is_passed'              => $is_passed,
             ),
             array( 'id' => $participant_id ),
-            array( '%f', '%f' ),
+            array( '%f', '%f', '%d' ),
             array( '%d' )
         );
         return true;

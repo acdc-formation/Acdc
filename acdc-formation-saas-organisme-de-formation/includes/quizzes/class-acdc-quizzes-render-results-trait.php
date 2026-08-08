@@ -334,15 +334,19 @@ trait ACDC_Quizzes_Render_Results_Trait {
                                 </td>
                                 <td>
                                     <?php
-                                    $trainer_name = '—';
-                                    if ( ! empty( $s->created_by ) ) {
-                                        $u = get_userdata( (int) $s->created_by );
+                                    /* ACDC 3.25.171 — Lisait s.created_by, un champ qui n'existe
+                                       pas sur la table des sessions de passation : la colonne
+                                       était donc vide partout. Le formateur vient de la séance
+                                       de formation ; à défaut, de l'animateur de la session live. */
+                                    $trainer_name = trim( (string) ( $s->trainer_name ?? '' ) );
+                                    if ( '' === $trainer_name && ! empty( $s->host_id ) ) {
+                                        $u = get_userdata( (int) $s->host_id );
                                         if ( $u ) {
                                             $n = trim( $u->first_name . ' ' . $u->last_name );
                                             $trainer_name = $n ?: $u->display_name;
                                         }
                                     }
-                                    echo esc_html( $trainer_name );
+                                    echo esc_html( '' !== $trainer_name ? $trainer_name : '—' );
                                     ?>
                                 </td>
                                 <td><?php echo esc_html( $this->qz_format_datetime( $launched_at ) ); ?></td>
@@ -602,7 +606,17 @@ trait ACDC_Quizzes_Render_Results_Trait {
                         ?>
                             <tr>
                                 <td>
-                                    <strong><?php echo esc_html( $p->full_name ?: $p->email ); ?></strong>
+                                    <?php
+                                    /* ACDC 3.25.171 — Le nom rattaché prime sur le pseudo de salle. */
+                                    $p_name = trim( (string) ( $p->learner_full_name ?? '' ) )
+                                        ?: trim( (string) $p->full_name )
+                                        ?: trim( (string) $p->nickname )
+                                        ?: (string) $p->email;
+                                    ?>
+                                    <strong><?php echo esc_html( $p_name ?: '—' ); ?></strong>
+                                    <?php if ( empty( $p->learner_id ) && '' === trim( (string) $p->email ) ) : ?>
+                                        <br><small style="color:#b45309;font-weight:600;">⚠ non rattaché à un apprenant</small>
+                                    <?php endif; ?>
                                     <?php if ( ! empty( $p->email ) && $p->full_name ) : ?>
                                         <small><?php echo esc_html( $p->email ); ?></small>
                                     <?php endif; ?>
@@ -1254,11 +1268,11 @@ trait ACDC_Quizzes_Render_Results_Trait {
         $results  = $this->get_qz_all_results_consolidated( $trainer_id, $filters );
         $base_url = $this->qz_admin_url( '', array( 'view' => 'results_all' ) );
 
-        $purpose_labels = array(
-            'live'        => 'Quiz live',
-            'positioning' => 'Test de positionnement',
-            'assessment'  => 'Évaluation des acquis',
-        );
+        /* ACDC 3.25.171 — Cette énumération omettait l'évaluation diagnostique : la
+           finalité s'affichait en brut dans la colonne Type et restait impossible à
+           filtrer, alors que des lignes en portaient. Même oubli que celui corrigé
+           sur l'onglet Résultats — on prend désormais la liste de référence. */
+        $purpose_labels = $this->get_quiz_purpose_labels();
 
         // Filtres de page
         ?>
@@ -1298,7 +1312,10 @@ trait ACDC_Quizzes_Render_Results_Trait {
                 Filtrer
             </button>
             <?php if ( $purpose || $quiz_id || $formation_id || $search ) : ?>
-                <a class="acdc-button acdc-button-soft" href="<?php echo esc_url( $this->qz_admin_url( '', array() ) . '&tab=qz_results_all' ); ?>"
+                <?php /* ACDC 3.25.171 — qz_admin_url('') pose déjà un tab (qz_live par
+                         défaut) : la concaténation en ajoutait un second, d'où une URL à
+                         deux paramètres tab. On construit l'URL proprement. */ ?>
+                <a class="acdc-button acdc-button-soft" href="<?php echo esc_url( $this->portal_page_url( array( 'tab' => 'qz_results_all' ) ) ); ?>"
                    style="height:36px;line-height:36px;padding:0 14px;">
                     ✕ Réinitialiser
                 </a>
@@ -1336,7 +1353,13 @@ trait ACDC_Quizzes_Render_Results_Trait {
                         </thead>
                         <tbody>
                         <?php foreach ( $results as $r ) :
-                            $name    = trim( (string) $r->full_name ) ?: trim( (string) $r->nickname ) ?: (string) $r->email ?: '—';
+                            /* ACDC 3.25.171 — Le nom rattaché prime sur le pseudo de salle. */
+                            $name = trim( (string) ( $r->learner_full_name ?? '' ) )
+                                ?: trim( (string) $r->full_name )
+                                ?: trim( (string) $r->nickname )
+                                ?: (string) $r->email
+                                ?: '—';
+                            $unlinked = empty( $r->learner_id ) && '' === trim( (string) $r->email );
                             $p_label = $purpose_labels[ $r->quiz_purpose ] ?? ucfirst( (string) $r->quiz_purpose );
                             /* ACDC 3.25.157 — wp_date(strtotime()) appliquait le fuseau DEUX
                                fois : les horodatages sont stockés en heure locale WordPress,
@@ -1358,8 +1381,14 @@ trait ACDC_Quizzes_Render_Results_Trait {
                             <tr>
                                 <td>
                                     <strong><?php echo esc_html( $name ); ?></strong>
-                                    <?php if ( ! empty( $r->email ) && trim( (string) $r->full_name ) ) : ?>
+                                    <?php if ( ! empty( $r->email ) ) : ?>
                                         <br><small style="color:#6b7280;"><?php echo esc_html( $r->email ); ?></small>
+                                    <?php endif; ?>
+                                    <?php if ( $unlinked ) : ?>
+                                        <?php /* ACDC 3.25.171 — Une passation jouée sous pseudo, sans
+                                                 apprenant rattaché, ne vaut pas preuve : il faut que
+                                                 cela se voie au lieu de se deviner. */ ?>
+                                        <br><small style="color:#b45309;font-weight:600;">⚠ non rattaché à un apprenant</small>
                                     <?php endif; ?>
                                 </td>
                                 <td><?php echo esc_html( (string) $r->formation_title ?: '—' ); ?></td>

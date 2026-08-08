@@ -671,8 +671,17 @@ trait ACDC_Quizzes_Engine_Trait {
         $where_sql = 'WHERE ' . implode( ' AND ', $where );
         $limit     = max( 1, min( 500, (int) $limit ) );
 
+        /* ACDC 3.25.171 — En salle, l'apprenant choisit son nom dans la liste de la
+           séance : learner_id est alors renseigné, mais full_name reste vide et
+           nickname ne contient que le PRÉNOM pré-rempli. Les écrans affichaient donc
+           « David » là où ils devaient afficher « David Contal ». Sur une évaluation
+           qui sert de preuve Qualiopi, un prénom seul n'identifie personne — et deux
+           apprenants de même prénom deviennent indiscernables. On résout donc le nom
+           depuis la fiche apprenant quand elle est rattachée. */
+        $tbl_l = $this->learner_table;
         $sql = "SELECT p.id AS participant_id,
-                       p.full_name, p.email, p.nickname,
+                       p.full_name, p.email, p.nickname, p.learner_id,
+                       TRIM(CONCAT(COALESCE(l.first_name,''), ' ', COALESCE(NULLIF(l.usage_last_name,''), l.last_name, ''))) AS learner_full_name,
                        p.total_score, p.total_score_percentage, p.is_passed,
                        p.completed_at, p.started_at, p.status,
                        {$result_col_sql}
@@ -682,6 +691,7 @@ trait ACDC_Quizzes_Engine_Trait {
                 INNER JOIN {$tbl_s} s  ON s.id = p.session_id
                 INNER JOIN {$tbl_q} q  ON q.id = s.quiz_id
                 LEFT  JOIN {$tbl_f} f  ON f.id = q.formation_id
+                LEFT  JOIN {$tbl_l} l  ON l.id = p.learner_id
                 {$where_sql}
                 ORDER BY p.completed_at DESC
                 LIMIT {$limit}";
