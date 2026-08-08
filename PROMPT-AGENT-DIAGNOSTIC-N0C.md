@@ -31,7 +31,9 @@ Tu LIS. Tu ne modifies RIEN. Aucune exception.
 
 INTERDIT, absolument :
 - supprimer, renommer, déplacer, éditer ou téléverser le moindre fichier ;
-- ouvrir phpMyAdmin, ou toucher à une base de données de quelque manière ;
+- écrire dans la base de données, de quelque manière que ce soit (phpMyAdmin
+  n'est ouvert qu'en LECTURE, et uniquement pour les cinq requêtes listées plus
+  bas — voir « Priorité absolue ») ;
 - modifier une configuration PHP, un DNS, un compte e-mail, une tâche cron ;
 - lancer, restaurer ou supprimer une sauvegarde ;
 - vider, purger ou faire tourner un journal ;
