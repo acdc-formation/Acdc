@@ -98,6 +98,47 @@ trait ACDC_Questionnaires_Engine_Trait {
     );
   }
 
+  /**
+   * ACDC 3.25.171 — Libellé lisible d'un statut de session d'enquête.
+   *
+   * Les écrans dérivaient le libellé du slug par ucfirst(str_replace('_',' ')), ce qui
+   * produisait « Expiree », « Planifiee », « Terminee » — sans accents, dans une
+   * interface entièrement française. Une table de correspondance existait déjà, elle
+   * n'était simplement pas utilisée par ces écrans-là.
+   *
+   * @param string $status
+   *
+   * @return string
+   */
+  public function questionnaire_session_status_label( $status ) {
+    $status = (string) $status;
+    $map = array(
+      'brouillon'              => 'Brouillon',
+      'planifiee'              => 'Planifiée',
+      'envoyee'                => 'Envoyée',
+      'prete'                  => 'Prête',
+      'ouverte'                => 'Ouverte',
+      'en_cours'               => 'En cours',
+      'en_pause'               => 'En pause',
+      'commencee'              => 'Commencée',
+      'partiellement_repondue' => 'Partiellement répondue',
+      'repondue'               => 'Répondue',
+      'terminee'               => 'Terminée',
+      'expiree'                => 'Expirée',
+      'annulee'                => 'Annulée',
+      'archivee'               => 'Archivée',
+      // Statuts de PARTICIPANT, au masculin singulier — mêmes écrans, même helper.
+      'envoye'                 => 'Envoyé',
+      'ouvert'                 => 'Ouvert',
+      'commence'               => 'Commencé',
+      'partiel'                => 'Partiel',
+      'repondu'                => 'Répondu',
+      'expire'                 => 'Expiré',
+      'annule'                 => 'Annulé',
+    );
+    return isset( $map[ $status ] ) ? $map[ $status ] : ucfirst( str_replace( '_', ' ', $status ) );
+  }
+
   private function get_survey_engine_dispatch_statuses() {
     return array(
       'brouillon'             => 'Brouillon',

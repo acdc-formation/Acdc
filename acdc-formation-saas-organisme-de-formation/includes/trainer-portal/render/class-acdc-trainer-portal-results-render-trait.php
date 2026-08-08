@@ -132,11 +132,34 @@ trait ACDC_Trainer_Portal_Results_Render_Trait {
                                 <strong><?php echo esc_html( $s->quiz_title ); ?></strong>
                             </td>
                             <td><?php echo esc_html( $s->formation_title ?? '—' ); ?></td>
-                            <td><?php echo esc_html( $this->qz_format_datetime( $s->sent_at ) ); ?></td>
+                            <?php
+                            /* ACDC 3.25.171 — Le formateur ne lisait que sent_at, qui n'est
+                               rempli que pour un envoi par e-mail : toutes ses passations
+                               EN SALLE affichaient « — », alors que le gestionnaire, lui,
+                               voyait bien la date de lancement. Même repli que côté
+                               administration. */
+                            $launched_at = ! empty( $s->started_at ) ? $s->started_at
+                                : ( ! empty( $s->sent_at ) ? $s->sent_at : $s->created_at );
+                            ?>
+                            <td><?php echo esc_html( $this->qz_format_datetime( $launched_at ) ); ?></td>
                             <td><?php echo (int) $count_cpl; ?> / <?php echo (int) $count_inv; ?></td>
                             <td>
-                                <?php if ( null === $s->avg_score ) : ?>—<?php
-                                else : echo esc_html( number_format( (float) $s->avg_score, 1, ',', ' ' ) ); ?>%<?php endif; ?>
+                                <?php
+                                /* ACDC 3.25.171 — Un quiz live se compte en POINTS, pas en
+                                   pourcentage : cette colonne n'affichait qu'un pourcentage et
+                                   rendait donc « — » là où le gestionnaire lisait 4 800 pts.
+                                   Même passation, deux valeurs selon le rôle. */
+                                if ( 'live' === ( $s->quiz_purpose ?? '' ) ) {
+                                    $tp_avg_pts = $this->get_qz_avg_live_score_for_session( (int) $s->id );
+                                    echo ( null === $tp_avg_pts )
+                                        ? '—'
+                                        : esc_html( number_format( (float) $tp_avg_pts, 0, ',', ' ' ) ) . ' pts';
+                                } elseif ( null === $s->avg_score ) {
+                                    echo '—';
+                                } else {
+                                    echo esc_html( number_format( (float) $s->avg_score, 1, ',', ' ' ) ) . ' %';
+                                }
+                                ?>
                             </td>
                             <td>
                                 <a class="acdc-button acdc-button-soft" href="<?php echo esc_url( $detail_url ); ?>">Voir →</a>
@@ -196,7 +219,12 @@ trait ACDC_Trainer_Portal_Results_Render_Trait {
                     <p class="acdc-tp-results-meta">
                         <strong>Formation :</strong> <?php echo esc_html( $session->formation_title ?? '—' ); ?>
                         &nbsp;·&nbsp;
-                        <strong>Envoyé le :</strong> <?php echo esc_html( $this->qz_format_datetime( $session->sent_at ) ); ?>
+                        <?php
+                        $hdr_launched = ! empty( $session->started_at ) ? $session->started_at
+                            : ( ! empty( $session->sent_at ) ? $session->sent_at : $session->created_at );
+                        ?>
+                        <strong><?php echo esc_html( ! empty( $session->started_at ) ? 'Lancé le :' : 'Envoyé le :' ); ?></strong>
+                        <?php echo esc_html( $this->qz_format_datetime( $hdr_launched ) ); ?>
                     </p>
                 </div>
                 <div>
@@ -243,15 +271,41 @@ trait ACDC_Trainer_Portal_Results_Render_Trait {
             <?php foreach ( $participants as $p ) :
                 $detail_url = add_query_arg( array( 'view' => 'results', 'participant' => (int) $p->id ), $this->trainer_portal_page_url( 'results' ) );
             ?>
+                <?php
+                /* ACDC 3.25.171 — La cellule était ENTIÈREMENT VIDE pour une passation en
+                   salle : ni nom (jamais rempli), ni e-mail, et aucun repli sur le pseudo.
+                   Le formateur ne pouvait pas savoir qui avait passé l'évaluation qu'il
+                   venait lui-même d'animer. Ordre de préférence identique à celui de
+                   l'administration : nom de la fiche apprenant, puis nom saisi, puis
+                   pseudo, puis e-mail. */
+                $tp_name = trim( (string) ( $p->learner_full_name ?? '' ) )
+                    ?: trim( (string) $p->full_name )
+                    ?: trim( (string) $p->nickname )
+                    ?: (string) $p->email;
+                ?>
                 <tr>
-                    <td><strong><?php echo esc_html( $p->full_name ?: $p->email ); ?></strong></td>
+                    <td>
+                        <strong><?php echo esc_html( $tp_name ?: '—' ); ?></strong>
+                        <?php if ( empty( $p->learner_id ) && '' === trim( (string) $p->email ) ) : ?>
+                            <br><small style="color:#b45309;font-weight:600;">⚠ non rattaché à un apprenant</small>
+                        <?php endif; ?>
+                    </td>
                     <td><?php echo esc_html( $status_labels[ $p->status ] ?? $p->status ); ?></td>
                     <td><?php echo esc_html( $this->qz_format_datetime( $p->completed_at ) ); ?></td>
                     <td>
-                        <?php if ( null === $p->total_score_percentage ) : ?>—<?php
-                        else : ?>
-                            <strong><?php echo esc_html( number_format( (float) $p->total_score_percentage, 1, ',', ' ' ) ); ?>%</strong>
-                        <?php endif; ?>
+                        <?php
+                        /* ACDC 3.25.171 — Même correction que sur la liste : un quiz live se
+                           lit en points. */
+                        if ( 'live' === ( $session->quiz_purpose ?? '' ) ) {
+                            echo ( null === $p->total_score )
+                                ? '—'
+                                : '<strong>' . esc_html( number_format( (float) $p->total_score, 0, ',', ' ' ) ) . ' pts</strong>';
+                        } elseif ( null === $p->total_score_percentage ) {
+                            echo '—';
+                        } else {
+                            echo '<strong>' . esc_html( number_format( (float) $p->total_score_percentage, 1, ',', ' ' ) ) . ' %</strong>';
+                        }
+                        ?>
                     </td>
                     <td>
                         <?php if ( in_array( $p->status, array( 'completed', 'in_progress' ), true ) ) : ?>
@@ -274,7 +328,10 @@ trait ACDC_Trainer_Portal_Results_Render_Trait {
         ?>
         <table class="acdc-tp-results-table">
             <thead>
-                <tr><th>Question</th><th>Type</th><th>Répondants</th><th>Bonnes</th><th>Réussite</th></tr>
+                <?php /* ACDC 3.25.171 — Colonne « Partielles » ajoutée, comme côté
+                         administration : sans elle, « 0 bonne réponse » à côté de « 66,7 % de
+                         réussite » sur la même ligne est illisible. */ ?>
+                <tr><th>Question</th><th>Type</th><th>Répondants</th><th>Bonnes</th><th>Partielles</th><th>Réussite</th></tr>
             </thead>
             <tbody>
             <?php foreach ( $rows as $r ) : ?>
@@ -283,9 +340,13 @@ trait ACDC_Trainer_Portal_Results_Render_Trait {
                     <td><?php echo esc_html( $this->qz_type_label( (string) $r->type ) ); ?></td>
                     <td><?php echo (int) $r->count_answered; ?></td>
                     <td><?php echo (int) $r->count_correct; ?></td>
+                    <td><?php echo ! empty( $r->count_partial ) ? (int) $r->count_partial : '—'; ?></td>
                     <td>
-                        <?php if ( null === $r->success_rate ) : ?>—<?php
-                        else : ?><strong><?php echo esc_html( number_format( (float) $r->success_rate, 1, ',', ' ' ) ); ?>%</strong><?php endif; ?>
+                        <?php if ( null === $r->success_rate ) : ?>
+                            <?php if ( ! empty( $r->count_pending ) ) : ?>
+                                <span style="color:#8a6d2a;font-weight:600;">⏳ à corriger</span>
+                            <?php else : ?>—<?php endif; ?>
+                        <?php else : ?><strong><?php echo esc_html( number_format( (float) $r->success_rate, 1, ',', ' ' ) ); ?>%</strong><?php endif; ?>
                     </td>
                 </tr>
             <?php endforeach; ?>
@@ -318,8 +379,24 @@ trait ACDC_Trainer_Portal_Results_Render_Trait {
                         else : ?><strong><?php echo esc_html( number_format( (float) $r->score_avg, 1, ',', ' ' ) ); ?>%</strong><?php endif; ?>
                     </td>
                     <td>
-                        <?php if ( null === $r->pass_threshold ) : ?>—<?php
-                        else : echo esc_html( number_format( (float) $r->pass_threshold, 0, ',', '' ) ); ?>%<?php endif; ?>
+                        <?php
+                        /* ACDC 3.25.171 — Cet écran affichait le seuil BRUT de l'objectif,
+                           vide tant qu'aucun seuil n'y avait été saisi, tout en affichant un
+                           verdict « ✗ Non » calculé, lui, sur un seuil de repli. Un objectif
+                           à 65 % était donc déclaré non atteint sans qu'aucun seuil ne soit
+                           visible — et un formateur exportant cela annonçait à son client
+                           qu'aucun objectif n'avait été atteint. On affiche le seuil
+                           réellement appliqué, et d'où il vient. */
+                        $tp_th_note = array( 'objective' => '', 'quiz' => 'seuil du quiz', 'default' => 'seuil par défaut' );
+                        $tp_th_src  = isset( $r->threshold_source ) ? (string) $r->threshold_source : 'objective';
+                        $tp_th_val  = isset( $r->threshold_applied ) ? (float) $r->threshold_applied : null;
+                        ?>
+                        <?php if ( null === $tp_th_val ) : ?>—<?php else : ?>
+                            <?php echo esc_html( number_format( $tp_th_val, 0, ',', '' ) ); ?>%
+                            <?php if ( ! empty( $tp_th_note[ $tp_th_src ] ) ) : ?>
+                                <small style="display:block;color:#6b7280;"><?php echo esc_html( $tp_th_note[ $tp_th_src ] ); ?></small>
+                            <?php endif; ?>
+                        <?php endif; ?>
                     </td>
                     <td>
                         <?php if ( null === $r->is_passing ) : ?>—<?php

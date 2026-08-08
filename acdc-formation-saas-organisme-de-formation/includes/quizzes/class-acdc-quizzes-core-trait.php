@@ -843,6 +843,32 @@ trait ACDC_Quizzes_Core_Trait {
     }
 
     /**
+     * ACDC 3.25.171 — Score moyen en points bruts d'une session de quiz live.
+     *
+     * L'administration calculait cela en ligne, dans son gabarit ; le portail formateur
+     * ne le calculait pas du tout et affichait « — » là où le gestionnaire lisait
+     * 4 800 pts, pour la même passation. Un seul calcul, partagé par les deux rôles.
+     *
+     * @param int $session_id
+     *
+     * @return float|null Null si aucune passation notée.
+     */
+    public function get_qz_avg_live_score_for_session( $session_id ) {
+        global $wpdb;
+        $tbl_p = $this->get_qz_table( 'participants' );
+        if ( '' === $tbl_p || (int) $session_id <= 0 ) {
+            return null;
+        }
+        /* Un score de 0 est une valeur : ni le filtre ni le test d'affichage ne doivent
+           l'écarter, sinon une session jouée et notée passe pour vide. */
+        $avg = $wpdb->get_var( $wpdb->prepare(
+            "SELECT AVG(total_score) FROM {$tbl_p} WHERE session_id = %d AND status = 'completed' AND total_score IS NOT NULL",
+            (int) $session_id
+        ) );
+        return ( null === $avg ) ? null : (float) $avg;
+    }
+
+    /**
      * ACDC 3.25.171 — Seuil de réussite applicable à un quiz.
      *
      * Le seuil est facultatif sur la fiche du quiz. À défaut, 70 % — la valeur que le
@@ -4139,13 +4165,18 @@ trait ACDC_Quizzes_Core_Trait {
                 (SELECT COUNT(*) FROM {$tbl_pa} pa WHERE pa.question_id = q.id AND pa.session_id = %d AND pa.is_correct = 1) AS count_correct,
                 /* ACDC 3.25.168 — Réussites partielles, et part moyenne réellement acquise. */
                 (SELECT COUNT(*) FROM {$tbl_pa} pa WHERE pa.question_id = q.id AND pa.session_id = %d AND pa.is_correct = 0 AND pa.score_ratio > 0) AS count_partial,
+                /* ACDC 3.25.171 — Réponses en attente de correction manuelle du formateur.
+                   Sans ce compte, une réponse rédigée non corrigée était noyée dans les
+                   « 0 bonne réponse » et son taux de réussite de 0 % passait pour un
+                   échec, alors que personne ne l'avait encore lue. */
+                (SELECT COUNT(*) FROM {$tbl_pa} pa WHERE pa.question_id = q.id AND pa.session_id = %d AND pa.is_correct IS NULL) AS count_pending,
                 (SELECT AVG(COALESCE(pa.score_ratio, pa.is_correct)) FROM {$tbl_pa} pa WHERE pa.question_id = q.id AND pa.session_id = %d AND pa.is_correct IS NOT NULL) AS ratio_avg
             FROM {$tbl_q} q
             INNER JOIN {$tbl_s} s ON s.quiz_id = q.quiz_id
             WHERE s.id = %d
             ORDER BY q.sort_order ASC, q.id ASC
         ";
-        $rows = $wpdb->get_results( $wpdb->prepare( $sql, $session_id, $session_id, $session_id, $session_id, $session_id ) );
+        $rows = $wpdb->get_results( $wpdb->prepare( $sql, $session_id, $session_id, $session_id, $session_id, $session_id, $session_id ) );
 
         if ( ! is_array( $rows ) ) {
             return array();
@@ -4156,6 +4187,13 @@ trait ACDC_Quizzes_Core_Trait {
            la plus faible du quiz. On prend désormais la part moyenne acquise. */
         foreach ( $rows as $r ) {
             if ( (int) $r->count_answered <= 0 ) {
+                $r->success_rate = null;
+                continue;
+            }
+            /* ACDC 3.25.171 — Une question dont TOUTES les réponses attendent la
+               correction du formateur n'a pas de taux : afficher 0 % laisserait croire
+               à un échec collectif. */
+            if ( (int) $r->count_answered > 0 && (int) $r->count_pending >= (int) $r->count_answered ) {
                 $r->success_rate = null;
                 continue;
             }
@@ -4194,10 +4232,21 @@ trait ACDC_Quizzes_Core_Trait {
                 o.pass_threshold,
                 qz.pass_threshold AS quiz_pass_threshold,
                 (SELECT COUNT(*) FROM {$tbl_q} q WHERE q.objective_id = o.id) AS count_questions,
+                /* ACDC 3.25.171 — Cette moyenne divisait les points GAGNÉS par les points
+                   NOMINAUX. Sur un quiz live, les points gagnés portent la prime de
+                   rapidité : une réponse juste mais lente y vaut la moitié des points.
+                   L'atteinte d'un objectif pédagogique se trouvait donc minorée par la
+                   vitesse des apprenants, et l'onglet « Par objectif » contredisait
+                   l'onglet « Par question » sur la même passation — 54,4 % contre 70 %.
+                   On pondère désormais la PART ACQUISE par le poids de chaque question,
+                   ce qui mesure l'acquisition et non le temps de réaction. */
                 (SELECT
-                    CASE WHEN SUM(CASE WHEN q.is_scored = 1 AND q.type != 'poll' THEN q.points_value ELSE 0 END) > 0
+                    CASE WHEN SUM(CASE WHEN pa.id IS NOT NULL AND q.is_scored = 1 AND q.type != 'poll' THEN q.points_value ELSE 0 END) > 0
                          THEN ROUND(
-                             (SUM(pa.score_earned) / (SUM(CASE WHEN q.is_scored = 1 AND q.type != 'poll' THEN q.points_value ELSE 0 END))) * 100,
+                             (SUM(CASE WHEN pa.id IS NOT NULL AND q.is_scored = 1 AND q.type != 'poll'
+                                       THEN q.points_value * COALESCE(pa.score_ratio, pa.is_correct, 0)
+                                       ELSE 0 END)
+                              / SUM(CASE WHEN pa.id IS NOT NULL AND q.is_scored = 1 AND q.type != 'poll' THEN q.points_value ELSE 0 END)) * 100,
                              1
                          )
                          ELSE NULL
@@ -4282,9 +4331,14 @@ trait ACDC_Quizzes_Core_Trait {
             return new WP_Error( 'answer_not_found', __( "Aucune réponse de l'apprenant à corriger.", 'acdc-formation-saas' ) );
         }
 
-        // Préparer les données à mettre à jour
-        $update_data   = array( 'is_correct' => $is_correct, 'score_earned' => $score_value );
-        $update_format = array( '%d', '%f' );
+        /* Préparer les données à mettre à jour.
+           ACDC 3.25.171 — score_ratio n'était pas remis à jour à la correction manuelle :
+           il restait à la valeur posée au moment de la passation, et l'écran « Par
+           question » affichait donc une réponse libre validée par le formateur avec
+           « 1 bonne réponse » et « 0 % de réussite » sur la même ligne. */
+        $ratio_value   = ( $max_points > 0 ) ? max( 0.0, min( 1.0, $score_value / $max_points ) ) : (float) $is_correct;
+        $update_data   = array( 'is_correct' => $is_correct, 'score_earned' => $score_value, 'score_ratio' => $ratio_value );
+        $update_format = array( '%d', '%f', '%f' );
 
         // Champ commentaire formateur (colonne optionnelle — créée si absente)
         if ( '' !== $grader_comment ) {

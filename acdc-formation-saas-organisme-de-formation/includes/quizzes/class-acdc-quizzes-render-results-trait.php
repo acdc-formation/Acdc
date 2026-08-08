@@ -298,16 +298,9 @@ trait ACDC_Quizzes_Render_Results_Trait {
                             // Score moyen : pour live, moyenne des total_score (pts bruts)
                             $avg_display = '—';
                             if ( 'live' === $s->quiz_purpose ) {
-                                global $wpdb;
-                                $tbl_p = $this->get_qz_table( 'participants' );
-                                /* ACDC 3.25.157 — Un score de 0 est une valeur : ni le
-                                   filtre SQL ni le test d'affichage ne doivent l'écarter,
-                                   sans quoi la colonne affiche « — » (pas de donnée) pour
-                                   une session pourtant jouée et notée. */
-                                $avg_pts = $wpdb->get_var( $wpdb->prepare(
-                                    "SELECT AVG(total_score) FROM {$tbl_p} WHERE session_id=%d AND status='completed' AND total_score IS NOT NULL",
-                                    (int) $s->id
-                                ) );
+                                // ACDC 3.25.171 — Calcul déplacé dans un helper commun aux
+                                // deux rôles : le portail formateur ne l'avait pas du tout.
+                                $avg_pts = $this->get_qz_avg_live_score_for_session( (int) $s->id );
                                 if ( null !== $avg_pts ) {
                                     $avg_display = number_format( (float) $avg_pts, 0, ',', ' ' ) . ' pts';
                                 }
@@ -753,7 +746,14 @@ trait ACDC_Quizzes_Render_Results_Trait {
                                 <td><?php echo isset( $r->count_partial ) && (int) $r->count_partial > 0 ? (int) $r->count_partial : '—'; ?></td>
                                 <td>
                                     <?php if ( null === $r->success_rate ) : ?>
-                                        <span class="acdc-qz-muted">— (non scorée)</span>
+                                        <?php /* ACDC 3.25.171 — Distinguer « pas de barème » de
+                                                 « pas encore corrigée » : le formateur doit savoir
+                                                 s'il lui reste quelque chose à faire. */ ?>
+                                        <?php if ( ! empty( $r->count_pending ) ) : ?>
+                                            <span style="color:#8a6d2a;font-weight:600;">⏳ en attente de correction</span>
+                                        <?php else : ?>
+                                            <span class="acdc-qz-muted">— (non scorée)</span>
+                                        <?php endif; ?>
                                     <?php else : ?>
                                         <div class="acdc-qz-rate-bar" data-rate="<?php echo esc_attr( $r->success_rate ); ?>">
                                             <div class="acdc-qz-rate-bar-fill" style="width: <?php echo esc_attr( $r->success_rate ); ?>%;"></div>

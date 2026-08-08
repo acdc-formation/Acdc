@@ -2806,7 +2806,11 @@ trait ACDC_Quizzes_Actions_Trait {
         $answer_ids = array_values( array_filter( array_map( 'intval', explode( ',', $answer_ids_raw ) ) ) );
         $verdict     = $this->qz_grade_answer_set( $question, $answer_ids );
         $is_correct  = $verdict['is_correct'];
-        $score_ratio = $verdict['ratio'];
+        /* ACDC 3.25.171 — NULL, et non zéro, quand la réponse n'est pas corrigeable
+           automatiquement. Une réponse rédigée était enregistrée avec une part de zéro ;
+           après correction manuelle du formateur, les écrans qui lisent cette part
+           continuaient d'afficher 0 % à côté d'un « juste ». */
+        $score_ratio = ( null === $is_correct ) ? null : $verdict['ratio'];
         // Sécurité anti-triche : le temps serveur (non falsifiable) est autoritatif dès
         // qu'il est connu. Un min(client, serveur) serait inefficace (response_ms=0 → 0).
         // Voir \ACDC\Support\QuizScore::clampResponseMs (couvert par PHPUnit).
@@ -2830,9 +2834,9 @@ trait ACDC_Quizzes_Actions_Trait {
         } elseif ( self::ACDC_OF_QZ_PURPOSE_LIVE === (string) $session->quiz_purpose ) {
             $score = $this->qz_calculate_kahoot_score(
                 (bool) $is_correct, $response_ms, (int) $question->time_limit
-            ) * $score_ratio;
+            ) * (float) $score_ratio;
         } else {
-            $score = (float) $question->points_value * $score_ratio;
+            $score = (float) $question->points_value * (float) $score_ratio;
         }
         // Verrou souple : UPSERT (un participant peut corriger sa réponse tant que la question est ouverte)
         $tbl_pa = $this->get_qz_table( 'player_answers' );

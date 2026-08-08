@@ -82,7 +82,7 @@ Trois choses à savoir sur cette distribution :
   Une confusion d'homonymes sur un résultat d'évaluation est un défaut grave,
   et c'est précisément ce qu'un jeu de test ordinaire ne révèle jamais.
 - « TEST-QA Financeur Essai » est le SEUL financeur sur lequel tu as le droit
-  d'agir. Les dix autres sont de vrais organismes. Voir les garde-fous.
+  d'agir. Les ONZE autres sont de vrais OPCO. Voir les garde-fous.
 - Le compte formateur est celui de David Contal lui-même. Côté portail, tu es
   donc sous SON identité : tu animes et tu lis, tu ne modifies ni son profil,
   ni ses coordonnées, ni ses documents.
@@ -179,8 +179,9 @@ redirige jamais un onglet que tu n'as pas ouvert toi-même.
 GARDE-FOUS ABSOLUS
 ────────────────────────────────────────────────
 🚨 FINANCEURS — UN SEUL EST À TOI
-L'onglet « Financeurs » contient de VRAIS organismes (OPCO), avec de VRAIES
-coordonnées, dont des noms de personnes physiques.
+L'onglet « Financeurs » contient 12 lignes : 11 VRAIS organismes (OPCO) et le
+financeur d'essai. Les organismes réels portent de VRAIES coordonnées, et leur
+page contact contient des noms de personnes physiques.
 - Tu n'agis QUE sur « TEST-QA Financeur Essai ».
 - Sur tous les autres : consultation seule. Aucun clic sur Créer / Modifier /
   Supprimer, aucun envoi d'e-mail, depuis aucun écran.
