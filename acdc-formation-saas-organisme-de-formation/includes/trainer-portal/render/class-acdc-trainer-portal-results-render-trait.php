@@ -115,7 +115,11 @@ trait ACDC_Trainer_Portal_Results_Render_Trait {
                         <tr>
                             <th>Quiz</th>
                             <th>Formation</th>
-                            <th>Envoyé le</th>
+                            <?php /* ACDC 3.25.182 — Cette liste mêle les envois par e-mail et les
+                                     passations lancées en salle : un en-tête « Envoyé le » décrit mal
+                                     la moitié de ses lignes. Le détail dit déjà « Lancé le » depuis
+                                     la 3.25.172 ; l'en-tête ne l'avait pas suivi. */ ?>
+                            <th>Lancé / Envoyé le</th>
                             <th>Participants</th>
                             <th>Score moyen</th>
                             <th></th>

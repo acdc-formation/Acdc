@@ -848,7 +848,15 @@ trait ACDC_Quizzes_Render_Results_Trait {
                         <?php foreach ( $rows as $r ) : ?>
                             <tr>
                                 <td><?php echo esc_html( $r->label ); ?></td>
-                                <td><?php echo (int) $r->count_questions; ?></td>
+                                <td>
+                                    <?php echo (int) $r->count_questions; ?>
+                                    <?php if ( ! empty( $r->count_pending ) ) : ?>
+                                        <?php /* ACDC 3.25.182 — Sans cette mention, l'écart entre le
+                                                 nombre de questions affiché et la moyenne, calculée sur
+                                                 les seules questions corrigées, reste inexplicable. */ ?>
+                                        <small style="display:block;color:#8a6d2a;">dont <?php echo (int) $r->count_pending; ?> à corriger, hors moyenne</small>
+                                    <?php endif; ?>
+                                </td>
                                 <td>
                                     <?php if ( null === $r->score_avg ) : ?>
                                         <span class="acdc-qz-muted">—</span>

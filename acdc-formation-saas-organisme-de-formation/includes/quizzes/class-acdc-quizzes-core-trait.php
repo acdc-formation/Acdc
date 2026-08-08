@@ -4275,7 +4275,14 @@ trait ACDC_Quizzes_Core_Trait {
                    « 0 bonne réponse » et son taux de réussite de 0 % passait pour un
                    échec, alors que personne ne l'avait encore lue. */
                 (SELECT COUNT(*) FROM {$tbl_pa} pa WHERE pa.question_id = q.id AND pa.session_id = %d AND pa.is_correct IS NULL) AS count_pending,
-                (SELECT AVG(COALESCE(pa.score_ratio, pa.is_correct)) FROM {$tbl_pa} pa WHERE pa.question_id = q.id AND pa.session_id = %d AND pa.is_correct IS NOT NULL) AS ratio_avg
+                /* ACDC 3.25.182 — COALESCE(score_ratio, is_correct) donnait ZÉRO sur une
+                   réponse pourtant déclarée JUSTE, quand sa part de réussite était
+                   restée à zéro — cas des réponses rédigées corrigées à la main avant
+                   la 3.25.172, qui n'écrivait pas cette part. D'où « 1 bonne réponse »
+                   et « 0 % de réussite » sur la même ligne. Une réponse juste vaut un,
+                   point ; la part ne sert qu'aux réponses partielles. */
+                (SELECT AVG( CASE WHEN pa.is_correct = 1 THEN 1 ELSE COALESCE(pa.score_ratio, 0) END )
+                   FROM {$tbl_pa} pa WHERE pa.question_id = q.id AND pa.session_id = %d AND pa.is_correct IS NOT NULL) AS ratio_avg
             FROM {$tbl_q} q
             INNER JOIN {$tbl_s} s ON s.quiz_id = q.quiz_id
             WHERE s.id = %d
@@ -4337,6 +4344,13 @@ trait ACDC_Quizzes_Core_Trait {
                 o.pass_threshold,
                 qz.pass_threshold AS quiz_pass_threshold,
                 (SELECT COUNT(*) FROM {$tbl_q} q WHERE q.objective_id = o.id) AS count_questions,
+                /* ACDC 3.25.182 — Nombre de questions écartées de la moyenne faute de
+                   correction : sans ce compte, l'écart entre « 3 questions » affichées et
+                   une moyenne calculée sur 2 reste inexplicable pour le formateur. */
+                (SELECT COUNT(DISTINCT q.id)
+                   FROM {$tbl_q} q
+                   INNER JOIN {$tbl_pa} pa ON pa.question_id = q.id AND pa.session_id = %d
+                  WHERE q.objective_id = o.id AND pa.is_correct IS NULL) AS count_pending,
                 /* ACDC 3.25.171 — Cette moyenne divisait les points GAGNÉS par les points
                    NOMINAUX. Sur un quiz live, les points gagnés portent la prime de
                    rapidité : une réponse juste mais lente y vaut la moitié des points.
@@ -4346,12 +4360,21 @@ trait ACDC_Quizzes_Core_Trait {
                    On pondère désormais la PART ACQUISE par le poids de chaque question,
                    ce qui mesure l'acquisition et non le temps de réaction. */
                 (SELECT
-                    CASE WHEN SUM(CASE WHEN pa.id IS NOT NULL AND q.is_scored = 1 AND q.type != 'poll' THEN q.points_value ELSE 0 END) > 0
+                    /* ACDC 3.25.182 — Une question en attente de correction manuelle ne
+                       compte NULLE PART : ni au numérateur, ni au dénominateur. Elle
+                       n'est ni juste ni fausse — personne ne l'a lue. La compter zéro
+                       impute à l'apprenant un échec qui n'existe pas, et fait chuter un
+                       taux d'atteinte pour une raison purement administrative.
+                       Le filtre pa.is_correct IS NOT NULL est ce qui aligne enfin cet
+                       onglet sur « Par question » : la recette avait mesuré 70 % d'un
+                       côté et 75 % de l'autre, l'un comptant la réponse rédigée, l'autre
+                       la comptant à moitié. */
+                    CASE WHEN SUM(CASE WHEN pa.id IS NOT NULL AND pa.is_correct IS NOT NULL AND q.is_scored = 1 AND q.type != 'poll' THEN q.points_value ELSE 0 END) > 0
                          THEN ROUND(
-                             (SUM(CASE WHEN pa.id IS NOT NULL AND q.is_scored = 1 AND q.type != 'poll'
-                                       THEN q.points_value * COALESCE(pa.score_ratio, pa.is_correct, 0)
+                             (SUM(CASE WHEN pa.id IS NOT NULL AND pa.is_correct IS NOT NULL AND q.is_scored = 1 AND q.type != 'poll'
+                                       THEN q.points_value * ( CASE WHEN pa.is_correct = 1 THEN 1 ELSE COALESCE(pa.score_ratio, 0) END )
                                        ELSE 0 END)
-                              / SUM(CASE WHEN pa.id IS NOT NULL AND q.is_scored = 1 AND q.type != 'poll' THEN q.points_value ELSE 0 END)) * 100,
+                              / SUM(CASE WHEN pa.id IS NOT NULL AND pa.is_correct IS NOT NULL AND q.is_scored = 1 AND q.type != 'poll' THEN q.points_value ELSE 0 END)) * 100,
                              1
                          )
                          ELSE NULL
@@ -4365,7 +4388,7 @@ trait ACDC_Quizzes_Core_Trait {
             WHERE s.id = %d
             ORDER BY o.sort_order ASC, o.id ASC
         ";
-        $rows = $wpdb->get_results( $wpdb->prepare( $sql, $session_id, $session_id ) );
+        $rows = $wpdb->get_results( $wpdb->prepare( $sql, $session_id, $session_id, $session_id ) );
 
         if ( ! is_array( $rows ) ) {
             return array();
@@ -4519,6 +4542,10 @@ trait ACDC_Quizzes_Core_Trait {
         $tbl_q  = $this->get_qz_table( 'questions' );
         $tbl_p  = $this->get_qz_table( 'participants' );
 
+        /* ACDC 3.25.182 — Même règle que les onglets d'analyse : une réponse en attente
+           de correction ne pèse pas dans le score. Sans ce filtre, le score du
+           participant baissait tant que le formateur n'avait pas corrigé, puis
+           remontait — un apprenant voyait donc sa note changer sans avoir rien fait. */
         $row = $wpdb->get_row( $wpdb->prepare(
             "SELECT
                 SUM(pa.score_earned) AS earned,
@@ -4526,6 +4553,7 @@ trait ACDC_Quizzes_Core_Trait {
              FROM {$tbl_pa} pa
              INNER JOIN {$tbl_q} q ON q.id = pa.question_id
              WHERE pa.participant_id = %d
+               AND pa.is_correct IS NOT NULL
                AND q.is_scored = 1
                AND q.type != 'poll'",
             $participant_id
