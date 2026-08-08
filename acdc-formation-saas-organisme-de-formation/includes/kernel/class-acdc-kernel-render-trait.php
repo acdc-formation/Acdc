@@ -1019,6 +1019,12 @@ trait ACDC_Kernel_Render_Trait {
         'label' => 'Pendant la formation',
         'icon'  => 'quiz',
         'items' => array(
+          /* ACDC 3.25.166 — L'évaluation diagnostique se place EN TÊTE du groupe :
+             elle ouvre la formation, avant tout quiz d'animation, et donne son point
+             de comparaison à l'évaluation des acquis qui la ferme. L'ordre du menu
+             suit ainsi le déroulé réel de la formation. */
+          array( 'tab' => 'qz_diagnostic',           'label' => 'Évaluations diagnostiques', 'icon' => 'evaluation_acquired' ),
+          array( 'tab' => 'qz_results_diagnostic',   'label' => 'Résultats — Diagnostiques', 'icon' => 'evaluation_result' ),
           array( 'tab' => 'qz_live',                'label' => 'Quiz live',                  'icon' => 'quiz' ),
           array( 'tab' => 'qz_results_live',        'label' => 'Résultats — Quiz live',       'icon' => 'evaluation_result' ),
           array( 'tab' => 'qz_assessment',           'label' => 'Évaluations des acquis',     'icon' => 'evaluation_acquired' ),
