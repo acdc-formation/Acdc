@@ -142,10 +142,24 @@
                 // Auto-submit : forcer l'envoi de la sélection courante (ou vide si rien sélectionné)
                 autoSubmitOnTimeout();
             } else {
-                // Timer expiré sans auto-submit : bloquer les boutons uniquement
+                /* ACDC 3.25.173 — Le blocage était muet : les tuiles devenaient inertes
+                   sans que rien ne l'explique, et l'apprenant qui cliquait encore croyait
+                   à une panne. On le dit, et on grise visiblement. */
                 document.querySelectorAll(
                     '.acdc-qz-player-answer-btn, #acdc-qz-player-open-submit, #acdc-qz-player-multi-submit, #acdc-qz-player-puzzle-submit'
-                ).forEach(function(btn) { btn.disabled = true; });
+                ).forEach(function(btn) {
+                    btn.disabled = true;
+                    btn.style.opacity = '.45';
+                    btn.style.cursor = 'not-allowed';
+                });
+                if (!state.answeredCurrentQuestion) {
+                    var instr = document.getElementById('acdc-qz-player-q-instruction');
+                    if (instr) {
+                        instr.className = 'acdc-qz-answer-instruction is-multi';
+                        instr.textContent = '⏱ Temps écoulé — vous ne pouvez plus répondre à cette question';
+                        instr.style.display = '';
+                    }
+                }
             }
         }
     }
@@ -477,7 +491,9 @@
         if (!multi && !single) { el.style.display = 'none'; return; }
         el.className = 'acdc-qz-answer-instruction ' + (multi ? 'is-multi' : 'is-single');
         el.textContent = multi
-            ? (type === 'poll' ? '⚠ Plusieurs réponses possibles (sondage)' : '⚠ Plusieurs réponses possibles')
+            ? (type === 'poll'
+                ? '⚠ Plusieurs réponses possibles (sondage)'
+                : '⚠ Plusieurs réponses possibles — cochez TOUTES les bonnes réponses')
             : '● Une seule réponse possible';
         el.style.display = '';
     }
@@ -821,19 +837,42 @@
                 state.runningScore = (state.runningScore || 0) + earned;
                 var scoreEl = document.getElementById('acdc-qz-player-score');
                 if (scoreEl) scoreEl.textContent = Math.round(state.runningScore) + ' pts';
-                showFeedback(j.data.is_correct, earned);
+                showFeedback(j.data.is_correct, earned, j.data.partial, j.data.score_ratio);
+            } else if (j.data && j.data.code === 'qz_time_over') {
+                // ACDC 3.25.173 — Le temps était écoulé côté serveur : on le DIT.
+                showTimeOver();
             }
         });
     }
 
     // ====== FEEDBACK ======================================================
-    function showFeedback(isCorrect, scoreEarned) {
+    /* ACDC 3.25.173 — Bandeau « temps écoulé », distinct d'une mauvaise réponse.
+       L'apprenant qui dépassait le temps lisait « Mauvaise réponse » et croyait s'être
+       trompé. */
+    function showTimeOver() {
         var card  = document.getElementById('acdc-qz-player-feedback-card');
         var icon  = document.getElementById('acdc-qz-player-feedback-icon');
         var title = document.getElementById('acdc-qz-player-feedback-title');
         var score = document.getElementById('acdc-qz-player-feedback-score');
         var sub   = document.getElementById('acdc-qz-player-feedback-sub');
-        card.classList.remove('is-correct','is-wrong','is-neutral');
+        if (!card) { return; }
+        card.classList.remove('is-correct','is-wrong','is-partial');
+        card.classList.add('is-neutral');
+        if (icon)  icon.textContent  = '⏱';
+        if (title) title.textContent = 'Temps écoulé';
+        if (score) score.textContent = 'Réponse non prise en compte';
+        if (sub)   sub.textContent   = 'Total : ' + Math.round(state.runningScore || 0) + ' pts';
+        playSound('time_up');
+        showState('feedback');
+    }
+
+    function showFeedback(isCorrect, scoreEarned, isPartial, scoreRatio) {
+        var card  = document.getElementById('acdc-qz-player-feedback-card');
+        var icon  = document.getElementById('acdc-qz-player-feedback-icon');
+        var title = document.getElementById('acdc-qz-player-feedback-title');
+        var score = document.getElementById('acdc-qz-player-feedback-score');
+        var sub   = document.getElementById('acdc-qz-player-feedback-sub');
+        card.classList.remove('is-correct','is-wrong','is-neutral','is-partial');
         if (isCorrect === null) {
             card.classList.add('is-neutral');
             // FIX 5 : distinguer sondage et réponse libre
@@ -855,11 +894,30 @@
             score.textContent = '+' + Math.round(scoreEarned) + ' pts';
             if (sub) sub.textContent = 'Total : ' + Math.round(state.runningScore || 0) + ' pts';
             playSound('correct');
+        } else if (isPartial) {
+            /* ACDC 3.25.173 — Troisième état. Cette branche écrivait « Mauvaise réponse »
+               et « +0 pt » EN DUR, sans jamais lire le score renvoyé par le serveur. Une
+               réponse à moitié juste, créditée de 500 points par le moteur, s'affichait
+               donc « ❌ Mauvaise réponse / +0 pt » — pendant que le compteur de points,
+               deux centimètres plus haut sur le même écran et alimenté par la même
+               valeur, montait bien de 500. L'apprenant était démoralisé à tort et ne
+               pouvait pas rapprocher son total. */
+            card.classList.add('is-partial');
+            icon.textContent = '◐';
+            title.textContent = 'Réponse partiellement juste';
+            score.textContent = '+' + Math.round(scoreEarned) + ' pts';
+            if (sub) {
+                var pct = (typeof scoreRatio === 'number') ? Math.round(scoreRatio * 100) : null;
+                sub.textContent = (null !== pct ? pct + ' % de la question · ' : '')
+                    + 'Total : ' + Math.round(state.runningScore || 0) + ' pts';
+            }
+            playSound('correct');
         } else {
             card.classList.add('is-wrong');
             icon.textContent = '❌';
             title.textContent = 'Mauvaise réponse';
-            score.textContent = '+0 pt';
+            // Le score reste celui du serveur : plus jamais une valeur écrite en dur.
+            score.textContent = '+' + Math.round(scoreEarned || 0) + ' pt' + (Math.round(scoreEarned || 0) > 1 ? 's' : '');
             if (sub) sub.textContent = 'Total : ' + Math.round(state.runningScore || 0) + ' pts';
             playSound('wrong');
         }

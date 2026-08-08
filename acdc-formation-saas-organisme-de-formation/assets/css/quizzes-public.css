@@ -679,9 +679,13 @@
     background: #fef2f2;
     border: 1px solid #fecaca;
 }
+/* ACDC 3.25.173 — « Une seule réponse possible » était en gris, sans pictogramme,
+   dans un corps trois fois plus petit que l'énoncé : depuis le fond d'une salle,
+   l'énoncé se lisait et la consigne se devinait. Les deux consignes ont désormais le
+   même poids ; seule la couleur les distingue, l'alerte restant réservée au cas où
+   l'on peut se tromper en ne cochant qu'une case. */
 .acdc-qz-answer-instruction.is-single {
-    color: #475569;
-    background: #f8fafc;
-    border: 1px solid #e2e8f0;
-    font-weight: 600;
+    color: #1e3a5f;
+    background: #eff6ff;
+    border: 1px solid #bfdbfe;
 }

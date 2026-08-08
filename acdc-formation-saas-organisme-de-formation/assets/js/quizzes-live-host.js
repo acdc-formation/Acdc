@@ -162,6 +162,7 @@
                     state.hasShownReveal = true;
                     renderReveal(data);
                     showState('reveal');
+                    armNextButtonGuard();
                 } else {
                     // Afficher la question + démarrer le timer
                     // Le reveal se fera via timer ou bouton "Réponse" — jamais via all_answered
@@ -214,7 +215,7 @@
             if (p.tab_switch > 0) tabSwitchIds[p.id] = p.tab_switch;
             var warn = tabSwitchIds[p.id] ? ' has-tab-switch' : '';
             var warnBadge = tabSwitchIds[p.id] ? ' <span class="acdc-qz-tab-switch-badge" title="Changements d\'onglet détectés">⚠️ ' + tabSwitchIds[p.id] + '</span>' : '';
-            html += '<li class="acdc-qz-host-participant' + warn + '" data-pid="' + p.id + '"><span>' + (p.avatar==='homme'?'👨':'👩') + '</span><span>' + esc(p.nickname) + '</span>' + warnBadge + '</li>';
+            html += '<li class="acdc-qz-host-participant' + warn + '" data-pid="' + p.id + '"><span>' + (p.avatar==='homme'?'👨':(p.avatar==='femme'?'👩':'🧑')) + '</span><span>' + esc(p.nickname) + '</span>' + warnBadge + '</li>';
         });
         ul.innerHTML = html;
     }
@@ -273,7 +274,7 @@
             if (!state.hasShownReveal) {
                 state.hasShownReveal = true;
                 ajax('acdc_of_qz_host_lobby_state', {}, function(j) {
-                    if (j.success) { renderReveal(j.data); showState('reveal'); playSound('reveal'); refreshRevealCounts(j.data.current_q_id); }
+                    if (j.success) { renderReveal(j.data); showState('reveal'); armNextButtonGuard(); playSound('reveal'); refreshRevealCounts(j.data.current_q_id); }
                 });
             }
         }
@@ -290,7 +291,9 @@
         if (!multi && !single) { el.style.display = 'none'; return; }
         el.className = 'acdc-qz-answer-instruction ' + (multi ? 'is-multi' : 'is-single');
         el.textContent = multi
-            ? (type === 'poll' ? '⚠ Plusieurs réponses possibles (sondage)' : '⚠ Plusieurs réponses possibles')
+            ? (type === 'poll'
+                ? '⚠ Plusieurs réponses possibles (sondage)'
+                : '⚠ Plusieurs réponses possibles — cochez TOUTES les bonnes réponses')
             : '● Une seule réponse possible';
         el.style.display = '';
     }
@@ -361,6 +364,25 @@
                 statsEl.textContent = c + ' bonne' + (c > 1 ? 's' : '') + ' réponse' + (c > 1 ? 's' : '') + ' sur ' + t + ' répondant' + (t > 1 ? 's' : '');
             }
         }
+    }
+
+    /* ACDC 3.25.173 — Les deux boutons de pied d'écran, « Réponse » et « Question
+       suivante → », occupent la MÊME position, chacun dans l'état correspondant. Quand
+       le chronomètre atteint zéro, l'écran bascule tout seul en dévoilement : le bouton
+       « Réponse » disparaît et « Question suivante » apparaît sous le curseur. Un clic
+       parti une fraction de seconde plus tôt atterrit donc sur le second, et le
+       dévoilement est sauté — ce qui explique qu'on l'observe sur certaines questions
+       et pas sur d'autres, selon l'instant du clic. On neutralise « Question suivante »
+       pendant un court instant après chaque bascule. */
+    function armNextButtonGuard() {
+        var btn = document.getElementById('acdc-qz-host-next-btn');
+        if (!btn) { return; }
+        btn.disabled = true;
+        btn.style.opacity = '.45';
+        setTimeout(function(){
+            btn.disabled = false;
+            btn.style.opacity = '';
+        }, 700);
     }
 
     function renderReveal(data) {
@@ -637,7 +659,7 @@
         state.hasShownReveal = true;
         stopHostTimer();
         ajax('acdc_of_qz_host_lobby_state',{},function(j){
-            if (j.success && j.data.current_question) { renderReveal(j.data); showState('reveal'); playSound('reveal'); refreshRevealCounts(j.data.current_q_id); }
+            if (j.success && j.data.current_question) { renderReveal(j.data); showState('reveal'); armNextButtonGuard(); playSound('reveal'); refreshRevealCounts(j.data.current_q_id); }
         });
     });
 

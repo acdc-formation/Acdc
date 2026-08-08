@@ -1375,9 +1375,13 @@ trait ACDC_Quizzes_Render_Trait {
             return;
         }
         if ( $multi ) {
+            /* ACDC 3.25.173 — « Plusieurs réponses possibles » ne disait pas qu'il fallait
+               les cocher TOUTES : on pouvait n'en cocher qu'une ou deux et croire avoir
+               répondu. On ne dit pas COMBIEN — ce serait donner la réponse — mais on dit
+               ce qu'il faut faire. */
             $label = ( self::ACDC_OF_QZ_QTYPE_POLL === $type )
                 ? __( 'Plusieurs réponses possibles (sondage)', 'acdc-formation-saas' )
-                : __( 'Plusieurs réponses possibles', 'acdc-formation-saas' );
+                : __( 'Plusieurs réponses possibles — cochez TOUTES les bonnes réponses', 'acdc-formation-saas' );
         } else {
             $label = __( 'Une seule réponse possible', 'acdc-formation-saas' );
         }
@@ -1758,6 +1762,18 @@ trait ACDC_Quizzes_Render_Trait {
                                 <span class="acdc-qz-player-avatar-card-inner">
                                     <span class="acdc-qz-player-avatar-symbol">♂</span>
                                     <span class="acdc-qz-player-avatar-name">Homme</span>
+                                </span>
+                            </label>
+                            <?php /* ACDC 3.25.173 — Le choix se limitait à « Femme » ou
+                                     « Homme » : une donnée de genre exigée de l'apprenant
+                                     pour un simple pictogramme, sans possibilité de ne pas
+                                     répondre. Troisième option neutre, sélectionnée par
+                                     défaut pour que le choix reste facultatif. */ ?>
+                            <label class="acdc-qz-player-avatar-card-big">
+                                <input type="radio" name="avatar" value="neutre" checked />
+                                <span class="acdc-qz-player-avatar-card-inner">
+                                    <span class="acdc-qz-player-avatar-symbol">★</span>
+                                    <span class="acdc-qz-player-avatar-name">Sans préférence</span>
                                 </span>
                             </label>
                         </div>

@@ -2685,9 +2685,11 @@ trait ACDC_Quizzes_Actions_Trait {
         global $wpdb;
         $pin      = isset( $_REQUEST['pin'] ) ? sanitize_text_field( wp_unslash( (string) $_REQUEST['pin'] ) ) : '';
         $nickname = isset( $_REQUEST['nickname'] ) ? sanitize_text_field( wp_unslash( (string) $_REQUEST['nickname'] ) ) : '';
-        $avatar   = isset( $_REQUEST['avatar'] ) ? sanitize_key( wp_unslash( (string) $_REQUEST['avatar'] ) ) : 'femme';
+        // ACDC 3.25.173 — « neutre » devient le défaut : on n'exige plus une donnée de
+        // genre pour afficher un pictogramme.
+        $avatar   = isset( $_REQUEST['avatar'] ) ? sanitize_key( wp_unslash( (string) $_REQUEST['avatar'] ) ) : 'neutre';
         $pin = preg_replace( '/[^0-9]/', '', $pin );
-        if ( strlen( $pin ) < 4 || ! in_array( $avatar, array( 'femme', 'homme' ), true ) ) {
+        if ( strlen( $pin ) < 4 || ! in_array( $avatar, array( 'femme', 'homme', 'neutre' ), true ) ) {
             wp_send_json_error( array( 'message' => 'Données invalides' ), 400 );
         }
         if ( strlen( $nickname ) < 1 || strlen( $nickname ) > 30 ) {
@@ -2822,6 +2824,21 @@ trait ACDC_Quizzes_Actions_Trait {
             $server_elapsed_ms = max( 0, ( current_time( 'timestamp' ) - strtotime( $session->current_question_started_at ) ) * 1000 );
         }
         $response_ms = \ACDC\Support\QuizScore::clampResponseMs( $response_ms, $server_elapsed_ms );
+
+        /* ACDC 3.25.173 — Le serveur ne ferme jamais une question : il acceptait donc
+           une réponse arrivée bien après la fin du temps imparti, et la notait. Sur une
+           évaluation, dont le barème ne dépend pas de la vitesse depuis la 3.25.168,
+           une réponse hors délai empochait même la totalité des points — l'anti-triche
+           du chronomètre ne servait à rien. Deux secondes de tolérance couvrent la
+           latence réseau et l'écart entre l'horloge du navigateur et celle du serveur.
+           Une question sans limite de temps n'est évidemment jamais concernée. */
+        $time_limit_ms = (int) $question->time_limit * 1000;
+        if ( $time_limit_ms > 0 && $server_elapsed_ms > ( $time_limit_ms + 2000 ) ) {
+            wp_send_json_error( array(
+                'code'    => 'qz_time_over',
+                'message' => 'Temps écoulé : cette réponse n\'a pas été prise en compte.',
+            ), 409 );
+        }
 
         /* ACDC 3.25.168 — Le barème dépend de la FINALITÉ, pas de la modalité. Le quiz
            live est un jeu : la prime à la rapidité y a du sens. Une évaluation passée
