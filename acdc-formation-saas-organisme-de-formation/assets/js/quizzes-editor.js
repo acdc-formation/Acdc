@@ -469,6 +469,17 @@
                 QzEditor.scheduleAutosave( quizId );
             } );
 
+            /* 5 bis. ACDC 3.25.168 — Le champ « temps limite » disparaît dès que la
+               question devient une réponse à rédiger : on ne chronomètre pas une
+               rédaction. Le serveur force déjà zéro à l'enregistrement ; ceci évite
+               simplement de laisser croire au formateur que son réglage compte. */
+            $( document ).on( 'change', '.acdc-qz-settings-form [name="type"]', function() {
+                var isOpen = ( $( this ).val() === 'open_text' );
+                var $sel   = $( '.acdc-qz-settings-form [name="time_limit"]' );
+                $sel.toggle( ! isOpen );
+                $( '.acdc-qz-time-limit-na' ).toggle( isOpen );
+            } );
+
             // 6. Bouton "+ Ajouter une proposition" / "+ Ajouter un élément".
             $( document ).on( 'click', '.acdc-qz-answer-add', function( e ) {
                 e.preventDefault();

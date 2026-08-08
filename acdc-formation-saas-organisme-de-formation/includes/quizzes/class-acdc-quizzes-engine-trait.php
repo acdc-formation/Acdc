@@ -310,12 +310,24 @@ trait ACDC_Quizzes_Engine_Trait {
             "SELECT id FROM {$tbl_p} WHERE session_id=%d",
             (int) $session->id
         ) );
+        /* ACDC 3.25.168 — Une évaluation passée en salle ne remontait aucun score dans
+           l'écran de résultats : on n'écrivait que total_score, alors que la colonne
+           affichée pour une évaluation est total_score_percentage, restée nulle. D'où
+           le « — » et l'impossibilité de dire si c'était acquis.
+           Le quiz live garde sa somme de points brute — c'est son unité, un classement.
+           Toute autre finalité passe par recompute_qz_participant_score(), qui rapporte
+           les points gagnés aux points possibles et remplit le pourcentage. */
+        $is_live_purpose = ( self::ACDC_OF_QZ_PURPOSE_LIVE === (string) $session->quiz_purpose );
         foreach ( $part_ids as $pid ) {
-            $total = (float) $wpdb->get_var( $wpdb->prepare(
-                "SELECT COALESCE(SUM(score_earned),0) FROM {$tbl_pa} WHERE participant_id=%d AND session_id=%d",
-                (int) $pid, (int) $session->id
-            ) );
-            $wpdb->update( $tbl_p, array( 'total_score' => $total ), array( 'id' => (int) $pid ), array( '%f' ), array( '%d' ) );
+            if ( $is_live_purpose ) {
+                $total = (float) $wpdb->get_var( $wpdb->prepare(
+                    "SELECT COALESCE(SUM(score_earned),0) FROM {$tbl_pa} WHERE participant_id=%d AND session_id=%d",
+                    (int) $pid, (int) $session->id
+                ) );
+                $wpdb->update( $tbl_p, array( 'total_score' => $total ), array( 'id' => (int) $pid ), array( '%f' ), array( '%d' ) );
+            } else {
+                $this->recompute_qz_participant_score( (int) $pid );
+            }
         }
 
         // 3.21.06 — Résoudre registration_id si absent, puis générer le PDF
@@ -486,7 +498,10 @@ trait ACDC_Quizzes_Engine_Trait {
                     'title'      => (string) $q->title,
                     'type'       => (string) $q->type,
                     'type_label' => isset( $type_labels[ $q->type ] ) ? $type_labels[ $q->type ] : 'Question',
-                    'time_limit' => (int) $q->time_limit,
+                    /* ACDC 3.25.168 — Une question à rédiger n'est jamais chronométrée,
+                       y compris celles créées avant cette règle : on neutralise à la
+                       lecture plutôt que d'exiger une reprise de tous les quiz. */
+                    'time_limit' => ( self::ACDC_OF_QZ_QTYPE_OPEN_TEXT === (string) $q->type ) ? 0 : (int) $q->time_limit,
                     'answers'        => array_map( function( $a ) {
                         return array(
                             'id'    => (int) $a->id,

@@ -16,3 +16,20 @@
 .acdc-learner-portal-content .acdc-mt-24 {
     margin-top: 28px;
 }
+
+/* ACDC 3.25.168 — Badges de correction du détail de résultats côté apprenant.
+   La feuille du portail apprenant ne les définissait pas : ils héritaient de
+   quizzes-admin.css, qui n'est pas chargée ici. Le troisième état — réponse en
+   partie juste — arrive avec le barème au prorata. */
+.acdc-qz-result-badge {
+    display: inline-block;
+    padding: 3px 10px;
+    border-radius: 999px;
+    font-size: 12px;
+    font-weight: 700;
+    white-space: nowrap;
+}
+.acdc-qz-result-badge-correct { background: #e8f4ec; color: #1b5e3f; }
+.acdc-qz-result-badge-partial { background: #fef3c7; color: #92400e; }
+.acdc-qz-result-badge-wrong   { background: #fde2e1; color: #7d2820; }
+.acdc-qz-result-badge-pending { background: #fef6e4; color: #8a6d2a; }

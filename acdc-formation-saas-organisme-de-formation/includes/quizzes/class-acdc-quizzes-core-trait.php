@@ -35,8 +35,9 @@ trait ACDC_Quizzes_Core_Trait {
     /*  Propriétés du module                                                */
     /* -------------------------------------------------------------------- */
 
-    /** @var string Version SQL courante du module Quizzes (utilisée pour dbDelta). */
-    private $qz_db_version = '1.0.0';
+    /** @var string Version SQL courante du module Quizzes (utilisée pour dbDelta).
+     *  1.1.0 — ACDC 3.25.168 : colonne score_ratio sur player_answers (barème partiel). */
+    private $qz_db_version = '1.1.0';
 
     /** @var string Option WP qui stocke la version SQL appliquée. */
     private $qz_db_version_option = 'acdc_of_qz_db_version';
@@ -453,6 +454,7 @@ trait ACDC_Quizzes_Core_Trait {
             answer_text LONGTEXT NULL,
             answer_value FLOAT NULL,
             is_correct TINYINT(1) NULL,
+            score_ratio DECIMAL(6,5) NULL,
             score_earned DECIMAL(10,2) NOT NULL DEFAULT 0,
             response_time DECIMAL(8,3) NULL,
             answered_at DATETIME NOT NULL,
@@ -749,6 +751,138 @@ trait ACDC_Quizzes_Core_Trait {
         return array_key_exists(
             (string) $purpose,
             $this->get_quiz_purpose_labels()
+        );
+    }
+
+    /**
+     * ACDC 3.25.168 — Corrige un jeu de réponses cochées et renvoie une PART de réussite.
+     *
+     * Jusqu'ici la correction était binaire : une seule case manquante sur trois et
+     * l'apprenant repartait avec zéro. C'est faux pédagogiquement — il connaissait deux
+     * tiers de la réponse — et cela fausse l'atteinte des objectifs Qualiopi, qui se
+     * calcule sur ces points.
+     *
+     * Barème pour un QCM à réponses multiples :
+     *
+     *     part = ( cochées justes − cochées fausses ) / nombre de bonnes réponses
+     *
+     * borné à [0, 1]. Retrancher les cochées fausses est ce qui empêche de tout cocher
+     * pour rafler les points : qui coche l'intégralité des propositions obtient zéro,
+     * exactement comme qui ne coche rien.
+     *
+     * Les autres types restent en tout-ou-rien : un choix unique, un vrai/faux ou un
+     * puzzle n'ont pas de réussite partielle qui ait un sens.
+     *
+     * @param object $question   Ligne de question (type attendu).
+     * @param array  $answer_ids Identifiants de réponses cochés par l'apprenant.
+     *
+     * @return array {
+     *     @type float    $ratio      Part de réussite entre 0 et 1.
+     *     @type int|null $is_correct 1 si tout juste, 0 sinon, null si non corrigeable.
+     *     @type bool     $partial    Vrai si 0 < ratio < 1.
+     * }
+     */
+    public function qz_grade_answer_set( $question, $answer_ids ) {
+        $none = array( 'ratio' => 0.0, 'is_correct' => 0, 'partial' => false );
+        if ( ! is_object( $question ) ) {
+            return $none;
+        }
+        $type       = (string) $question->type;
+        $answer_ids = array_values( array_unique( array_map( 'intval', (array) $answer_ids ) ) );
+
+        // Texte libre et sondage ne se corrigent pas automatiquement.
+        if ( self::ACDC_OF_QZ_QTYPE_OPEN_TEXT === $type || self::ACDC_OF_QZ_QTYPE_POLL === $type ) {
+            return array( 'ratio' => 0.0, 'is_correct' => null, 'partial' => false );
+        }
+
+        $all = $this->get_qz_answers_for_question_db( (int) $question->id );
+
+        if ( self::ACDC_OF_QZ_QTYPE_PUZZLE === $type ) {
+            // Puzzle : l'ordre fait la réponse, donc comparaison ordonnée, tout ou rien.
+            usort( $all, function( $a, $b ) { return ( (int) $a->sort_order ) <=> ( (int) $b->sort_order ); } );
+            $expected = array();
+            foreach ( $all as $a ) {
+                $expected[] = (int) $a->id;
+            }
+            $ok = ( ! empty( $expected ) && $answer_ids === $expected );
+            return array( 'ratio' => $ok ? 1.0 : 0.0, 'is_correct' => $ok ? 1 : 0, 'partial' => false );
+        }
+
+        $correct_ids = array();
+        foreach ( $all as $a ) {
+            if ( 1 === (int) $a->is_correct ) {
+                $correct_ids[] = (int) $a->id;
+            }
+        }
+        if ( empty( $correct_ids ) ) {
+            // Question sans bonne réponse déclarée : rien de corrigeable.
+            return array( 'ratio' => 0.0, 'is_correct' => null, 'partial' => false );
+        }
+
+        $sorted_resp = $answer_ids;
+        sort( $sorted_resp );
+        $sorted_corr = $correct_ids;
+        sort( $sorted_corr );
+        $exact = ( $sorted_resp === $sorted_corr );
+
+        if ( self::ACDC_OF_QZ_QTYPE_QCM_MULTIPLE !== $type ) {
+            // Choix unique, vrai/faux : tout ou rien.
+            return array( 'ratio' => $exact ? 1.0 : 0.0, 'is_correct' => $exact ? 1 : 0, 'partial' => false );
+        }
+
+        $hits   = count( array_intersect( $answer_ids, $correct_ids ) );
+        $misses = count( array_diff( $answer_ids, $correct_ids ) );
+        $ratio  = ( $hits - $misses ) / count( $correct_ids );
+        $ratio  = max( 0.0, min( 1.0, (float) $ratio ) );
+
+        return array(
+            'ratio'      => $ratio,
+            'is_correct' => ( $ratio >= 1.0 ) ? 1 : 0,
+            'partial'    => ( $ratio > 0.0 && $ratio < 1.0 ),
+        );
+    }
+
+    /**
+     * ACDC 3.25.168 — Libellé de correction d'une réponse, part de réussite comprise.
+     *
+     * @param int|null   $is_correct  Colonne is_correct de la réponse.
+     * @param float|null $score_ratio Colonne score_ratio de la réponse.
+     *
+     * @return array { @type string $label, @type string $state } state : correct|partial|wrong|pending
+     */
+    public function qz_answer_verdict( $is_correct, $score_ratio ) {
+        if ( null === $is_correct ) {
+            return array( 'label' => 'À corriger', 'state' => 'pending' );
+        }
+        if ( (int) $is_correct === 1 ) {
+            return array( 'label' => 'Juste', 'state' => 'correct' );
+        }
+        if ( null !== $score_ratio && (float) $score_ratio > 0.0 ) {
+            return array(
+                'label' => sprintf( 'Partiellement juste (%d %%)', (int) round( (float) $score_ratio * 100 ) ),
+                'state' => 'partial',
+            );
+        }
+        return array( 'label' => 'Faux', 'state' => 'wrong' );
+    }
+
+    /**
+     * ACDC 3.25.168 — Liste des onglets « Résultats » du portail.
+     *
+     * Ces onglets imposent la vue résultats et masquent le filtre de finalité. La liste
+     * était recopiée à deux endroits et l'évaluation diagnostique n'avait été ajoutée ni
+     * à l'un ni à l'autre : son entrée de menu existait, mais elle ouvrait la LISTE des
+     * quiz au lieu de leurs résultats — d'où « la page de résultats n'existe pas ».
+     *
+     * @return array
+     */
+    public function qz_results_tabs() {
+        return array(
+            'qz_results',
+            'qz_results_live',
+            'qz_results_positioning',
+            'qz_results_diagnostic',
+            'qz_results_assessment',
         );
     }
 
@@ -3757,6 +3891,7 @@ trait ACDC_Quizzes_Core_Trait {
                 q.title AS quiz_title,
                 q.quiz_purpose,
                 q.delivery_mode AS quiz_delivery_mode,
+                q.pass_threshold AS quiz_pass_threshold,
                 f.title AS formation_title,
                 f.code AS formation_code,
                 f.modality AS formation_modality,
@@ -3807,6 +3942,7 @@ trait ACDC_Quizzes_Core_Trait {
                 q.title AS quiz_title,
                 q.quiz_purpose,
                 q.delivery_mode AS quiz_delivery_mode,
+                q.pass_threshold AS quiz_pass_threshold,
                 f.title AS formation_title,
                 f.code AS formation_code,
                 f.modality AS formation_modality,
@@ -3939,22 +4075,32 @@ trait ACDC_Quizzes_Core_Trait {
                 q.points_value,
                 q.objective_id,
                 (SELECT COUNT(*) FROM {$tbl_pa} pa WHERE pa.question_id = q.id AND pa.session_id = %d) AS count_answered,
-                (SELECT COUNT(*) FROM {$tbl_pa} pa WHERE pa.question_id = q.id AND pa.session_id = %d AND pa.is_correct = 1) AS count_correct
+                (SELECT COUNT(*) FROM {$tbl_pa} pa WHERE pa.question_id = q.id AND pa.session_id = %d AND pa.is_correct = 1) AS count_correct,
+                /* ACDC 3.25.168 — Réussites partielles, et part moyenne réellement acquise. */
+                (SELECT COUNT(*) FROM {$tbl_pa} pa WHERE pa.question_id = q.id AND pa.session_id = %d AND pa.is_correct = 0 AND pa.score_ratio > 0) AS count_partial,
+                (SELECT AVG(COALESCE(pa.score_ratio, pa.is_correct)) FROM {$tbl_pa} pa WHERE pa.question_id = q.id AND pa.session_id = %d AND pa.is_correct IS NOT NULL) AS ratio_avg
             FROM {$tbl_q} q
             INNER JOIN {$tbl_s} s ON s.quiz_id = q.quiz_id
             WHERE s.id = %d
             ORDER BY q.sort_order ASC, q.id ASC
         ";
-        $rows = $wpdb->get_results( $wpdb->prepare( $sql, $session_id, $session_id, $session_id ) );
+        $rows = $wpdb->get_results( $wpdb->prepare( $sql, $session_id, $session_id, $session_id, $session_id, $session_id ) );
 
         if ( ! is_array( $rows ) ) {
             return array();
         }
-        // Calcul du taux de réussite côté PHP pour gérer la division par zéro
+        /* Taux de réussite calculé en PHP pour gérer la division par zéro.
+           ACDC 3.25.168 — Il comptait les seules réponses parfaites : une question que
+           toute la classe avait réussie aux deux tiers s'affichait à 0 %, et passait pour
+           la plus faible du quiz. On prend désormais la part moyenne acquise. */
         foreach ( $rows as $r ) {
-            $r->success_rate = ( (int) $r->count_answered > 0 )
-                ? round( ( (int) $r->count_correct / (int) $r->count_answered ) * 100, 1 )
-                : null;
+            if ( (int) $r->count_answered <= 0 ) {
+                $r->success_rate = null;
+                continue;
+            }
+            $r->success_rate = ( null !== $r->ratio_avg )
+                ? round( (float) $r->ratio_avg * 100, 1 )
+                : round( ( (int) $r->count_correct / (int) $r->count_answered ) * 100, 1 );
         }
         return $rows;
     }
@@ -3977,6 +4123,7 @@ trait ACDC_Quizzes_Core_Trait {
         $tbl_q   = $this->get_qz_table( 'questions' );
         $tbl_pa  = $this->get_qz_table( 'player_answers' );
         $tbl_s   = $this->get_qz_table( 'sessions' );
+        $tbl_qz  = $this->get_qz_table( 'quizzes' );
 
         $sql = "
             SELECT
@@ -3984,6 +4131,7 @@ trait ACDC_Quizzes_Core_Trait {
                 o.label,
                 o.description,
                 o.pass_threshold,
+                qz.pass_threshold AS quiz_pass_threshold,
                 (SELECT COUNT(*) FROM {$tbl_q} q WHERE q.objective_id = o.id) AS count_questions,
                 (SELECT
                     CASE WHEN SUM(CASE WHEN q.is_scored = 1 AND q.type != 'poll' THEN q.points_value ELSE 0 END) > 0
@@ -3998,6 +4146,7 @@ trait ACDC_Quizzes_Core_Trait {
                  WHERE q.objective_id = o.id AND q.type != 'poll') AS score_avg
             FROM {$tbl_obj} o
             INNER JOIN {$tbl_s} s ON s.quiz_id = o.quiz_id
+            INNER JOIN {$tbl_qz} qz ON qz.id = o.quiz_id
             WHERE s.id = %d
             ORDER BY o.sort_order ASC, o.id ASC
         ";
@@ -4006,13 +4155,26 @@ trait ACDC_Quizzes_Core_Trait {
         if ( ! is_array( $rows ) ) {
             return array();
         }
-        // Indicateur is_passing (atteint le seuil ?)
+        /* ACDC 3.25.168 — Le seuil et la colonne « Atteint ? » restaient vides dès que le
+           formateur n'avait pas saisi de seuil sur CHAQUE objectif — ce qui est le cas
+           par défaut, le champ étant facultatif. Une évaluation sans verdict d'atteinte
+           ne prouve rien au titre de l'indicateur Qualiopi 12 : on retombe donc sur le
+           seuil de réussite du quiz, puis sur 70 % comme partout ailleurs dans le
+           moteur, et l'on note d'où vient le seuil appliqué pour que l'écran le dise. */
         foreach ( $rows as $r ) {
-            if ( null !== $r->score_avg && null !== $r->pass_threshold ) {
-                $r->is_passing = ( (float) $r->score_avg >= (float) $r->pass_threshold );
+            if ( null !== $r->pass_threshold ) {
+                $r->threshold_applied = (float) $r->pass_threshold;
+                $r->threshold_source  = 'objective';
+            } elseif ( null !== $r->quiz_pass_threshold ) {
+                $r->threshold_applied = (float) $r->quiz_pass_threshold;
+                $r->threshold_source  = 'quiz';
             } else {
-                $r->is_passing = null;
+                $r->threshold_applied = 70.0;
+                $r->threshold_source  = 'default';
             }
+            $r->is_passing = ( null !== $r->score_avg )
+                ? ( (float) $r->score_avg >= $r->threshold_applied )
+                : null;
         }
         return $rows;
     }
@@ -5596,7 +5758,9 @@ trait ACDC_Quizzes_Core_Trait {
                 'type'            => $type,
                 'title'           => $title,
                 'description'     => '' !== $description ? $description : null,
-                'time_limit'      => $timer_global,
+                // ACDC 3.25.168 — L'import appliquait le chronomètre global à toutes les
+                // questions, réponses rédigées comprises. Zéro = pas de limite.
+                'time_limit'      => ( self::ACDC_OF_QZ_QTYPE_OPEN_TEXT === $type ) ? 0 : $timer_global,
                 'sort_order'      => $base_sort + $sort_offset,
                 'is_scored'       => in_array( $type, array( self::ACDC_OF_QZ_QTYPE_POLL, self::ACDC_OF_QZ_QTYPE_OPEN_TEXT ), true ) ? 0 : 1,
                 'points_type'     => 'standard',

@@ -559,11 +559,22 @@ trait ACDC_Learner_Portal_Render_Trait {
               <span class="acdc-qz-result-question-num">Q<?php echo (int) $idx + 1; ?></span>
               <h3><?php echo esc_html( $q->title ); ?></h3>
               <?php if ( ! $is_poll && $a && null !== $a->is_correct ) : ?>
-                <?php if ( (int) $a->is_correct === 1 ) : ?>
-                  <span class="acdc-qz-result-badge acdc-qz-result-badge-correct">✓ Correct</span>
-                <?php else : ?>
-                  <span class="acdc-qz-result-badge acdc-qz-result-badge-wrong">✗ Faux</span>
-                <?php endif; ?>
+                <?php
+                /* ACDC 3.25.168 — L'apprenant lisait « Faux » sur une réponse qu'il avait
+                   en partie juste, alors que ses points, eux, étaient comptés au prorata.
+                   Le badge dit maintenant la même chose que le score. */
+                $lp_verdict = $this->qz_answer_verdict( $a->is_correct, $a->score_ratio ?? null );
+                $lp_class = array(
+                    'correct' => 'acdc-qz-result-badge-correct',
+                    'partial' => 'acdc-qz-result-badge-partial',
+                    'wrong'   => 'acdc-qz-result-badge-wrong',
+                    'pending' => 'acdc-qz-result-badge-pending',
+                );
+                $lp_icon = array( 'correct' => '✓', 'partial' => '◐', 'wrong' => '✗', 'pending' => '⏳' );
+                ?>
+                <span class="acdc-qz-result-badge <?php echo esc_attr( $lp_class[ $lp_verdict['state'] ] ); ?>">
+                  <?php echo esc_html( $lp_icon[ $lp_verdict['state'] ] . ' ' . $lp_verdict['label'] ); ?>
+                </span>
               <?php elseif ( $is_open && $a ) : ?>
                 <span class="acdc-qz-result-badge acdc-qz-result-badge-pending">⏳ En cours de correction</span>
               <?php endif; ?>

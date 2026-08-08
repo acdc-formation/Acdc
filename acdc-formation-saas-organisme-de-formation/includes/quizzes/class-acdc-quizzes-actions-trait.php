@@ -1144,6 +1144,13 @@ trait ACDC_Quizzes_Actions_Trait {
         $title = isset( $_POST['title'] ) ? sanitize_text_field( wp_unslash( $_POST['title'] ) ) : '';
         $description = isset( $_POST['description'] ) ? wp_kses_post( wp_unslash( $_POST['description'] ) ) : '';
         $time_limit = isset( $_POST['time_limit'] ) ? max( 5, min( 600, (int) wp_unslash( $_POST['time_limit'] ) ) ) : 20;
+        /* ACDC 3.25.168 — Une réponse à rédiger ne se chronomètre pas. Le champ était
+           servi avec le même défaut de 20 secondes que les QCM : le temps était écoulé
+           avant que l'apprenant ait fini sa première phrase, et sa réponse partait vide.
+           Zéro signifie « pas de limite » partout dans le moteur. */
+        if ( self::ACDC_OF_QZ_QTYPE_OPEN_TEXT === $type ) {
+            $time_limit = 0;
+        }
 
         $allowed_pts = array( 'standard', 'double', 'none' );
         $points_type = isset( $_POST['points_type'] ) ? sanitize_key( wp_unslash( $_POST['points_type'] ) ) : 'standard';
@@ -2793,31 +2800,13 @@ trait ACDC_Quizzes_Actions_Trait {
         if ( ! $question ) {
             wp_send_json_error( array( 'message' => 'Question introuvable' ), 404 );
         }
-        // Calcul correctness
-        $is_correct = null;
+        /* ACDC 3.25.168 — Correction déléguée à qz_grade_answer_set(), qui rend une PART
+           de réussite et non plus un simple oui/non : sur un QCM à réponses multiples,
+           deux bonnes cases sur trois valent désormais deux tiers des points. */
         $answer_ids = array_values( array_filter( array_map( 'intval', explode( ',', $answer_ids_raw ) ) ) );
-        if ( self::ACDC_OF_QZ_QTYPE_OPEN_TEXT === $question->type ) {
-            $is_correct = null; // sera corrigé manuellement
-        } elseif ( self::ACDC_OF_QZ_QTYPE_POLL === $question->type ) {
-            $is_correct = null; // sondage : pas de bonne/mauvaise réponse
-        } elseif ( self::ACDC_OF_QZ_QTYPE_PUZZLE === $question->type ) {
-            // Puzzle : comparaison ordonnée par sort_order
-            $expected = array();
-            $all = $this->get_qz_answers_for_question_db( $question_id );
-            usort( $all, function( $a, $b ) { return ( (int) $a->sort_order ) <=> ( (int) $b->sort_order ); } );
-            foreach ( $all as $a ) { $expected[] = (int) $a->id; }
-            $is_correct = ( ! empty( $expected ) && $answer_ids === $expected ) ? 1 : 0;
-        } else {
-            // QCM single, multi, true/false : comparaison ensembliste
-            $correct_ids = array();
-            foreach ( $this->get_qz_answers_for_question_db( $question_id ) as $a ) {
-                if ( (int) $a->is_correct === 1 ) {
-                    $correct_ids[] = (int) $a->id;
-                }
-            }
-            sort( $correct_ids ); $sorted_resp = $answer_ids; sort( $sorted_resp );
-            $is_correct = ( ! empty( $correct_ids ) && $sorted_resp === $correct_ids ) ? 1 : 0;
-        }
+        $verdict     = $this->qz_grade_answer_set( $question, $answer_ids );
+        $is_correct  = $verdict['is_correct'];
+        $score_ratio = $verdict['ratio'];
         // Sécurité anti-triche : le temps serveur (non falsifiable) est autoritatif dès
         // qu'il est connu. Un min(client, serveur) serait inefficace (response_ms=0 → 0).
         // Voir \ACDC\Support\QuizScore::clampResponseMs (couvert par PHPUnit).
@@ -2829,9 +2818,22 @@ trait ACDC_Quizzes_Actions_Trait {
             $server_elapsed_ms = max( 0, ( current_time( 'timestamp' ) - strtotime( $session->current_question_started_at ) ) * 1000 );
         }
         $response_ms = \ACDC\Support\QuizScore::clampResponseMs( $response_ms, $server_elapsed_ms );
-        $score = ( null === $is_correct ) ? 0 : $this->qz_calculate_kahoot_score(
-            (bool) $is_correct, $response_ms, (int) $question->time_limit
-        );
+
+        /* ACDC 3.25.168 — Le barème dépend de la FINALITÉ, pas de la modalité. Le quiz
+           live est un jeu : la prime à la rapidité y a du sens. Une évaluation passée
+           dans la même salle, avec les mêmes écrans, reste une évaluation : elle doit
+           rendre un score pédagogique sur les points de la question, sans bonus de
+           vitesse — sinon le pourcentage d'acquisition ne veut rien dire, et le verdict
+           acquis / non acquis récompense les doigts rapides. */
+        if ( null === $is_correct ) {
+            $score = 0;
+        } elseif ( self::ACDC_OF_QZ_PURPOSE_LIVE === (string) $session->quiz_purpose ) {
+            $score = $this->qz_calculate_kahoot_score(
+                (bool) $is_correct, $response_ms, (int) $question->time_limit
+            ) * $score_ratio;
+        } else {
+            $score = (float) $question->points_value * $score_ratio;
+        }
         // Verrou souple : UPSERT (un participant peut corriger sa réponse tant que la question est ouverte)
         $tbl_pa = $this->get_qz_table( 'player_answers' );
         $existing = $wpdb->get_var( $wpdb->prepare(
@@ -2846,33 +2848,43 @@ trait ACDC_Quizzes_Actions_Trait {
             'answer_ids_json' => wp_json_encode( $answer_ids ),
             'answer_text'     => $answer_text,
             'is_correct'      => $is_correct,
+            'score_ratio'     => $score_ratio,
             'score_earned'    => $score,
             'response_time'   => round( $response_ms / 1000.0, 3 ),
             'answered_at'     => $now,
         );
         if ( $existing ) {
-            $wpdb->update( $tbl_pa, $data, array( 'id' => (int) $existing ), array( '%d','%d','%d','%s','%s','%d','%f','%f','%s' ), array( '%d' ) );
+            $wpdb->update( $tbl_pa, $data, array( 'id' => (int) $existing ), array( '%d','%d','%d','%s','%s','%d','%f','%f','%f','%s' ), array( '%d' ) );
         } else {
-            $wpdb->insert( $tbl_pa, $data, array( '%d','%d','%d','%s','%s','%d','%f','%f','%s' ) );
+            $wpdb->insert( $tbl_pa, $data, array( '%d','%d','%d','%s','%s','%d','%f','%f','%f','%s' ) );
         }
         // Pour les sessions live (Kahoot), le score est la somme directe de score_earned
         // (les questions live ont is_scored=0, recompute_qz_participant_score retournerait 0)
         $tbl_p = $this->get_qz_table( 'participants' );
-        $total_live = (float) $wpdb->get_var( $wpdb->prepare(
-            "SELECT COALESCE(SUM(score_earned),0) FROM {$tbl_pa} WHERE participant_id=%d AND session_id=%d",
-            (int) $p->id, (int) $p->session_id
-        ) );
-        $wpdb->update(
-            $tbl_p,
-            array( 'total_score' => $total_live, 'updated_at' => $now ),
-            array( 'id' => (int) $p->id ),
-            array( '%f', '%s' ),
-            array( '%d' )
-        );
+        if ( self::ACDC_OF_QZ_PURPOSE_LIVE === (string) $session->quiz_purpose ) {
+            $total_live = (float) $wpdb->get_var( $wpdb->prepare(
+                "SELECT COALESCE(SUM(score_earned),0) FROM {$tbl_pa} WHERE participant_id=%d AND session_id=%d",
+                (int) $p->id, (int) $p->session_id
+            ) );
+            $wpdb->update(
+                $tbl_p,
+                array( 'total_score' => $total_live, 'updated_at' => $now ),
+                array( 'id' => (int) $p->id ),
+                array( '%f', '%s' ),
+                array( '%d' )
+            );
+        } else {
+            /* ACDC 3.25.168 — Pour une évaluation, on tient le pourcentage à jour à
+               chaque réponse : le formateur consulte souvent l'écran de résultats sans
+               avoir cliqué « Terminer », et il y lisait un score vide. */
+            $this->recompute_qz_participant_score( (int) $p->id );
+        }
         wp_send_json_success( array(
-            'recorded'   => true,
-            'is_correct' => $is_correct,
-            'score'      => $score,
+            'recorded'    => true,
+            'is_correct'  => $is_correct,
+            'score_ratio' => $score_ratio,
+            'partial'     => ! empty( $verdict['partial'] ),
+            'score'       => $score,
         ) );
     }
 

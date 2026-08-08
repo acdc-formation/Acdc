@@ -656,3 +656,32 @@
         font-size: 16px;
     }
 }
+
+/* ACDC 3.25.168 — Consigne de saisie sous l'énoncé (« une seule » / « plusieurs »
+   réponses). Elle n'existait qu'en pied d'écran, en gris et en petit corps : sur une
+   évaluation dont le résultat est opposable, ne pas voir qu'on pouvait cocher
+   plusieurs cases est un piège. Le rouge est réservé au cas multiple — c'est là que
+   l'erreur se produit ; le choix unique reste sobre, pour ne pas diluer l'alerte. */
+.acdc-qz-answer-instruction {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    margin: 10px 0 16px;
+    padding: 9px 14px;
+    border-radius: 8px;
+    font-size: 15px;
+    font-weight: 700;
+    letter-spacing: .01em;
+    line-height: 1.35;
+}
+.acdc-qz-answer-instruction.is-multi {
+    color: #b91c1c;
+    background: #fef2f2;
+    border: 1px solid #fecaca;
+}
+.acdc-qz-answer-instruction.is-single {
+    color: #475569;
+    background: #f8fafc;
+    border: 1px solid #e2e8f0;
+    font-weight: 600;
+}

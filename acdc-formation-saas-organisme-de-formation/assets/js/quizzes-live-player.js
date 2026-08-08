@@ -467,12 +467,27 @@
     }
 
     // ====== RENDU QUESTION — par type =====================================
+    /* ACDC 3.25.168 — Consigne « une seule » / « plusieurs » réponses, affichée sous
+       l'énoncé. Elle ne vivait qu'en pied d'écran, en petit corps gris : sur une
+       évaluation, ne pas savoir qu'on peut cocher plusieurs cases fausse le résultat. */
+    function fillAnswerInstruction(el, type) {
+        if (!el) { return; }
+        var multi  = (type === 'qcm_multiple' || type === 'poll');
+        var single = (type === 'qcm_single' || type === 'true_false');
+        if (!multi && !single) { el.style.display = 'none'; return; }
+        el.className = 'acdc-qz-answer-instruction ' + (multi ? 'is-multi' : 'is-single');
+        el.textContent = multi
+            ? (type === 'poll' ? '⚠ Plusieurs réponses possibles (sondage)' : '⚠ Plusieurs réponses possibles')
+            : '● Une seule réponse possible';
+        el.style.display = '';
+    }
+
     function renderQuestion(data) {
         var q = data.current_question;
         if (!q) return;
         state.currentQuestionType = q.type;
-
         document.getElementById('acdc-qz-player-q-title').textContent = q.title;
+        fillAnswerInstruction(document.getElementById('acdc-qz-player-q-instruction'), q.type);
         document.getElementById('acdc-qz-player-q-num').textContent = (data.current_q_num||'?') + '/' + (data.total_q||'?');
         document.getElementById('acdc-qz-player-q-type').textContent = q.type_label||'';
 

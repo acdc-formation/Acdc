@@ -14,7 +14,33 @@
     var playerUrl = root.dataset.playerUrl;
 
     var POLL_INTERVAL = 1500;
-    var state = { current: 'lobby', lastQuestionId: 0, hasShownReveal: false, podiumAnimated: false };
+    var state = { current: 'lobby', lastQuestionId: 0, hasShownReveal: false, podiumAnimated: false, allAnswered: false };
+
+    /* ACDC 3.25.168 — Le formateur ne doit pas pouvoir révéler une question encore
+       ouverte. Trois cas rendent la main :
+         — la question n'a pas de chronomètre (réponse libre, par exemple) : sans cette
+           porte, l'écran serait bloqué à jamais ;
+         — le chronomètre est arrivé à zéro ;
+         — tout le monde a répondu : plus personne à attendre. */
+    function canRevealNow() {
+        if ( ! hostTimerData.limit || hostTimerData.limit <= 0 ) { return true; }
+        if ( ! hostTimerData.active ) { return true; }
+        if ( state.allAnswered ) { return true; }
+        return ( Date.now() - hostTimerData.startedAt ) >= hostTimerData.limit;
+    }
+
+    /* Reflète ce verrou dans le bouton : grisé et explicite plutôt que muet au clic. */
+    function refreshRevealBtn() {
+        var btn = document.getElementById('acdc-qz-host-reveal-btn');
+        if ( ! btn ) { return; }
+        var ok = canRevealNow();
+        btn.disabled = ! ok;
+        btn.style.opacity = ok ? '' : '.45';
+        btn.style.cursor  = ok ? '' : 'not-allowed';
+        btn.title = ok
+            ? 'Afficher la bonne réponse'
+            : 'Disponible à la fin du temps imparti, ou dès que tout le monde a répondu';
+    }
 
     // ====== QR CODE =======================================================
     try {
@@ -112,6 +138,8 @@
         if (elF) elF.textContent = count;
 
         renderParticipants(data.participants||[]);
+        state.allAnswered = !! data.all_answered;
+        refreshRevealBtn();
 
         if (data.status === 'lobby') {
             stopHostTimer();
@@ -198,7 +226,13 @@
     function startHostTimer(elapsedSec, limitSec) {
         stopHostTimer();
         var wrap = document.getElementById('acdc-qz-host-timer-wrap');
-        if (!limitSec || limitSec <= 0) { if (wrap) wrap.style.display = 'none'; return; }
+        if (!limitSec || limitSec <= 0) {
+            if (wrap) wrap.style.display = 'none';
+            hostTimerData.limit = 0;
+            hostTimerData.active = false;
+            refreshRevealBtn();
+            return;
+        }
         if (wrap) wrap.style.display = 'block';
         // On recalcule startedAt à partir des secondes déjà écoulées (fourni par le serveur, pas de parsing de date)
         hostTimerData.startedAt = Date.now() - (elapsedSec * 1000);
@@ -211,6 +245,7 @@
     function stopHostTimer() {
         hostTimerData.active = false;
         if (hostTimerRaf) { cancelAnimationFrame(hostTimerRaf); hostTimerRaf = null; }
+        refreshRevealBtn();
     }
 
     function tickHostTimer() {
@@ -223,6 +258,7 @@
         var count = document.getElementById('acdc-qz-host-timer-count');
         if (bar)   { bar.style.width = pct + '%'; bar.classList.toggle('is-urgent', pct <= 25); }
         if (count) { count.textContent = secLeft + 's'; count.classList.toggle('is-urgent', pct <= 25); }
+        refreshRevealBtn();
         // Ticks sonores sur les 3 dernières secondes (seulement quand le chiffre change)
         if (remaining > 0 && secLeft <= 3 && secLeft !== (hostTimerData.lastTick || -1)) {
             hostTimerData.lastTick = secLeft;
@@ -243,11 +279,28 @@
         }
     }
 
+
+    /* ACDC 3.25.168 — Consigne « une seule » / « plusieurs » réponses, affichée sous
+       l'énoncé. Elle ne vivait qu'en pied d'écran, en petit corps gris : sur une
+       évaluation, ne pas savoir qu'on peut cocher plusieurs cases fausse le résultat. */
+    function fillAnswerInstruction(el, type) {
+        if (!el) { return; }
+        var multi  = (type === 'qcm_multiple' || type === 'poll');
+        var single = (type === 'qcm_single' || type === 'true_false');
+        if (!multi && !single) { el.style.display = 'none'; return; }
+        el.className = 'acdc-qz-answer-instruction ' + (multi ? 'is-multi' : 'is-single');
+        el.textContent = multi
+            ? (type === 'poll' ? '⚠ Plusieurs réponses possibles (sondage)' : '⚠ Plusieurs réponses possibles')
+            : '● Une seule réponse possible';
+        el.style.display = '';
+    }
+
     function renderQuestion(data) {
         var q = data.current_question;
         if (!q) return;
         var letters = ['A','B','C','D','E','F'];
         document.getElementById('acdc-qz-host-q-title').textContent = q.title;
+        fillAnswerInstruction(document.getElementById('acdc-qz-host-q-instruction'), q.type);
         document.getElementById('acdc-qz-host-q-num').textContent = (data.current_q_num||'?') + '/' + (data.total_q||'?');
         document.getElementById('acdc-qz-host-q-type').textContent = q.type_label||'';
         var html = '';
@@ -265,6 +318,12 @@
        passation. On rejoue donc la lecture quelques instants après le reveal, et on
        ne redessine que si l'on est toujours sur la même question. */
     function refreshRevealCounts( questionId ) {
+        /* ACDC 3.25.168 — Ces deux relectures appelaient renderReveal(), qui reconstruit
+           tout le bloc et relance ses animations d'entrée : l'écran se retapait
+           entièrement deux fois, à 1,5 s puis 4 s, sous les yeux du formateur et de la
+           salle. La mise à jour non destructive existait déjà depuis la 3.25.160 — elle
+           n'avait simplement jamais été branchée ici. Les nombres se corrigent
+           maintenant en place, sans que rien ne bouge à l'écran. */
         [ 1500, 4000 ].forEach( function( delay ) {
             setTimeout( function() {
                 if ( ! state.hasShownReveal ) { return; }
@@ -272,7 +331,7 @@
                     if ( ! j.success || ! j.data || ! j.data.current_question ) { return; }
                     if ( parseInt( j.data.current_q_id, 10 ) !== parseInt( questionId, 10 ) ) { return; }
                     if ( ! state.hasShownReveal ) { return; }
-                    renderReveal( j.data );
+                    updateRevealCounts( j.data.current_question );
                 } );
             }, delay );
         } );
@@ -569,6 +628,12 @@
     var revealBtn = document.getElementById('acdc-qz-host-reveal-btn');
     if (revealBtn) revealBtn.addEventListener('click', function(){
         if (state.hasShownReveal) return; // Déjà révélé — ignorer
+        /* ACDC 3.25.168 — On ne révèle pas une question encore ouverte. Le bouton
+           était actif dès l'affichage : un clic de trop et la salle voyait la bonne
+           réponse pendant que les apprenants répondaient encore. Le verrou saute
+           quand le chronomètre est à zéro, ou avant s'il ne reste plus personne à
+           attendre — inutile de faire patienter tout le monde. */
+        if ( ! canRevealNow() ) { return; }
         state.hasShownReveal = true;
         stopHostTimer();
         ajax('acdc_of_qz_host_lobby_state',{},function(j){

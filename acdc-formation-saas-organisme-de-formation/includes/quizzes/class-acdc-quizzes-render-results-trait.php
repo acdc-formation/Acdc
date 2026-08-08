@@ -125,12 +125,10 @@ trait ACDC_Quizzes_Render_Results_Trait {
 
         $current_tab = isset( $_GET['tab'] ) ? sanitize_key( wp_unslash( $_GET['tab'] ) ) : '';
         $is_transverse = ( self::ACDC_OF_QZ_TAB_RESULTS === $current_tab );
-        // Tab spécifique = un des 3 onglets Résultats par finalité
-        $is_purpose_specific = in_array( $current_tab, array(
-            self::ACDC_OF_QZ_TAB_RESULTS_LIVE,
-            self::ACDC_OF_QZ_TAB_RESULTS_POSITIONING,
-            self::ACDC_OF_QZ_TAB_RESULTS_ASSESSMENT,
-        ), true );
+        // Tab spécifique = un des onglets Résultats par finalité (hors transverse).
+        // ACDC 3.25.168 — Même omission de l'évaluation diagnostique qu'au-dessus.
+        $is_purpose_specific = in_array( $current_tab, $this->qz_results_tabs(), true )
+            && ! $is_transverse;
 
         // Titre et sous-titre adaptés au contexte
         $title    = 'Résultats des quiz';
@@ -585,6 +583,9 @@ trait ACDC_Quizzes_Render_Results_Trait {
                                 <th>Date complétion</th>
                                 <th>Durée</th>
                                 <th>Score</th>
+                                <?php if ( 'live' !== $session->quiz_purpose ) : ?>
+                                    <th title="Comparaison du score au seuil de réussite du quiz">Acquis&nbsp;?</th>
+                                <?php endif; ?>
                                 <th title="ACDC 3.21.70 — Nb de changements d'onglet détectés pendant la passation">Chgt. onglet</th>
                                 <th>Actions</th>
                             </tr>
@@ -635,6 +636,26 @@ trait ACDC_Quizzes_Render_Results_Trait {
                                     }
                                     ?>
                                 </td>
+                                <?php if ( 'live' !== $session->quiz_purpose ) : ?>
+                                    <td>
+                                        <?php
+                                        /* ACDC 3.25.168 — L'écran donnait un pourcentage sans dire s'il
+                                           valait acquisition. Le seuil est celui du quiz, à défaut 70 %,
+                                           la même règle que l'attestation de résultats. */
+                                        $pass_th = ( null !== ( $session->quiz_pass_threshold ?? null ) )
+                                            ? (float) $session->quiz_pass_threshold
+                                            : 70.0;
+                                        if ( null === $p->total_score_percentage ) {
+                                            echo '<span class="acdc-qz-muted">—</span>';
+                                        } elseif ( (float) $p->total_score_percentage >= $pass_th ) {
+                                            echo '<span class="acdc-qz-pass-yes">✓ Acquis</span>';
+                                        } else {
+                                            echo '<span class="acdc-qz-pass-no">✗ Non acquis</span>';
+                                        }
+                                        ?>
+                                        <small class="acdc-qz-muted" style="display:block;">seuil <?php echo esc_html( number_format( $pass_th, 0, ',', '' ) ); ?>%</small>
+                                    </td>
+                                <?php endif; ?>
                                 <td style="text-align:center;">
                                     <?php
                                     $ts_count = isset( $p->tab_switch_count ) ? (int) $p->tab_switch_count : 0;
@@ -704,7 +725,8 @@ trait ACDC_Quizzes_Render_Results_Trait {
                                 <th>Type</th>
                                 <th>Répondants</th>
                                 <th>Bonnes réponses</th>
-                                <th>Taux de réussite</th>
+                                <th title="ACDC 3.25.168 — Réponses en partie justes, comptées au prorata">Partielles</th>
+                                <th title="Part moyenne réellement acquise, réussites partielles comprises">Taux de réussite</th>
                             </tr>
                         </thead>
                         <tbody>
@@ -714,6 +736,7 @@ trait ACDC_Quizzes_Render_Results_Trait {
                                 <td><?php echo esc_html( $this->qz_type_label( (string) $r->type ) ); ?></td>
                                 <td><?php echo (int) $r->count_answered; ?></td>
                                 <td><?php echo (int) $r->count_correct; ?></td>
+                                <td><?php echo isset( $r->count_partial ) && (int) $r->count_partial > 0 ? (int) $r->count_partial : '—'; ?></td>
                                 <td>
                                     <?php if ( null === $r->success_rate ) : ?>
                                         <span class="acdc-qz-muted">— (non scorée)</span>
@@ -820,10 +843,20 @@ trait ACDC_Quizzes_Render_Results_Trait {
                                     <?php endif; ?>
                                 </td>
                                 <td>
-                                    <?php if ( null === $r->pass_threshold ) : ?>
-                                        <span class="acdc-qz-muted">—</span>
-                                    <?php else : ?>
-                                        <?php echo esc_html( number_format( (float) $r->pass_threshold, 0, ',', '' ) ); ?>%
+                                    <?php
+                                    /* ACDC 3.25.168 — Le seuil appliqué est toujours connu : celui
+                                       de l'objectif, sinon celui du quiz, sinon 70 %. On dit lequel,
+                                       pour qu'un « Non atteint » ne surprenne jamais. */
+                                    $th_note = array(
+                                        'objective' => '',
+                                        'quiz'      => 'seuil du quiz',
+                                        'default'   => 'seuil par défaut',
+                                    );
+                                    $th_src = isset( $r->threshold_source ) ? (string) $r->threshold_source : 'objective';
+                                    ?>
+                                    <?php echo esc_html( number_format( (float) $r->threshold_applied, 0, ',', '' ) ); ?>%
+                                    <?php if ( ! empty( $th_note[ $th_src ] ) ) : ?>
+                                        <small class="acdc-qz-muted" style="display:block;"><?php echo esc_html( $th_note[ $th_src ] ); ?></small>
                                     <?php endif; ?>
                                 </td>
                                 <td>
@@ -940,11 +973,22 @@ trait ACDC_Quizzes_Render_Results_Trait {
                             <span class="acdc-qz-result-question-num">Q<?php echo (int) $idx + 1; ?></span>
                             <h3><?php echo esc_html( $q->title ); ?></h3>
                             <?php if ( $a && null !== $a->is_correct ) : ?>
-                                <?php if ( (int) $a->is_correct === 1 ) : ?>
-                                    <span class="acdc-qz-result-badge acdc-qz-result-badge-correct">✓ Correct</span>
-                                <?php else : ?>
-                                    <span class="acdc-qz-result-badge acdc-qz-result-badge-wrong">✗ Faux</span>
-                                <?php endif; ?>
+                                <?php
+                                /* ACDC 3.25.168 — Une réponse à moitié juste n'est plus étiquetée
+                                   « Faux » : le badge porte la part effectivement acquise, la même
+                                   qui a servi à compter les points. */
+                                $verdict = $this->qz_answer_verdict( $a->is_correct, $a->score_ratio ?? null );
+                                $badge_class = array(
+                                    'correct' => 'acdc-qz-result-badge-correct',
+                                    'partial' => 'acdc-qz-result-badge-partial',
+                                    'wrong'   => 'acdc-qz-result-badge-wrong',
+                                    'pending' => 'acdc-qz-result-badge-pending',
+                                );
+                                $badge_icon = array( 'correct' => '✓', 'partial' => '◐', 'wrong' => '✗', 'pending' => '⏳' );
+                                ?>
+                                <span class="acdc-qz-result-badge <?php echo esc_attr( $badge_class[ $verdict['state'] ] ); ?>">
+                                    <?php echo esc_html( $badge_icon[ $verdict['state'] ] . ' ' . $verdict['label'] ); ?>
+                                </span>
                             <?php elseif ( $is_open ) : ?>
                                 <span class="acdc-qz-result-badge acdc-qz-result-badge-pending">⏳ À corriger</span>
                             <?php endif; ?>

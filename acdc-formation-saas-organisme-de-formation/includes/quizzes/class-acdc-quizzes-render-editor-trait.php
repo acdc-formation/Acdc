@@ -740,7 +740,13 @@ trait ACDC_Quizzes_Render_Editor_Trait {
                     <?php esc_html_e( 'Sert au temps annoncé à l’apprenant. La passation n’est pas chronométrée hors quiz live.', 'acdc-formation-saas' ); ?>
                 </p>
                 <?php endif; ?>
-                <select name="time_limit" class="acdc-qz-input" <?php echo esc_attr( $disabled ); ?>>
+                <?php /* ACDC 3.25.168 — Sur une réponse à rédiger, le champ n'a pas de sens :
+                         on le remplace par la règle appliquée, et le JS le masque au
+                         changement de type. */ ?>
+                <p class="acdc-qz-field-help acdc-qz-time-limit-na" style="margin:0;font-size:13px;color:#b91c1c;font-weight:600;<?php echo ( self::ACDC_OF_QZ_QTYPE_OPEN_TEXT === (string) $question->type ) ? '' : 'display:none;'; ?>">
+                    <?php esc_html_e( 'Pas de limite de temps : une réponse rédigée ne se chronomètre pas.', 'acdc-formation-saas' ); ?>
+                </p>
+                <select name="time_limit" class="acdc-qz-input" <?php echo esc_attr( $disabled ); ?> <?php echo ( self::ACDC_OF_QZ_QTYPE_OPEN_TEXT === (string) $question->type ) ? 'style="display:none;"' : ''; ?>>
                     <?php foreach ( array( 5, 10, 20, 30, 45, 60, 90, 120, 180, 300, 600 ) as $sec ) : ?>
                         <option value="<?php echo esc_attr( $sec ); ?>" <?php selected( (int) $question->time_limit, $sec ); ?>>
                             <?php

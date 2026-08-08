@@ -148,6 +148,9 @@ trait ACDC_Quizzes_Render_Live_Trait {
                         <span class="acdc-qz-host-timer-count" id="acdc-qz-host-timer-count">—</span>
                     </div>
                     <h2 class="acdc-qz-host-question-title" id="acdc-qz-host-q-title">…</h2>
+                    <?php /* ACDC 3.25.168 — Consigne projetée avec la question, pour que la
+                             salle entière sache combien de cases sont attendues. */ ?>
+                    <p class="acdc-qz-answer-instruction" id="acdc-qz-host-q-instruction" style="display:none"></p>
                     <div class="acdc-qz-host-question-answers" id="acdc-qz-host-q-answers"></div>
                     <footer class="acdc-qz-host-question-footer">
                         <span class="acdc-qz-host-q-counter" id="acdc-qz-host-q-num">1/1</span>

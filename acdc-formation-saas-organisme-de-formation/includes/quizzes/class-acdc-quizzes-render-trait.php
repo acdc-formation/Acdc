@@ -53,13 +53,10 @@ trait ACDC_Quizzes_Render_Trait {
         /* ACDC 3.21.04.1-hotfix1+2 — Quand on arrive via un tab Résultats (transverse
            ou par finalité), on impose la vue results par défaut. */
         $current_tab = isset( $_GET['tab'] ) ? sanitize_key( wp_unslash( $_GET['tab'] ) ) : '';
-        $results_tabs = array(
-            self::ACDC_OF_QZ_TAB_RESULTS,
-            self::ACDC_OF_QZ_TAB_RESULTS_LIVE,
-            self::ACDC_OF_QZ_TAB_RESULTS_POSITIONING,
-            self::ACDC_OF_QZ_TAB_RESULTS_ASSESSMENT,
-        );
-        if ( in_array( $current_tab, $results_tabs, true ) ) {
+        /* ACDC 3.25.168 — Cette liste omettait l'évaluation diagnostique : son onglet
+           « Résultats — Diagnostiques » n'imposait donc pas la vue résultats et retombait
+           sur la liste des quiz. Liste unique désormais, dans qz_results_tabs(). */
+        if ( in_array( $current_tab, $this->qz_results_tabs(), true ) ) {
             $view = self::ACDC_OF_QZ_VIEW_RESULTS;
         }
         ?>
@@ -1364,9 +1361,45 @@ trait ACDC_Quizzes_Render_Trait {
     /**
      * Rend les propositions de réponse selon le type de question.
      */
+    /**
+     * ACDC 3.25.168 — Consigne de saisie affichée sous l'énoncé.
+     *
+     * @param string $type Type de question.
+     *
+     * @return void
+     */
+    private function render_qz_answer_instruction( $type ) {
+        $multi = in_array( $type, array( self::ACDC_OF_QZ_QTYPE_QCM_MULTIPLE, self::ACDC_OF_QZ_QTYPE_POLL ), true );
+        $single = in_array( $type, array( self::ACDC_OF_QZ_QTYPE_QCM_SINGLE, self::ACDC_OF_QZ_QTYPE_TRUE_FALSE ), true );
+        if ( ! $multi && ! $single ) {
+            return;
+        }
+        if ( $multi ) {
+            $label = ( self::ACDC_OF_QZ_QTYPE_POLL === $type )
+                ? __( 'Plusieurs réponses possibles (sondage)', 'acdc-formation-saas' )
+                : __( 'Plusieurs réponses possibles', 'acdc-formation-saas' );
+        } else {
+            $label = __( 'Une seule réponse possible', 'acdc-formation-saas' );
+        }
+        ?>
+        <p class="acdc-qz-answer-instruction <?php echo $multi ? 'is-multi' : 'is-single'; ?>">
+            <span aria-hidden="true"><?php echo $multi ? '⚠' : '●'; ?></span>
+            <?php echo esc_html( $label ); ?>
+        </p>
+        <?php
+    }
+
     private function render_qz_public_question_answers( $question, $answers, $position ) {
         $name = "answers[{$question->id}]";
         $type = (string) $question->type;
+
+        /* ACDC 3.25.168 — La consigne « plusieurs réponses possibles » était une ligne
+           grise parmi d'autres, et le choix unique n'en portait aucune : l'apprenant
+           découvrait la règle en cochant. C'est piégeux sur une évaluation dont le
+           résultat est opposable. La consigne est désormais annoncée pour les deux cas,
+           juste sous la question, et signalée en rouge quand plusieurs cases sont
+           attendues — c'est là qu'on se trompe. */
+        $this->render_qz_answer_instruction( $type );
 
         switch ( $type ) {
             case self::ACDC_OF_QZ_QTYPE_QCM_SINGLE:
@@ -1386,7 +1419,6 @@ trait ACDC_Quizzes_Render_Trait {
             // hotfix43 — Sondage : checkbox (multi-select), pas radio.
             case self::ACDC_OF_QZ_QTYPE_POLL:
                 ?>
-                <p class="acdc-qz-public-help-inline"><?php esc_html_e( "Plusieurs réponses possibles (sondage).", 'acdc-formation-saas' ); ?></p>
                 <div class="acdc-qz-public-answers">
                     <?php foreach ( $answers as $a ) : ?>
                         <label class="acdc-qz-public-answer">
@@ -1400,7 +1432,6 @@ trait ACDC_Quizzes_Render_Trait {
 
             case self::ACDC_OF_QZ_QTYPE_QCM_MULTIPLE:
                 ?>
-                <p class="acdc-qz-public-help-inline"><?php esc_html_e( "Plusieurs réponses possibles.", 'acdc-formation-saas' ); ?></p>
                 <div class="acdc-qz-public-answers">
                     <?php foreach ( $answers as $a ) : ?>
                         <label class="acdc-qz-public-answer">
@@ -1492,7 +1523,10 @@ trait ACDC_Quizzes_Render_Trait {
         foreach ( $questions as $q ) {
             $qid = (int) $q->id;
             $reponse = $answers_in[ $qid ] ?? null;
-            $is_correct = 0;
+            /* ACDC 3.25.168 — NULL, et non zéro, pour ce qui ne se corrige pas tout seul.
+               Une réponse rédigée était enregistrée à zéro dès l'envoi : l'écran de
+               résultats la présentait « ✗ Faux » avant même que le formateur l'ait lue. */
+            $is_correct = null;
             $value_text = '';
             $value_answer_ids = array();
 
@@ -1512,43 +1546,19 @@ trait ACDC_Quizzes_Render_Trait {
                 $value_answer_ids = array_values( array_filter( array_map( 'intval', explode( ',', $csv ) ) ) );
             }
 
-            // Calcul du score (uniquement pour types scorés)
-            // Le sondage et le texte libre ne sont jamais scorés.
+            /* Calcul du score (uniquement pour types scorés). Le sondage et le texte
+               libre ne sont jamais scorés automatiquement.
+               ACDC 3.25.168 — Même correcteur que la passation en salle : une part de
+               réussite, et non plus un tout-ou-rien qui mettait à zéro un apprenant
+               n'ayant manqué qu'une case sur trois. */
+            $score_ratio = null;
             if ( (int) $q->is_scored === 1 && ! in_array( $q->type, array( self::ACDC_OF_QZ_QTYPE_POLL, self::ACDC_OF_QZ_QTYPE_OPEN_TEXT ), true ) ) {
                 $score_max += (int) $q->points_value;
 
-                if ( self::ACDC_OF_QZ_QTYPE_PUZZLE === $q->type ) {
-                    // Score binaire : tout-ou-rien.
-                    // L'ordre attendu est l'ordre de sort_order croissant des réponses.
-                    $expected_ids = array();
-                    $all_answers = $this->get_qz_answers_for_question_db( $qid );
-                    // get_qz_answers_for_question_db trie déjà par sort_order (vérifié) ; sinon on retrie ici par sécurité.
-                    usort( $all_answers, function( $x, $y ) {
-                        return ( (int) $x->sort_order ) <=> ( (int) $y->sort_order );
-                    } );
-                    foreach ( $all_answers as $a ) {
-                        $expected_ids[] = (int) $a->id;
-                    }
-                    if ( ! empty( $expected_ids ) && $value_answer_ids === $expected_ids ) {
-                        $is_correct = 1;
-                        $score_total += (int) $q->points_value;
-                    }
-                } else {
-                    // QCM single, multi, true_false : comparaison ensembliste
-                    $correct_ids = array();
-                    foreach ( $this->get_qz_answers_for_question_db( $qid ) as $a ) {
-                        if ( (int) $a->is_correct === 1 ) {
-                            $correct_ids[] = (int) $a->id;
-                        }
-                    }
-                    $sorted_response = $value_answer_ids;
-                    sort( $sorted_response );
-                    sort( $correct_ids );
-                    if ( $sorted_response === $correct_ids && ! empty( $correct_ids ) ) {
-                        $is_correct = 1;
-                        $score_total += (int) $q->points_value;
-                    }
-                }
+                $verdict     = $this->qz_grade_answer_set( $q, $value_answer_ids );
+                $score_ratio = (float) $verdict['ratio'];
+                $is_correct  = ( null === $verdict['is_correct'] ) ? 0 : (int) $verdict['is_correct'];
+                $score_total += (int) $q->points_value * $score_ratio;
             }
 
             $wpdb->insert( $tbl_player_answers, array(
@@ -1559,7 +1569,8 @@ trait ACDC_Quizzes_Render_Trait {
                 'answer_ids_json'  => wp_json_encode( $value_answer_ids ),
                 'answer_text'      => $value_text,
                 'is_correct'       => $is_correct,
-                'score_earned'     => $is_correct ? (float) $q->points_value : 0,
+                'score_ratio'      => $score_ratio,
+                'score_earned'     => ( null === $score_ratio ) ? 0 : (float) $q->points_value * $score_ratio,
                 'answered_at'      => $now,
             ) );
         }
@@ -1781,6 +1792,9 @@ trait ACDC_Quizzes_Render_Trait {
                         <span class="acdc-qz-player-timer-count" id="acdc-qz-player-timer-count">—</span>
                     </div>
                     <h2 class="acdc-qz-player-question-title" id="acdc-qz-player-q-title">…</h2>
+                    <?php /* ACDC 3.25.168 — La consigne ne figurait qu'en pied d'écran, en
+                             petit, à droite : personne ne la lisait avant de répondre. */ ?>
+                    <p class="acdc-qz-answer-instruction" id="acdc-qz-player-q-instruction" style="display:none"></p>
                     <!-- QCM / Vrai-Faux / Sondage -->
                     <div class="acdc-qz-player-question-answers" id="acdc-qz-player-q-answers"></div>
                     <!-- Réponse libre -->
