@@ -238,8 +238,9 @@ trait ACDC_Quizzes_Core_Trait {
                 $p_row   = $wpdb->get_row( $wpdb->prepare( "SELECT * FROM {$tbl_p} WHERE id=%d LIMIT 1", (int) $row->participant_id ) );
                 $s_row   = $this->get_qz_dispatch_session( (int) $row->session_id );
                 if ( $p_row && $s_row ) {
-                    $qz_tab = ( 'positioning' === ( $s_row->quiz_purpose ?? '' ) )
-                              ? 'qz_results_positioning' : 'qz_results_assessment';
+                    /* ACDC 3.25.167 — Le repli à deux branches renvoyait toute
+                       évaluation diagnostique vers l'onglet des acquis. */
+                    $qz_tab = $this->qz_results_tab_for_purpose( $s_row->quiz_purpose ?? '' );
                     $fallback_url = $this->portal_page_url( array(
                         'tab'         => $qz_tab,
                         'view'        => 'results',
@@ -749,6 +750,31 @@ trait ACDC_Quizzes_Core_Trait {
             (string) $purpose,
             $this->get_quiz_purpose_labels()
         );
+    }
+
+    /**
+     * ACDC 3.25.167 — Onglet de résultats correspondant à une finalité.
+     *
+     * Deux endroits choisissaient cet onglet avec un ternaire à deux branches, écrit
+     * quand il n'existait que trois finalités. L'un comparait même la finalité à un
+     * slug d'onglet, donc n'était jamais vrai. Un seul point de vérité évite que la
+     * prochaine finalité ajoutée reparte silencieusement sur « évaluations ».
+     *
+     * @param string $purpose Finalité du quiz.
+     *
+     * @return string Slug d'onglet du portail.
+     */
+    public function qz_results_tab_for_purpose( $purpose ) {
+        switch ( (string) $purpose ) {
+            case self::ACDC_OF_QZ_PURPOSE_POSITIONING:
+                return 'qz_results_positioning';
+            case self::ACDC_OF_QZ_PURPOSE_DIAGNOSTIC:
+                return 'qz_results_diagnostic';
+            case self::ACDC_OF_QZ_PURPOSE_LIVE:
+                return 'qz_results_live';
+            default:
+                return 'qz_results_assessment';
+        }
     }
 
     /**

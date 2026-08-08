@@ -180,8 +180,13 @@ trait ACDC_Quizzes_Engine_Trait {
             return new WP_Error( 'qz_invalid_quiz', 'Quiz invalide.' );
         }
         $quiz = $this->get_qz_quiz( $quiz_id );
-        if ( ! $quiz || self::ACDC_OF_QZ_PURPOSE_LIVE !== $quiz->quiz_purpose ) {
-            return new WP_Error( 'qz_not_live', 'Ce quiz n\'est pas un quiz live.' );
+        /* ACDC 3.25.167 — La création d'une session en salle dépend de la MODALITÉ, pas
+           de la finalité. Cette garde testait la finalité « quiz live » : une évaluation
+           diagnostique ou des acquis, pourtant réglée en passation synchrone, était
+           refusée au lancement avec « Ce quiz n'est pas un quiz live ». Quatrième
+           endroit où les deux axes étaient confondus, et le dernier du parcours. */
+        if ( ! $quiz || self::ACDC_OF_QZ_DELIVERY_LIVE_SYNC !== $quiz->delivery_mode ) {
+            return new WP_Error( 'qz_not_live', 'Ce quiz n\'est pas prévu pour une passation en salle. Réglez son mode de passation sur « en salle » dans ses paramètres.' );
         }
         $pin = $this->generate_unique_qz_pin();
         if ( ! $pin ) {

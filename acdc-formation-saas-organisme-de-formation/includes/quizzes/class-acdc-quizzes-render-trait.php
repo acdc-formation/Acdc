@@ -1577,9 +1577,12 @@ trait ACDC_Quizzes_Render_Trait {
             // Fallback : lien vers la page de résultats en ligne du nouveau moteur
             $session_obj = $this->get_qz_dispatch_session( (int) $participant->session_id );
             if ( $session_obj ) {
+                /* ACDC 3.25.167 — Cette comparaison confrontait une FINALITÉ à un slug
+                   d'onglet : elle ne pouvait jamais être vraie, et tout résultat, y
+                   compris un test de positionnement, atterrissait sur l'onglet des
+                   évaluations des acquis. */
                 $results_url = $this->portal_page_url( array(
-                    'tab'         => 'qz_results_positioning' === ( $session_obj->quiz_purpose ?? '' )
-                                     ? 'qz_results_positioning' : 'qz_results_assessment',
+                    'tab'         => $this->qz_results_tab_for_purpose( $session_obj->quiz_purpose ?? '' ),
                     'view'        => 'results',
                     'participant' => (int) $participant->id,
                 ) );

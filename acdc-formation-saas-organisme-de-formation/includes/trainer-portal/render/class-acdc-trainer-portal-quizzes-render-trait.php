@@ -149,6 +149,9 @@ trait ACDC_Trainer_Portal_Quizzes_Render_Trait {
         $count_all = $this->count_qz_quizzes_for_trainer( $trainer_id, array( 'only_current' => true ) );
         $count_live = $this->count_qz_quizzes_for_trainer( $trainer_id, array( 'only_current' => true, 'purpose' => 'live' ) );
         $count_pos = $this->count_qz_quizzes_for_trainer( $trainer_id, array( 'only_current' => true, 'purpose' => 'positioning' ) );
+        /* ACDC 3.25.167 — L'évaluation diagnostique était acceptée en paramètre d'URL
+           mais aucun onglet ne la proposait : le formateur ne pouvait pas y accéder. */
+        $count_diag = $this->count_qz_quizzes_for_trainer( $trainer_id, array( 'only_current' => true, 'purpose' => 'diagnostic' ) );
         $count_ass = $this->count_qz_quizzes_for_trainer( $trainer_id, array( 'only_current' => true, 'purpose' => 'assessment' ) );
 
         $base_url = $this->trainer_portal_page_url( 'quizzes' );
@@ -201,6 +204,11 @@ trait ACDC_Trainer_Portal_Quizzes_Render_Trait {
                    role="tab" aria-selected="<?php echo 'positioning' === $current_purpose ? 'true' : 'false'; ?>">
                     Tests de positionnement <span class="acdc-trainer-portal-quizzes-count"><?php echo (int) $count_pos; ?></span>
                 </a>
+                <a class="acdc-trainer-portal-quizzes-tab <?php echo 'diagnostic' === $current_purpose ? 'is-active' : ''; ?>"
+                   href="<?php echo esc_url( add_query_arg( 'purpose', 'diagnostic', $base_url ) ); ?>"
+                   role="tab" aria-selected="<?php echo 'diagnostic' === $current_purpose ? 'true' : 'false'; ?>">
+                    Évaluations diagnostiques <span class="acdc-trainer-portal-quizzes-count"><?php echo (int) $count_diag; ?></span>
+                </a>
                 <a class="acdc-trainer-portal-quizzes-tab <?php echo 'assessment' === $current_purpose ? 'is-active' : ''; ?>"
                    href="<?php echo esc_url( add_query_arg( 'purpose', 'assessment', $base_url ) ); ?>"
                    role="tab" aria-selected="<?php echo 'assessment' === $current_purpose ? 'true' : 'false'; ?>">
@@ -252,6 +260,7 @@ trait ACDC_Trainer_Portal_Quizzes_Render_Trait {
         $purpose_labels = array(
             'live'        => 'Quiz live',
             'positioning' => 'Test de positionnement',
+            'diagnostic'  => 'Évaluation diagnostique',
             'assessment'  => 'Évaluation des acquis',
         );
         $status_labels = array(
@@ -290,7 +299,16 @@ trait ACDC_Trainer_Portal_Quizzes_Render_Trait {
                 <a class="acdc-trainer-portal-quiz-link" href="<?php echo esc_url( $detail_url ); ?>">
                     Voir le détail →
                 </a>
-                <?php if ( 'live' === (string) $q->quiz_purpose ) : ?>
+                <?php
+                /* ACDC 3.25.167 — Le lancement en salle dépend de la MODALITÉ, pas de la
+                   finalité. Cette carte testait la finalité « quiz live » : une évaluation
+                   diagnostique ou des acquis réglée en salle n'offrait donc aucun bouton
+                   de lancement au formateur, alors que l'écran d'administration, lui, en
+                   proposait un. Cinquième et dernier endroit où les deux axes étaient
+                   confondus. */
+                $q_live_ready = isset( $q->delivery_mode ) && 'live_sync' === (string) $q->delivery_mode;
+                ?>
+                <?php if ( $q_live_ready ) : ?>
                     <?php if ( 'active' === (string) $q->status ) : ?>
                         <form method="post" action="<?php echo esc_url( admin_url( 'admin-post.php' ) ); ?>" style="display:inline">
                             <input type="hidden" name="action"   value="acdc_of_qz_launch_live" />
@@ -337,6 +355,7 @@ trait ACDC_Trainer_Portal_Quizzes_Render_Trait {
         $purpose_default_map = array(
             'live'        => 'live',
             'positioning' => 'positioning',
+            'diagnostic'  => 'diagnostic',
             'assessment'  => 'assessment',
         );
         $preselected_purpose = isset( $purpose_default_map[ $current_purpose ] ) ? $purpose_default_map[ $current_purpose ] : 'assessment';
@@ -370,7 +389,8 @@ trait ACDC_Trainer_Portal_Quizzes_Render_Trait {
                         <select id="acdc-tp-quiz-purpose" name="quiz_purpose" required>
                             <option value="live" <?php selected( $preselected_purpose, 'live' ); ?>>Quiz live (animé en direct)</option>
                             <option value="positioning" <?php selected( $preselected_purpose, 'positioning' ); ?>>Test de positionnement (avant formation)</option>
-                            <option value="assessment" <?php selected( $preselected_purpose, 'assessment' ); ?>>Évaluation des acquis (après formation)</option>
+                            <option value="diagnostic" <?php selected( $preselected_purpose, 'diagnostic' ); ?>>Évaluation diagnostique (début de formation)</option>
+                            <option value="assessment" <?php selected( $preselected_purpose, 'assessment' ); ?>>Évaluation des acquis (fin de formation)</option>
                         </select>
                     </p>
 
@@ -389,11 +409,15 @@ trait ACDC_Trainer_Portal_Quizzes_Render_Trait {
                         <?php endif; ?>
                     </p>
 
-                    <p class="acdc-tp-field" data-show-when-purpose="assessment">
-                        <label for="acdc-tp-quiz-delivery-mode">Mode de passation par défaut</label>
+                    <?php /* ACDC 3.25.167 — L'évaluation diagnostique se passe en salle au
+                             début de la formation, comme l'évaluation des acquis à la fin :
+                             les deux ouvrent le choix de la modalité, avec la salle par
+                             défaut. L'asynchrone reste possible pour un rattrapage. */ ?>
+                    <p class="acdc-tp-field" data-show-when-purpose="diagnostic,assessment">
+                        <label for="acdc-tp-quiz-delivery-mode">Mode de passation</label>
                         <select id="acdc-tp-quiz-delivery-mode" name="delivery_mode">
-                            <option value="async_token" selected>E-mail asynchrone (par défaut)</option>
-                            <option value="live_sync">Présentiel synchrone (anti-triche)</option>
+                            <option value="live_sync">En salle, en direct (anti-triche)</option>
+                            <option value="async_token">À distance, par e-mail (rattrapage)</option>
                         </select>
                     </p>
 
@@ -453,8 +477,20 @@ trait ACDC_Trainer_Portal_Quizzes_Render_Trait {
                 function refreshDelivery() {
                     var fields = document.querySelectorAll('[data-show-when-purpose]');
                     for (var i = 0; i < fields.length; i++) {
-                        var want = fields[i].getAttribute('data-show-when-purpose');
-                        fields[i].style.display = (purposeSelect.value === want) ? '' : 'none';
+                        // ACDC 3.25.167 — Plusieurs finalités peuvent partager un même champ,
+                        // séparées par des virgules. L'égalité stricte n'en acceptait qu'une.
+                        var want = (fields[i].getAttribute('data-show-when-purpose') || '').split(',');
+                        fields[i].style.display = (want.indexOf(purposeSelect.value) !== -1) ? '' : 'none';
+                    }
+                    // Le champ masqué est quand même posté : on le remet sur la valeur
+                    // cohérente avec la finalité, sinon un test de positionnement pouvait
+                    // partir en « salle » avec la valeur laissée par un choix précédent.
+                    var delivery = document.getElementById('acdc-tp-quiz-delivery-mode');
+                    if (delivery) {
+                        var inRoom = (purposeSelect.value === 'live'
+                            || purposeSelect.value === 'diagnostic'
+                            || purposeSelect.value === 'assessment');
+                        delivery.value = inRoom ? 'live_sync' : 'async_token';
                     }
                 }
                 purposeSelect.addEventListener('change', refreshDelivery);
@@ -515,6 +551,7 @@ trait ACDC_Trainer_Portal_Quizzes_Render_Trait {
         $purpose_labels = array(
             'live'        => 'Quiz live',
             'positioning' => 'Test de positionnement',
+            'diagnostic'  => 'Évaluation diagnostique',
             'assessment'  => 'Évaluation des acquis',
         );
         $status_labels = array(

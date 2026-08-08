@@ -92,6 +92,7 @@ Délai pour répondre : <strong>jusqu'au <?php echo esc_html( $expires_human ); 
 <?php
 $cta_labels = array(
     'positioning' => 'Accéder au test de positionnement',
+    'diagnostic'  => 'Accéder à l’évaluation diagnostique',
     'assessment'  => 'Accéder à l’évaluation des acquis',
     'live'        => 'Accéder au quiz',
 );
