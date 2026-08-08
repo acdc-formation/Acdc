@@ -691,7 +691,7 @@ trait ACDC_Quizzes_Engine_Trait {
                        p.total_score, p.total_score_percentage, p.is_passed,
                        p.completed_at, p.started_at, p.status,
                        {$result_col_sql}
-                       q.id AS quiz_id, q.title AS quiz_title, q.quiz_purpose,
+                       q.id AS quiz_id, q.title AS quiz_title, q.quiz_purpose, q.pass_threshold,
                        f.title AS formation_title
                 FROM {$tbl_p} p
                 INNER JOIN {$tbl_s} s  ON s.id = p.session_id

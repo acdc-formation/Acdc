@@ -9064,6 +9064,40 @@ private function maybe_auto_create_questionnaire_actions_from_response( $session
     return $fixed;
   }
 
+  /**
+   * ACDC 3.25.181 — Nom du formateur d'une session d'enquête, avec repli sur la séance.
+   *
+   * La colonne « Formateur » des listes d'enquêtes ne lisait que formateur_id, champ
+   * qui valait ZÉRO sur toutes les sessions créées automatiquement — c'est le défaut
+   * corrigé en 3.25.176. Résultat : un tiret partout, y compris sur des séances
+   * pourtant animées. Corriger la création ne suffit pas, car les sessions déjà
+   * enregistrées gardent leur zéro : on retombe donc sur le formateur de la séance
+   * au moment de l'affichage.
+   *
+   * @param object $entry Ligne de session d'enquête.
+   *
+   * @return string Nom du formateur, ou chaîne vide.
+   */
+  private function acdc_survey_session_trainer_name( $entry ) {
+    global $wpdb;
+    $trainer_id = ! empty( $entry->formateur_id ) ? absint( $entry->formateur_id ) : 0;
+
+    if ( $trainer_id <= 0 && ! empty( $entry->seance_id ) ) {
+      $trainer_id = (int) $wpdb->get_var( $wpdb->prepare(
+        "SELECT trainer_id FROM {$this->session_table} WHERE id = %d LIMIT 1",
+        absint( $entry->seance_id )
+      ) );
+    }
+    if ( $trainer_id <= 0 ) {
+      return '';
+    }
+    $trainer = $this->get_trainer( $trainer_id );
+    if ( ! $trainer ) {
+      return '';
+    }
+    return trim( (string) $trainer->first_name . ' ' . (string) $trainer->last_name );
+  }
+
   private function acdc_resolve_survey_trainer_id( $training_session ) {
     if ( ! empty( $training_session->trainer_id ) ) {
       return absint( $training_session->trainer_id );

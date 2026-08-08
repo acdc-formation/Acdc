@@ -1408,12 +1408,30 @@ trait ACDC_Quizzes_Render_Results_Trait {
                                 <td><?php echo esc_html( $date ); ?></td>
                                 <td><strong><?php echo esc_html( $score ); ?></strong></td>
                                 <td>
-                                    <?php if ( null !== $r->is_passed ) : ?>
-                                        <?php if ( (int) $r->is_passed === 1 ) : ?>
+                                    <?php
+                                    /* ACDC 3.25.181 — Cette colonne ne lisait que is_passed, verdict
+                                       stocké au moment de la passation. Toutes les passations
+                                       antérieures à son introduction l'ont donc à NULL, et la colonne
+                                       affichait « — » alors que le score, lui, était bien là — 50 %
+                                       d'un côté, rien de l'autre, sur la même ligne. Un verdict qui
+                                       se déduit d'un pourcentage et d'un seuil n'a pas besoin d'avoir
+                                       été enregistré pour être affiché : on le calcule à défaut. */
+                                    $verdict_passed = ( null !== $r->is_passed ) ? (int) $r->is_passed : null;
+                                    if ( null === $verdict_passed && null !== $r->total_score_percentage ) {
+                                        $th = ( null !== ( $r->pass_threshold ?? null ) && '' !== $r->pass_threshold )
+                                            ? (float) $r->pass_threshold
+                                            : 70.0;
+                                        $verdict_passed = ( (float) $r->total_score_percentage >= $th ) ? 1 : 0;
+                                    }
+                                    ?>
+                                    <?php if ( null !== $verdict_passed ) : ?>
+                                        <?php if ( 1 === $verdict_passed ) : ?>
                                             <span class="acdc-qz-status acdc-qz-status-is-completed">✓ Réussi</span>
                                         <?php else : ?>
                                             <span class="acdc-qz-status acdc-qz-status-is-expired">✗ Non réussi</span>
                                         <?php endif; ?>
+                                    <?php elseif ( 'live' === $r->quiz_purpose ) : ?>
+                                        <span style="color:#6b7280;" title="Un quiz live est un jeu : il ne rend pas de verdict d'acquisition.">—</span>
                                     <?php else : ?>
                                         <span style="color:#6b7280;">—</span>
                                     <?php endif; ?>
