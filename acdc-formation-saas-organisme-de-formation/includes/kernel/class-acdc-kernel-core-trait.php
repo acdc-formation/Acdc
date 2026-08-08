@@ -3425,8 +3425,34 @@ dbDelta( $sql_companies );
     return is_dir( $dir ) ? $dir : '';
   }
 
+  /**
+   * ACDC 3.25.178 — Un site est réputé de PRODUCTION par défaut.
+   *
+   * Cette fonction ne renvoyait vrai que si l'une des constantes WP_ENV,
+   * WP_ENVIRONMENT_TYPE ou APP_ENV était définie ET valait « prod ». Sur une
+   * installation WordPress ordinaire, aucune de ces constantes n'existe : la
+   * fonction renvoyait donc FAUX sur un vrai site de production, et l'écran
+   * annonçait « Environnement détecté : hors production » à un organisme de
+   * formation travaillant sur ses données réelles.
+   *
+   * Conséquence : le blocage de la purge en production, que l'écran présente
+   * comme une protection active, ne s'appliquait jamais. Une protection qui ne
+   * se déclenche pas est pire que pas de protection, parce qu'on lui fait
+   * confiance.
+   *
+   * La règle s'inverse : on est en production SAUF si l'environnement se déclare
+   * explicitement comme autre chose. C'est aussi la convention de WordPress, dont
+   * wp_get_environment_type() répond « production » par défaut. Un site de
+   * développement se déclare ; un site de production n'a rien à faire pour être
+   * protégé.
+   *
+   * @return bool
+   */
   private function is_production_environment() {
     $candidates = array();
+    if ( function_exists( 'wp_get_environment_type' ) ) {
+      $candidates[] = wp_get_environment_type();
+    }
     if ( defined( 'WP_ENV' ) ) {
       $candidates[] = WP_ENV;
     }
@@ -3436,13 +3462,22 @@ dbDelta( $sql_companies );
     if ( defined( 'APP_ENV' ) ) {
       $candidates[] = APP_ENV;
     }
+
+    $non_production = array( 'local', 'development', 'dev', 'staging', 'preprod', 'preproduction', 'test' );
     foreach ( $candidates as $candidate ) {
       $candidate = strtolower( trim( (string) $candidate ) );
+      if ( '' === $candidate ) {
+        continue;
+      }
       if ( in_array( $candidate, array( 'prod', 'production', 'live' ), true ) ) {
         return true;
       }
+      if ( in_array( $candidate, $non_production, true ) ) {
+        return false;
+      }
     }
-    return false;
+    // Aucune déclaration exploitable : on protège.
+    return true;
   }
 
   private function is_production_purge_blocked() {

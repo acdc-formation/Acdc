@@ -4843,7 +4843,17 @@ public function handle_purge_plugin_data() {
     $this->redirect_to_portal( 'settings', 'Confirmation incorrecte. Saisissez exactement « ' . $this->get_plugin_data_purge_confirmation_phrase() . ' ».', 'error' );
   }
 
+  /* ACDC 3.25.178 — La sauvegarde de sécurité était CRÉÉE, puis on continuait quoi
+     qu'il arrive. La case à cocher demandait à l'utilisateur de « confirmer avoir
+     vérifié la sauvegarde de sécurité », déclaration que rien ne vérifiait — et
+     l'écran affichait par ailleurs « Dernière sauvegarde de sécurité : Aucune ». On
+     faisait donc confirmer l'existence d'une sauvegarde que l'écran lui-même
+     déclarait inexistante. Désormais : si le filet n'a pas été tendu, on ne saute
+     pas. */
   $safety_backup = $this->create_safety_backup_snapshot( 'purge_plugin_data', array( 'user_id' => get_current_user_id() ) );
+  if ( empty( $safety_backup ) ) {
+    $this->redirect_to_portal( 'settings', "Purge annulée : la sauvegarde de sécurité n'a pas pu être créée. Aucune donnée n'a été touchée.", 'error' );
+  }
 
   global $wpdb;
 
@@ -4877,6 +4887,18 @@ public function handle_purge_plugin_data() {
     'marketing_public_page_id' => (int) get_option( 'acdc_of_marketing_public_page_id', 0 ),
     'signature_page_id'       => (int) get_option( 'acdc_sig_page_id', 0 ),
     'signature_settings'      => get_option( 'acdc_sig_settings', array() ),
+    /* ACDC 3.25.178 — Le POINTEUR vers la sauvegarde de sécurité était emporté par
+       l'effacement des options acdc_of_%. Le plugin tendait donc le filet, puis
+       effaçait l'adresse qui permettait de le retrouver : l'écran affichait ensuite
+       « Dernière sauvegarde de sécurité : Aucune », et l'utilisateur en concluait
+       qu'il n'avait rien à restaurer. C'est le détail qui décide si quelqu'un
+       récupère ses données ou y renonce. */
+    'last_safety_backup_file' => get_option( 'acdc_of_last_safety_backup_file', '' ),
+    'last_safety_backup_at'   => get_option( 'acdc_of_last_safety_backup_at', '' ),
+    'last_manual_backup_file' => get_option( 'acdc_of_last_manual_backup_file', '' ),
+    'last_manual_backup_at'   => get_option( 'acdc_of_last_manual_backup_at', '' ),
+    'last_backup_file'        => get_option( 'acdc_of_last_backup_file', '' ),
+    'last_backup_at'          => get_option( 'acdc_of_last_backup_at', '' ),
   );
 
   $paths = $this->collect_plugin_generated_file_paths();
@@ -4897,6 +4919,21 @@ public function handle_purge_plugin_data() {
   $wpdb->query( "DELETE FROM {$options_table} WHERE option_name LIKE 'acdc_sig_%'" );
 
   update_option( 'acdc_of_saas_version', ACDC_OF_SAAS_VERSION, false );
+  /* ACDC 3.25.178 — On rétablit d'abord les pointeurs de sauvegarde : ce sont eux
+     qui permettent de revenir en arrière si la purge n'était pas voulue. */
+  foreach ( array(
+    'acdc_of_last_safety_backup_file' => 'last_safety_backup_file',
+    'acdc_of_last_safety_backup_at'   => 'last_safety_backup_at',
+    'acdc_of_last_manual_backup_file' => 'last_manual_backup_file',
+    'acdc_of_last_manual_backup_at'   => 'last_manual_backup_at',
+    'acdc_of_last_backup_file'        => 'last_backup_file',
+    'acdc_of_last_backup_at'          => 'last_backup_at',
+  ) as $opt => $key ) {
+    if ( '' !== $preserve[ $key ] ) {
+      update_option( $opt, $preserve[ $key ], false );
+    }
+  }
+
   update_option( 'acdc_of_company_profile', $preserve['company_profile'], false );
   update_option( 'acdc_of_branding', $preserve['branding'], false );
   update_option( 'acdc_of_billing_settings', $preserve['billing_settings'], false );
