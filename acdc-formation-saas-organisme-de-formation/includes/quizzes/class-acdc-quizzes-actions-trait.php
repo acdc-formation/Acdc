@@ -34,12 +34,15 @@ trait ACDC_Quizzes_Actions_Trait {
     const ACDC_OF_QZ_TAB_LIVE        = 'qz_live';
     const ACDC_OF_QZ_TAB_POSITIONING = 'qz_positioning';
     const ACDC_OF_QZ_TAB_ASSESSMENT  = 'qz_assessment';
+    /* ACDC 3.25.165 — Évaluation diagnostique : création et résultats. */
+    const ACDC_OF_QZ_TAB_DIAGNOSTIC  = 'qz_diagnostic';
     /* ACDC 3.21.04.1-hotfix1 — Onglet transverse Résultats */
     const ACDC_OF_QZ_TAB_RESULTS     = 'qz_results';
     /* ACDC 3.21.04.1-hotfix2 — Trois onglets Résultats spécifiques par finalité */
     const ACDC_OF_QZ_TAB_RESULTS_LIVE        = 'qz_results_live';
     const ACDC_OF_QZ_TAB_RESULTS_POSITIONING = 'qz_results_positioning';
     const ACDC_OF_QZ_TAB_RESULTS_ASSESSMENT  = 'qz_results_assessment';
+    const ACDC_OF_QZ_TAB_RESULTS_DIAGNOSTIC  = 'qz_results_diagnostic';
 
     /**
      * Enregistre l'ensemble des hooks WordPress du module Quizzes.
@@ -237,6 +240,16 @@ trait ACDC_Quizzes_Actions_Trait {
                     'icon'  => 'evaluation_result',
                 ),
                 array(
+                    'tab'   => self::ACDC_OF_QZ_TAB_DIAGNOSTIC,
+                    'label' => __( 'Évaluations diagnostiques', 'acdc-formation-saas' ),
+                    'icon'  => 'evaluation_acquired',
+                ),
+                array(
+                    'tab'   => self::ACDC_OF_QZ_TAB_RESULTS_DIAGNOSTIC,
+                    'label' => __( 'Résultats — Diagnostiques', 'acdc-formation-saas' ),
+                    'icon'  => 'evaluation_result',
+                ),
+                array(
                     'tab'   => self::ACDC_OF_QZ_TAB_ASSESSMENT,
                     'label' => __( 'Évaluations des acquis', 'acdc-formation-saas' ),
                     'icon'  => 'evaluation_acquired',
@@ -306,6 +319,10 @@ trait ACDC_Quizzes_Actions_Trait {
             $this->render_qz_extranet_screen( self::ACDC_OF_QZ_PURPOSE_POSITIONING );
             return true;
         }
+        if ( self::ACDC_OF_QZ_TAB_RESULTS_DIAGNOSTIC === $tab ) {
+            $this->render_qz_extranet_screen( self::ACDC_OF_QZ_PURPOSE_DIAGNOSTIC );
+            return true;
+        }
         if ( self::ACDC_OF_QZ_TAB_RESULTS_ASSESSMENT === $tab ) {
             $this->render_qz_extranet_screen( self::ACDC_OF_QZ_PURPOSE_ASSESSMENT );
             return true;
@@ -341,6 +358,9 @@ trait ACDC_Quizzes_Actions_Trait {
         if ( self::ACDC_OF_QZ_TAB_POSITIONING === $tab ) {
             return self::ACDC_OF_QZ_PURPOSE_POSITIONING;
         }
+        if ( self::ACDC_OF_QZ_TAB_DIAGNOSTIC === $tab ) {
+            return self::ACDC_OF_QZ_PURPOSE_DIAGNOSTIC;
+        }
         if ( self::ACDC_OF_QZ_TAB_ASSESSMENT === $tab ) {
             return self::ACDC_OF_QZ_PURPOSE_ASSESSMENT;
         }
@@ -357,6 +377,9 @@ trait ACDC_Quizzes_Actions_Trait {
     private function qz_tab_for_purpose( $purpose ) {
         if ( self::ACDC_OF_QZ_PURPOSE_POSITIONING === $purpose ) {
             return self::ACDC_OF_QZ_TAB_POSITIONING;
+        }
+        if ( self::ACDC_OF_QZ_PURPOSE_DIAGNOSTIC === $purpose ) {
+            return self::ACDC_OF_QZ_TAB_DIAGNOSTIC;
         }
         if ( self::ACDC_OF_QZ_PURPOSE_ASSESSMENT === $purpose ) {
             return self::ACDC_OF_QZ_TAB_ASSESSMENT;
@@ -517,6 +540,7 @@ trait ACDC_Quizzes_Actions_Trait {
             $portal_purpose_map = array(
                 self::ACDC_OF_QZ_PURPOSE_LIVE        => 'live',
                 self::ACDC_OF_QZ_PURPOSE_POSITIONING => 'positioning',
+                self::ACDC_OF_QZ_PURPOSE_DIAGNOSTIC  => 'diagnostic',
                 self::ACDC_OF_QZ_PURPOSE_ASSESSMENT  => 'assessment',
             );
             if ( isset( $portal_purpose_map[ $purpose ] ) ) {
@@ -591,7 +615,17 @@ trait ACDC_Quizzes_Actions_Trait {
             $formation_id = (int) $existing->formation_id;
         }
 
-        $delivery_default = ( self::ACDC_OF_QZ_PURPOSE_LIVE === $purpose )
+        /* ACDC 3.25.165 — L'évaluation diagnostique et l'évaluation des acquis se
+           passent en salle : le mode SYNCHRONE est leur défaut, au même titre que le
+           quiz live. Il reste modifiable — un apprenant absent doit pouvoir rattraper
+           à distance — contrairement au quiz live, dont la modalité EST la finalité.
+           Seul le test de positionnement garde l'asynchrone par défaut : il se passe
+           avant l'entrée en formation, donc à distance. */
+        $delivery_default = in_array( $purpose, array(
+            self::ACDC_OF_QZ_PURPOSE_LIVE,
+            self::ACDC_OF_QZ_PURPOSE_DIAGNOSTIC,
+            self::ACDC_OF_QZ_PURPOSE_ASSESSMENT,
+        ), true )
             ? self::ACDC_OF_QZ_DELIVERY_LIVE_SYNC
             : self::ACDC_OF_QZ_DELIVERY_ASYNC_TOKEN;
         $delivery_mode = isset( $_POST['delivery_mode'] ) ? sanitize_key( wp_unslash( $_POST['delivery_mode'] ) ) : $delivery_default;
@@ -3160,6 +3194,8 @@ trait ACDC_Quizzes_Actions_Trait {
             self::ACDC_OF_QZ_TAB_LIVE,
             self::ACDC_OF_QZ_TAB_POSITIONING,
             self::ACDC_OF_QZ_TAB_ASSESSMENT,
+            self::ACDC_OF_QZ_TAB_DIAGNOSTIC,
+            self::ACDC_OF_QZ_TAB_RESULTS_DIAGNOSTIC,
             /* ACDC 3.21.04.1-hotfix2 — Onglets Résultats (transverse + 3 par finalité) */
             self::ACDC_OF_QZ_TAB_RESULTS,
             self::ACDC_OF_QZ_TAB_RESULTS_LIVE,

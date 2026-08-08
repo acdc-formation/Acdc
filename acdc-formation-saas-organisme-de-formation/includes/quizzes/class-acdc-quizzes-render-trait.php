@@ -282,11 +282,13 @@ trait ACDC_Quizzes_Render_Trait {
         $this->render_qz_modal_create( $purpose );
         $this->render_qz_modal_duplicate_from( $purpose );
         // 3.21.03.1 — Modale d'envoi async depuis la liste (positionnement et évaluation)
-        if ( in_array( $purpose, array( self::ACDC_OF_QZ_PURPOSE_POSITIONING, self::ACDC_OF_QZ_PURPOSE_ASSESSMENT ), true ) ) {
+        if ( in_array( $purpose, array( self::ACDC_OF_QZ_PURPOSE_POSITIONING, self::ACDC_OF_QZ_PURPOSE_DIAGNOSTIC, self::ACDC_OF_QZ_PURPOSE_ASSESSMENT ), true ) ) {
             $this->render_qz_modal_send_list( $purpose );
         }
-        // ACDC 3.21.06 — Modal lancement live (toujours rendu pour les quiz live)
-        if ( self::ACDC_OF_QZ_PURPOSE_LIVE === $purpose ) {
+        /* ACDC 3.25.165 — La modale de lancement en salle vaut pour toute finalité
+           susceptible d'être passée en synchrone : diagnostique et acquis le sont par
+           défaut. Sans cela, leur bouton « Lancer en live » n'ouvrait rien. */
+        if ( in_array( $purpose, array( self::ACDC_OF_QZ_PURPOSE_LIVE, self::ACDC_OF_QZ_PURPOSE_DIAGNOSTIC, self::ACDC_OF_QZ_PURPOSE_ASSESSMENT ), true ) ) {
             $this->render_qz_modal_live_launch();
         }
         // 3.21.31 — Modale import IA Mode B (création complète)
@@ -538,7 +540,11 @@ trait ACDC_Quizzes_Render_Trait {
                         </label>
                     </p>
 
-                    <?php if ( self::ACDC_OF_QZ_PURPOSE_ASSESSMENT === $purpose ) : ?>
+                    <?php /* ACDC 3.25.165 — Le choix du mode de passation est offert au
+                             diagnostique comme aux acquis : tous deux se passent en salle par
+                             défaut, mais doivent pouvoir être envoyés à distance pour un
+                             rattrapage. */ ?>
+                    <?php if ( in_array( $purpose, array( self::ACDC_OF_QZ_PURPOSE_DIAGNOSTIC, self::ACDC_OF_QZ_PURPOSE_ASSESSMENT ), true ) ) : ?>
                         <p>
                             <label>
                                 <span><?php esc_html_e( "Mode de passation par défaut", 'acdc-formation-saas' ); ?></span>

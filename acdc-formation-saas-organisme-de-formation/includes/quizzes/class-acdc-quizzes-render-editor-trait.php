@@ -117,7 +117,12 @@ trait ACDC_Quizzes_Render_Editor_Trait {
                             <?php esc_html_e( '✉ Envoyer par e-mail', 'acdc-formation-saas' ); ?>
                         </button>
                     <?php elseif ( self::ACDC_OF_QZ_STATUS_ACTIVE === $quiz->status
-                        && self::ACDC_OF_QZ_PURPOSE_LIVE === $quiz->quiz_purpose ) :
+                        /* ACDC 3.25.165 — Le lancement en salle dépend de la MODALITÉ, pas
+                           de la finalité. Cette condition testait la finalité « quiz live » :
+                           une évaluation des acquis réglée en synchrone n'affichait donc
+                           aucun bouton de lancement, alors que la liste, elle, en proposait
+                           un — c'est la même confusion des deux axes. */
+                        && self::ACDC_OF_QZ_DELIVERY_LIVE_SYNC === $quiz->delivery_mode ) :
                         $launch_url = wp_nonce_url(
                             add_query_arg( array(
                                 'action'  => 'acdc_of_qz_launch_live',

@@ -14,11 +14,13 @@ $score = isset( $args['score'] ) ? $args['score'] : null;
 // hotfix49 — Libellés contextuels selon la finalité
 $confirm_h1 = array(
     'positioning' => 'Test de positionnement validé !',
+    'diagnostic'  => 'Évaluation diagnostique validée !',
     'assessment'  => 'Évaluation des acquis validée !',
     'live'        => 'Quiz validé !',
 );
 $confirm_body = array(
     'positioning' => 'Vos réponses au test de positionnement',
+    'diagnostic'  => 'Vos réponses à l’évaluation diagnostique',
     'assessment'  => 'Vos réponses à l’évaluation des acquis',
     'live'        => 'Vos réponses au quiz',
 );

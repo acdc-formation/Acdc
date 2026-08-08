@@ -129,7 +129,7 @@ trait ACDC_Trainer_Portal_Quizzes_Render_Trait {
     private function render_trainer_portal_quizzes_list( $trainer_id ) {
         // Onglet de finalité courant (live | positioning | assessment | '')
         $current_purpose = isset( $_GET['purpose'] ) ? sanitize_key( wp_unslash( $_GET['purpose'] ) ) : '';
-        $allowed = array( '', 'live', 'positioning', 'assessment' );
+        $allowed = array( '', 'live', 'positioning', 'diagnostic', 'assessment' );
         if ( ! in_array( $current_purpose, $allowed, true ) ) {
             $current_purpose = '';
         }
@@ -530,7 +530,7 @@ trait ACDC_Trainer_Portal_Quizzes_Render_Trait {
             : array();
 
         $can_dispatch = $this->trainer_can( $trainer_id, 'dispatch_quiz' );
-        $is_dispatch_eligible = ( 'active' === $quiz->status && in_array( $quiz->quiz_purpose, array( 'positioning', 'assessment' ), true ) && empty( $quiz->is_locked ) );
+        $is_dispatch_eligible = ( 'active' === $quiz->status && in_array( $quiz->quiz_purpose, array( 'positioning', 'diagnostic', 'assessment' ), true ) && empty( $quiz->is_locked ) );
 
         ob_start();
         ?>

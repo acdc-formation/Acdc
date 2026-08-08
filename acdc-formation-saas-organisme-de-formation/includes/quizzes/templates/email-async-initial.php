@@ -18,6 +18,7 @@ $expires_human = '' !== $expires_at ? mysql2date( 'l j F Y \\à H\\hi', $expires
 
 $purpose_intro = array(
     'positioning' => 'Avant le démarrage de votre formation, votre formateur vous invite à passer un test de positionnement. Il permet d\'adapter le contenu à votre niveau actuel.',
+    'diagnostic'  => 'Au début de votre formation, votre formateur vous invite à passer une évaluation diagnostique afin de situer votre niveau de départ.',
     'assessment'  => 'À l\'issue de votre formation, votre formateur vous invite à passer une évaluation des acquis pour mesurer votre progression.',
     'live'        => 'Votre formateur vous invite à passer un quiz.',
 );
@@ -64,6 +65,7 @@ Bonjour <strong><?php echo esc_html( $display_first ); ?></strong>,
 <?php
 $purpose_label = array(
     'positioning' => 'Test de positionnement',
+    'diagnostic'  => 'Évaluation diagnostique',
     'assessment'  => 'Évaluation des acquis',
     'live'        => 'Quiz',
 );

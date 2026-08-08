@@ -622,7 +622,7 @@ trait ACDC_Quizzes_Engine_Trait {
         }
 
         $purpose = isset( $filters['purpose'] ) ? sanitize_key( $filters['purpose'] ) : '';
-        if ( in_array( $purpose, array( 'live', 'positioning', 'assessment' ), true ) ) {
+        if ( in_array( $purpose, array( 'live', 'positioning', 'diagnostic', 'assessment' ), true ) ) {
             $where[]  = 'q.quiz_purpose = %s';
             $params[] = $purpose;
         }

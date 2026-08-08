@@ -141,6 +141,9 @@ trait ACDC_Quizzes_Render_Results_Trait {
         } elseif ( 'positioning' === $filter_purpose ) {
             $title    = 'Résultats — Tests de positionnement';
             $subtitle = 'Niveau initial des apprenants détecté à l\'entrée en formation.';
+        } elseif ( 'diagnostic' === $filter_purpose ) {
+            $title    = 'Résultats — Évaluations diagnostiques';
+            $subtitle = 'Niveau des apprenants en début de formation, point de départ de la mesure de progression.';
         } elseif ( 'assessment' === $filter_purpose ) {
             $title    = 'Résultats — Évaluations des acquis';
             $subtitle = 'Atteinte des objectifs pédagogiques en fin de formation (Qualiopi indicateur 12).';
@@ -194,6 +197,7 @@ trait ACDC_Quizzes_Render_Results_Trait {
                             <option value="">Toutes les finalités</option>
                             <option value="live" <?php selected( 'live', $filter_purpose ); ?>>Quiz live</option>
                             <option value="positioning" <?php selected( 'positioning', $filter_purpose ); ?>>Tests de positionnement</option>
+                            <option value="diagnostic" <?php selected( 'diagnostic', $filter_purpose ); ?>>Évaluations diagnostiques</option>
                             <option value="assessment" <?php selected( 'assessment', $filter_purpose ); ?>>Évaluations des acquis</option>
                         </select>
                     </label>
@@ -1156,6 +1160,7 @@ trait ACDC_Quizzes_Render_Results_Trait {
         $labels = array(
             'live'        => 'Quiz live',
             'positioning' => 'Positionnement',
+            'diagnostic'  => 'Diagnostique',
             'assessment'  => 'Évaluation',
         );
         return $labels[ $purpose ] ?? $purpose;

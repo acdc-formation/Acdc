@@ -322,6 +322,7 @@ trait ACDC_Learner_Portal_Render_Trait {
     $purpose_labels = array(
       'live'        => 'Quiz live',
       'positioning' => 'Test de positionnement',
+      'diagnostic'  => 'Évaluation diagnostique',
       'assessment'  => 'Évaluation des acquis',
       'poll'        => 'Sondage',
     );
@@ -478,6 +479,7 @@ trait ACDC_Learner_Portal_Render_Trait {
     $purpose_labels = array(
       'live'        => 'Quiz live',
       'positioning' => 'Test de positionnement',
+      'diagnostic'  => 'Évaluation diagnostique',
       'assessment'  => 'Évaluation des acquis',
     );
     $purpose_label  = $purpose_labels[ $p->quiz_purpose ] ?? ucfirst( (string) $p->quiz_purpose );

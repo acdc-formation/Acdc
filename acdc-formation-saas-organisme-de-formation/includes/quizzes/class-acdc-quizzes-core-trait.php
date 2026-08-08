@@ -51,6 +51,12 @@ trait ACDC_Quizzes_Core_Trait {
     const ACDC_OF_QZ_PURPOSE_LIVE        = 'live';
     const ACDC_OF_QZ_PURPOSE_POSITIONING = 'positioning';
     const ACDC_OF_QZ_PURPOSE_ASSESSMENT  = 'assessment';
+    /* ACDC 3.25.165 — Quatrième finalité : l'évaluation DIAGNOSTIQUE, passée en début
+       de formation pour situer le niveau de départ. Comparée à l'évaluation des
+       acquis, elle mesure la progression — c'est sa raison d'être. À ne pas confondre
+       avec le test de positionnement, qui vérifie des PRÉREQUIS avant l'entrée en
+       formation et conditionne l'inscription ou une remise à niveau. */
+    const ACDC_OF_QZ_PURPOSE_DIAGNOSTIC  = 'diagnostic';
 
     const ACDC_OF_QZ_DELIVERY_LIVE_SYNC   = 'live_sync';
     const ACDC_OF_QZ_DELIVERY_ASYNC_TOKEN = 'async_token';
@@ -212,7 +218,7 @@ trait ACDC_Quizzes_Core_Trait {
              INNER JOIN {$tbl_s} s ON s.id = p.session_id
              INNER JOIN {$tbl_q} q ON q.id = s.quiz_id
              WHERE p.status = 'completed'
-               AND q.quiz_purpose IN ('positioning', 'assessment')
+               AND q.quiz_purpose IN ('positioning', 'diagnostic', 'assessment')
                {$where_url}
              ORDER BY p.id ASC
              LIMIT 500"
@@ -670,6 +676,7 @@ trait ACDC_Quizzes_Core_Trait {
         return array(
             self::ACDC_OF_QZ_PURPOSE_LIVE        => 'Quiz live',
             self::ACDC_OF_QZ_PURPOSE_POSITIONING => 'Test de positionnement',
+            self::ACDC_OF_QZ_PURPOSE_DIAGNOSTIC  => 'Évaluation diagnostique',
             self::ACDC_OF_QZ_PURPOSE_ASSESSMENT  => 'Évaluation des acquis',
         );
     }
@@ -831,6 +838,7 @@ trait ACDC_Quizzes_Core_Trait {
         $result = array(
             self::ACDC_OF_QZ_PURPOSE_LIVE        => 0,
             self::ACDC_OF_QZ_PURPOSE_POSITIONING => 0,
+            self::ACDC_OF_QZ_PURPOSE_DIAGNOSTIC  => 0,
             self::ACDC_OF_QZ_PURPOSE_ASSESSMENT  => 0,
         );
 
@@ -885,8 +893,16 @@ trait ACDC_Quizzes_Core_Trait {
         $row = $wpdb->get_row( $wpdb->prepare( "SELECT * FROM {$tbl} WHERE id = %d", $quiz_id ) );
         if ( ! $row ) { return null; }
 
-        // Auto-correction : quiz positionnement/évaluation avec delivery_mode incorrect → async_token
-        if ( in_array( $row->quiz_purpose, array( self::ACDC_OF_QZ_PURPOSE_POSITIONING, self::ACDC_OF_QZ_PURPOSE_ASSESSMENT ), true )
+        /* Auto-correction du mode de passation, à la lecture.
+           ACDC 3.25.165 — L'ÉVALUATION DES ACQUIS EN EST RETIRÉE. Cette correction
+           forçait en asynchrone toute évaluation, y compris celle que l'organisme
+           avait délibérément réglée en salle : le choix était réécrit au premier
+           chargement, sans message, et le bouton de lancement ne réapparaissait
+           jamais. Elle ne vaut plus que pour le test de positionnement, qui se passe
+           par nature à distance, avant l'entrée en formation.
+           L'évaluation diagnostique n'y figure pas non plus : elle se passe en salle
+           au début de la formation. */
+        if ( in_array( $row->quiz_purpose, array( self::ACDC_OF_QZ_PURPOSE_POSITIONING ), true )
             && $row->delivery_mode !== self::ACDC_OF_QZ_DELIVERY_ASYNC_TOKEN ) {
             $wpdb->update( $tbl, array( 'delivery_mode' => self::ACDC_OF_QZ_DELIVERY_ASYNC_TOKEN ), array( 'id' => $quiz_id ), array( '%s' ), array( '%d' ) );
             $row->delivery_mode = self::ACDC_OF_QZ_DELIVERY_ASYNC_TOKEN;
@@ -1180,7 +1196,9 @@ trait ACDC_Quizzes_Core_Trait {
         // Délivrance par défaut selon la finalité.
         $delivery = isset( $data['delivery_mode'] ) ? (string) $data['delivery_mode'] : '';
         if ( ! $this->is_valid_quiz_delivery_mode( $delivery ) ) {
-            $delivery = ( $purpose === self::ACDC_OF_QZ_PURPOSE_LIVE )
+            /* ACDC 3.25.165 — Même règle qu'à l'enregistrement : diagnostique et acquis
+               se passent en salle par défaut. */
+            $delivery = in_array( $purpose, array( self::ACDC_OF_QZ_PURPOSE_LIVE, self::ACDC_OF_QZ_PURPOSE_DIAGNOSTIC, self::ACDC_OF_QZ_PURPOSE_ASSESSMENT ), true )
                 ? self::ACDC_OF_QZ_DELIVERY_LIVE_SYNC
                 : self::ACDC_OF_QZ_DELIVERY_ASYNC_TOKEN;
         }
@@ -1936,7 +1954,7 @@ trait ACDC_Quizzes_Core_Trait {
      */
     public function get_qz_pending_counts() {
         if ( empty( $this->qz_tables ) ) {
-            return array( 'quiz' => 0, 'positioning' => 0, 'assessment' => 0 );
+            return array( 'quiz' => 0, 'positioning' => 0, 'diagnostic' => 0, 'assessment' => 0 );
         }
         global $wpdb;
         $tbl_p = $this->get_qz_table( 'participants' );
@@ -1955,12 +1973,12 @@ trait ACDC_Quizzes_Core_Trait {
              INNER JOIN {$tbl_s} s ON s.id = p.session_id
              INNER JOIN {$tbl_q} q ON q.id = s.quiz_id
              WHERE p.status IN ('invited', 'opened', 'in_progress')
-               AND q.quiz_purpose IN ('positioning', 'assessment')
+               AND q.quiz_purpose IN ('positioning', 'diagnostic', 'assessment')
                {$snooze_clause}
              GROUP BY q.quiz_purpose"
         );
 
-        $counts = array( 'quiz' => 0, 'positioning' => 0, 'assessment' => 0 );
+        $counts = array( 'quiz' => 0, 'positioning' => 0, 'diagnostic' => 0, 'assessment' => 0 );
         foreach ( (array) $rows as $row ) {
             if ( isset( $counts[ $row->quiz_purpose ] ) ) {
                 $counts[ $row->quiz_purpose ] = (int) $row->cnt;
@@ -2632,6 +2650,7 @@ trait ACDC_Quizzes_Core_Trait {
         $prefix_map = array(
             self::ACDC_OF_QZ_PURPOSE_LIVE        => 'lv',
             self::ACDC_OF_QZ_PURPOSE_POSITIONING => 'pos',
+            self::ACDC_OF_QZ_PURPOSE_DIAGNOSTIC  => 'dia',
             self::ACDC_OF_QZ_PURPOSE_ASSESSMENT  => 'eva',
         );
         $prefix = isset( $prefix_map[ $purpose ] ) ? $prefix_map[ $purpose ] : 'qz';
@@ -3205,6 +3224,7 @@ trait ACDC_Quizzes_Core_Trait {
 
         $purpose_subjects = array(
             'positioning' => '[Relance] Votre test de positionnement est en attente — %s',
+            'diagnostic'  => '[Relance] Votre évaluation diagnostique est en attente — %s',
             'assessment'  => '[Relance] Votre évaluation des acquis est en attente — %s',
             'live'        => '[Relance] Votre quiz est en attente — %s',
         );
@@ -3224,6 +3244,7 @@ trait ACDC_Quizzes_Core_Trait {
         // hotfix49 — Objet contextuel selon la finalité du quiz
         $purpose_subjects = array(
             'positioning' => '[%s] Vous êtes invité à passer un test de positionnement',
+            'diagnostic'  => '[%s] Vous êtes invité à passer une évaluation diagnostique',
             'assessment'  => '[%s] Vous êtes invité à passer une évaluation des acquis',
             'live'        => '[%s] Vous êtes invité à passer un quiz',
         );
@@ -3262,6 +3283,7 @@ trait ACDC_Quizzes_Core_Trait {
         // hotfix49 — Objet contextuel selon la finalité du quiz
         $purpose_confirms = array(
             'positioning' => 'Test de positionnement validé : %s',
+            'diagnostic'  => 'Évaluation diagnostique validée : %s',
             'assessment'  => 'Évaluation des acquis validée : %s',
             'live'        => 'Quiz validé : %s',
         );
@@ -4478,6 +4500,7 @@ trait ACDC_Quizzes_Core_Trait {
         // Titre H1 — contextuel selon la finalité (hotfix50)
         $pdf_titles = array(
             'positioning' => 'Résultats test de positionnement',
+            'diagnostic'  => 'Résultats évaluation diagnostique',
             'assessment'  => 'Résultats évaluation des acquis',
             'live'        => 'Résultats de quiz',
         );

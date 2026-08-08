@@ -16,6 +16,7 @@ $expires_human = '' !== $expires_at ? mysql2date( 'l j F Y \à H\hi', $expires_a
 
 $purpose_label = array(
     'positioning' => 'votre test de positionnement',
+    'diagnostic'  => 'votre évaluation diagnostique',
     'assessment'  => 'votre évaluation des acquis',
     'live'        => 'votre quiz',
 );
@@ -23,6 +24,7 @@ $quiz_label = isset( $purpose_label[ $quiz->quiz_purpose ] ) ? $purpose_label[ $
 
 $purpose_title = array(
     'positioning' => '📋 Relance — Test de positionnement',
+    'diagnostic'  => '📋 Relance — Évaluation diagnostique',
     'assessment'  => '📋 Relance — Évaluation des acquis',
     'live'        => '📋 Relance — Quiz',
 );

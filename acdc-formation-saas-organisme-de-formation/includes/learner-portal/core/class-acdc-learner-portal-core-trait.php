@@ -1527,6 +1527,7 @@ trait ACDC_Learner_Portal_Core_Trait {
           $purpose_labels = array(
             'live'        => 'Quiz live',
             'positioning' => 'Test de positionnement',
+            'diagnostic'  => 'Evaluation diagnostique',
             'assessment'  => 'Evaluation des acquis',
           );
           foreach ( $quiz_results as $qr ) {
