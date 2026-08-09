@@ -87,6 +87,9 @@ trait ACDC_Workflow_Actions_Trait {
         array(
           'status'      => 'skipped',
           'result_note' => 'Écartée manuellement.',
+          /* Marque la décision comme HUMAINE : le moteur ne rouvrira jamais
+             cette étape, quoi que dise le dossier par la suite. */
+          'settled_by'  => 'human',
           'executed_at' => $now,
           'updated_at'  => $now,
         ),

@@ -96,6 +96,7 @@ trait ACDC_Workflow_Core_Trait {
       executed_at DATETIME DEFAULT NULL,
       status VARCHAR(20) NOT NULL DEFAULT 'pending',
       is_alert TINYINT(1) NOT NULL DEFAULT 0,
+      settled_by VARCHAR(10) NOT NULL DEFAULT '',
       attempts SMALLINT UNSIGNED NOT NULL DEFAULT 0,
       result_note TEXT,
       last_error TEXT,
@@ -112,6 +113,41 @@ trait ACDC_Workflow_Core_Trait {
     dbDelta( $sql_steps );
 
     $this->acdc_wf_migrate_replan_after_timezone_fix();
+    $this->acdc_wf_migrate_mark_human_dismissals();
+  }
+
+  /**
+   * ACDC 3.25.191 — Les écartements manuels antérieurs à la colonne `settled_by`.
+   *
+   * Le moteur peut désormais rouvrir une étape qu'il avait lui-même écartée,
+   * mais jamais une que David a écartée à la main. Les lignes écrites avant
+   * cette distinction n'en portent pas la marque : sans ce rattrapage, le
+   * premier tour de moteur ressusciterait les tâches déjà tranchées — soit
+   * exactement le comportement que la recette venait de valider comme correct.
+   * La note laissée par l'action manuelle suffit à les reconnaître.
+   */
+  private function acdc_wf_migrate_mark_human_dismissals() {
+    global $wpdb;
+
+    if ( '1' === (string) get_option( 'acdc_of_workflow_settled_by_3_25_191', '' ) ) {
+      return;
+    }
+    update_option( 'acdc_of_workflow_settled_by_3_25_191', '1', false );
+
+    $exists = $wpdb->get_var( $wpdb->prepare( 'SHOW TABLES LIKE %s', $this->workflow_step_table ) );
+    if ( $exists !== $this->workflow_step_table ) {
+      return;
+    }
+    if ( ! $this->acdc_schema_has_column( $this->workflow_step_table, 'settled_by' ) ) {
+      return;
+    }
+
+    $wpdb->query( $wpdb->prepare(
+      "UPDATE {$this->workflow_step_table}
+          SET settled_by = 'human'
+        WHERE settled_by = '' AND result_note = %s",
+      'Écartée manuellement.'
+    ) );
   }
 
   /**

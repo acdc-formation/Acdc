@@ -381,7 +381,8 @@ trait ACDC_Workflow_Engine_Trait {
     $now  = $this->acdc_wf_mysql( $this->acdc_wf_now() );
     $wpdb->query( $wpdb->prepare(
       "UPDATE {$this->workflow_step_table}
-          SET status = 'skipped', result_note = %s, executed_at = COALESCE(executed_at, %s), updated_at = %s
+          SET status = 'skipped', result_note = %s, settled_by = 'engine',
+              executed_at = COALESCE(executed_at, %s), updated_at = %s
         WHERE run_id = %d AND status IN ('pending','waiting')
           AND phase IN ('preparation','animation','evaluation')",
       $note,
@@ -650,22 +651,10 @@ trait ACDC_Workflow_Engine_Trait {
       $company_id = (int) $contract->company_id;
     }
 
-    $session = null;
-    if ( $formation_id > 0 ) {
-      $session = $wpdb->get_row( $wpdb->prepare(
-        "SELECT * FROM {$this->session_table}
-          WHERE formation_id = %d AND is_draft = 0
-            AND COALESCE(status,'') NOT IN ('Annulée','Annulee')
-            AND ( %d = 0 OR company_id = %d )
-          ORDER BY COALESCE(start_date, DATE(start_at)) ASC, id ASC
-          LIMIT 1",
-        $formation_id,
-        $company_id,
-        $company_id
-      ) );
-    }
+    $sessions = $this->acdc_wf_resolve_sessions( $formation_id, $company_id, $contract );
+    $session  = ! empty( $sessions ) ? $sessions[0] : null;
 
-    $funder_id = $this->acdc_wf_resolve_funder_id( $contract, $company_id );
+    $funder_id = $this->acdc_wf_resolve_funder_id( $need, $contract, $company_id );
 
     return array(
       'need'         => $need,
@@ -673,6 +662,7 @@ trait ACDC_Workflow_Engine_Trait {
       'quote'        => $quote,
       'contract'     => $contract,
       'session'      => $session,
+      'sessions'     => $sessions,
       'session_id'   => $session ? (int) $session->id : 0,
       'formation_id' => $formation_id,
       'company_id'   => $company_id,
@@ -723,8 +713,22 @@ trait ACDC_Workflow_Engine_Trait {
     return count( $names ) . ' apprenants inscrits';
   }
 
-  private function acdc_wf_resolve_funder_id( $contract, $company_id ) {
+  /**
+   * ACDC 3.25.191 — Le financeur se déclare sur le RECUEIL DES BESOINS.
+   *
+   * C'est le seul endroit du plugin qui porte une colonne `funder_id`. Le moteur
+   * interrogeait la convention et l'entreprise, où cette colonne n'existe pas :
+   * la branche financeur ne pouvait donc JAMAIS s'activer, quel que soit le
+   * dossier. Le message « Aucun financeur rattaché » était exact du point de vue
+   * du code, et faux du point de vue de l'utilisateur qui venait d'en désigner
+   * un. Les deux autres sources restent interrogées si elles existent un jour.
+   */
+  private function acdc_wf_resolve_funder_id( $need, $contract, $company_id ) {
     global $wpdb;
+
+    if ( $need && ! empty( $need->funder_id ) ) {
+      return (int) $need->funder_id;
+    }
     if ( $contract && ! empty( $contract->funder_id ) ) {
       return (int) $contract->funder_id;
     }
@@ -735,6 +739,53 @@ trait ACDC_Workflow_Engine_Trait {
       ) );
     }
     return 0;
+  }
+
+  /**
+   * ACDC 3.25.191 — Une formation de trois jours, ce sont TROIS séances.
+   *
+   * Le moteur n'en retenait qu'une, la première, et en déduisait une fin de
+   * formation au premier jour : toutes les enquêtes de fin partaient deux jours
+   * trop tôt, avant même que la formation soit terminée. C'est le genre de
+   * défaut qu'aucun destinataire ne signale — il répond juste à une enquête sur
+   * une formation qu'il n'a pas finie.
+   *
+   * Le filtre par entreprise posait un second piège : une séance créée depuis
+   * une proposition naît SANS entreprise, donc invisible pour un dossier qui en
+   * porte une. On accepte désormais ces séances orphelines, mais uniquement dans
+   * la fenêtre de dates de la convention — sans quoi le dossier d'un client
+   * ramasserait les séances d'un autre sur la même formation.
+   */
+  private function acdc_wf_resolve_sessions( $formation_id, $company_id, $contract ) {
+    global $wpdb;
+
+    $formation_id = (int) $formation_id;
+    if ( $formation_id <= 0 ) {
+      return array();
+    }
+
+    $sql = "SELECT * FROM {$this->session_table}
+             WHERE formation_id = %d AND is_draft = 0
+               AND COALESCE(status,'') NOT IN ('Annulée','Annulee')";
+    $values = array( $formation_id );
+
+    $company_id = (int) $company_id;
+    $bounded    = $contract && ! empty( $contract->start_date ) && ! empty( $contract->end_date );
+
+    if ( $company_id > 0 ) {
+      $sql     .= $bounded ? ' AND ( company_id = %d OR company_id IS NULL )' : ' AND company_id = %d';
+      $values[] = $company_id;
+    }
+    if ( $bounded ) {
+      $sql     .= ' AND COALESCE(start_date, DATE(start_at)) BETWEEN %s AND %s';
+      $values[] = (string) $contract->start_date;
+      $values[] = (string) $contract->end_date;
+    }
+
+    $sql .= ' ORDER BY COALESCE(start_date, DATE(start_at)) ASC, COALESCE(start_at, "") ASC, id ASC LIMIT 200';
+
+    $rows = $wpdb->get_results( $wpdb->prepare( $sql, $values ) );
+    return is_array( $rows ) ? $rows : array();
   }
 
   private function acdc_wf_trainer_name( $session ) {
@@ -808,11 +859,30 @@ trait ACDC_Workflow_Engine_Trait {
     $start_source = '';
     $end_source   = '';
 
-    $session = $pieces['session'] ?? null;
-    if ( $session ) {
-      $id = (int) $session->id;
-      list( $start, $start_source ) = $this->acdc_wf_session_moment( $session, 'start', $id, '09:00:00' );
-      list( $end,   $end_source )   = $this->acdc_wf_session_moment( $session, 'end',   $id, '17:00:00' );
+    /* La formation commence à la première journée du dossier et se termine à la
+       DERNIÈRE. Retenir une seule séance faisait partir les enquêtes de fin avant
+       la fin réelle de la formation. */
+    $sessions = ! empty( $pieces['sessions'] ) ? $pieces['sessions'] : array();
+    $count    = count( $sessions );
+
+    if ( $count > 0 ) {
+      $first = $sessions[0];
+      $last  = $sessions[ $count - 1 ];
+
+      list( $start, $start_source ) = $this->acdc_wf_session_moment( $first, 'start', (int) $first->id, '09:00:00' );
+      list( $end,   $end_source )   = $this->acdc_wf_session_moment( $last,  'end',   (int) $last->id,  '17:00:00' );
+
+      /* Une séance sans heure de fin borne quand même la journée. */
+      if ( $end <= 0 ) {
+        list( $end, $end_source ) = $this->acdc_wf_session_moment( $last, 'start', (int) $last->id, '17:00:00' );
+        if ( $end > 0 ) {
+          $end        = $this->acdc_wf_local_ts( wp_date( 'Y-m-d', $end ), '17:00:00' );
+          $end_source = 'Fin : dernière journée du dossier, séance n°' . (int) $last->id . ' (heure de fin non renseignée).';
+        }
+      }
+      if ( $count > 1 ) {
+        $end_source .= ' ' . $count . ' séances au dossier.';
+      }
     }
 
     $contract = $pieces['contract'] ?? null;
@@ -901,8 +971,23 @@ trait ACDC_Workflow_Engine_Trait {
   private function acdc_wf_session_slots( $pieces ) {
     $slots = array();
 
-    if ( ! empty( $pieces['session']->schedule_json ) ) {
-      $schedule = json_decode( (string) $pieces['session']->schedule_json, true );
+    foreach ( ( ! empty( $pieces['sessions'] ) ? $pieces['sessions'] : array() ) as $session ) {
+      foreach ( $this->acdc_wf_slots_for_session( $session ) as $slot ) {
+        $slots[] = $slot;
+      }
+    }
+    /* Garde-fou de volume : un planning réel ne dépasse pas cet ordre de
+       grandeur. Au-delà, la donnée est suspecte et l'on préfère ne rien
+       planifier plutôt que d'inonder le parcours. */
+    return count( $slots ) > 120 ? array() : $slots;
+  }
+
+  /** Les demi-journées d'UNE séance : planning détaillé, sinon ses horaires. */
+  private function acdc_wf_slots_for_session( $session ) {
+    $slots = array();
+
+    if ( ! empty( $session->schedule_json ) ) {
+      $schedule = json_decode( (string) $session->schedule_json, true );
       if ( is_array( $schedule ) ) {
         foreach ( $schedule as $entry ) {
           if ( ! is_array( $entry ) || empty( $entry['date'] ) ) {
@@ -929,16 +1014,12 @@ trait ACDC_Workflow_Engine_Trait {
     }
 
     if ( ! empty( $slots ) ) {
-      /* Garde-fou de volume : un planning réel ne dépasse pas cet ordre de
-         grandeur. Au-delà, la donnée est suspecte et l'on préfère ne rien
-         planifier plutôt que d'inonder le parcours. */
-      return count( $slots ) > 120 ? array() : $slots;
+      return $slots;
     }
 
     /* Séance d'un seul tenant portant de vraies heures : deux demi-journées si
        elle enjambe midi, une seule sinon. */
-    $session = $pieces['session'] ?? null;
-    if ( ! $session || empty( $session->start_at ) ) {
+    if ( empty( $session->start_at ) ) {
       return array();
     }
     $start = $this->acdc_wf_ts( $session->start_at );
@@ -1041,8 +1122,28 @@ trait ACDC_Workflow_Engine_Trait {
       : null;
 
     if ( $existing ) {
-      if ( in_array( (string) $existing->status, $this->acdc_wf_settled_statuses(), true ) ) {
+      /* ACDC 3.25.191 — Une décision de MACHINE se révise, une décision
+         d'HOMME ne se révise pas.
+         Le moteur écartait une branche — « aucun financeur rattaché » — et la
+         figeait pour toujours : rattacher un financeur ensuite ne la rouvrait
+         jamais. Or ce « sans objet » n'était qu'une lecture de l'état du dossier
+         à un instant donné, et l'état a changé. À l'inverse, le « sans objet »
+         que David clique lui-même est un arbitrage : le rouvrir au tour suivant
+         reviendrait à lui redemander sans fin ce qu'il vient de trancher.
+         C'est cette distinction, et elle seule, qui autorise à rouvrir. */
+      $status    = (string) $existing->status;
+      $reopenable = in_array( $status, array( 'skipped', 'cancelled' ), true )
+        && 'human' !== (string) ( $existing->settled_by ?? '' );
+
+      if ( in_array( $status, $this->acdc_wf_settled_statuses(), true ) && ! $reopenable ) {
         return;
+      }
+      if ( $reopenable ) {
+        $wpdb->update(
+          $this->workflow_step_table,
+          array( 'executed_at' => null, 'result_note' => '', 'settled_by' => '' ),
+          array( 'id' => (int) $existing->id )
+        );
       }
       $wpdb->update(
         $this->workflow_step_table,
@@ -1093,7 +1194,7 @@ trait ACDC_Workflow_Engine_Trait {
     $now = $this->acdc_wf_mysql( $this->acdc_wf_now() );
     $wpdb->query( $wpdb->prepare(
       "UPDATE {$this->workflow_step_table}
-          SET status = 'cancelled', result_note = %s, updated_at = %s
+          SET status = 'cancelled', result_note = %s, settled_by = 'engine', updated_at = %s
         WHERE run_id = %d AND dedupe_key = %s AND status IN ('pending','waiting')",
       (string) $note,
       $now,
@@ -1108,7 +1209,8 @@ trait ACDC_Workflow_Engine_Trait {
     $now = $this->acdc_wf_mysql( $this->acdc_wf_now() );
     $wpdb->query( $wpdb->prepare(
       "UPDATE {$this->workflow_step_table}
-          SET status = %s, result_note = %s, executed_at = COALESCE(executed_at, %s), updated_at = %s
+          SET status = %s, result_note = %s, settled_by = 'engine',
+              executed_at = COALESCE(executed_at, %s), updated_at = %s
         WHERE run_id = %d AND dedupe_key = %s AND status IN ('pending','waiting')",
       (string) $status,
       (string) $note,
