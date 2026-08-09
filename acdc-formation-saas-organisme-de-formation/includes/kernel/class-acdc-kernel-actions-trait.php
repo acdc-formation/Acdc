@@ -3605,6 +3605,12 @@ trait ACDC_Kernel_Actions_Trait {
     $need_id = (int) $wpdb->insert_id;
     $message = 'Recueil enregistré.';
     $error_context = 'Impossible d’enregistrer le recueil.';
+    /* ACDC 3.25.185 — Le parcours s'arme ici, à la création du recueil : un
+       prospect n'engage rien, un recueil oui. Sans attendre le cron, pour que
+       le dossier apparaisse dans le suivi dans la foulée. */
+    if ( false !== $result && $need_id > 0 && method_exists( $this, 'acdc_wf_on_need_saved' ) ) {
+      $this->acdc_wf_on_need_saved( $need_id );
+    }
   }
 
   $email_results = array(

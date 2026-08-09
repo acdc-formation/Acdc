@@ -70,6 +70,11 @@ class ACDC_Formation_SAAS_Plugin {
   /* ACDC 3.25.144 — Module MCP : abilities exposées via mcp-adapter. */
   use ACDC_Mcp_Abilities_Trait;
   /* ACDC 3.23.11 — Module veille automatisée IA (V1→V6). */
+  /* ACDC 3.25.185 — Orchestration du parcours. */
+  use ACDC_Workflow_Core_Trait;
+  use ACDC_Workflow_Engine_Trait;
+  use ACDC_Workflow_Actions_Trait;
+  use ACDC_Workflow_Render_Trait;
   use ACDC_Watch_Core_Trait;
   use ACDC_Watch_AI_Trait;
   use ACDC_Watch_Actions_Trait;
@@ -88,6 +93,9 @@ class ACDC_Formation_SAAS_Plugin {
   private $complaint_table;
   /* ACDC 3.23.11 — Module veille automatisée IA (V1→V6). */
   private $watch_items_table;
+  /* ACDC 3.25.185 — Workflow : le parcours et ses étapes. */
+  private $workflow_run_table;
+  private $workflow_step_table;
   private $company_table;
   private $contact_table;
   private $document_table;
@@ -232,6 +240,9 @@ class ACDC_Formation_SAAS_Plugin {
     $this->learner_portal_token_table   = $wpdb->prefix . 'acdc_of_learner_portal_tokens';
     $this->learner_portal_session_table = $wpdb->prefix . 'acdc_of_learner_portal_sessions';
     $this->learner_portal_log_table     = $wpdb->prefix . 'acdc_of_learner_portal_logs';
+    /* ACDC 3.25.185 — Workflow : le parcours et ses étapes. */
+    $this->workflow_run_table  = $wpdb->prefix . 'acdc_of_workflow_runs';
+    $this->workflow_step_table = $wpdb->prefix . 'acdc_of_workflow_steps';
 
     add_action( 'init', array( $this, 'maybe_upgrade' ) );
     /* ACDC 3.25.157 — Les pages wp-admin du plugin sont enregistrées puis retirées
@@ -271,6 +282,10 @@ class ACDC_Formation_SAAS_Plugin {
        relance manuelle. */
     add_action( 'admin_notices', array( $this, 'acdc_render_upgrade_blocked_notice' ) );
     add_action( 'admin_post_acdc_retry_upgrade', array( $this, 'handle_retry_upgrade' ) );
+    /* ACDC 3.25.185 — Workflow : cron d'orchestration et écrans de pilotage. */
+    add_action( 'acdc_of_workflow_cron', array( $this, 'acdc_wf_cron' ) );
+    add_action( 'admin_post_acdc_wf_save_settings', array( $this, 'acdc_wf_handle_save_settings' ) );
+    add_action( 'admin_post_acdc_wf_dismiss_task', array( $this, 'acdc_wf_handle_dismiss_task' ) );
     add_action( 'wp_ajax_acdc_save_global_column_width', array( $this, 'ajax_save_global_column_width' ) );
     add_action( 'wp_ajax_acdc_save_global_column_widths', array( $this, 'ajax_save_global_column_widths' ) );
     /* ACDC 3.20.67 — Verrouillage des largeurs par tableau métier. */

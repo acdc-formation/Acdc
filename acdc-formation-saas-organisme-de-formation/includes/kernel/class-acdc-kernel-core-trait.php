@@ -240,6 +240,14 @@ private function acdc_send_transactional_email( $to, $subject, $template_args = 
         'display'  => 'Toutes les 6 heures (ACDC)',
       );
     }
+    /* ACDC 3.25.185 — Le rappel d'émargement se pose 30 minutes avant une
+       demi-journée : une cadence horaire le manquerait d'une demi-heure. */
+    if ( ! isset( $schedules['acdc_quarter_hour'] ) ) {
+      $schedules['acdc_quarter_hour'] = array(
+        'interval' => 15 * MINUTE_IN_SECONDS,
+        'display'  => 'Tous les quarts d’heure (ACDC)',
+      );
+    }
     if ( ! isset( $schedules['acdc_fortnightly'] ) ) {
       $schedules['acdc_fortnightly'] = array(
         'interval' => 14 * DAY_IN_SECONDS,
@@ -392,6 +400,10 @@ private function acdc_send_transactional_email( $to, $subject, $template_args = 
     }
     if ( $this->maybe_schedule_runtime_hook( 'acdc_of_absence_alert_cron', 'daily', 2700 ) ) {
       $repaired[] = 'Planification alerte absences restaurée';
+    }
+    /* ACDC 3.25.185 — Cron d'orchestration du parcours. */
+    if ( $this->maybe_schedule_runtime_hook( 'acdc_of_workflow_cron', 'acdc_quarter_hour', 120 ) ) {
+      $repaired[] = 'Planification du workflow restaurée';
     }
     // ACDC 3.25.118 — passage automatique des factures impayées en retard (quotidien).
     if ( $this->maybe_schedule_runtime_hook( 'acdc_of_invoices_overdue_cron', 'daily', 3000 ) ) {
@@ -2762,6 +2774,14 @@ dbDelta( $sql_companies );
        absence_count         : nombre d'absences détectées (toutes séances confondues). */
     $this->maybe_add_table_column( $this->learner_table, 'absence_alert_sent_at', 'DATETIME DEFAULT NULL' );
     $this->maybe_add_table_column( $this->learner_table, 'absence_count', 'SMALLINT UNSIGNED NOT NULL DEFAULT 0' );
+
+    /* ACDC 3.25.185 — Module workflow : parcours, étapes, et le délai d'envoi
+       de l'analyse des besoins saisi dans la convention (le schéma de David dit
+       « selon temps définis dans la création de la convention »). */
+    if ( method_exists( $this, 'acdc_wf_install_schema' ) ) {
+      $this->acdc_wf_install_schema();
+    }
+    $this->maybe_add_table_column( $this->registration_contract_table, 'nad_delay_days', 'SMALLINT UNSIGNED DEFAULT NULL' );
 
     update_option( 'acdc_of_saas_version', ACDC_OF_SAAS_VERSION );
     update_option( 'acdc_of_db_version', '3.0.0', false );

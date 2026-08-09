@@ -3,7 +3,7 @@
  * Plugin Name: ACDC Formation SAAS Organisme de formation
  * Plugin URI: https://acdc-formation.com/
  * Description: Espace de gestion frontal sécurisé pour organisme de formation, réécrit sur base (dernière version du plugin : 3.20.105) avec module UI/Design système : réglage avancé des icônes d’action, taille, couleurs, espacements et choix des pictogrammes.
- * Version: 3.25.184
+ * Version: 3.25.185
  * Requires at least: 6.2
  * Requires PHP: 8.2
  * Author: ACDC Formation
@@ -15,7 +15,7 @@ if ( ! defined( 'ABSPATH' ) ) {
     exit;
 }
 
-define( 'ACDC_OF_SAAS_VERSION', '3.25.184' );
+define( 'ACDC_OF_SAAS_VERSION', '3.25.185' );
 define( 'ACDC_OF_SAAS_FILE', __FILE__ );
 define( 'ACDC_OF_SAAS_DIR', plugin_dir_path( __FILE__ ) );
 define( 'ACDC_OF_SAAS_URL', plugin_dir_url( __FILE__ ) );
@@ -346,6 +346,19 @@ if ( file_exists( ACDC_OF_SAAS_DIR . 'includes/class-acdc-agent-audit.php' ) ) {
 require_once ACDC_OF_SAAS_DIR . 'includes/proposals/class-acdc-proposals-core-trait.php';
 require_once ACDC_OF_SAAS_DIR . 'includes/proposals/class-acdc-proposals-actions-trait.php';
 require_once ACDC_OF_SAAS_DIR . 'includes/proposals/class-acdc-proposals-render-trait.php';
+
+/* ACDC 3.25.185 — Module workflow : orchestration du parcours, du recueil des
+   besoins jusqu'aux enquêtes de fin de formation. */
+if ( file_exists( ACDC_OF_SAAS_DIR . 'includes/class-acdc-workflow.php' ) ) {
+    require_once ACDC_OF_SAAS_DIR . 'includes/class-acdc-workflow.php';
+    if ( ! trait_exists( 'ACDC_Workflow_Core_Trait' ) ) {
+        acdc_of_saas_store_boot_error( 'Module workflow incomplet : includes/class-acdc-workflow.php.' );
+        return;
+    }
+} else {
+    acdc_of_saas_store_boot_error( 'Module workflow introuvable : includes/class-acdc-workflow.php.' );
+    return;
+}
 
 /* ACDC 3.25.144 — Module MCP : abilities WordPress (pilotage via mcp-adapter). */
 require_once ACDC_OF_SAAS_DIR . 'includes/class-acdc-mcp.php';

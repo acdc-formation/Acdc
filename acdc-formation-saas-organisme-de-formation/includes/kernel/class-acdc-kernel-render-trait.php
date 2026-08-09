@@ -613,6 +613,9 @@ trait ACDC_Kernel_Render_Trait {
             case 'needs':
               $this->render_front_needs_tab( $action, $item_id );
               break;
+            case 'workflow':
+              $this->render_front_workflow_tab( $action, $item_id );
+              break;
             case 'positioning_tests':
               $this->render_front_positioning_tests_tab( $action, $item_id );
               break;
@@ -968,6 +971,14 @@ trait ACDC_Kernel_Render_Trait {
       array(
         'type' => 'section',
         'label' => 'Commercial',
+      ),
+      /* ACDC 3.25.185 — Le workflow ouvre la section : c'est lui qui dit où en
+         est chaque dossier et ce qui doit partir ensuite. */
+      array(
+        'type'  => 'single',
+        'tab'   => 'workflow',
+        'label' => 'Workflow',
+        'icon'  => 'phone',
       ),
       array(
         'type' => 'group',
@@ -14252,6 +14263,9 @@ private function render_admin_portal_content( $tab ) {
             break;
           case 'needs':
             $this->render_front_needs_tab( $action, $item_id );
+            break;
+          case 'workflow':
+            $this->render_front_workflow_tab( $action, $item_id );
             break;
           case 'company_profile':
             $this->render_front_company_profile_tab( $action );
