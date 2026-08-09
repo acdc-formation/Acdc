@@ -183,10 +183,20 @@ trait ACDC_Sessions_Core_Trait {
     if ( '' !== $group_name ) {
       return $group_name;
     }
+    /* ACDC 3.25.201 — Le nom d'usage REMPLACE le nom de naissance, il ne s'y
+       ajoute pas.
+       Cette ligne concaténait les deux, produisant « Valeriano Valeriano » pour
+       une personne dont les deux colonnes portent la même valeur — et, sur une
+       feuille d'émargement, un nom qui n'existe dans aucun répertoire. Partout
+       ailleurs dans le plugin la règle est celle-ci : nom d'usage s'il est
+       renseigné, nom de naissance sinon. Elle s'applique désormais ici aussi. */
+    $learner_last = isset( $session->learner_usage_last_name ) ? trim( (string) $session->learner_usage_last_name ) : '';
+    if ( '' === $learner_last ) {
+      $learner_last = isset( $session->learner_last_name ) ? trim( (string) $session->learner_last_name ) : '';
+    }
     $learner_name = trim( implode( ' ', array_filter( array(
-      isset( $session->learner_first_name ) ? $session->learner_first_name : '',
-      isset( $session->learner_usage_last_name ) ? $session->learner_usage_last_name : '',
-      isset( $session->learner_last_name ) ? $session->learner_last_name : '',
+      isset( $session->learner_first_name ) ? trim( (string) $session->learner_first_name ) : '',
+      $learner_last,
     ) ) ) );
     if ( '' !== $learner_name ) {
       return $learner_name;
@@ -329,9 +339,9 @@ trait ACDC_Sessions_Core_Trait {
       ),
     );
     // ACDC 3.23.1 — Traçabilité des convocations automatiques (preuve Qualiopi).
-    $conv_appr = ! empty( $session->convocation_sent_at )          ? wp_date( 'd/m/Y \à H\hi', strtotime( $session->convocation_sent_at ) )          : 'Non envoyée';
-    $conv_rapp = ! empty( $session->convocation_reminder_sent_at ) ? wp_date( 'd/m/Y \à H\hi', strtotime( $session->convocation_reminder_sent_at ) ) : 'Non envoyé';
-    $conv_cmd  = ! empty( $session->convocation_company_sent_at )  ? wp_date( 'd/m/Y \à H\hi', strtotime( $session->convocation_company_sent_at ) )  : 'Non envoyée';
+    $conv_appr = ! empty( $session->convocation_sent_at )          ? mysql2date( 'd/m/Y \à H\hi', $session->convocation_sent_at )          : 'Non envoyée';
+    $conv_rapp = ! empty( $session->convocation_reminder_sent_at ) ? mysql2date( 'd/m/Y \à H\hi', $session->convocation_reminder_sent_at ) : 'Non envoyé';
+    $conv_cmd  = ! empty( $session->convocation_company_sent_at )  ? mysql2date( 'd/m/Y \à H\hi', $session->convocation_company_sent_at )  : 'Non envoyée';
     $sections[] = array(
       'title' => 'Convocations automatiques',
       'items' => array(

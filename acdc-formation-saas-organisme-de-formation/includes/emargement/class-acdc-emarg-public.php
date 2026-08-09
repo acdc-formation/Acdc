@@ -426,7 +426,7 @@ function initCanvas(canvasId) {
                     <div>
                         <div class="learner-name"><?php echo esc_html( $lr->learner_name ); ?></div>
                         <?php if ( $is_signed && $lr->signed_at ) : ?>
-                        <div class="learner-meta">Signé à <?php echo esc_html( wp_date( 'H\hi', strtotime( $lr->signed_at ) ) ); ?></div>
+                        <div class="learner-meta">Signé à <?php echo esc_html( mysql2date( 'H\hi', $lr->signed_at ) ); ?></div>
                         <?php endif; ?>
                         <?php if ( $is_signed && $lr->sig_url ) : ?>
                         <img src="<?php echo esc_url( $lr->sig_url ); ?>" class="sig-preview" alt="Signature">

@@ -53,7 +53,7 @@ class ACDC_Emarg_Email {
         $session_label = $session ? ( $session->title ?: 'Séance #' . $session->id ) : 'Séance';
         $date_label = '';
         if ( $session && $session->start_at ) {
-            $date_label = wp_date( 'd/m/Y à H\hi', strtotime( $session->start_at ) );
+            $date_label = mysql2date( 'd/m/Y à H\hi', $session->start_at );
         }
 
         // Émargement par séance : n'ajoute un contexte séance QUE pour les créneaux >= 1.
@@ -63,7 +63,7 @@ class ACDC_Emarg_Email {
                 $session_label = $session_label . ' — ' . $emarg_session->seance_label;
             }
             if ( ! empty( $emarg_session->seance_start_at ) ) {
-                $date_label = wp_date( 'd/m/Y à H\hi', strtotime( $emarg_session->seance_start_at ) );
+                $date_label = mysql2date( 'd/m/Y à H\hi', $emarg_session->seance_start_at );
             }
         }
 

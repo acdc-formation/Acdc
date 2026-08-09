@@ -231,12 +231,12 @@ class ACDC_Emarg_PDF {
         $formation_label = ! empty( $session->formation_title ) ? $session->formation_title : '—';
         if ( ! empty( $session->formation_code ) ) { $formation_label .= '  (' . $session->formation_code . ')'; }
         if ( ! empty( $session->start_at ) ) {
-            $date_label = wp_date( 'd/m/Y', strtotime( $session->start_at ) );
+            $date_label = mysql2date( 'd/m/Y', $session->start_at );
             if ( ! empty( $session->end_at ) && gmdate( 'Y-m-d', strtotime( $session->end_at ) ) !== gmdate( 'Y-m-d', strtotime( $session->start_at ) ) ) {
-                $date_label .= ' au ' . wp_date( 'd/m/Y', strtotime( $session->end_at ) );
+                $date_label .= ' au ' . mysql2date( 'd/m/Y', $session->end_at );
             }
-            $heure_debut = wp_date( 'H\hi', strtotime( $session->start_at ) );
-            $heure_fin   = ! empty( $session->end_at ) ? wp_date( 'H\hi', strtotime( $session->end_at ) ) : '';
+            $heure_debut = mysql2date( 'H\hi', $session->start_at );
+            $heure_fin   = ! empty( $session->end_at ) ? mysql2date( 'H\hi', $session->end_at ) : '';
             $date_label .= '  |  ' . $heure_debut . ( $heure_fin ? ' - ' . $heure_fin : '' );
         }
 
@@ -340,7 +340,7 @@ class ACDC_Emarg_PDF {
             $row_bg    = ( $idx % 2 === 0 ) ? '#ffffff' : self::LGRAY;
             $status_label = $is_absent ? 'Absent' : ( $is_signed ? 'Present' : 'En attente' );
             $status_color = $is_absent ? self::DANGER : ( $is_signed ? self::SUCCESS : '#856404' );
-            $heure_label  = ( $is_signed && ! empty( $lr->signed_at ) ) ? wp_date( 'H\hi', strtotime( $lr->signed_at ) ) : '—';
+            $heure_label  = ( $is_signed && ! empty( $lr->signed_at ) ) ? mysql2date( 'H\hi', $lr->signed_at ) : '—';
 
             /* Ligne de fond */
             $current_page_lines[] = array( 'type' => 'rect', 'x' => $ml, 'y' => $y - $row_h + 12, 'width' => $cw, 'height' => $row_h, 'fill_color' => $row_bg );
@@ -601,7 +601,7 @@ class ACDC_Emarg_PDF {
 
         $formation_label = ! empty( $row->formation_title ) ? $row->formation_title : '—';
         $doc_type_label  = 'Feuille d\'emargement';
-        $issued_label    = wp_date( 'd/m/Y \a H\hi', strtotime( $signed_at ) );
+        $issued_label    = mysql2date( 'd/m/Y \a H\hi', $signed_at );
         $uid_short       = substr( sha1( $token . $signed_at . $signer_name ), 0, 48 ) . '...';
 
         $pages = $this->build_cert_pages(
@@ -640,7 +640,7 @@ class ACDC_Emarg_PDF {
         $lines[] = array( 'type' => 'rect', 'x' => $bx, 'y' => $by, 'width' => 135, 'height' => 48, 'fill_color' => '#1a4a7a' );
         $lines[] = array( 'type' => 'text', 'text' => 'DOCUMENT SIGNE', 'font' => 'Helvetica-Bold', 'size' => 7, 'color' => '#ffffff', 'x' => $bx + 6, 'y' => $by + 34 );
         $lines[] = array( 'type' => 'text', 'text' => 'ELECTRONIQUEMENT', 'font' => 'Helvetica-Bold', 'size' => 7, 'color' => '#ffffff', 'x' => $bx + 6, 'y' => $by + 24 );
-        $signed_label = wp_date( 'd/m/Y \a H\hi', strtotime( $signed_at ) );
+        $signed_label = mysql2date( 'd/m/Y \a H\hi', $signed_at );
         $lines[] = array( 'type' => 'text', 'text' => $signed_label, 'font' => 'Helvetica', 'size' => 8, 'color' => self::GOLD, 'x' => $bx + 6, 'y' => $by + 10 );
 
         $y = $hy - 22;
@@ -681,7 +681,7 @@ class ACDC_Emarg_PDF {
         // Lignes journal
         $events = array(
             array( 'date' => $issued_label,                                         'event' => 'Demande creee',    'ip' => $ip, 'detail' => 'Demande creee.' ),
-            array( 'date' => wp_date( 'd/m/Y \a H\hi', strtotime( $signed_at ) ),  'event' => 'Lien ouvert',      'ip' => $ip, 'detail' => 'Lien ouvert.' ),
+            array( 'date' => mysql2date( 'd/m/Y \a H\hi', $signed_at ),  'event' => 'Lien ouvert',      'ip' => $ip, 'detail' => 'Lien ouvert.' ),
             array( 'date' => $signed_label,                                         'event' => 'Document signe',   'ip' => $ip, 'detail' => 'Document signe avec succes.' ),
         );
         foreach ( $events as $idx => $ev ) {

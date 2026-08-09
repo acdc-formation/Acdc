@@ -2213,7 +2213,7 @@ trait ACDC_Kernel_Render_Trait {
             if ( ! empty( $linked_nad->planned_funding ) ) { $nad_fields[] = array( 'label' => 'Financement prévu','val' => $linked_nad->planned_funding, 'full' => false ); }
             if ( ! empty( $linked_nad->urgency ) )         { $nad_fields[] = array( 'label' => 'Urgence',         'val' => $linked_nad->urgency,         'full' => false ); }
             if ( ! empty( $linked_nad->collection_date ) && '0000-00-00' !== $linked_nad->collection_date ) {
-              $nad_fields[] = array( 'label' => 'Collecté le', 'val' => wp_date( 'd/m/Y', strtotime( $linked_nad->collection_date ) ), 'full' => false );
+              $nad_fields[] = array( 'label' => 'Collecté le', 'val' => mysql2date( 'd/m/Y', $linked_nad->collection_date ), 'full' => false );
             }
             if ( ! empty( $linked_nad->target_audience ) ) { $nad_fields[] = array( 'label' => 'Public cible',    'val' => $linked_nad->target_audience, 'full' => false ); }
             if ( ! empty( $linked_nad->expressed_need ) )  { $nad_fields[] = array( 'label' => 'Besoin exprimé',  'val' => wp_trim_words( $linked_nad->expressed_need, 40, '…' ), 'full' => true ); }
@@ -2464,7 +2464,7 @@ trait ACDC_Kernel_Render_Trait {
           <div class="tf-ug-head"><span class="tf-ug-title">Positionnement — données automatiques</span><span class="tf-ug-desc">État d'envoi et document résultat — lecture seule</span></div>
           <div class="tf-ug-grid">
             <?php if ( ! empty( $pos_sent_dates ) ) : foreach ( $pos_sent_dates as $psd ) : ?>
-            <div class="tf-ug-field tf-full"><span class="tf-ug-label">Test envoyé</span><span style="font-size:13px;padding-top:7px;"><span style="color:#35b37e;font-weight:600;"><?php echo esc_html( wp_date( 'd/m/Y H:i', strtotime( $psd['sent_at'] ) ) ); ?></span> — <?php echo esc_html( $psd['label'] ); ?></span></div>
+            <div class="tf-ug-field tf-full"><span class="tf-ug-label">Test envoyé</span><span style="font-size:13px;padding-top:7px;"><span style="color:#35b37e;font-weight:600;"><?php echo esc_html( mysql2date( 'd/m/Y H:i', $psd['sent_at'] ) ); ?></span> — <?php echo esc_html( $psd['label'] ); ?></span></div>
             <?php endforeach; else : ?>
             <div class="tf-ug-field tf-full"><span class="tf-ug-label">Test envoyé</span><span style="font-size:13px;color:#aaa;padding-top:7px;">Non encore envoyé</span></div>
             <?php endif; ?>
@@ -2505,7 +2505,7 @@ trait ACDC_Kernel_Render_Trait {
           <div class="tf-ug-grid">
             <div class="tf-ug-field"><span class="tf-ug-label">Intitulé convention</span><span style="font-size:13px;color:#0f2c52;padding-top:7px;"><?php echo esc_html( $linked_contract->title ); ?></span></div>
             <div class="tf-ug-field"><span class="tf-ug-label">Type commanditaire</span><span style="font-size:13px;color:#0f2c52;padding-top:7px;"><?php echo esc_html( $linked_contract->commanditaire_type ); ?></span></div>
-            <div class="tf-ug-field"><span class="tf-ug-label">Période de formation</span><span style="font-size:13px;color:#0f2c52;padding-top:7px;"><?php echo ( $linked_contract->start_date ? esc_html( wp_date( 'd/m/Y', strtotime( $linked_contract->start_date ) ) ) : '—' ) . ( $linked_contract->end_date ? ' → ' . esc_html( wp_date( 'd/m/Y', strtotime( $linked_contract->end_date ) ) ) : '' ); ?></span></div>
+            <div class="tf-ug-field"><span class="tf-ug-label">Période de formation</span><span style="font-size:13px;color:#0f2c52;padding-top:7px;"><?php echo ( $linked_contract->start_date ? esc_html( mysql2date( 'd/m/Y', $linked_contract->start_date ) ) : '—' ) . ( $linked_contract->end_date ? ' → ' . esc_html( mysql2date( 'd/m/Y', $linked_contract->end_date ) ) : '' ); ?></span></div>
             <div class="tf-ug-field"><span class="tf-ug-label">Montant HT</span><span style="font-size:13px;color:#0f2c52;padding-top:7px;"><?php echo ! empty( $linked_contract->price_ht ) ? esc_html( $linked_contract->price_ht ) . ' €' : '—'; ?></span></div>
             <div class="tf-ug-field"><span class="tf-ug-label">Financement public</span><span style="font-size:13px;color:#0f2c52;padding-top:7px;"><?php echo ! empty( $linked_contract->public_funding ) ? esc_html( $linked_contract->public_funding ) . ' €' : '—'; ?></span></div>
             <div class="tf-ug-field"><span class="tf-ug-label">Statut signature</span><span style="font-size:13px;padding-top:7px;"><?php
@@ -2515,8 +2515,8 @@ trait ACDC_Kernel_Render_Trait {
               $sig_label = isset( $sig_labels[ $sig_status ] ) ? $sig_labels[ $sig_status ] : esc_html( $sig_status );
               echo '<span style="color:' . esc_attr( $sig_color ) . ';font-weight:600;">' . esc_html( $sig_label ) . '</span>';
             ?></span></div>
-            <div class="tf-ug-field"><span class="tf-ug-label">Envoyée le</span><span style="font-size:13px;color:#0f2c52;padding-top:7px;"><?php echo ! empty( $linked_contract->signature_sent_at ) && '0000-00-00 00:00:00' !== $linked_contract->signature_sent_at ? esc_html( wp_date( 'd/m/Y H:i', strtotime( $linked_contract->signature_sent_at ) ) ) : '—'; ?></span></div>
-            <div class="tf-ug-field"><span class="tf-ug-label">Signée le</span><span style="font-size:13px;color:#0f2c52;padding-top:7px;"><?php echo ! empty( $linked_contract->signature_completed_at ) && '0000-00-00 00:00:00' !== $linked_contract->signature_completed_at ? esc_html( wp_date( 'd/m/Y H:i', strtotime( $linked_contract->signature_completed_at ) ) ) : '—'; ?></span></div>
+            <div class="tf-ug-field"><span class="tf-ug-label">Envoyée le</span><span style="font-size:13px;color:#0f2c52;padding-top:7px;"><?php echo ! empty( $linked_contract->signature_sent_at ) && '0000-00-00 00:00:00' !== $linked_contract->signature_sent_at ? esc_html( mysql2date( 'd/m/Y H:i', $linked_contract->signature_sent_at ) ) : '—'; ?></span></div>
+            <div class="tf-ug-field"><span class="tf-ug-label">Signée le</span><span style="font-size:13px;color:#0f2c52;padding-top:7px;"><?php echo ! empty( $linked_contract->signature_completed_at ) && '0000-00-00 00:00:00' !== $linked_contract->signature_completed_at ? esc_html( mysql2date( 'd/m/Y H:i', $linked_contract->signature_completed_at ) ) : '—'; ?></span></div>
             <?php if ( ! empty( $linked_contract->signed_document_url ) ) : ?>
             <div class="tf-ug-field tf-full"><span class="tf-ug-label">Convention signée</span><span style="font-size:13px;padding-top:7px;"><a href="<?php echo esc_url( $linked_contract->signed_document_url ); ?>" target="_blank" style="color:#8b5b23;font-weight:600;">📄 Télécharger la convention signée</a></span></div>
             <?php elseif ( ! empty( $linked_contract->document_url ) ) : ?>
@@ -2568,8 +2568,8 @@ trait ACDC_Kernel_Render_Trait {
               $cs_label = ! empty( $cs->title ) ? $cs->title : 'Séance #' . (int) $cs->id;
               $cs_date  = $this->get_session_datetime_label( $cs );
               if ( $cs_date ) { $cs_label .= ' — ' . $cs_date; }
-              $conv_learner  = ! empty( $cs->convocation_sent_at ) && '0000-00-00 00:00:00' !== $cs->convocation_sent_at ? wp_date( 'd/m/Y H:i', strtotime( $cs->convocation_sent_at ) ) : null;
-              $conv_company  = ! empty( $cs->convocation_company_sent_at ) && '0000-00-00 00:00:00' !== $cs->convocation_company_sent_at ? wp_date( 'd/m/Y H:i', strtotime( $cs->convocation_company_sent_at ) ) : null;
+              $conv_learner  = ! empty( $cs->convocation_sent_at ) && '0000-00-00 00:00:00' !== $cs->convocation_sent_at ? mysql2date( 'd/m/Y H:i', $cs->convocation_sent_at ) : null;
+              $conv_company  = ! empty( $cs->convocation_company_sent_at ) && '0000-00-00 00:00:00' !== $cs->convocation_company_sent_at ? mysql2date( 'd/m/Y H:i', $cs->convocation_company_sent_at ) : null;
               if ( ! $conv_learner && ! $conv_company ) { continue; }
             ?>
             <tr>
@@ -2863,8 +2863,8 @@ trait ACDC_Kernel_Render_Trait {
               <td><?php echo $lt_type; ?></td>
               <td><?php echo $lt_legal; ?></td>
               <td><?php echo $lt_siret; ?></td>
-              <td><?php echo $lt_urssaf ? '<span style="color:' . ( $urssaf_ok ? '#35b37e' : '#dc2626' ) . ';font-weight:600;">' . esc_html( wp_date( 'd/m/Y', strtotime( $lt_urssaf ) ) ) . '</span>' : '<span style="color:#aaa;">—</span>'; ?></td>
-              <td><?php echo $lt_rc ? '<span style="color:' . ( $rc_ok ? '#35b37e' : '#dc2626' ) . ';font-weight:600;">' . esc_html( wp_date( 'd/m/Y', strtotime( $lt_rc ) ) ) . '</span>' : '<span style="color:#aaa;">—</span>'; ?></td>
+              <td><?php echo $lt_urssaf ? '<span style="color:' . ( $urssaf_ok ? '#35b37e' : '#dc2626' ) . ';font-weight:600;">' . esc_html( mysql2date( 'd/m/Y', $lt_urssaf ) ) . '</span>' : '<span style="color:#aaa;">—</span>'; ?></td>
+              <td><?php echo $lt_rc ? '<span style="color:' . ( $rc_ok ? '#35b37e' : '#dc2626' ) . ';font-weight:600;">' . esc_html( mysql2date( 'd/m/Y', $lt_rc ) ) . '</span>' : '<span style="color:#aaa;">—</span>'; ?></td>
             </tr>
             <?php endforeach; ?>
           </tbody></table></div>
@@ -3305,14 +3305,14 @@ trait ACDC_Kernel_Render_Trait {
                 echo '<span style="font-weight:600;color:' . esc_attr( $col ) . ';">' . esc_html( $pec ?: '—' ) . '</span>';
               ?></td></tr>
               <tr><th>Montant PEC</th><td><?php echo esc_html( ! empty( $profile['accounting']['funder_amount'] ) ? $profile['accounting']['funder_amount'] . ' € HT' : '—' ); ?></td></tr>
-              <tr><th>Date transmission</th><td><?php echo esc_html( ! empty( $profile['accounting']['funder_sent_date'] ) ? wp_date( 'd/m/Y', strtotime( $profile['accounting']['funder_sent_date'] ) ) : '—' ); ?></td></tr>
-              <tr><th>Retour attendu</th><td><?php echo esc_html( ! empty( $profile['accounting']['funder_expected_reply_date'] ) ? wp_date( 'd/m/Y', strtotime( $profile['accounting']['funder_expected_reply_date'] ) ) : '—' ); ?></td></tr>
+              <tr><th>Date transmission</th><td><?php echo esc_html( ! empty( $profile['accounting']['funder_sent_date'] ) ? mysql2date( 'd/m/Y', $profile['accounting']['funder_sent_date'] ) : '—' ); ?></td></tr>
+              <tr><th>Retour attendu</th><td><?php echo esc_html( ! empty( $profile['accounting']['funder_expected_reply_date'] ) ? mysql2date( 'd/m/Y', $profile['accounting']['funder_expected_reply_date'] ) : '—' ); ?></td></tr>
               <tr><th>Référence devis</th><td><?php echo esc_html( $profile['accounting']['quote_reference'] ?: '—' ); ?></td></tr>
               <tr><th>Référence facture</th><td><?php echo esc_html( $profile['accounting']['invoice_reference'] ?: '—' ); ?></td></tr>
               <tr><th>Statut facturation</th><td><?php echo esc_html( $profile['accounting']['billing_status'] ?: '—' ); ?></td></tr>
               <tr><th>Montant facturé</th><td><?php echo esc_html( ! empty( $profile['accounting']['billing_amount'] ) ? $profile['accounting']['billing_amount'] . ' € HT' : '—' ); ?></td></tr>
               <tr><th>Statut paiement</th><td><?php echo esc_html( $profile['accounting']['payment_status'] ?: '—' ); ?></td></tr>
-              <tr><th>Échéance paiement</th><td><?php echo esc_html( ! empty( $profile['accounting']['payment_due_date'] ) ? wp_date( 'd/m/Y', strtotime( $profile['accounting']['payment_due_date'] ) ) : '—' ); ?></td></tr>
+              <tr><th>Échéance paiement</th><td><?php echo esc_html( ! empty( $profile['accounting']['payment_due_date'] ) ? mysql2date( 'd/m/Y', $profile['accounting']['payment_due_date'] ) : '—' ); ?></td></tr>
               <?php if ( ! empty( $profile['accounting']['funder_pec_doc_url'] ) ) : ?><tr><th>Accord PEC</th><td><a href="<?php echo esc_url( $profile['accounting']['funder_pec_doc_url'] ); ?>" target="_blank" rel="noopener" style="color:#8b5b23;">📄 Voir</a></td></tr><?php endif; ?>
               <?php if ( ! empty( $profile['accounting']['funder_other_doc_url'] ) ) : ?><tr><th>Autre pièce</th><td><a href="<?php echo esc_url( $profile['accounting']['funder_other_doc_url'] ); ?>" target="_blank" rel="noopener" style="color:#8b5b23;">📄 Voir</a></td></tr><?php endif; ?>
             </tbody></table></div>
@@ -5469,7 +5469,7 @@ trait ACDC_Kernel_Render_Trait {
             <p style="margin:0;"><label style="font-size:13px;font-weight:600;color:#0f2c52;">Dossier / Convention</label>
               <select name="analysis[dossier_id]">
                 <option value="">— Aucun —</option>
-                <?php foreach($nad_dossiers as $_d): ?><option value="<?php echo(int)$_d->id;?>"<?php if($analysis&&(int)($analysis->dossier_id??0)===(int)$_d->id) echo' selected';?>><?php echo esc_html($_d->label);?><?php if($_d->start_date) echo' ('.esc_html(wp_date('d/m/Y',strtotime($_d->start_date))).')';?></option><?php endforeach;?>
+                <?php foreach($nad_dossiers as $_d): ?><option value="<?php echo(int)$_d->id;?>"<?php if($analysis&&(int)($analysis->dossier_id??0)===(int)$_d->id) echo' selected';?>><?php echo esc_html($_d->label);?><?php if($_d->start_date) echo' ('.esc_html(mysql2date( 'd/m/Y', $_d->start_date )).')';?></option><?php endforeach;?>
               </select></p>
           </div>
           <?php if ( ! empty( $nad_prefill ) ) : ?>
@@ -10508,7 +10508,7 @@ trait ACDC_Kernel_Render_Trait {
             <span style="font-size:11px;font-weight:600;color:#1a2744"><?php echo esc_html( $el->learner_name ); ?></span>
             <span style="display:inline-block;padding:1px 7px;border-radius:10px;font-size:11px;font-weight:700;background:<?php echo esc_attr($pill_bg); ?>;color:<?php echo esc_attr($pill_c); ?>;margin-left:4px"><?php echo esc_html( $pill_txt ); ?></span>
             <?php if ( $is_signed && $el->signed_at ) : ?>
-            <span style="font-size:10px;color:#6b7280;margin-left:4px"><?php echo esc_html( wp_date('H\\hi', strtotime($el->signed_at)) ); ?></span>
+            <span style="font-size:10px;color:#6b7280;margin-left:4px"><?php echo esc_html( mysql2date( 'H\\hi', $el->signed_at ) ); ?></span>
             <?php endif; ?>
             <?php if ( $is_signed && $el->sig_url ) : ?>
             <img src="<?php echo esc_url($el->sig_url); ?>" style="max-width:60px;max-height:26px;vertical-align:middle;margin-left:4px;border:1px solid #e2e6ea;border-radius:3px" alt="">
@@ -10540,7 +10540,7 @@ trait ACDC_Kernel_Render_Trait {
                 <span style="font-size:11px;font-weight:600;color:#1a2744"><?php echo esc_html( $el2->learner_name ); ?></span>
                 <span style="display:inline-block;padding:1px 7px;border-radius:10px;font-size:11px;font-weight:700;background:<?php echo esc_attr($pill_bg2); ?>;color:<?php echo esc_attr($pill_c2); ?>;margin-left:4px"><?php echo esc_html( $pill_txt2 ); ?></span>
                 <?php if ( $is_signed2 && $el2->signed_at ) : ?>
-                <span style="font-size:10px;color:#6b7280;margin-left:4px"><?php echo esc_html( wp_date('H\\hi', strtotime($el2->signed_at)) ); ?></span>
+                <span style="font-size:10px;color:#6b7280;margin-left:4px"><?php echo esc_html( mysql2date( 'H\\hi', $el2->signed_at ) ); ?></span>
                 <?php endif; ?>
                 <?php if ( $is_signed2 && $el2->sig_url ) : ?>
                 <img src="<?php echo esc_url($el2->sig_url); ?>" style="max-width:60px;max-height:26px;vertical-align:middle;margin-left:4px;border:1px solid #e2e6ea;border-radius:3px" alt="">
@@ -12418,7 +12418,7 @@ Nb de questions réussies / Nb de questions : <?php echo esc_html( (int) $contex
             $formation_label = ! empty( $cs->formation_title ) ? (string) $cs->formation_title : ( ! empty( $cs->title ) ? (string) $cs->title : '—' );
             $start_ts = ! empty( $cs->start_date ) ? strtotime( $cs->start_date ) : ( ! empty( $cs->start_at ) ? strtotime( $cs->start_at ) : 0 );
             $start_label = $start_ts ? wp_date( 'd/m/Y', $start_ts ) : '—';
-            $sent_label  = wp_date( 'd/m/Y \\à H\\hi', strtotime( $cs->convocation_company_sent_at ) );
+            $sent_label  = mysql2date( 'd/m/Y \\à H\\hi', $cs->convocation_company_sent_at );
           ?>
             <tr>
               <td><?php echo esc_html( $formation_label ); ?></td>

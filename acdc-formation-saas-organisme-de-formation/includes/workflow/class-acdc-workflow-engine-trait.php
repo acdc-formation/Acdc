@@ -269,12 +269,9 @@ trait ACDC_Workflow_Engine_Trait {
        organisme auprès de ses stagiaires. Le parcours le plus ancien garde la
        main, les autres le disent et s'arrêtent après la phase commerciale. */
     $owner_run_id = $this->acdc_wf_session_owner_run_id( $pieces['session_id'], $run_id );
-    if ( $owner_run_id > 0 ) {
-      $this->acdc_wf_release_downstream_steps( $run_id, $owner_run_id );
-    }
 
     /* ---- Préparation, animation, évaluation ------------------------------ */
-    if ( $convention_signed && 0 === $owner_run_id ) {
+    if ( $convention_signed ) {
       $phase = 'preparation';
       $this->acdc_wf_plan_preparation( $run_id, $pieces );
 
@@ -293,6 +290,19 @@ trait ACDC_Workflow_Engine_Trait {
           $phase = 'evaluation';
         }
       }
+    }
+
+    /* ACDC 3.25.201 — La neutralisation vient APRÈS la planification.
+       En sautant purement et simplement la phase aval, le parcours non pilote
+       n'écrivait plus ses cibles : ses étapes gardaient « Formateur non
+       rattaché » et « Aucune séance rattachée » alors que l'en-tête du même
+       écran, deux lignes plus haut, nommait la séance n°7 et son formateur. Le
+       chemin d'exclusion perdait les entités portées par la séance.
+       On planifie donc normalement — le plan reste juste et lisible — puis on
+       neutralise ce qui ferait doublon, en le disant. */
+    if ( $owner_run_id > 0 ) {
+      $this->acdc_wf_release_downstream_steps( $run_id, $owner_run_id );
+      $phase = 'commercial';
     }
 
     $wpdb->update(
@@ -434,12 +444,23 @@ trait ACDC_Workflow_Engine_Trait {
     global $wpdb;
     $note = 'Séance pilotée par le parcours n°' . (int) $owner_run_id . ' : pas de second envoi aux mêmes destinataires.';
     $now  = $this->acdc_wf_mysql( $this->acdc_wf_now() );
+
+    /* ACDC 3.25.201 — La branche FINANCEUR échappe à la neutralisation.
+       Le motif « pas de second envoi aux mêmes destinataires » est vrai pour les
+       apprenants, le formateur et l'entreprise : ils sont portés par la séance,
+       donc partagés. Il est faux pour le financeur, qui se déclare sur le
+       RECUEIL : deux dossiers partageant une séance peuvent être financés par
+       deux OPCO différents. La recette l'a montré — un dossier pilote sans
+       financeur faisait supprimer deux enquêtes financeur bien distinctes.
+       Un garde-fou qui supprime un envoi légitime coûte plus cher que le
+       doublon qu'il évite. */
     $wpdb->query( $wpdb->prepare(
       "UPDATE {$this->workflow_step_table}
           SET status = 'skipped', result_note = %s, settled_by = 'engine',
               executed_at = COALESCE(executed_at, %s), updated_at = %s
         WHERE run_id = %d AND status IN ('pending','waiting')
-          AND phase IN ('preparation','animation','evaluation')",
+          AND phase IN ('preparation','animation','evaluation')
+          AND step_key NOT LIKE 'survey_funder%%'",
       $note,
       $now,
       $now,

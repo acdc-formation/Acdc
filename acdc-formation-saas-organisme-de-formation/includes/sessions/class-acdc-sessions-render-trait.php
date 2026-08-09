@@ -194,7 +194,7 @@ trait ACDC_Sessions_Render_Trait {
                     <div style="text-align:center">
                       <span class="acdc-status-pill acdc-status-pill-success">Signé</span>
                       <?php if ( $emarg_ses_s->trainer_signed_at ) : ?>
-                      <div style="font-size:11px;color:#4b5d76;margin-top:2px"><?php echo esc_html( wp_date( 'H\hi', strtotime( $emarg_ses_s->trainer_signed_at ) ) ); ?></div>
+                      <div style="font-size:11px;color:#4b5d76;margin-top:2px"><?php echo esc_html( mysql2date( 'H\hi', $emarg_ses_s->trainer_signed_at ) ); ?></div>
                       <?php endif; ?>
                       <?php if ( $emarg_ses_s->trainer_sig_url ) : ?>
                       <img src="<?php echo esc_url( $emarg_ses_s->trainer_sig_url ); ?>" style="max-width:80px;max-height:36px;display:block;margin:4px auto 0;border:1px solid #e2e6ea;border-radius:4px" alt="Signature">
@@ -232,7 +232,7 @@ trait ACDC_Sessions_Render_Trait {
                     <span style="font-size:11px;font-weight:600;color:#1a2744"><?php echo esc_html( $el_s->learner_name ); ?></span>
                     <span style="display:inline-block;padding:1px 7px;border-radius:10px;font-size:11px;font-weight:700;background:<?php echo esc_attr( $pill_bg_s ); ?>;color:<?php echo esc_attr( $pill_c_s ); ?>;margin-left:4px"><?php echo esc_html( $pill_txt_s ); ?></span>
                     <?php if ( $is_signed_s && $el_s->signed_at ) : ?>
-                    <span style="font-size:10px;color:#6b7280;margin-left:4px"><?php echo esc_html( wp_date( 'H\hi', strtotime( $el_s->signed_at ) ) ); ?></span>
+                    <span style="font-size:10px;color:#6b7280;margin-left:4px"><?php echo esc_html( mysql2date( 'H\hi', $el_s->signed_at ) ); ?></span>
                     <?php endif; ?>
                     <?php if ( $is_signed_s && $el_s->sig_url ) : ?>
                     <img src="<?php echo esc_url( $el_s->sig_url ); ?>" style="max-width:60px;max-height:26px;vertical-align:middle;margin-left:4px;border:1px solid #e2e6ea;border-radius:3px" alt="">
