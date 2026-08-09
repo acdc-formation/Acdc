@@ -39,7 +39,7 @@ trait ACDC_Learners_Contacts_Core_Trait {
       $where = $wpdb->prepare( "WHERE a.first_name LIKE %s OR a.usage_last_name LIKE %s OR a.email LIKE %s OR a.phone LIKE %s OR a.city LIKE %s", $like, $like, $like, $like, $like );
     }
     $sql = "SELECT a.*, e.name AS company_name, s.title AS session_title,
-            p.first_name AS prospect_first_name, p.last_name AS prospect_last_name
+            p.first_name AS prospect_first_name, p.last_name AS prospect_last_name, p.company_name AS prospect_company_name
         FROM {$this->learner_table} a
         LEFT JOIN {$this->company_table} e ON e.id = a.company_id
         LEFT JOIN {$this->session_table} s ON s.id = a.session_id
@@ -55,7 +55,7 @@ trait ACDC_Learners_Contacts_Core_Trait {
     return $wpdb->get_row(
       $wpdb->prepare(
         "SELECT a.*, e.name AS company_name, s.title AS session_title,
-            p.first_name AS prospect_first_name, p.last_name AS prospect_last_name
+            p.first_name AS prospect_first_name, p.last_name AS prospect_last_name, p.company_name AS prospect_company_name
          FROM {$this->learner_table} a
          LEFT JOIN {$this->company_table} e ON e.id = a.company_id
          LEFT JOIN {$this->session_table} s ON s.id = a.session_id

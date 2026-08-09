@@ -311,8 +311,24 @@ trait ACDC_Learners_Contacts_Render_Trait {
                   if ( $entry->company_id && ! empty( $entry->company_name ) ) {
                     echo '<span style="font-size:12px;color:#0f2c52;font-weight:500;">' . esc_html( $entry->company_name ) . '</span>';
                   } elseif ( $entry->prospect_id ) {
-                    $p_label = trim( (string) $entry->prospect_first_name . ' ' . (string) $entry->prospect_last_name );
-                    echo '<span style="font-size:12px;color:#4b5d76;" title="Lié à un prospect">' . esc_html( $p_label ?: '—' ) . '</span>';
+                    /* ACDC 3.25.197 — Le commanditaire d'une formation est
+                       l'ENTREPRISE, pas la personne qui la signe. La colonne
+                       affichait le signataire du prospect : les trois apprenantes
+                       de Skil Conseil apparaissaient donc commanditées par l'une
+                       d'entre elles, qui se retrouvait ainsi son propre
+                       commanditaire. On affiche la raison sociale quand le
+                       prospect en porte une, et l'on garde le nom du signataire
+                       en infobulle — l'information n'est pas perdue, elle est
+                       remise à son rang. */
+                    $p_person  = trim( (string) $entry->prospect_first_name . ' ' . (string) $entry->prospect_last_name );
+                    $p_company = trim( (string) ( $entry->prospect_company_name ?? '' ) );
+
+                    if ( '' !== $p_company ) {
+                      $hint = '' !== $p_person ? 'Signataire : ' . $p_person : 'Commanditaire issu du suivi commercial';
+                      echo '<span style="font-size:12px;color:#0f2c52;font-weight:500;" title="' . esc_attr( $hint ) . '">' . esc_html( $p_company ) . '</span>';
+                    } else {
+                      echo '<span style="font-size:12px;color:#4b5d76;" title="Commanditaire issu du suivi commercial, sans raison sociale renseignée">' . esc_html( $p_person ?: '—' ) . '</span>';
+                    }
                   } else {
                     echo '<span style="font-size:12px;color:#9ca3af;" title="Sans commanditaire">—</span>';
                   }
