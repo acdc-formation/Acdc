@@ -3591,6 +3591,47 @@ dbDelta( $sql_companies );
       'learner_portal_sessions' => $this->learner_portal_session_table,
       'learner_portal_logs' => $this->learner_portal_log_table,
       'system_logs' => $this->system_log_table,
+    ) + $this->acdc_satellite_table_map();
+  }
+
+  /**
+   * ACDC 3.25.192 — Les tables satellites entrent dans les deux périmètres.
+   *
+   * Émargement, moteur de quiz et signature électronique vivaient hors de la
+   * sauvegarde. Les tables de signature étaient même PURGÉES sans avoir jamais
+   * été sauvegardées : une suppression totale détruisait la trace des documents
+   * signés sans laisser aucun moyen de revenir en arrière.
+   *
+   * Pour l'émargement et le quiz, la conséquence était l'inverse et tout aussi
+   * grave : n'étant purgés nulle part, ils survivaient à la suppression des
+   * séances qu'ils documentent. Or la purge remet les compteurs d'identifiants
+   * à 1 : les séances recréées ensuite reprennent les anciens numéros, et
+   * l'émargement orphelin s'y raccroche tout seul. Une formation pouvait ainsi
+   * afficher une feuille signée par des personnes qui n'y étaient jamais
+   * venues — sur une pièce exigée par Qualiopi.
+   *
+   * La règle est simple et vaut dans les deux sens : ce qui documente une
+   * donnée doit être sauvegardé avec elle, et disparaître avec elle.
+   */
+  private function acdc_satellite_table_map() {
+    global $wpdb;
+    $qz = $wpdb->prefix . 'acdc_of_qz_';
+
+    return array(
+      'emarg_sessions'    => $wpdb->prefix . 'acdc_of_emarg_sessions',
+      'emarg_learners'    => $wpdb->prefix . 'acdc_of_emarg_learners',
+      'sig_requests'      => $wpdb->prefix . 'acdc_sig_requests',
+      'sig_audit'         => $wpdb->prefix . 'acdc_sig_audit',
+      'qz_quizzes'        => $qz . 'quizzes',
+      'qz_questions'      => $qz . 'questions',
+      'qz_answers'        => $qz . 'answers',
+      'qz_objectives'     => $qz . 'objectives',
+      'qz_sessions'       => $qz . 'sessions',
+      'qz_participants'   => $qz . 'participants',
+      'qz_player_answers' => $qz . 'player_answers',
+      'qz_logs'           => $qz . 'logs',
+      'workflow_runs'     => $this->workflow_run_table,
+      'workflow_steps'    => $this->workflow_step_table,
     );
   }
 
@@ -10254,9 +10295,15 @@ public function register_admin_menu() {
       $this->questionnaire_model_table,
       $this->questionnaire_action_table,
       $this->questionnaire_log_table,
-      $wpdb->prefix . 'acdc_sig_requests',
-      $wpdb->prefix . 'acdc_sig_audit',
     );
+
+    /* ACDC 3.25.192 — Émargement, quiz, signature et parcours entrent dans la
+       purge. Ils en étaient absents — sauf la signature — et survivaient donc
+       aux séances qu'ils documentent, se raccrochant aux identifiants réutilisés
+       par les enregistrements suivants. Ils sont désormais couverts par la
+       sauvegarde de sécurité prise juste avant la purge : on ne détruit rien
+       dont on n'ait d'abord une copie. */
+    $tables = array_merge( $tables, array_values( $this->acdc_satellite_table_map() ) );
 
     $tables = array_filter( array_unique( array_map( 'strval', $tables ) ) );
     return array_values( $tables );
