@@ -684,6 +684,76 @@ trait ACDC_Workflow_Core_Trait {
     return $cache[ $session_id ];
   }
 
+  /**
+   * ACDC 3.25.202 — Les émargements orphelins, et la façon de les reconnaître.
+   *
+   * La purge du 9 août a remis les compteurs d'identifiants à 1 sans effacer les
+   * tables d'émargement, restées hors de son périmètre jusqu'à la 3.25.192. Des
+   * lignes de signature se sont donc raccrochées seules à des séances recréées
+   * ensuite : la recette a trouvé des signatures du 4 mai sur des séances d'août
+   * créées le 9, portées par six personnes qui n'existent dans aucun répertoire.
+   *
+   * Deux critères, et deux seulement. Ils sont volontairement étroits :
+   *
+   *   1. UNE SIGNATURE ANTÉRIEURE À LA CRÉATION DE SA SÉANCE. C'est le critère
+   *      décisif — signer une feuille avant que la séance n'existe est
+   *      impossible, pas improbable.
+   *   2. UN SIGNATAIRE QUI NE CORRESPOND À AUCUN APPRENANT. Seulement lorsqu'un
+   *      identifiant d'apprenant est renseigné et ne pointe plus sur rien : une
+   *      ligne sans identifiant peut être une saisie libre légitime, elle n'est
+   *      jamais retenue.
+   *
+   * On ne supprime rien sur la seule ancienneté, ni sur un doute de nom : une
+   * feuille d'émargement est une pièce Qualiopi, et l'effacer à tort coûte plus
+   * cher que la laisser.
+   */
+  private function acdc_wf_orphan_emargement_rows() {
+    global $wpdb;
+
+    $learners_tbl = $wpdb->prefix . 'acdc_of_emarg_learners';
+    $sheets_tbl   = $wpdb->prefix . 'acdc_of_emarg_sessions';
+
+    foreach ( array( $learners_tbl, $sheets_tbl ) as $table ) {
+      if ( $wpdb->get_var( $wpdb->prepare( 'SHOW TABLES LIKE %s', $table ) ) !== $table ) {
+        return array();
+      }
+    }
+
+    $rows = $wpdb->get_results(
+      "SELECT el.id, el.learner_id, el.learner_name, el.signed_at,
+              sh.session_id, sh.trainer_name,
+              s.title AS session_title, s.created_at AS session_created_at,
+              COALESCE(s.start_date, DATE(s.start_at)) AS session_date,
+              l.id AS learner_exists
+         FROM {$learners_tbl} el
+         INNER JOIN {$sheets_tbl} sh ON sh.id = el.emarg_session_id
+         LEFT JOIN {$this->session_table} s ON s.id = sh.session_id
+         LEFT JOIN {$this->learner_table} l ON l.id = el.learner_id
+        ORDER BY el.id ASC
+        LIMIT 500"
+    );
+
+    $orphans = array();
+    foreach ( (array) $rows as $row ) {
+      $reasons = array();
+
+      if ( ! empty( $row->signed_at ) && ! empty( $row->session_created_at )
+        && strtotime( (string) $row->signed_at ) < strtotime( (string) $row->session_created_at ) ) {
+        $reasons[] = 'signature antérieure à la création de la séance';
+      }
+      if ( ! empty( $row->learner_id ) && empty( $row->learner_exists ) ) {
+        $reasons[] = 'apprenant absent du répertoire';
+      }
+
+      if ( ! empty( $reasons ) ) {
+        $row->orphan_reasons = $reasons;
+        $orphans[] = $row;
+      }
+    }
+
+    return $orphans;
+  }
+
   /** Mode recette armé mais aucune adresse déclarée : plus rien ne peut partir. */
   private function acdc_wf_test_mode_is_mute() {
     $settings = $this->acdc_wf_settings();

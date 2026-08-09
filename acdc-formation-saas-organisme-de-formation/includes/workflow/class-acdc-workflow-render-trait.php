@@ -33,6 +33,9 @@ trait ACDC_Workflow_Render_Trait {
       case 'settings':
         $this->acdc_wf_render_settings();
         break;
+      case 'emargements':
+        $this->acdc_wf_render_orphan_emargements();
+        break;
       case 'run':
         $this->acdc_wf_render_run_detail( (int) $item_id );
         break;
@@ -55,6 +58,7 @@ trait ACDC_Workflow_Render_Trait {
       'runs'     => 'Suivi des parcours',
       'tasks'    => 'À faire',
       'journal'  => 'Journal',
+      'emargements' => 'Émargements orphelins',
       'settings' => 'Configuration',
     );
     ?>
@@ -414,6 +418,71 @@ trait ACDC_Workflow_Render_Trait {
 
       <p><button type="submit" class="acdc-button acdc-button-primary">Enregistrer</button></p>
     </form>
+    <?php
+  }
+
+  /**
+   * ACDC 3.25.202 — Voir avant de supprimer.
+   *
+   * L'écran montre chaque ligne suspecte avec son motif, sa séance et ses deux
+   * dates — celle de la signature et celle de la création de la séance. C'est la
+   * confrontation de ces deux dates qui prouve l'anomalie, et elle doit être
+   * lisible par David avant qu'il ne décide, pas après.
+   *
+   * La suppression prend une sauvegarde AVANT d'agir. Les tables d'émargement
+   * sont entrées dans le périmètre de sauvegarde en 3.25.192 : c'est ce qui rend
+   * cette suppression réversible, et c'est la seule raison pour laquelle elle est
+   * proposée ici.
+   */
+  private function acdc_wf_render_orphan_emargements() {
+    $orphans = $this->acdc_wf_orphan_emargement_rows();
+
+    if ( empty( $orphans ) ) {
+      echo '<div class="acdc-panel"><p><strong>Aucune signature orpheline détectée.</strong> '
+        . 'Sont recherchées les signatures antérieures à la création de leur séance, et celles rattachées '
+        . 'à un apprenant qui n\'existe plus au répertoire.</p></div>';
+      return;
+    }
+    ?>
+    <div class="acdc-alert acdc-alert-warning">
+      <strong><?php echo count( $orphans ); ?> signature(s) orpheline(s).</strong>
+      Ces lignes portent une signature impossible : antérieure à la création de la séance, ou attribuée
+      à un apprenant absent du répertoire. Elles proviennent d'identifiants de séance réutilisés après une
+      suppression totale — un cas que la version 3.25.192 empêche désormais, mais qui laisse ces traces
+      derrière lui.
+    </div>
+    <div class="acdc-panel">
+      <table class="acdc-table">
+        <thead>
+          <tr><th>Signataire</th><th>Séance</th><th>Date de la séance</th><th>Séance créée le</th><th>Signée le</th><th>Motif</th></tr>
+        </thead>
+        <tbody>
+        <?php foreach ( $orphans as $row ) : ?>
+          <tr>
+            <td><strong><?php echo esc_html( (string) $row->learner_name ); ?></strong></td>
+            <td><?php echo esc_html( (string) ( $row->session_title ?: 'Séance n°' . (int) $row->session_id ) ); ?></td>
+            <td><?php echo $row->session_date ? esc_html( mysql2date( 'd/m/Y', $row->session_date ) ) : '—'; ?></td>
+            <td><?php echo $row->session_created_at ? esc_html( mysql2date( 'd/m/Y H:i', $row->session_created_at ) ) : '—'; ?></td>
+            <td><?php echo $row->signed_at ? esc_html( mysql2date( 'd/m/Y H:i', $row->signed_at ) ) : '—'; ?></td>
+            <td><?php echo esc_html( implode( ' ; ', (array) $row->orphan_reasons ) ); ?></td>
+          </tr>
+        <?php endforeach; ?>
+        </tbody>
+      </table>
+
+      <form method="post" action="<?php echo esc_url( admin_url( 'admin-post.php' ) ); ?>" style="margin-top:16px">
+        <?php wp_nonce_field( 'acdc_wf_purge_orphan_emargements' ); ?>
+        <input type="hidden" name="action" value="acdc_wf_purge_orphan_emargements">
+        <p>
+          <label>
+            <input type="checkbox" name="confirm" value="1" required>
+            Je confirme la suppression définitive de ces <?php echo count( $orphans ); ?> ligne(s) de signature.
+          </label>
+        </p>
+        <p class="description">Une sauvegarde complète est prise automatiquement juste avant la suppression. Seules les lignes listées ci-dessus sont supprimées ; les feuilles et les séances ne sont pas touchées.</p>
+        <p><button type="submit" class="acdc-button acdc-button-primary">Supprimer les signatures orphelines</button></p>
+      </form>
+    </div>
     <?php
   }
 
