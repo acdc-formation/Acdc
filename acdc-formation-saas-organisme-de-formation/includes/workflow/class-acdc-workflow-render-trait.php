@@ -66,7 +66,11 @@ trait ACDC_Workflow_Render_Trait {
     </section>
     <?php
     if ( empty( $settings['enabled'] ) ) {
-      echo '<div class="acdc-alert acdc-alert-warning"><strong>Le workflow est à l\'arrêt.</strong> Aucun parcours n\'est ouvert et rien n\'est planifié. Activez-le dans la configuration.</div>';
+      /* ACDC 3.25.188 — Le bandeau annonçait « aucun parcours n'est ouvert et
+         rien n'est planifié » pendant que l'onglet voisin en listait cinq avec
+         leurs échéances. Deux phrases qui se contredisent à l'écran font douter
+         de l'ensemble : à l'arrêt, le moteur est en PAUSE, il ne perd rien. */
+      echo '<div class="acdc-alert acdc-alert-warning"><strong>Le moteur est en pause.</strong> Les parcours et leurs plans sont conservés, mais plus rien n\'est réévalué, planifié ni envoyé tant que vous ne l\'avez pas réactivé dans la configuration.</div>';
     } elseif ( ! empty( $settings['simulation'] ) ) {
       echo '<div class="acdc-alert acdc-alert-info"><strong>Mode simulation.</strong> Les parcours sont planifiés et le journal se remplit, mais <strong>aucun e-mail ne part</strong>. Regardez le plan, ajustez les délais, puis désactivez la simulation.</div>';
     } elseif ( $this->acdc_wf_test_mode_is_mute() ) {
