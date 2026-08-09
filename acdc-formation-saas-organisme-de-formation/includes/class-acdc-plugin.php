@@ -73,6 +73,7 @@ class ACDC_Formation_SAAS_Plugin {
   /* ACDC 3.25.185 — Orchestration du parcours. */
   use ACDC_Workflow_Core_Trait;
   use ACDC_Workflow_Engine_Trait;
+  use ACDC_Workflow_Handlers_Trait;
   use ACDC_Workflow_Actions_Trait;
   use ACDC_Workflow_Render_Trait;
   use ACDC_Watch_Core_Trait;
