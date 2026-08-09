@@ -22,6 +22,12 @@ if ( ! defined( 'ABSPATH' ) ) {
 
 trait ACDC_Workflow_Engine_Trait {
 
+  /**
+   * ACDC 3.25.195 — Les clés d'étapes affirmées pendant la réconciliation en
+   * cours. Ce qui n'y figure pas et reste ouvert n'a plus lieu d'être.
+   */
+  private $acdc_wf_touched_keys = array();
+
   /* =====================================================================
    * Cron
    * ===================================================================== */
@@ -168,6 +174,8 @@ trait ACDC_Workflow_Engine_Trait {
       return;
     }
 
+    $this->acdc_wf_touched_keys = array();
+
     $pieces  = $this->acdc_wf_resolve_pieces( $run, $need );
     $dates   = $this->acdc_wf_resolve_dates( $pieces );
     $phase   = 'commercial';
@@ -306,6 +314,53 @@ trait ACDC_Workflow_Engine_Trait {
       ),
       array( 'id' => $run_id )
     );
+
+    $this->acdc_wf_sweep_orphan_steps( $run_id );
+  }
+
+  /**
+   * ACDC 3.25.195 — Ce que la réconciliation n'a pas réaffirmé n'existe plus.
+   *
+   * Le plan doit refléter EXACTEMENT la lecture du dossier, sinon il n'est plus
+   * un plan mais une sédimentation. Le cas s'est présenté dès le premier
+   * changement de clé d'unicité : les rappels d'émargement, désormais indexés
+   * par séance et par demi-journée au lieu de la date, ont laissé derrière eux
+   * les six lignes de l'ancienne indexation. Douze rappels pour six
+   * demi-journées, deux à deux à la même minute — donc, le jour de l'ouverture
+   * du robinet, deux e-mails identiques au formateur.
+   *
+   * Le balayage ne touche que ce qui est encore à venir et que le moteur a lui
+   * même posé : le passé est un fait, et un écartement humain est un arbitrage.
+   */
+  private function acdc_wf_sweep_orphan_steps( $run_id ) {
+    global $wpdb;
+
+    $open = $wpdb->get_results( $wpdb->prepare(
+      "SELECT id, dedupe_key FROM {$this->workflow_step_table}
+        WHERE run_id = %d AND status IN ('pending','waiting') AND settled_by <> 'human'",
+      (int) $run_id
+    ) );
+
+    if ( empty( $open ) ) {
+      return;
+    }
+
+    $now = $this->acdc_wf_mysql( $this->acdc_wf_now() );
+    foreach ( $open as $row ) {
+      if ( isset( $this->acdc_wf_touched_keys[ (string) $row->dedupe_key ] ) ) {
+        continue;
+      }
+      $wpdb->update(
+        $this->workflow_step_table,
+        array(
+          'status'      => 'cancelled',
+          'result_note' => 'Étape sans objet dans le plan actuel du dossier.',
+          'settled_by'  => 'engine',
+          'updated_at'  => $now,
+        ),
+        array( 'id' => (int) $row->id )
+      );
+    }
   }
 
   /**
@@ -578,8 +633,10 @@ trait ACDC_Workflow_Engine_Trait {
           ? $this->acdc_wf_add_days( $cursor, (int) $delay )
           : $cursor + ( (int) $delay * (int) $spec['unit'] );
         $due    = $this->acdc_wf_shift_to_business_day( $cursor );
+        $spaced = false;
         if ( $previous > 0 && $due <= $this->acdc_wf_add_days( $previous, 1 ) ) {
-          $due = $this->acdc_wf_shift_to_business_day( $this->acdc_wf_add_days( $previous, 1 ) );
+          $due    = $this->acdc_wf_shift_to_business_day( $this->acdc_wf_add_days( $previous, 1 ) );
+          $spaced = true;
         }
         $previous = $due;
         $this->acdc_wf_upsert_step( $run_id, $step_key . '_r' . $rank, array(
@@ -587,6 +644,10 @@ trait ACDC_Workflow_Engine_Trait {
           'parent_key'   => $step_key,
           'target_type'  => $target[0],
           'target_label' => $target[1],
+          /* Le report au jour ouvré de la relance précédente a pu rapprocher
+             celle-ci au point de la coller ; on l'a repoussée d'un jour ouvré.
+             L'écart avec le délai nominal doit se lire, pas se deviner. */
+          'payload'      => $spaced ? array( 'spaced_after_shift' => true ) : null,
         ) );
       }
 
@@ -1119,6 +1180,8 @@ trait ACDC_Workflow_Engine_Trait {
     $dedupe = isset( $args['dedupe_key'] ) ? (string) $args['dedupe_key'] : (string) $step_key;
     $now    = $this->acdc_wf_mysql( $this->acdc_wf_now() );
 
+    $this->acdc_wf_touched_keys[ $dedupe ] = true;
+
     $existing = $wpdb->get_row( $wpdb->prepare(
       "SELECT * FROM {$this->workflow_step_table} WHERE run_id = %d AND dedupe_key = %s LIMIT 1",
       (int) $run_id,
@@ -1152,6 +1215,26 @@ trait ACDC_Workflow_Engine_Trait {
           array( 'executed_at' => null, 'result_note' => '', 'settled_by' => '' ),
           array( 'id' => (int) $existing->id )
         );
+      }
+
+      /* ACDC 3.25.195 — La cible se rafraîchit à chaque passage.
+         Une étape rouverte gardait le destinataire qu'elle avait au moment où
+         elle avait été écartée — c'est-à-dire aucun. Les cinq étapes de la
+         branche financeur se réactivaient donc avec une colonne Destinataire
+         vide, alors que le financeur venait précisément d'être rattaché. Une
+         étape qui ne sait pas à qui elle s'adresse ne doit jamais atteindre le
+         moment de l'envoi. */
+      $target_update = array();
+      foreach ( array( 'target_type', 'target_label' ) as $key ) {
+        if ( isset( $args[ $key ] ) ) {
+          $target_update[ $key ] = (string) $args[ $key ];
+        }
+      }
+      if ( isset( $args['target_id'] ) ) {
+        $target_update['target_id'] = (int) $args['target_id'];
+      }
+      if ( ! empty( $target_update ) ) {
+        $wpdb->update( $this->workflow_step_table, $target_update, array( 'id' => (int) $existing->id ) );
       }
       $wpdb->update(
         $this->workflow_step_table,

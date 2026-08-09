@@ -949,6 +949,41 @@ trait ACDC_Sessions_Render_Trait {
             <p><label>Date de début</label><input type="date" name="start_date" value="<?php echo esc_attr( $session_value( 'start_date', $acdc_session_date_default ) ); ?>"></p>
             <p><label>Date de fin</label><input type="date" name="end_date" value="<?php echo esc_attr( $session_value( 'end_date', $acdc_session_date_default ) ); ?>"></p>
             <?php
+            /* ACDC 3.25.195 — Trois champs manquaient à l'écran de modification
+               alors qu'ils existent à la création : le type de séance, la méthode
+               d'émargement et le format. La 3.25.190 a arrêté l'hémorragie — un
+               champ absent n'est plus écrasé — mais elle laissait les séances déjà
+               dégradées irréparables : aucun écran ne permettait de ressaisir ces
+               valeurs. Pire, l'écran « Séances validées » AFFICHE les colonnes
+               Format et Méthode d'émargement et propose un bouton « Modifier »
+               vers un formulaire qui ne savait pas les éditer. */
+            $acdc_type_options       = $this->get_session_type_options();
+            $acdc_format_options     = $this->get_session_format_options();
+            $acdc_attendance_options = $this->get_session_attendance_options();
+            ?>
+            <p><label>Type de séance</label>
+              <select name="session_type">
+                <option value="">— Non précisé —</option>
+                <?php foreach ( $acdc_type_options as $value => $label ) : ?>
+                  <option value="<?php echo esc_attr( $value ); ?>" <?php selected( (string) $session_value( 'session_type' ), (string) $value ); ?>><?php echo esc_html( $label ); ?></option>
+                <?php endforeach; ?>
+              </select></p>
+            <p><label>Format de la séance</label>
+              <select name="session_format">
+                <option value="">— Non précisé —</option>
+                <?php foreach ( $acdc_format_options as $value => $label ) : ?>
+                  <option value="<?php echo esc_attr( $value ); ?>" <?php selected( (string) $session_value( 'session_format' ), (string) $value ); ?>><?php echo esc_html( $label ); ?></option>
+                <?php endforeach; ?>
+              </select></p>
+            <p><label>Méthode d'émargement</label>
+              <select name="attendance_method">
+                <option value="">— Non précisé —</option>
+                <?php foreach ( $acdc_attendance_options as $value => $label ) : ?>
+                  <option value="<?php echo esc_attr( $value ); ?>" <?php selected( (string) $session_value( 'attendance_method' ), (string) $value ); ?>><?php echo esc_html( $label ); ?></option>
+                <?php endforeach; ?>
+              </select>
+              <span class="description">Ces trois valeurs pilotent la feuille d'émargement. Une séance qui les perd ne peut plus être justifiée.</span></p>
+            <?php
             /* ACDC 3.25.188 — Les horaires n'existaient QUE dans l'écran de
                création atteint depuis une proposition. Une séance existante sans
                heures ne pouvait donc être corrigée que par suppression et
