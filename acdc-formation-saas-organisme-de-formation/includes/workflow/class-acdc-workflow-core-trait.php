@@ -628,6 +628,58 @@ trait ACDC_Workflow_Core_Trait {
     return array( 'done', 'simulated', 'failed', 'skipped', 'cancelled' );
   }
 
+  /**
+   * ACDC 3.25.194 — UN SEUL CHEF D'ORCHESTRE.
+   *
+   * Quatre modules possèdent leur propre ordonnanceur, avec des règles qui ne
+   * sont pas celles du schéma : la convocation part à J-7 puis J-1, les relances
+   * de signature à 48 heures, les enquêtes à 5/10/15 jours. Brancher le workflow
+   * par-dessus sans rien dire, c'était garantir que le jour de l'ouverture du
+   * robinet chaque apprenant reçoive sa convocation DEUX fois, à deux dates
+   * différentes, et chaque entreprise deux enquêtes.
+   *
+   * La règle est donc : sur un dossier piloté par un parcours, les ordonnanceurs
+   * historiques passent leur tour. Sur tous les autres, ils continuent
+   * exactement comme avant — un organisme ne doit pas voir ses envois s'arrêter
+   * parce qu'un module de pilotage a été installé.
+   *
+   * La condition retenue est volontairement stricte : le workflow ne prend la
+   * main que lorsqu'il envoie RÉELLEMENT. En simulation, il ne fait que
+   * journaliser ; si les anciens crons se taisaient aussi, plus personne
+   * n'enverrait rien et le silence passerait pour un fonctionnement normal.
+   * Un trou d'envoi est plus dangereux qu'un doublon : le doublon se voit.
+   */
+  public function acdc_wf_is_piloting() {
+    $settings = $this->acdc_wf_settings();
+    return ! empty( $settings['enabled'] ) && empty( $settings['simulation'] );
+  }
+
+  /** Cette séance est-elle pilotée par un parcours actif ? */
+  public function acdc_wf_pilots_session( $session_id ) {
+    global $wpdb;
+
+    $session_id = (int) $session_id;
+    if ( $session_id <= 0 || ! $this->acdc_wf_is_piloting() ) {
+      return false;
+    }
+    if ( empty( $this->workflow_run_table ) ) {
+      return false;
+    }
+
+    static $cache = array();
+    if ( isset( $cache[ $session_id ] ) ) {
+      return $cache[ $session_id ];
+    }
+
+    $count = (int) $wpdb->get_var( $wpdb->prepare(
+      "SELECT COUNT(*) FROM {$this->workflow_run_table} WHERE session_id = %d AND status = 'active'",
+      $session_id
+    ) );
+
+    $cache[ $session_id ] = ( $count > 0 );
+    return $cache[ $session_id ];
+  }
+
   /** Mode recette armé mais aucune adresse déclarée : plus rien ne peut partir. */
   private function acdc_wf_test_mode_is_mute() {
     $settings = $this->acdc_wf_settings();

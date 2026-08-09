@@ -395,6 +395,15 @@ trait ACDC_Sessions_Actions_Trait {
       }
 
       $session_id              = (int) $session->id;
+
+      /* ACDC 3.25.194 — Un seul chef d'orchestre. Sur une séance pilotée par un
+         parcours, c'est le workflow qui décide du moment de la convocation — la
+         veille à 17 h — et cette boucle-ci passe son tour. Sans cela, l'apprenant
+         recevrait sa convocation deux fois : à J-7 par ce cron, la veille par le
+         workflow. Les séances hors parcours gardent le comportement historique. */
+      if ( method_exists( $this, 'acdc_wf_pilots_session' ) && $this->acdc_wf_pilots_session( $session_id ) ) {
+        continue;
+      }
       $convocation_sent_at     = ! empty( $session->convocation_sent_at )          ? (string) $session->convocation_sent_at          : '';
       $convocation_reminder_at = ! empty( $session->convocation_reminder_sent_at ) ? (string) $session->convocation_reminder_sent_at : '';
 

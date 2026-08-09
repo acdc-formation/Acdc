@@ -292,8 +292,195 @@ trait ACDC_Workflow_Handlers_Trait {
   }
 
   /* =====================================================================
+   * La convocation
+   * ===================================================================== */
+
+  /**
+   * ACDC 3.25.194 — La convocation part la veille à 17 h, et une seule fois.
+   *
+   * Le cron historique l'envoyait à J-7 puis un rappel à J-1. Il cède désormais
+   * la main sur les dossiers pilotés ; c'est ici que la règle du schéma
+   * s'applique. Le contenu reste rigoureusement celui du module — même modèle,
+   * même en-têtes d'archivage — pour qu'un apprenant reçoive la même convocation
+   * qu'il soit dans un parcours ou non.
+   *
+   * La séance est ensuite horodatée comme convoquée : si le workflow est mis en
+   * pause un jour, l'ancien cron reprendra la main sans réexpédier ce qui est
+   * déjà parti.
+   */
+  private function acdc_wf_handle_convocation( $step ) {
+    global $wpdb;
+
+    $pieces = $this->acdc_wf_step_context( $step );
+    if ( ! $pieces ) {
+      return array( 'success' => false, 'error' => 'Dossier introuvable au moment de l’envoi.' );
+    }
+    if ( empty( $pieces['learners'] ) ) {
+      return array( 'success' => false, 'error' => 'Aucun apprenant nommé : aucune convocation à envoyer.' );
+    }
+
+    $session   = $pieces['session'];
+    $dates     = $this->acdc_wf_resolve_dates( $pieces );
+    $formation = $this->acdc_wf_formation_title( $pieces );
+    $portal_id = (int) get_option( 'acdc_of_learner_portal_page_id', 0 );
+    $portal    = $portal_id ? get_permalink( $portal_id ) : home_url( '/' );
+    $lieu      = ! empty( $session->location )
+      ? (string) $session->location
+      : ( ! empty( $session->remote_link ) ? 'Distanciel' : '—' );
+
+    $rows = array(
+      array( 'label' => 'Formation',     'value' => $formation ),
+      array( 'label' => 'Date de début', 'value' => $dates['start'] > 0 ? ucfirst( wp_date( 'l d F Y', $dates['start'] ) ) : 'À préciser' ),
+      array( 'label' => 'Lieu / format', 'value' => $lieu ),
+    );
+
+    $body = '<p style="font-size:19px;line-height:1.7;margin:0 0 20px;">Vous êtes convoqué(e) à la formation indiquée ci-dessous. Merci de vous présenter à l\'heure et muni(e) des documents nécessaires.</p>';
+    if ( ! empty( $session->remote_link ) ) {
+      $body .= '<p style="font-size:18px;line-height:1.7;margin:0 0 20px;">Lien de connexion : <a href="' . esc_url( (string) $session->remote_link ) . '">' . esc_html( (string) $session->remote_link ) . '</a></p>';
+    }
+    $body .= '<p style="margin:24px 0;text-align:center;"><a href="' . esc_url( $portal ) . '" style="display:inline-block;padding:14px 28px;background:#C5A253;color:#0B0706;text-decoration:none;border-radius:8px;font-weight:700;font-size:16px;">Accéder à mon espace apprenant</a></p>';
+
+    $sent = array();
+    $held = array();
+    $failed = array();
+
+    foreach ( $pieces['learners'] as $learner ) {
+      $email = sanitize_email( (string) $learner['email'] );
+      if ( '' === $email || ! is_email( $email ) ) {
+        $failed[] = (string) $learner['name'] . ' (adresse absente ou invalide)';
+        continue;
+      }
+      if ( ! $this->acdc_wf_may_send_to( $email ) ) {
+        $held[] = (string) $learner['name'] . ' <' . $email . '>';
+        continue;
+      }
+      $ok = $this->acdc_send_transactional_email(
+        $email,
+        'Convocation — ' . $formation,
+        array(
+          'greeting_name' => (string) $learner['name'],
+          'intro_html'    => '',
+          'summary_title' => 'DÉTAILS DE VOTRE CONVOCATION',
+          'summary_rows'  => $rows,
+          'body_html'     => $body,
+          'footer_notice' => 'Cet e-mail est votre convocation officielle. Conservez-le pour vos dossiers.',
+        ),
+        array(
+          'source_module'       => 'workflow',
+          'source_action'       => 'convocation',
+          'related_entity_type' => 'session',
+          'related_entity_id'   => (int) $pieces['session_id'],
+          'email_category'      => 'convocation',
+          'email_audience'      => 'apprenant',
+        )
+      );
+      if ( $ok ) {
+        $sent[] = (string) $learner['name'];
+      } else {
+        $failed[] = (string) $learner['name'] . ' (échec du serveur de messagerie)';
+      }
+    }
+
+    if ( ! empty( $sent ) && (int) $pieces['session_id'] > 0 ) {
+      $wpdb->update(
+        $this->session_table,
+        array( 'convocation_sent_at' => $this->acdc_wf_mysql( $this->acdc_wf_now() ) ),
+        array( 'id' => (int) $pieces['session_id'] )
+      );
+    }
+
+    return $this->acdc_wf_recipient_report( 'Convocation', $sent, $held, $failed );
+  }
+
+  /* =====================================================================
+   * L'ouverture de l'extranet apprenant
+   * ===================================================================== */
+
+  /**
+   * ACDC 3.25.194 — Le workflow déclenche l'ouverture, il ne la refait pas.
+   *
+   * Le portail apprenant possède déjà sa synchronisation des comptes et son
+   * e-mail d'activation. Le workflow se contente d'appeler l'un puis l'autre,
+   * au moment prévu par le parcours.
+   */
+  private function acdc_wf_handle_learner_invite( $step ) {
+    $pieces = $this->acdc_wf_step_context( $step );
+    if ( ! $pieces ) {
+      return array( 'success' => false, 'error' => 'Dossier introuvable au moment de l’envoi.' );
+    }
+
+    $learner_id = (int) $step->target_id;
+    $learner    = null;
+    foreach ( $pieces['learners'] as $candidate ) {
+      if ( (int) $candidate['id'] === $learner_id ) {
+        $learner = $candidate;
+        break;
+      }
+    }
+    if ( ! $learner ) {
+      return array( 'success' => false, 'error' => 'Cet apprenant n’est plus nommé dans la convention.' );
+    }
+
+    $email = sanitize_email( (string) $learner['email'] );
+    if ( '' === $email || ! is_email( $email ) ) {
+      return array( 'success' => false, 'error' => 'Aucune adresse e-mail exploitable pour ' . $learner['name'] . '.' );
+    }
+    if ( ! $this->acdc_wf_may_send_to( $email ) ) {
+      return array(
+        'success' => true,
+        'note'    => 'Mode recette : envoi retenu. L’ouverture d’extranet de ' . $learner['name'] . ' aurait été adressée à ' . $email . ', qui ne figure pas dans les adresses autorisées.',
+      );
+    }
+
+    if ( method_exists( $this, 'learner_portal_sync_accounts' ) ) {
+      $this->learner_portal_sync_accounts( true );
+    }
+    if ( ! method_exists( $this, 'learner_portal_get_account_by_email' ) || ! method_exists( $this, 'learner_portal_send_activation_email' ) ) {
+      return array( 'success' => false, 'error' => 'Module extranet apprenant indisponible.' );
+    }
+
+    $account = $this->learner_portal_get_account_by_email( $email );
+    if ( ! $account ) {
+      return array( 'success' => false, 'error' => 'Aucun compte extranet pour ' . $email . ' — l’accès extranet est-il activé sur le dossier ?' );
+    }
+
+    $ok = $this->learner_portal_send_activation_email( $account );
+
+    return $ok
+      ? array( 'success' => true, 'note' => 'Ouverture d’extranet envoyée à ' . $learner['name'] . ' <' . $email . '>.' )
+      : array( 'success' => false, 'error' => 'L’e-mail d’ouverture à ' . $email . ' n’a pas pu être envoyé.' );
+  }
+
+  /* =====================================================================
    * Utilitaires partagés par les traitements
    * ===================================================================== */
+
+  /**
+   * Le compte rendu d'un envoi collectif : qui a reçu, qui a été retenu par le
+   * mode recette, qui a échoué. Un « 3 envoyés » ne dit rien le jour où il n'y
+   * en avait que deux.
+   */
+  private function acdc_wf_recipient_report( $label, $sent, $held, $failed ) {
+    $parts = array();
+    if ( ! empty( $sent ) ) {
+      $parts[] = 'envoyée à ' . implode( ', ', $sent );
+    }
+    if ( ! empty( $held ) ) {
+      $parts[] = 'retenue par le mode recette pour ' . implode( ', ', $held );
+    }
+    if ( ! empty( $failed ) ) {
+      $parts[] = 'en échec pour ' . implode( ', ', $failed );
+    }
+
+    $note = $label . ' : ' . ( empty( $parts ) ? 'aucun destinataire.' : implode( ' ; ', $parts ) . '.' );
+
+    /* Un échec partiel reste un échec : l'étape ne doit pas se refermer sur un
+       apprenant qui n'a rien reçu. */
+    if ( ! empty( $failed ) ) {
+      return array( 'success' => false, 'error' => $note );
+    }
+    return array( 'success' => ! empty( $sent ) || ! empty( $held ), 'note' => $note, 'error' => 'Aucun destinataire joignable.' );
+  }
 
   private function acdc_wf_trainer_record( $pieces ) {
     global $wpdb;
