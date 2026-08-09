@@ -416,21 +416,99 @@ trait ACDC_Sessions_Core_Trait {
     return $map;
   }
 
+  /**
+   * ACDC 3.25.198 — L'état réel de l'émargement d'une séance.
+   *
+   * Deux écrans se contredisaient sur la même feuille : « Feuilles
+   * d'émargement » la déclarait SIGNÉE, « Séances validées » proposait encore
+   * de l'envoyer. La raison était simple et grave : le mot SIGNÉE était écrit en
+   * dur dans le gabarit, sans la moindre lecture de la base. Sur une pièce
+   * d'audit, un écran qui affirme une signature sans la vérifier ne se contente
+   * pas de se tromper — il fabrique une preuve.
+   *
+   * Une seule source désormais : la feuille d'émargement elle-même.
+   */
+  private function get_attendance_sheet_state( $session ) {
+    global $wpdb;
+
+    $empty = array( 'signed' => false, 'signed_at' => '', 'sheets' => 0, 'signed_sheets' => 0 );
+
+    $session_id = isset( $session->id ) ? (int) $session->id : 0;
+    if ( $session_id <= 0 ) {
+      return $empty;
+    }
+
+    $table  = $wpdb->prefix . 'acdc_of_emarg_sessions';
+    $exists = $wpdb->get_var( $wpdb->prepare( 'SHOW TABLES LIKE %s', $table ) );
+    if ( $exists !== $table ) {
+      return $empty;
+    }
+
+    $rows = $wpdb->get_results( $wpdb->prepare(
+      "SELECT trainer_status, trainer_signed_at FROM {$table} WHERE session_id = %d",
+      $session_id
+    ) );
+    if ( empty( $rows ) ) {
+      return $empty;
+    }
+
+    $signed    = 0;
+    $latest    = '';
+    foreach ( $rows as $row ) {
+      $is_signed = ( 'signe' === (string) $row->trainer_status ) || ! empty( $row->trainer_signed_at );
+      if ( ! $is_signed ) {
+        continue;
+      }
+      $signed++;
+      if ( ! empty( $row->trainer_signed_at ) && ( '' === $latest || $row->trainer_signed_at > $latest ) ) {
+        $latest = (string) $row->trainer_signed_at;
+      }
+    }
+
+    return array(
+      'signed'        => ( $signed > 0 && $signed === count( $rows ) ),
+      'signed_at'     => $latest,
+      'sheets'        => count( $rows ),
+      'signed_sheets' => $signed,
+    );
+  }
+
+  private function get_attendance_sheet_trainer_signature_label( $session ) {
+    $state = $this->get_attendance_sheet_state( $session );
+
+    if ( 0 === $state['sheets'] ) {
+      return 'Aucune feuille ouverte';
+    }
+    if ( $state['signed'] ) {
+      return 1 === $state['sheets'] ? 'Signée' : 'Signées (' . $state['signed_sheets'] . '/' . $state['sheets'] . ')';
+    }
+    if ( $state['signed_sheets'] > 0 ) {
+      return 'Partiellement signée (' . $state['signed_sheets'] . '/' . $state['sheets'] . ')';
+    }
+    return 'Non signée';
+  }
+
+  /**
+   * ACDC 3.25.198 — La date de signature est celle de la SIGNATURE.
+   *
+   * Cette fonction rendait `updated_at` de la SÉANCE sous l'intitulé « Date
+   * ajout / signature » : modifier le lieu d'une séance déplaçait donc la date
+   * de sa feuille signée. Une date d'audit qui bouge quand on corrige une
+   * adresse n'est pas une date d'audit.
+   *
+   * Quand rien n'est signé, on le dit — plutôt que d'afficher une date qui n'en
+   * est pas une.
+   */
   private function get_attendance_sheet_signature_date_label( $session ) {
-    $value = '';
-    if ( ! empty( $session->updated_at ) && '0000-00-00 00:00:00' !== $session->updated_at ) {
-      $value = $session->updated_at;
-    } elseif ( ! empty( $session->created_at ) && '0000-00-00 00:00:00' !== $session->created_at ) {
-      $value = $session->created_at;
-    } elseif ( ! empty( $session->start_at ) && '0000-00-00 00:00:00' !== $session->start_at ) {
-      $value = $session->start_at;
-    } elseif ( ! empty( $session->start_date ) ) {
-      $value = $session->start_date . ' 09:00:00';
+    $state = $this->get_attendance_sheet_state( $session );
+
+    if ( '' !== $state['signed_at'] ) {
+      return mysql2date( 'd F Y \\à H\\hi', $state['signed_at'] );
     }
-    if ( '' === $value ) {
-      return '—';
+    if ( $state['sheets'] > 0 ) {
+      return 'Non signée à ce jour';
     }
-    return mysql2date( 'd F Y \\à H\\hi', $value );
+    return '—';
   }
 
   private function get_session_duration_label( $session ) {

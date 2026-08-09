@@ -11289,7 +11289,7 @@ trait ACDC_Kernel_Render_Trait {
           <h3>Signatures</h3>
           <div class="acdc-list-details">
             <div><strong>Date ajout / signature :</strong> <?php echo esc_html( $this->get_attendance_sheet_signature_date_label( $session ) ); ?></div>
-            <div><strong>Signature formateur :</strong> SIGNÉE</div>
+            <div><strong>Signature formateur :</strong> <?php echo esc_html( $this->get_attendance_sheet_trainer_signature_label( $session ) ); ?></div>
             <div><strong>Signature apprenant :</strong> Voir détails</div>
             <div><strong>Progression :</strong> Voir détails</div>
             <div><strong>État dossier :</strong> Voir détails</div>
