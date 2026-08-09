@@ -4845,6 +4845,38 @@ public function handle_restore_backup_import() {
   $this->redirect_to_portal( 'settings', 'Sauvegarde importée et restaurée avec succès.', 'success' );
 }
 
+/**
+ * ACDC 3.25.184 — Relance manuelle de la migration de schéma.
+ *
+ * Appelée depuis l'avertissement d'administration, après trois tentatives
+ * automatiques infructueuses. On efface le verrou et le drapeau d'abandon, puis
+ * on rejoue install_or_update() — sans nouvel instantané préalable : celui de la
+ * première tentative est déjà sur le disque, et c'est justement lui qui coûte le
+ * plus cher.
+ */
+public function handle_retry_upgrade() {
+  if ( ! current_user_can( 'manage_options' ) ) {
+    wp_die( 'Action non autorisée.' );
+  }
+  check_admin_referer( 'acdc_retry_upgrade' );
+
+  global $wpdb;
+  $wpdb->query( $wpdb->prepare( "DELETE FROM {$wpdb->options} WHERE option_name = %s", 'acdc_of_upgrade_lock' ) );
+  wp_cache_delete( 'acdc_of_upgrade_lock', 'options' );
+  wp_cache_delete( 'notoptions', 'options' );
+  delete_option( 'acdc_of_upgrade_blocked' );
+
+  $this->install_or_update();
+  $this->ensure_default_pages();
+
+  $done = ( ACDC_OF_SAAS_VERSION === get_option( 'acdc_of_saas_version' ) );
+  $this->redirect_to_portal(
+    'settings',
+    $done ? 'Migration de base rejouée avec succès.' : 'La migration n\'a pas abouti : consultez le journal des erreurs.',
+    $done ? 'success' : 'error'
+  );
+}
+
 public function handle_purge_plugin_data() {
   if ( ! is_user_logged_in() || ! $this->is_admin_manager() ) {
     wp_die( esc_html( 'Accès refusé.' ) );

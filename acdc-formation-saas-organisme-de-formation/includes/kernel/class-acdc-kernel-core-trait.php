@@ -530,18 +530,73 @@ private function acdc_send_transactional_email( $to, $subject, $template_args = 
     return $this->portal_page_url( $args );
   }
 
+  /**
+   * ACDC 3.25.184 — La migration de version ne peut plus se rejouer en parallèle.
+   *
+   * Cette méthode est accrochée sur `init`, donc à CHAQUE requête, publique
+   * comprise. Tant que `acdc_of_saas_version` ne portait pas encore le nouveau
+   * numéro — et il n'est écrit qu'à la toute fin de install_or_update() —, toute
+   * requête entrante rejouait l'intégralité du travail : un instantané JSON+ZIP
+   * des ~31 tables métier, puis un dbDelta sur ~50 tables et des dizaines de
+   * SHOW COLUMNS. Une seule exécution est déjà longue ; dix requêtes simultanées
+   * (onglets ouverts, heartbeat de l'admin, requêtes de l'installateur) en
+   * lançaient dix, chacune ralentissant les autres, et aucune n'atteignait la
+   * ligne qui aurait arrêté la ronde. C'est l'installation « qui mouline »
+   * pendant dix minutes, et c'est la même mécanique que la panne du 9 août.
+   *
+   * Deux protections, dans cet ordre :
+   *
+   *   1. UN VERROU POSÉ AVANT LE TRAVAIL. Un INSERT sec dans la table des
+   *      options : la clé unique sur option_name fait échouer le second
+   *      arrivant, qui repart sans rien faire. Une seule requête migre.
+   *   2. UN COMPTEUR DE TENTATIVES. Si la requête qui détient le verrou meurt
+   *      (délai PHP dépassé), le verrou est repris au bout de 15 minutes, deux
+   *      fois au plus. À la troisième, on cesse d'essayer et on l'écrit noir sur
+   *      blanc : mieux vaut un site en ligne avec un schéma en retard et une
+   *      alerte visible qu'un site indisponible qui se relance sans fin.
+   *
+   * On ne pose PAS le numéro de version avant le travail, contrairement au
+   * correctif 3.25.177 sur les reprises de données : là-bas, perdre une reprise
+   * était rattrapable ; ici, sauter la migration du schéma laisserait des
+   * colonnes manquantes. Le verrou remplace le drapeau, et le compteur borne la
+   * casse.
+   *
+   * Enfin, le travail lourd ne s'exécute plus que dans l'administration, en CLI
+   * ou en cron — jamais sur une page publique, ni sur admin-ajax.php (que le
+   * quiz en salle interroge en boucle). Une mise à jour par l'installateur
+   * WordPress réactive le plugin, et `activate()` fait déjà la migration : le
+   * chemin nominal ne dépend donc pas de cette méthode.
+   */
   public function maybe_upgrade() {
+    $may_run = $this->acdc_upgrade_may_run_here();
+    if ( ! $may_run ) {
+      return;
+    }
+
     $installed = get_option( 'acdc_of_saas_version' );
     if ( ACDC_OF_SAAS_VERSION !== $installed ) {
-      if ( ! empty( $installed ) ) {
-        $this->backup_data_before_update( $installed, ACDC_OF_SAAS_VERSION );
+      $lock = $this->acdc_acquire_upgrade_lock( (string) $installed );
+
+      if ( 'abandoned' === $lock ) {
+        $this->acdc_report_upgrade_abandoned( (string) $installed );
       }
-      $this->install_or_update();
-      $this->ensure_default_pages();
-      /* ACDC 3.25.93 — C02 (audit) : (re)construit le rôle "acdc_portal_admin" à
-         capacités limitées et resynchronise ses capacités avec administrator. */
-      if ( method_exists( $this, 'ensure_acdc_portal_admin_role' ) ) {
-        $this->ensure_acdc_portal_admin_role( true );
+
+      if ( 'acquired' === $lock ) {
+        try {
+          if ( ! empty( $installed ) ) {
+            $this->backup_data_before_update( $installed, ACDC_OF_SAAS_VERSION );
+          }
+          $this->install_or_update();
+          $this->ensure_default_pages();
+          /* ACDC 3.25.93 — C02 (audit) : (re)construit le rôle "acdc_portal_admin" à
+             capacités limitées et resynchronise ses capacités avec administrator. */
+          if ( method_exists( $this, 'ensure_acdc_portal_admin_role' ) ) {
+            $this->ensure_acdc_portal_admin_role( true );
+          }
+          delete_option( 'acdc_of_upgrade_blocked' );
+        } finally {
+          $this->acdc_release_upgrade_lock();
+        }
       }
     }
     /* ACDC 3.20.83 — Le rôle WordPress "acdc_trainer" du 3.20.82 est abandonné au profit
@@ -572,6 +627,160 @@ private function acdc_send_transactional_email( $to, $subject, $template_args = 
     if ( method_exists( $this, 'migrate_portal_admins_to_custom_role' ) ) {
       $this->migrate_portal_admins_to_custom_role();
     }
+  }
+
+  /**
+   * ACDC 3.25.184 — Où la migration de schéma a le droit de s'exécuter.
+   *
+   * Nulle part sur le front : une page publique ne doit jamais payer un dbDelta.
+   * Ni sur admin-ajax.php / admin-post.php, qui sont is_admin() mais servent les
+   * actions de l'extranet et le pilotage du quiz en salle — une migration y
+   * bloquerait une session en cours. Reste : les vraies pages de wp-admin,
+   * WP-CLI et le cron.
+   */
+  private function acdc_upgrade_may_run_here() {
+    if ( defined( 'WP_CLI' ) && WP_CLI ) {
+      return true;
+    }
+    if ( function_exists( 'wp_doing_cron' ) && wp_doing_cron() ) {
+      return true;
+    }
+    if ( ! is_admin() ) {
+      return false;
+    }
+    $script = isset( $_SERVER['SCRIPT_NAME'] ) ? basename( sanitize_text_field( wp_unslash( $_SERVER['SCRIPT_NAME'] ) ) ) : '';
+    return ! in_array( $script, array( 'admin-ajax.php', 'admin-post.php' ), true );
+  }
+
+  /**
+   * ACDC 3.25.184 — Prise du verrou de migration.
+   *
+   * Renvoie 'acquired' (à nous de migrer), 'busy' (une autre requête s'en
+   * charge, ou vient d'échouer et le délai de reprise n'est pas écoulé) ou
+   * 'abandoned' (trois tentatives ont échoué : on ne relance plus).
+   *
+   * L'acquisition passe par un INSERT sec, sans ON DUPLICATE KEY : c'est la clé
+   * unique sur option_name qui arbitre, côté base, entre deux requêtes qui
+   * arrivent dans la même milliseconde. add_option() ne conviendrait pas — il
+   * écrit en ON DUPLICATE KEY UPDATE et laisserait passer les deux.
+   */
+  private function acdc_acquire_upgrade_lock( $from_version ) {
+    global $wpdb;
+
+    $option  = 'acdc_of_upgrade_lock';
+    $now     = time();
+    $stale_after = 900; // 15 minutes : au-delà, la requête détentrice est morte.
+
+    $raw = $wpdb->get_var( $wpdb->prepare(
+      "SELECT option_value FROM {$wpdb->options} WHERE option_name = %s LIMIT 1",
+      $option
+    ) );
+
+    if ( null !== $raw ) {
+      $lock     = json_decode( (string) $raw, true );
+      $lock     = is_array( $lock ) ? $lock : array();
+      $started  = isset( $lock['started_at'] ) ? (int) $lock['started_at'] : 0;
+      $attempts = isset( $lock['attempts'] ) ? (int) $lock['attempts'] : 1;
+
+      if ( ( $now - $started ) < $stale_after ) {
+        return 'busy';
+      }
+      if ( $attempts >= 3 ) {
+        return 'abandoned';
+      }
+
+      /* Reprise d'un verrou périmé. La comparaison sur l'ancienne valeur rend
+         l'UPDATE atomique : si deux requêtes reprennent en même temps, une seule
+         voit une ligne modifiée. */
+      $payload = wp_json_encode( array(
+        'target'     => ACDC_OF_SAAS_VERSION,
+        'from'       => (string) $from_version,
+        'started_at' => $now,
+        'attempts'   => $attempts + 1,
+      ) );
+      $taken = $wpdb->query( $wpdb->prepare(
+        "UPDATE {$wpdb->options} SET option_value = %s WHERE option_name = %s AND option_value = %s",
+        $payload,
+        $option,
+        (string) $raw
+      ) );
+      $this->acdc_forget_option_cache( $option );
+      return ( (int) $taken > 0 ) ? 'acquired' : 'busy';
+    }
+
+    $payload = wp_json_encode( array(
+      'target'     => ACDC_OF_SAAS_VERSION,
+      'from'       => (string) $from_version,
+      'started_at' => $now,
+      'attempts'   => 1,
+    ) );
+    $suppress = $wpdb->suppress_errors( true );
+    $inserted = $wpdb->query( $wpdb->prepare(
+      "INSERT INTO {$wpdb->options} (option_name, option_value, autoload) VALUES (%s, %s, 'no')",
+      $option,
+      $payload
+    ) );
+    $wpdb->suppress_errors( $suppress );
+    $this->acdc_forget_option_cache( $option );
+
+    return ( (int) $inserted > 0 ) ? 'acquired' : 'busy';
+  }
+
+  private function acdc_release_upgrade_lock() {
+    global $wpdb;
+    $option = 'acdc_of_upgrade_lock';
+    $wpdb->query( $wpdb->prepare( "DELETE FROM {$wpdb->options} WHERE option_name = %s", $option ) );
+    $this->acdc_forget_option_cache( $option );
+  }
+
+  /* Le verrou est écrit et lu en SQL direct : il faut invalider à la main ce que
+     l'API des options garde en cache, sans quoi get_option() servirait une valeur
+     obsolète au reste de la requête. */
+  private function acdc_forget_option_cache( $option ) {
+    if ( function_exists( 'wp_cache_delete' ) ) {
+      wp_cache_delete( $option, 'options' );
+      wp_cache_delete( 'notoptions', 'options' );
+    }
+  }
+
+  /**
+   * ACDC 3.25.184 — Trois tentatives ont échoué : on cesse de relancer, et on le
+   * dit. Le site reste en ligne avec son schéma précédent ; l'écran
+   * d'administration porte un avertissement, et le journal garde la trace.
+   */
+  private function acdc_report_upgrade_abandoned( $from_version ) {
+    $already = (string) get_option( 'acdc_of_upgrade_blocked', '' );
+    if ( $already === ACDC_OF_SAAS_VERSION ) {
+      return; // Déjà signalé pour cette version : on ne réécrit pas à chaque page.
+    }
+    update_option( 'acdc_of_upgrade_blocked', ACDC_OF_SAAS_VERSION, false );
+    $this->log_error( 'upgrade', 'Migration de schéma abandonnée après trois tentatives.', array(
+      'from' => (string) $from_version,
+      'to'   => ACDC_OF_SAAS_VERSION,
+    ) );
+  }
+
+  /**
+   * ACDC 3.25.184 — Avertissement visible quand la migration a été abandonnée.
+   * Le bouton relance une seule tentative, en effaçant le verrou : c'est une
+   * action délibérée, jamais un automatisme.
+   */
+  public function acdc_render_upgrade_blocked_notice() {
+    if ( ! current_user_can( 'manage_options' ) ) {
+      return;
+    }
+    $blocked = (string) get_option( 'acdc_of_upgrade_blocked', '' );
+    if ( '' === $blocked ) {
+      return;
+    }
+    $url = wp_nonce_url(
+      add_query_arg( 'action', 'acdc_retry_upgrade', admin_url( 'admin-post.php' ) ),
+      'acdc_retry_upgrade'
+    );
+    echo '<div class="notice notice-error"><p><strong>ACDC Formation — migration de base incomplète.</strong> ';
+    echo 'La mise à jour vers la version ' . esc_html( $blocked ) . ' n\'a pas pu aller au bout après trois tentatives. ';
+    echo 'Le site fonctionne, mais certaines colonnes peuvent manquer. ';
+    echo '<a href="' . esc_url( $url ) . '" class="button button-primary">Relancer la migration</a></p></div>';
   }
 
   /**
@@ -3383,6 +3592,20 @@ dbDelta( $sql_companies );
     return $count > 0 ? $count : 30;
   }
 
+  /**
+   * ACDC 3.25.184 — La rétention est appliquée par famille, plus globalement.
+   *
+   * Elle ne l'était pas : les répertoires étaient triés par date, tous types
+   * confondus, et tout ce qui dépassait le quota partait. Une rafale
+   * d'instantanés automatiques suffisait donc à effacer les sauvegardes
+   * manuelles et les sauvegardes de sécurité — celles que l'on prend justement
+   * avant une opération risquée. C'est ce qui s'est produit le 9 août.
+   *
+   * Désormais, les instantanés automatiques d'avant-mise-à-jour (« update-… »)
+   * ont leur propre quota, plafonné à dix, et ne peuvent plus évincer une
+   * sauvegarde décidée par un humain. Les autres se partagent la rétention
+   * réglée dans l'écran de configuration.
+   */
   private function prune_backup_directories() {
     $base = $this->get_backup_base_directory();
     if ( '' === $base ) {
@@ -3392,9 +3615,31 @@ dbDelta( $sql_companies );
     if ( ! is_array( $dirs ) ) {
       return;
     }
-    usort( $dirs, static function( $a, $b ) { return filemtime( $b ) <=> filemtime( $a ); } );
+
     $retain = $this->get_backup_retention_count();
-    foreach ( array_slice( $dirs, $retain ) as $dir ) {
+    $newest_first = static function( $a, $b ) { return filemtime( $b ) <=> filemtime( $a ); };
+
+    $automatic = array();
+    $deliberate = array();
+    foreach ( $dirs as $dir ) {
+      /* Le nom d'un répertoire vaut « Ymd-His-<libellé> » : la famille se lit
+         après l'horodatage, jamais ailleurs dans le nom. */
+      if ( preg_match( '/^\d{8}-\d{6}-update-/', basename( $dir ) ) ) {
+        $automatic[] = $dir;
+      } else {
+        $deliberate[] = $dir;
+      }
+    }
+
+    usort( $automatic, $newest_first );
+    usort( $deliberate, $newest_first );
+
+    $obsolete = array_merge(
+      array_slice( $automatic, min( $retain, 10 ) ),
+      array_slice( $deliberate, $retain )
+    );
+
+    foreach ( $obsolete as $dir ) {
       $files = new RecursiveIteratorIterator(
         new RecursiveDirectoryIterator( $dir, FilesystemIterator::SKIP_DOTS ),
         RecursiveIteratorIterator::CHILD_FIRST
@@ -3408,6 +3653,17 @@ dbDelta( $sql_companies );
       }
       @rmdir( $dir );
     }
+  }
+
+  /* ACDC 3.25.184 — Existe-t-il déjà un instantané pour cette transition de
+     version ? Le nom du répertoire porte l'horodatage devant, d'où le motif. */
+  private function acdc_update_snapshot_exists( $label ) {
+    $base = $this->get_backup_base_directory();
+    if ( '' === $base ) {
+      return false;
+    }
+    $found = glob( trailingslashit( $base ) . '*-' . sanitize_file_name( strtolower( (string) $label ) ), GLOB_ONLYDIR );
+    return is_array( $found ) && ! empty( $found );
   }
 
   private function get_backup_run_directory( $label ) {
@@ -3856,7 +4112,20 @@ dbDelta( $sql_companies );
   }
 
   private function backup_data_before_update( $from_version, $to_version ) {
-    $result = $this->backup_data_snapshot( 'update-' . sanitize_key( (string) $from_version ) . '-to-' . sanitize_key( (string) $to_version ), array(
+    $label = 'update-' . sanitize_key( (string) $from_version ) . '-to-' . sanitize_key( (string) $to_version );
+
+    /* ACDC 3.25.184 — Un instantané par couple de versions, pas un par tentative.
+       Le 9 août, trente instantanés « update-325170-to-325176 » ont été créés en
+       47 minutes par une migration qui se rejouait : chacun repoussait d'un cran
+       les sauvegardes plus anciennes hors de la rétention, jusqu'à les effacer
+       toutes. Le second dump de la même transition n'apporte rien — l'état de la
+       base au moment du premier est précisément celui qu'il faut pouvoir
+       retrouver. */
+    if ( $this->acdc_update_snapshot_exists( $label ) ) {
+      return true;
+    }
+
+    $result = $this->backup_data_snapshot( $label, array(
       'from_version' => (string) $from_version,
       'to_version' => (string) $to_version,
       'backup_type' => 'before_update',

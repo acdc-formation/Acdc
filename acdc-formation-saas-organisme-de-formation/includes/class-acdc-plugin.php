@@ -266,6 +266,11 @@ class ACDC_Formation_SAAS_Plugin {
     add_action( 'admin_head', array( $this, 'print_plugin_favicon' ) );
     add_action( 'admin_notices', array( $this, 'render_runtime_state_notice' ) );
     add_action( 'admin_notices', array( $this, 'render_agent_audit_mode_notice' ) );
+    /* ACDC 3.25.184 — Migration de schéma abandonnée après trois tentatives : le
+       site reste en ligne, mais l'administration doit le dire, et proposer une
+       relance manuelle. */
+    add_action( 'admin_notices', array( $this, 'acdc_render_upgrade_blocked_notice' ) );
+    add_action( 'admin_post_acdc_retry_upgrade', array( $this, 'handle_retry_upgrade' ) );
     add_action( 'wp_ajax_acdc_save_global_column_width', array( $this, 'ajax_save_global_column_width' ) );
     add_action( 'wp_ajax_acdc_save_global_column_widths', array( $this, 'ajax_save_global_column_widths' ) );
     /* ACDC 3.20.67 — Verrouillage des largeurs par tableau métier. */
