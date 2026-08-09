@@ -8065,7 +8065,9 @@ dbDelta( $sql_companies );
       $item->attendance_progression_label = 'Voir détails';
       $item->attendance_state_label = 'Voir détails';
       if ( empty( $item->trainer_signature_label ) ) {
-        $item->trainer_signature_label = 'SIGNÉE';
+        /* ACDC 3.25.200 — Voir la note du module séances : le mot était écrit en
+           dur, il est désormais lu sur la feuille d'émargement. */
+        $item->trainer_signature_label = $this->get_attendance_sheet_trainer_signature_label( $item );
       }
       if ( empty( $item->learner_signature_label ) ) {
         $item->learner_signature_label = 'Voir détails';

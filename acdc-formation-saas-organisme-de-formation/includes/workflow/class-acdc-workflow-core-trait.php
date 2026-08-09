@@ -273,6 +273,10 @@ trait ACDC_Workflow_Core_Trait {
         'phase' => 'animation', 'mode' => 'alert',
         'label' => 'Renseigner les horaires de la séance — sans eux, la feuille d’émargement ne peut pas être ouverte',
       ),
+      'session_missing' => array(
+        'phase' => 'animation', 'mode' => 'alert',
+        'label' => 'Rattacher une séance au dossier — sans elle, ni convocation ni émargement ne peuvent être planifiés',
+      ),
       'emargement_am' => array(
         'phase' => 'animation', 'mode' => 'auto',
         'label' => 'Ouvrir la feuille d’émargement — séance du matin',

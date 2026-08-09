@@ -138,7 +138,12 @@ trait ACDC_Sessions_Core_Trait {
         $row->learner_or_group_label = $this->get_session_validated_learner_or_group_label( $row );
         $row->trainer_display_name = $this->get_session_validated_trainer_label( $row );
         $row->location_display = $this->get_session_validated_location_label( $row );
-        $row->trainer_signature_label = 'SIGNÉE';
+        /* ACDC 3.25.200 — La LISTE lisait le même mot en dur que la carte.
+           Corriger le détail sans corriger le tableau laissait la contradiction
+           entière : le détail disait « aucune feuille ouverte » pendant que la
+           ligne affichait SIGNÉE — et c'est la liste que l'on imprime et que
+           l'on parcourt. Une pièce d'audit ne s'affirme jamais, elle se lit. */
+        $row->trainer_signature_label = $this->get_attendance_sheet_trainer_signature_label( $row );
         // Statuts réels dérivés de l'émargement préchargé (affichage + filtres opérants).
         $emarg = isset( $emarg_by_session[ (int) $row->id ] ) ? $emarg_by_session[ (int) $row->id ] : null;
         $emarg_learners = ( $emarg && isset( $learners_by_emarg[ (int) $emarg->id ] ) ) ? $learners_by_emarg[ (int) $emarg->id ] : array();

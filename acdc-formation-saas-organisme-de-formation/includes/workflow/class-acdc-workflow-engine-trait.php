@@ -470,7 +470,12 @@ trait ACDC_Workflow_Engine_Trait {
       ? max( $now, $this->acdc_wf_add_days( $start_ts, -(int) $this->acdc_wf_delay( 'trainer_pack_days_before', 15 ) ) )
       : $now;
 
-    $this->acdc_wf_upsert_step( $run_id, 'trainer_pack', array( 'scheduled_at' => $pack_ts ) );
+    $this->acdc_wf_upsert_step( $run_id, 'trainer_pack', array(
+      'scheduled_at' => $pack_ts,
+      'target_type'  => 'trainer',
+      'target_id'    => (int) $pieces['trainer_id'],
+      'target_label' => '' !== (string) $pieces['trainer_name'] ? (string) $pieces['trainer_name'] : 'Formateur non rattaché',
+    ) );
 
     foreach ( $pieces['learners'] as $learner ) {
       $this->acdc_wf_upsert_step( $run_id, 'learner_invite', array(
@@ -521,16 +526,20 @@ trait ACDC_Workflow_Engine_Trait {
     $slots = $this->acdc_wf_session_slots( $pieces );
 
     if ( empty( $slots ) ) {
-      $this->acdc_wf_upsert_step( $run_id, 'session_hours_missing', array(
+      /* ACDC 3.25.200 — Demander les horaires d'une séance qui n'existe pas
+         n'aide personne : quand aucune séance n'est rattachée, l'action à faire
+         est de la rattacher. */
+      $this->acdc_wf_upsert_step( $run_id, $pieces['session_id'] ? 'session_hours_missing' : 'session_missing', array(
         'scheduled_at' => $this->acdc_wf_now(),
         'target_type'  => 'session',
         'target_id'    => (int) $pieces['session_id'],
-        'target_label' => $pieces['session_id'] ? 'Séance n°' . (int) $pieces['session_id'] : 'Aucune séance rattachée',
+        'target_label' => $pieces['session_id'] ? 'Séance n°' . (int) $pieces['session_id'] : $this->acdc_wf_formation_title( $pieces ),
       ) );
       return;
     }
 
     $this->acdc_wf_settle_step( $run_id, 'session_hours_missing', 'skipped', 'Les demi-journées de la séance sont renseignées.' );
+    $this->acdc_wf_settle_step( $run_id, 'session_missing', 'skipped', 'Une séance est rattachée au dossier.' );
 
     foreach ( $slots as $slot ) {
       $step_key = ( 'pm' === $slot['half'] ) ? 'emargement_pm' : 'emargement_am';
@@ -861,6 +870,38 @@ trait ACDC_Workflow_Engine_Trait {
       $values[] = (string) $contract->end_date;
     }
 
+    $sql .= ' ORDER BY COALESCE(start_date, DATE(start_at)) ASC, COALESCE(start_at, "") ASC, id ASC LIMIT 200';
+
+    $rows = $wpdb->get_results( $wpdb->prepare( $sql, $values ) );
+    if ( ! empty( $rows ) ) {
+      return $rows;
+    }
+
+    /* ACDC 3.25.200 — La borne de dates ne doit jamais faire disparaître un
+       dossier.
+       Elle avait été posée pour empêcher qu'un dossier ramasse les séances d'un
+       autre client sur la même formation. Mais quand les dates de la convention
+       ne recouvrent pas celles de ses séances — parce qu'elles n'ont pas été
+       saisies, ou qu'une session a été déplacée — la requête ne rend plus RIEN,
+       et le dossier perd d'un coup ses séances, son formateur et ses rappels
+       d'émargement. C'est ce qu'a montré la recette : un parcours dont les
+       étapes déjà jouées nommaient le formateur et dont les étapes à venir ne le
+       nommaient plus.
+       Une borne trop stricte qui vide un dossier est pire que le risque qu'elle
+       prévient. Si elle ne rend rien, on la retire et l'on garde le seul filtre
+       qui identifie vraiment le client : son entreprise. */
+    if ( ! $bounded ) {
+      return array();
+    }
+
+    $sql = "SELECT * FROM {$this->session_table}
+             WHERE formation_id = %d AND is_draft = 0
+               AND COALESCE(status,'') NOT IN ('Annulée','Annulee')";
+    $values = array( $formation_id );
+    if ( $company_id > 0 ) {
+      $sql     .= ' AND company_id = %d';
+      $values[] = $company_id;
+    }
     $sql .= ' ORDER BY COALESCE(start_date, DATE(start_at)) ASC, COALESCE(start_at, "") ASC, id ASC LIMIT 200';
 
     $rows = $wpdb->get_results( $wpdb->prepare( $sql, $values ) );

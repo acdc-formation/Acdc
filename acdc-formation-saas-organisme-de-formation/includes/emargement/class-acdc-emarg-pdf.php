@@ -267,7 +267,7 @@ class ACDC_Emarg_PDF {
         $lines[] = array( 'type' => 'text', 'text' => 'SIGNATURE DU FORMATEUR', 'font' => 'Helvetica-Bold', 'size' => 8, 'color' => self::MARINE, 'x' => $ml + 6, 'y' => $y + 1 );
         $y -= ( $sb_h + 6 );
 
-        $signed_at_label = ! empty( $emarg->trainer_signed_at ) ? wp_date( 'd/m/Y a H\hi', strtotime( $emarg->trainer_signed_at ) ) : '';
+        $signed_at_label = ! empty( $emarg->trainer_signed_at ) ? mysql2date( 'd/m/Y a H\hi', $emarg->trainer_signed_at ) : '';
         $lines[] = array( 'type' => 'text', 'text' => $emarg->trainer_name, 'font' => 'Helvetica-Bold', 'size' => 9, 'color' => self::MARINE, 'x' => $ml, 'y' => $y );
         if ( $signed_at_label ) {
             $lines[] = array( 'type' => 'text', 'text' => 'Signe le ' . $signed_at_label, 'font' => 'Helvetica', 'size' => 8, 'color' => self::DGRAY, 'x' => $ml, 'y' => $y - 12 );

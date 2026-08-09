@@ -10438,7 +10438,7 @@ trait ACDC_Kernel_Render_Trait {
             <div style="text-align:center">
               <span class="acdc-status-pill acdc-status-pill-success">Signé</span>
               <?php if ( $emarg_ses->trainer_signed_at ) : ?>
-              <div style="font-size:11px;color:#4b5d76;margin-top:2px"><?php echo esc_html( wp_date( 'H\\hi', strtotime( $emarg_ses->trainer_signed_at ) ) ); ?></div>
+              <div style="font-size:11px;color:#4b5d76;margin-top:2px"><?php echo esc_html( mysql2date( 'H\\hi', $emarg_ses->trainer_signed_at ) ); ?></div>
               <?php endif; ?>
               <?php if ( $emarg_ses->trainer_sig_url ) : ?>
               <img src="<?php echo esc_url( $emarg_ses->trainer_sig_url ); ?>" style="max-width:80px;max-height:36px;display:block;margin:4px auto 0;border:1px solid #e2e6ea;border-radius:4px" alt="Signature">
@@ -10470,7 +10470,7 @@ trait ACDC_Kernel_Render_Trait {
               <?php if ( 'signe' === $st_k ) : ?>
                 <span class="acdc-status-pill acdc-status-pill-success">Signé</span>
                 <?php if ( $sheet_k->trainer_signed_at ) : ?>
-                <span style="font-size:10px;color:#4b5d76;margin-left:4px"><?php echo esc_html( wp_date( 'H\\hi', strtotime( $sheet_k->trainer_signed_at ) ) ); ?></span>
+                <span style="font-size:10px;color:#4b5d76;margin-left:4px"><?php echo esc_html( mysql2date( 'H\\hi', $sheet_k->trainer_signed_at ) ); ?></span>
                 <?php endif; ?>
                 <?php if ( $sheet_k->trainer_sig_url ) : ?>
                 <img src="<?php echo esc_url( $sheet_k->trainer_sig_url ); ?>" style="max-width:70px;max-height:30px;display:block;margin:3px 0 0;border:1px solid #e2e6ea;border-radius:4px" alt="Signature">
