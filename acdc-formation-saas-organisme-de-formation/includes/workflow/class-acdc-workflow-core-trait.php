@@ -61,6 +61,9 @@ trait ACDC_Workflow_Core_Trait {
       phase VARCHAR(40) NOT NULL DEFAULT 'commercial',
       status VARCHAR(20) NOT NULL DEFAULT 'active',
       close_reason VARCHAR(190) NOT NULL DEFAULT '',
+      formation_start_at DATETIME DEFAULT NULL,
+      formation_end_at DATETIME DEFAULT NULL,
+      dates_source VARCHAR(120) NOT NULL DEFAULT '',
       last_reconciled_at DATETIME DEFAULT NULL,
       started_at DATETIME NOT NULL,
       updated_at DATETIME NOT NULL,
@@ -107,6 +110,39 @@ trait ACDC_Workflow_Core_Trait {
       KEY mode (mode)
     ) {$charset_collate};";
     dbDelta( $sql_steps );
+
+    $this->acdc_wf_migrate_replan_after_timezone_fix();
+  }
+
+  /**
+   * ACDC 3.25.186 — Remise à plat des plans établis par la 3.25.185.
+   *
+   * Cette version-là planifiait avec un décalage horaire de deux fois l'offset
+   * — 17 h devenait 21 h — et, faute d'horaires de séance, semait jusqu'à 120
+   * rappels d'émargement par dossier, week-ends compris. Corriger le calcul ne
+   * suffit pas : les lignes déjà écrites gardent leurs mauvaises heures, et
+   * celles qui ont été « jouées » en simulation ne sont plus jamais recalculées.
+   *
+   * On efface donc les ÉTAPES, jamais les parcours. La table des étapes ne
+   * contient aucune donnée métier : c'est un plan, et un plan faux se refait.
+   * La réconciliation suivante le reconstruit intégralement à partir des
+   * dossiers réels.
+   *
+   * Le drapeau est posé AVANT le travail : perdre une remise à plat est
+   * rattrapable, la rejouer en boucle ne l'est pas.
+   */
+  private function acdc_wf_migrate_replan_after_timezone_fix() {
+    global $wpdb;
+
+    if ( '1' === (string) get_option( 'acdc_of_workflow_replan_3_25_186', '' ) ) {
+      return;
+    }
+    update_option( 'acdc_of_workflow_replan_3_25_186', '1', false );
+
+    $exists = $wpdb->get_var( $wpdb->prepare( 'SHOW TABLES LIKE %s', $this->workflow_step_table ) );
+    if ( $exists === $this->workflow_step_table ) {
+      $wpdb->query( "DELETE FROM {$this->workflow_step_table}" );
+    }
   }
 
   /* =====================================================================
@@ -192,6 +228,15 @@ trait ACDC_Workflow_Core_Trait {
       ),
 
       /* ---- Animation ---------------------------------------------------- */
+      /* ACDC 3.25.186 — Quand la séance ne porte ni horaires ni demi-journées,
+         le moteur ne devine plus : il le dit. La 3.25.185 balayait la plage
+         calendaire entière et produisait 120 rappels sur deux mois, week-ends
+         compris, jusqu'à buter sur son propre garde-fou. Un plan faux et
+         volumineux est pire qu'un plan absent : il noie les vraies lignes. */
+      'session_hours_missing' => array(
+        'phase' => 'animation', 'mode' => 'alert',
+        'label' => 'Horaires de la séance non renseignés : aucun rappel d’émargement planifiable',
+      ),
       'emargement_am' => array(
         'phase' => 'animation', 'mode' => 'auto',
         'label' => 'Rappel d’émargement au formateur — séance du matin',
@@ -391,12 +436,48 @@ trait ACDC_Workflow_Core_Trait {
     return $ts;
   }
 
+  /**
+   * ACDC 3.25.186 — Une seule représentation du temps, et elle est explicite.
+   *
+   * La 3.25.185 mélangeait deux conventions et payait le prix classique : toutes
+   * les heures planifiées étaient décalées du double du décalage horaire — 17 h
+   * devenait 21 h en été, 19 h en hiver. L'erreur venait de current_time
+   * ('timestamp'), qui rend un horodatage DÉJÀ décalé en heure locale, puis de
+   * wp_date() qui rajoutait ce même décalage à l'affichage.
+   *
+   * La règle, désormais, tient en trois lignes :
+   *   - en mémoire, un horodatage est TOUJOURS un vrai timestamp UTC ;
+   *   - en base, une date-heure est TOUJOURS de l'heure locale (convention du
+   *     plugin, héritée de current_time('mysql')) ;
+   *   - on ne franchit la frontière qu'avec acdc_wf_mysql() dans un sens et
+   *     acdc_wf_ts() dans l'autre. Jamais strtotime() nu sur une valeur lue en
+   *     base : c'est lui qui a introduit le décalage.
+   */
   private function acdc_wf_mysql( $timestamp ) {
     return wp_date( 'Y-m-d H:i:s', (int) $timestamp );
   }
 
   private function acdc_wf_now() {
-    return (int) current_time( 'timestamp' );
+    return time();
+  }
+
+  /** Heure locale stockée en base → horodatage UTC. */
+  private function acdc_wf_ts( $mysql_local ) {
+    $mysql_local = trim( (string) $mysql_local );
+    if ( '' === $mysql_local || 0 === strpos( $mysql_local, '0000-00-00' ) ) {
+      return 0;
+    }
+    try {
+      $date = new DateTimeImmutable( $mysql_local, wp_timezone() );
+    } catch ( Exception $e ) {
+      return 0;
+    }
+    return (int) $date->getTimestamp();
+  }
+
+  /** Date locale + heure locale → horodatage UTC. */
+  private function acdc_wf_local_ts( $date, $time = '00:00:00' ) {
+    return $this->acdc_wf_ts( trim( (string) $date ) . ' ' . trim( (string) $time ) );
   }
 
   /* =====================================================================
@@ -453,10 +534,45 @@ trait ACDC_Workflow_Core_Trait {
       'waiting'   => 'En attente d’un préalable',
       'pending'   => 'Planifiée',
       'done'      => 'Faite',
+      /* ACDC 3.25.186 — En simulation, « Faite » était un mensonge : rien n'avait
+         été fait. L'état porte désormais lui-même la nuance, sans dépendre de la
+         colonne Observation que l'œil saute. */
+      'simulated' => 'Simulée — aucun envoi',
       'skipped'   => 'Sans objet',
       'cancelled' => 'Annulée',
       'failed'    => 'En échec',
     );
+  }
+
+  /**
+   * ACDC 3.25.186 — Le libellé d'un dossier, identique partout.
+   *
+   * Le journal affichait le thème du recueil — « Intelligence artificielle »
+   * pour quatre parcours différents. Un journal qui ne dit pas de quel dossier
+   * il parle n'est pas un journal.
+   */
+  private function acdc_wf_run_display_label( $row ) {
+    $company = isset( $row->prospect_company ) ? trim( (string) $row->prospect_company ) : '';
+    $base    = '' !== $company ? $company : (string) ( $row->run_label ?? $row->label ?? '' );
+    $need_id = (int) ( $row->need_id ?? 0 );
+    if ( '' === $base ) {
+      $base = 'Dossier';
+    }
+    return $need_id > 0 ? $base . ' (recueil n°' . $need_id . ')' : $base;
+  }
+
+  /** Les états qui signifient « cette étape est derrière nous ». */
+  private function acdc_wf_settled_statuses() {
+    return array( 'done', 'simulated', 'failed', 'skipped', 'cancelled' );
+  }
+
+  /** Mode recette armé mais aucune adresse déclarée : plus rien ne peut partir. */
+  private function acdc_wf_test_mode_is_mute() {
+    $settings = $this->acdc_wf_settings();
+    if ( empty( $settings['test_mode'] ) ) {
+      return false;
+    }
+    return '' === trim( (string) $settings['allowed_recipients'] );
   }
 
   private function acdc_wf_status_label( $status ) {

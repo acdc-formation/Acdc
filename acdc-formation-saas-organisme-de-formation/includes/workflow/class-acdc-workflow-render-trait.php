@@ -69,6 +69,11 @@ trait ACDC_Workflow_Render_Trait {
       echo '<div class="acdc-alert acdc-alert-warning"><strong>Le workflow est à l\'arrêt.</strong> Aucun parcours n\'est ouvert et rien n\'est planifié. Activez-le dans la configuration.</div>';
     } elseif ( ! empty( $settings['simulation'] ) ) {
       echo '<div class="acdc-alert acdc-alert-info"><strong>Mode simulation.</strong> Les parcours sont planifiés et le journal se remplit, mais <strong>aucun e-mail ne part</strong>. Regardez le plan, ajustez les délais, puis désactivez la simulation.</div>';
+    } elseif ( $this->acdc_wf_test_mode_is_mute() ) {
+      /* ACDC 3.25.186 — Mode recette armé sans aucune adresse déclarée : le
+         garde-fou refuse tout le monde. C'est le comportement sûr, mais il était
+         silencieux, et un garde-fou muet ne rassure personne. */
+      echo '<div class="acdc-alert acdc-alert-warning"><strong>Mode recette actif, aucune adresse déclarée.</strong> Dans cet état <strong>aucun envoi ne peut partir, à personne</strong>. Renseignez les adresses autorisées, ou désactivez le mode recette.</div>';
     } elseif ( ! empty( $settings['test_mode'] ) ) {
       echo '<div class="acdc-alert acdc-alert-warning"><strong>Mode recette.</strong> Les envois ne partent qu\'aux adresses déclarées dans la configuration. Tout autre destinataire est refusé et journalisé.</div>';
     } else {
@@ -122,13 +127,12 @@ trait ACDC_Workflow_Render_Trait {
         <tbody>
         <?php foreach ( $runs as $run ) :
           $next  = $this->acdc_wf_next_step( (int) $run->id );
-          $label = (string) ( $run->prospect_company ? $run->prospect_company : $run->label );
-          $late  = $next && ! empty( $next->scheduled_at ) && strtotime( (string) $next->scheduled_at ) < $this->acdc_wf_now();
+          $label = $this->acdc_wf_run_display_label( $run );
+          $late  = $next && ! empty( $next->scheduled_at ) && $this->acdc_wf_ts( $next->scheduled_at ) < $this->acdc_wf_now();
           ?>
           <tr>
             <td>
-              <strong><?php echo esc_html( $label ); ?></strong><br>
-              <span class="description">Recueil n°<?php echo (int) $run->need_id; ?></span>
+              <strong><?php echo esc_html( $label ); ?></strong>
             </td>
             <td><?php echo esc_html( $phases[ $run->phase ] ?? $run->phase ); ?></td>
             <td>
@@ -143,7 +147,7 @@ trait ACDC_Workflow_Render_Trait {
             </td>
             <td>
               <?php if ( $next && ! empty( $next->scheduled_at ) ) : ?>
-                <?php echo esc_html( wp_date( 'd/m/Y H:i', strtotime( (string) $next->scheduled_at ) ) ); ?>
+                <?php echo esc_html( wp_date( 'd/m/Y H:i', $this->acdc_wf_ts( $next->scheduled_at ) ) ); ?>
                 <?php if ( $late ) : ?><br><span style="color:#b32d2e">en retard</span><?php endif; ?>
               <?php else : ?>
                 <span class="description">—</span>
@@ -188,6 +192,21 @@ trait ACDC_Workflow_Render_Trait {
         <?php if ( $run->contract_id ) : ?> · Convention n°<?php echo (int) $run->contract_id; ?><?php endif; ?>
         <?php if ( $run->session_id ) : ?> · Séance n°<?php echo (int) $run->session_id; ?><?php endif; ?>
       </p>
+      <?php
+      /* ACDC 3.25.186 — L'ancre des enquêtes s'affiche, avec sa provenance. Cinq
+         enquêtes et douze relances se calculent depuis cette date : la lire ne
+         doit pas demander une requête en base. */
+      $start_ts = $this->acdc_wf_ts( $run->formation_start_at ?? '' );
+      $end_ts   = $this->acdc_wf_ts( $run->formation_end_at ?? '' );
+      ?>
+      <p class="description">
+        <strong>Dates de formation retenues</strong> —
+        début : <?php echo $start_ts > 0 ? esc_html( wp_date( 'd/m/Y H:i', $start_ts ) ) : 'non déterminé'; ?> ·
+        fin : <?php echo $end_ts > 0 ? esc_html( wp_date( 'd/m/Y H:i', $end_ts ) ) : 'non déterminée'; ?>
+        <?php if ( '' !== (string) ( $run->dates_source ?? '' ) ) : ?>
+          <br><?php echo esc_html( (string) $run->dates_source ); ?>
+        <?php endif; ?>
+      </p>
       <table class="acdc-table">
         <thead>
           <tr><th>Phase</th><th>Étape</th><th>Destinataire</th><th>Prévue le</th><th>État</th><th>Observation</th></tr>
@@ -198,7 +217,7 @@ trait ACDC_Workflow_Render_Trait {
             <td><?php echo esc_html( $phases[ $step->phase ] ?? $step->phase ); ?></td>
             <td><?php echo esc_html( $step->label ); ?></td>
             <td><?php echo '' !== (string) $step->target_label ? esc_html( $step->target_label ) : '<span class="description">—</span>'; ?></td>
-            <td><?php echo ! empty( $step->scheduled_at ) ? esc_html( wp_date( 'd/m/Y H:i', strtotime( (string) $step->scheduled_at ) ) ) : '<span class="description">—</span>'; ?></td>
+            <td><?php echo ! empty( $step->scheduled_at ) ? esc_html( wp_date( 'd/m/Y H:i', $this->acdc_wf_ts( $step->scheduled_at ) ) ) : '<span class="description">—</span>'; ?></td>
             <td><?php echo esc_html( $this->acdc_wf_status_label( $step->status ) ); ?></td>
             <td>
               <?php echo '' !== (string) $step->result_note ? esc_html( $step->result_note ) : ''; ?>
@@ -223,9 +242,10 @@ trait ACDC_Workflow_Render_Trait {
     global $wpdb;
 
     $tasks = $wpdb->get_results(
-      "SELECT s.*, r.label AS run_label, r.need_id
+      "SELECT s.*, r.label AS run_label, r.need_id, p.company_name AS prospect_company
          FROM {$this->workflow_step_table} s
          INNER JOIN {$this->workflow_run_table} r ON r.id = s.run_id
+         LEFT JOIN {$this->prospect_table} p ON p.id = r.prospect_id
         WHERE s.mode IN ('task','alert') AND s.status = 'pending' AND r.status = 'active'
         ORDER BY s.is_alert DESC, s.scheduled_at ASC
         LIMIT 200"
@@ -244,8 +264,8 @@ trait ACDC_Workflow_Render_Trait {
           <tr>
             <td><?php echo (int) $task->is_alert ? '<span title="Alerte" style="color:#b32d2e">&#9888;</span>' : ''; ?></td>
             <td><strong><?php echo esc_html( $task->label ); ?></strong></td>
-            <td><?php echo esc_html( $task->run_label ); ?> <span class="description">(recueil n°<?php echo (int) $task->need_id; ?>)</span></td>
-            <td><?php echo ! empty( $task->scheduled_at ) ? esc_html( wp_date( 'd/m/Y', strtotime( (string) $task->scheduled_at ) ) ) : '—'; ?></td>
+            <td><?php echo esc_html( $this->acdc_wf_run_display_label( $task ) ); ?></td>
+            <td><?php echo ! empty( $task->scheduled_at ) ? esc_html( wp_date( 'd/m/Y', $this->acdc_wf_ts( $task->scheduled_at ) ) ) : '—'; ?></td>
             <td>
               <form method="post" action="<?php echo esc_url( admin_url( 'admin-post.php' ) ); ?>">
                 <?php wp_nonce_field( 'acdc_wf_dismiss_task' ); ?>
@@ -271,10 +291,11 @@ trait ACDC_Workflow_Render_Trait {
     global $wpdb;
 
     $rows = $wpdb->get_results(
-      "SELECT s.*, r.label AS run_label
+      "SELECT s.*, r.label AS run_label, r.need_id, p.company_name AS prospect_company
          FROM {$this->workflow_step_table} s
          INNER JOIN {$this->workflow_run_table} r ON r.id = s.run_id
-        WHERE s.status IN ('done','failed','skipped','cancelled')
+         LEFT JOIN {$this->prospect_table} p ON p.id = r.prospect_id
+        WHERE s.status IN ('done','simulated','failed','skipped','cancelled')
         ORDER BY s.executed_at DESC, s.updated_at DESC
         LIMIT 300"
     );
@@ -290,8 +311,8 @@ trait ACDC_Workflow_Render_Trait {
         <tbody>
         <?php foreach ( $rows as $row ) : ?>
           <tr>
-            <td><?php echo ! empty( $row->executed_at ) ? esc_html( wp_date( 'd/m/Y H:i', strtotime( (string) $row->executed_at ) ) ) : '—'; ?></td>
-            <td><?php echo esc_html( $row->run_label ); ?></td>
+            <td><?php echo ! empty( $row->executed_at ) ? esc_html( wp_date( 'd/m/Y H:i', $this->acdc_wf_ts( $row->executed_at ) ) ) : '—'; ?></td>
+            <td><?php echo esc_html( $this->acdc_wf_run_display_label( $row ) ); ?></td>
             <td><?php echo esc_html( $row->label ); ?></td>
             <td><?php echo '' !== (string) $row->target_label ? esc_html( $row->target_label ) : '—'; ?></td>
             <td><?php echo esc_html( $this->acdc_wf_status_label( $row->status ) ); ?></td>

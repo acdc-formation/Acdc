@@ -159,6 +159,7 @@ trait ACDC_Workflow_Engine_Trait {
     }
 
     $pieces  = $this->acdc_wf_resolve_pieces( $run, $need );
+    $dates   = $this->acdc_wf_resolve_dates( $pieces );
     $phase   = 'commercial';
 
     /* ---- Commercial : proposition ------------------------------------- */
@@ -179,7 +180,7 @@ trait ACDC_Workflow_Engine_Trait {
     if ( ! empty( $pieces['quote'] ) ) {
       $quote        = $pieces['quote'];
       $quote_signed = $this->acdc_wf_is_signed( $quote->status ?? '', $quote->signature_status ?? '' );
-      $sent_ts      = ! empty( $quote->sent_at ) ? strtotime( (string) $quote->sent_at ) : 0;
+      $sent_ts      = $this->acdc_wf_ts( $quote->sent_at ?? '' );
 
       if ( $quote_signed ) {
         $this->acdc_wf_settle_step( $run_id, 'quote_reminder', 'skipped', 'Devis signé : relance sans objet.' );
@@ -203,7 +204,7 @@ trait ACDC_Workflow_Engine_Trait {
 
       $convention_signed = $this->acdc_wf_is_signed( '', $contract->signature_status ?? '' )
         || ! empty( $contract->signature_completed_at );
-      $c_sent_ts = ! empty( $contract->signature_sent_at ) ? strtotime( (string) $contract->signature_sent_at ) : 0;
+      $c_sent_ts = $this->acdc_wf_ts( $contract->signature_sent_at ?? '' );
 
       if ( $convention_signed ) {
         $this->acdc_wf_settle_step( $run_id, 'convention_reminder', 'skipped', 'Convention signée : relance sans objet.' );
@@ -250,6 +251,9 @@ trait ACDC_Workflow_Engine_Trait {
         'funder_id'          => (int) $pieces['funder_id'],
         'company_id'         => (int) $pieces['company_id'],
         'phase'              => $phase,
+        'formation_start_at' => $dates['start'] > 0 ? $this->acdc_wf_mysql( $dates['start'] ) : null,
+        'formation_end_at'   => $dates['end'] > 0 ? $this->acdc_wf_mysql( $dates['end'] ) : null,
+        'dates_source'       => (string) $dates['source'],
         'last_reconciled_at' => $this->acdc_wf_mysql( $now ),
         'updated_at'         => $this->acdc_wf_mysql( $now ),
       ),
@@ -271,10 +275,12 @@ trait ACDC_Workflow_Engine_Trait {
       (int) $run_id,
       $reminder_key
     ) );
-    if ( ! $reminder || 'done' !== (string) $reminder->status || empty( $reminder->executed_at ) ) {
+    /* Une relance simulée compte comme jouée : le plan doit continuer à se
+       dérouler en simulation, sinon on ne verrait jamais la suite du parcours. */
+    if ( ! $reminder || ! in_array( (string) $reminder->status, array( 'done', 'simulated' ), true ) || empty( $reminder->executed_at ) ) {
       return;
     }
-    $due = strtotime( (string) $reminder->executed_at )
+    $due = $this->acdc_wf_ts( $reminder->executed_at )
       + ( (int) $this->acdc_wf_delay( $delay_key, $fallback_days ) * DAY_IN_SECONDS );
     $this->acdc_wf_upsert_step( $run_id, $rdv_key, array(
       'scheduled_at' => $this->acdc_wf_shift_to_business_day( $due ),
@@ -327,20 +333,44 @@ trait ACDC_Workflow_Engine_Trait {
        formation de trois jours — David a été explicite. */
     if ( $start_ts > 0 ) {
       $hour = max( 0, min( 23, (int) $this->acdc_wf_delay( 'convocation_hour', 17 ) ) );
-      $veille = strtotime( wp_date( 'Y-m-d', $start_ts - DAY_IN_SECONDS ) . sprintf( ' %02d:00:00', $hour ) );
-      $this->acdc_wf_upsert_step( $run_id, 'convocation', array( 'scheduled_at' => $veille ) );
+      $veille = $this->acdc_wf_local_ts( wp_date( 'Y-m-d', $start_ts - DAY_IN_SECONDS ), sprintf( '%02d:00:00', $hour ) );
+      $this->acdc_wf_upsert_step( $run_id, 'convocation', array(
+        'scheduled_at' => $veille,
+        'target_type'  => 'learners',
+        'target_label' => $this->acdc_wf_learners_label( $pieces['learners'] ),
+      ) );
     }
   }
 
   /**
    * Un rappel d'émargement par demi-journée, trente minutes avant son début.
-   * Les créneaux sont lus dans la séance ; à défaut d'horaires renseignés, on
-   * retient 9 h et 14 h et on le DIT dans la note de l'étape — une hypothèse
-   * silencieuse serait pire qu'une absence de rappel.
+   *
+   * ACDC 3.25.186 — Le moteur n'invente plus les horaires. La 3.25.185, faute de
+   * planning détaillé, balayait toute la plage calendaire du début à la fin en
+   * posant deux créneaux par jour, week-ends compris : 120 rappels sur deux mois
+   * pour une seule séance, et le garde-fou de 60 jours comme unique limite. Un
+   * plan faux et volumineux est pire qu'un plan absent — il noie les vraies
+   * lignes et personne ne les relit.
+   *
+   * Désormais : soit la séance porte ses demi-journées et on les suit, soit elle
+   * n'en porte pas et le moteur pose UNE alerte disant qu'il ne peut pas
+   * planifier. La donnée manquante se corrige ; une supposition, non.
    */
   private function acdc_wf_plan_animation( $run_id, $pieces, $start_ts, $end_ts ) {
     $lead  = (int) $this->acdc_wf_delay( 'emargement_lead_minutes', 30 ) * MINUTE_IN_SECONDS;
-    $slots = $this->acdc_wf_session_slots( $pieces, $start_ts, $end_ts );
+    $slots = $this->acdc_wf_session_slots( $pieces );
+
+    if ( empty( $slots ) ) {
+      $this->acdc_wf_upsert_step( $run_id, 'session_hours_missing', array(
+        'scheduled_at' => $this->acdc_wf_now(),
+        'target_type'  => 'session',
+        'target_id'    => (int) $pieces['session_id'],
+        'target_label' => $pieces['session_id'] ? 'Séance n°' . (int) $pieces['session_id'] : 'Aucune séance rattachée',
+      ) );
+      return;
+    }
+
+    $this->acdc_wf_settle_step( $run_id, 'session_hours_missing', 'skipped', 'Les demi-journées de la séance sont renseignées.' );
 
     foreach ( $slots as $slot ) {
       $step_key = ( 'pm' === $slot['half'] ) ? 'emargement_pm' : 'emargement_am';
@@ -348,9 +378,8 @@ trait ACDC_Workflow_Engine_Trait {
         'scheduled_at' => $slot['ts'] - $lead,
         'target_type'  => 'trainer',
         'target_id'    => (int) $pieces['trainer_id'],
-        'target_label' => (string) $pieces['trainer_name'],
+        'target_label' => '' !== (string) $pieces['trainer_name'] ? (string) $pieces['trainer_name'] : 'Formateur non rattaché',
         'dedupe_key'   => $step_key . ':' . wp_date( 'Y-m-d', $slot['ts'] ),
-        'payload'      => array( 'assumed_hours' => ! empty( $slot['assumed'] ) ),
       ) );
     }
   }
@@ -387,30 +416,60 @@ trait ACDC_Workflow_Engine_Trait {
       ),
     );
 
+    $targets = array(
+      'survey_hot'     => array( 'learners', $this->acdc_wf_learners_label( $pieces['learners'] ) ),
+      'survey_cold'    => array( 'learners', $this->acdc_wf_learners_label( $pieces['learners'] ) ),
+      'survey_company' => array( 'company', '' !== (string) $pieces['company_name'] ? (string) $pieces['company_name'] : 'Entreprise non rattachée' ),
+      'survey_funder'  => array( 'funder', '' !== (string) $pieces['funder_name'] ? (string) $pieces['funder_name'] : 'Financeur non nommé' ),
+      'survey_trainer' => array( 'trainer', '' !== (string) $pieces['trainer_name'] ? (string) $pieces['trainer_name'] : 'Formateur non rattaché' ),
+    );
+
     foreach ( $plan as $step_key => $spec ) {
-      /* Pas de financeur au dossier : la branche entière sort du parcours. */
+      $target = $targets[ $step_key ];
+
+      /* Pas de financeur au dossier : la branche sort du parcours — mais elle
+         doit le DIRE. En 3.25.185 elle disparaissait de l'écran, et rien ne
+         distinguait plus « pas de financeur » d'un oubli du moteur. */
       if ( 'survey_funder' === $step_key && empty( $pieces['funder_id'] ) ) {
-        $this->acdc_wf_settle_step( $run_id, 'survey_funder', 'skipped', 'Aucun financeur rattaché au dossier.' );
+        $note = 'Aucun financeur rattaché au dossier.';
+        $this->acdc_wf_mark_skipped( $run_id, 'survey_funder', $note );
         for ( $r = 1; $r <= 3; $r++ ) {
-          $this->acdc_wf_settle_step( $run_id, 'survey_funder_r' . $r, 'skipped', 'Aucun financeur rattaché au dossier.' );
+          $this->acdc_wf_mark_skipped( $run_id, 'survey_funder_r' . $r, $note );
         }
         continue;
       }
 
       $send_ts = $end_ts + (int) $spec['offset'];
-      $this->acdc_wf_upsert_step( $run_id, $step_key, array( 'scheduled_at' => $send_ts ) );
+      $this->acdc_wf_upsert_step( $run_id, $step_key, array(
+        'scheduled_at' => $send_ts,
+        'target_type'  => $target[0],
+        'target_label' => $target[1],
+      ) );
 
       /* Relances CUMULATIVES : chaque délai part de la relance précédente.
          Pour l'entreprise, 3 / 5 / 7 donne donc J+3, J+8, J+15 — c'est la
-         lecture que David a explicitement retenue. */
+         lecture que David a explicitement retenue.
+         Le CUMUL se calcule sur les dates théoriques, sans quoi chaque report de
+         week-end décalerait toute la suite. Mais le report peut rapprocher deux
+         relances au point de les coller : une relance repoussée au lundi suivie
+         d'une autre le mardi n'est plus une relance, c'est du harcèlement. D'où
+         l'écart minimal d'un jour ouvré, appliqué APRÈS report. */
       $cursor    = $send_ts;
+      $previous  = 0;
       $reminders = is_array( $spec['reminders'] ) ? array_values( $spec['reminders'] ) : array();
       foreach ( $reminders as $index => $delay ) {
         $rank    = $index + 1;
         $cursor += (int) $delay * (int) $spec['unit'];
+        $due     = $this->acdc_wf_shift_to_business_day( $cursor );
+        if ( $previous > 0 && $due <= ( $previous + DAY_IN_SECONDS ) ) {
+          $due = $this->acdc_wf_shift_to_business_day( $previous + DAY_IN_SECONDS );
+        }
+        $previous = $due;
         $this->acdc_wf_upsert_step( $run_id, $step_key . '_r' . $rank, array(
-          'scheduled_at' => $this->acdc_wf_shift_to_business_day( $cursor ),
+          'scheduled_at' => $due,
           'parent_key'   => $step_key,
+          'target_type'  => $target[0],
+          'target_label' => $target[1],
         ) );
       }
     }
@@ -487,6 +546,8 @@ trait ACDC_Workflow_Engine_Trait {
       ) );
     }
 
+    $funder_id = $this->acdc_wf_resolve_funder_id( $contract, $company_id );
+
     return array(
       'need'         => $need,
       'proposal'     => $proposal,
@@ -497,11 +558,50 @@ trait ACDC_Workflow_Engine_Trait {
       'formation_id' => $formation_id,
       'company_id'   => $company_id,
       'prospect_id'  => $prospect_id,
-      'funder_id'    => $this->acdc_wf_resolve_funder_id( $contract, $company_id ),
+      'funder_id'    => $funder_id,
+      'funder_name'  => $this->acdc_wf_entity_name( $this->funder_table, $funder_id ),
+      'company_name' => $this->acdc_wf_entity_name( $this->company_table, $company_id ),
       'trainer_id'   => $session && ! empty( $session->trainer_id ) ? (int) $session->trainer_id : 0,
       'trainer_name' => $this->acdc_wf_trainer_name( $session ),
       'learners'     => $this->acdc_wf_contract_learners( $contract ),
     );
+  }
+
+  /** Le nom lisible d'une entreprise ou d'un financeur, pour la colonne Destinataire. */
+  private function acdc_wf_entity_name( $table, $id ) {
+    global $wpdb;
+    $id = (int) $id;
+    if ( $id <= 0 ) {
+      return '';
+    }
+    $column = $this->acdc_schema_has_column( $table, 'name' ) ? 'name' : 'company_name';
+    if ( ! $this->acdc_schema_has_column( $table, $column ) ) {
+      return '';
+    }
+    return (string) $wpdb->get_var( $wpdb->prepare( "SELECT {$column} FROM {$table} WHERE id = %d", $id ) );
+  }
+
+  /**
+   * ACDC 3.25.186 — Une convocation « à — » ne dit pas qui la reçoit.
+   *
+   * Les enquêtes et la convocation partent à un GROUPE, pas à une personne :
+   * une seule étape, mais elle doit nommer sa cible. Au-delà de trois personnes
+   * on compte plutôt que d'énumérer.
+   */
+  private function acdc_wf_learners_label( $learners ) {
+    $names = array();
+    foreach ( (array) $learners as $learner ) {
+      if ( '' !== trim( (string) $learner['name'] ) ) {
+        $names[] = (string) $learner['name'];
+      }
+    }
+    if ( empty( $names ) ) {
+      return 'Aucun apprenant nommé dans la convention';
+    }
+    if ( count( $names ) <= 3 ) {
+      return implode( ', ', $names );
+    }
+    return count( $names ) . ' apprenants inscrits';
   }
 
   private function acdc_wf_resolve_funder_id( $contract, $company_id ) {
@@ -571,43 +671,75 @@ trait ACDC_Workflow_Engine_Trait {
    * ===================================================================== */
 
   private function acdc_wf_run_start_ts( $pieces ) {
-    if ( ! empty( $pieces['session'] ) ) {
-      $s = $pieces['session'];
-      if ( ! empty( $s->start_at ) ) {
-        return (int) strtotime( (string) $s->start_at );
-      }
-      if ( ! empty( $s->start_date ) ) {
-        return (int) strtotime( (string) $s->start_date . ' 09:00:00' );
-      }
-    }
-    if ( ! empty( $pieces['contract'] ) && ! empty( $pieces['contract']->start_date ) ) {
-      return (int) strtotime( (string) $pieces['contract']->start_date . ' 09:00:00' );
-    }
-    return 0;
-  }
-
-  private function acdc_wf_run_end_ts( $pieces ) {
-    if ( ! empty( $pieces['session'] ) ) {
-      $s = $pieces['session'];
-      if ( ! empty( $s->end_at ) ) {
-        return (int) strtotime( (string) $s->end_at );
-      }
-      if ( ! empty( $s->end_date ) ) {
-        return (int) strtotime( (string) $s->end_date . ' 17:00:00' );
-      }
-    }
-    if ( ! empty( $pieces['contract'] ) && ! empty( $pieces['contract']->end_date ) ) {
-      return (int) strtotime( (string) $pieces['contract']->end_date . ' 17:00:00' );
-    }
-    return 0;
+    $resolved = $this->acdc_wf_resolve_dates( $pieces );
+    return (int) $resolved['start'];
   }
 
   /**
-   * Les demi-journées de la formation. On lit d'abord le planning détaillé de la
-   * séance ; sinon on couvre chaque jour ouvré de la période avec deux créneaux
-   * présumés, marqués comme tels.
+   * ACDC 3.25.186 — Les dates de formation retenues, ET leur provenance.
+   *
+   * L'agent de recette a buté sur une « fin de formation » au 05/08 pour une
+   * séance commençant le 13/05 et sans date de fin : le moteur était retombé sur
+   * la date de fin de la convention, ce qui est légitime mais invisible. Une
+   * ancre qui décide de la date de cinq enquêtes doit dire d'où elle vient.
    */
-  private function acdc_wf_session_slots( $pieces, $start_ts, $end_ts ) {
+  private function acdc_wf_resolve_dates( $pieces ) {
+    $start        = 0;
+    $end          = 0;
+    $start_source = '';
+    $end_source   = '';
+
+    $session = $pieces['session'] ?? null;
+    if ( $session ) {
+      if ( ! empty( $session->start_at ) ) {
+        $start        = $this->acdc_wf_ts( $session->start_at );
+        $start_source = 'horaire de la séance n°' . (int) $session->id;
+      } elseif ( ! empty( $session->start_date ) ) {
+        $start        = $this->acdc_wf_local_ts( $session->start_date, '09:00:00' );
+        $start_source = 'date de la séance n°' . (int) $session->id;
+      }
+      if ( ! empty( $session->end_at ) ) {
+        $end        = $this->acdc_wf_ts( $session->end_at );
+        $end_source = 'horaire de fin de la séance n°' . (int) $session->id;
+      } elseif ( ! empty( $session->end_date ) ) {
+        $end        = $this->acdc_wf_local_ts( $session->end_date, '17:00:00' );
+        $end_source = 'date de fin de la séance n°' . (int) $session->id;
+      }
+    }
+
+    $contract = $pieces['contract'] ?? null;
+    if ( $contract ) {
+      if ( $start <= 0 && ! empty( $contract->start_date ) ) {
+        $start        = $this->acdc_wf_local_ts( $contract->start_date, '09:00:00' );
+        $start_source = 'date de début de la convention n°' . (int) $contract->id;
+      }
+      if ( $end <= 0 && ! empty( $contract->end_date ) ) {
+        $end        = $this->acdc_wf_local_ts( $contract->end_date, '17:00:00' );
+        $end_source = 'date de fin de la convention n°' . (int) $contract->id;
+      }
+    }
+
+    $source = trim( ( '' !== $start_source ? 'Début : ' . $start_source . '.' : 'Début : non déterminé.' )
+      . ' ' . ( '' !== $end_source ? 'Fin : ' . $end_source . '.' : 'Fin : non déterminée.' ) );
+
+    return array( 'start' => $start, 'end' => $end, 'source' => $source );
+  }
+
+  private function acdc_wf_run_end_ts( $pieces ) {
+    $resolved = $this->acdc_wf_resolve_dates( $pieces );
+    return (int) $resolved['end'];
+  }
+
+  /**
+   * Les demi-journées RÉELLES de la séance, ou rien.
+   *
+   * Deux sources, dans cet ordre : le planning détaillé de la séance, puis les
+   * horaires de début et de fin quand ils portent une heure. En l'absence des
+   * deux, on renvoie un tableau vide et l'appelant pose une alerte. Aucune
+   * troisième source : deviner 9 h et 14 h sur soixante jours n'était pas une
+   * approximation, c'était une invention.
+   */
+  private function acdc_wf_session_slots( $pieces ) {
     $slots = array();
 
     if ( ! empty( $pieces['session']->schedule_json ) ) {
@@ -617,15 +749,20 @@ trait ACDC_Workflow_Engine_Trait {
           if ( ! is_array( $entry ) || empty( $entry['date'] ) ) {
             continue;
           }
-          foreach ( array( 'am' => array( 'start_am', 'morning_start' ), 'pm' => array( 'start_pm', 'afternoon_start' ) ) as $half => $keys ) {
+          $halves = array(
+            'am' => array( 'start_am', 'morning_start', 'am_start', 'start_morning' ),
+            'pm' => array( 'start_pm', 'afternoon_start', 'pm_start', 'start_afternoon' ),
+          );
+          foreach ( $halves as $half => $keys ) {
             foreach ( $keys as $key ) {
-              if ( ! empty( $entry[ $key ] ) ) {
-                $ts = strtotime( (string) $entry['date'] . ' ' . (string) $entry[ $key ] );
-                if ( $ts ) {
-                  $slots[] = array( 'ts' => $ts, 'half' => $half, 'assumed' => false );
-                }
-                break;
+              if ( empty( $entry[ $key ] ) ) {
+                continue;
               }
+              $ts = $this->acdc_wf_local_ts( $entry['date'], (string) $entry[ $key ] );
+              if ( $ts > 0 ) {
+                $slots[] = array( 'ts' => $ts, 'half' => $half );
+              }
+              break;
             }
           }
         }
@@ -633,22 +770,31 @@ trait ACDC_Workflow_Engine_Trait {
     }
 
     if ( ! empty( $slots ) ) {
-      return $slots;
+      /* Garde-fou de volume : un planning réel ne dépasse pas cet ordre de
+         grandeur. Au-delà, la donnée est suspecte et l'on préfère ne rien
+         planifier plutôt que d'inonder le parcours. */
+      return count( $slots ) > 120 ? array() : $slots;
     }
 
-    if ( $start_ts <= 0 ) {
+    /* Séance d'un seul tenant portant de vraies heures : deux demi-journées si
+       elle enjambe midi, une seule sinon. */
+    $session = $pieces['session'] ?? null;
+    if ( ! $session || empty( $session->start_at ) ) {
       return array();
     }
-    $last  = $end_ts > 0 ? $end_ts : $start_ts;
-    $day   = strtotime( wp_date( 'Y-m-d', $start_ts ) );
-    $guard = 0;
-    while ( $day <= $last && $guard < 60 ) {
-      $date = wp_date( 'Y-m-d', $day );
-      $slots[] = array( 'ts' => strtotime( $date . ' 09:00:00' ), 'half' => 'am', 'assumed' => true );
-      $slots[] = array( 'ts' => strtotime( $date . ' 14:00:00' ), 'half' => 'pm', 'assumed' => true );
-      $day += DAY_IN_SECONDS;
-      $guard++;
+    $start = $this->acdc_wf_ts( $session->start_at );
+    if ( $start <= 0 || '00:00:00' === wp_date( 'H:i:s', $start ) ) {
+      return array();
     }
+    $end  = ! empty( $session->end_at ) ? $this->acdc_wf_ts( $session->end_at ) : 0;
+    $date = wp_date( 'Y-m-d', $start );
+
+    $slots[] = array( 'ts' => $start, 'half' => (int) wp_date( 'G', $start ) < 12 ? 'am' : 'pm' );
+
+    if ( $end > $start && wp_date( 'Y-m-d', $end ) === $date && (int) wp_date( 'G', $start ) < 12 && (int) wp_date( 'G', $end ) > 13 ) {
+      $slots[] = array( 'ts' => $this->acdc_wf_local_ts( $date, '14:00:00' ), 'half' => 'pm' );
+    }
+
     return $slots;
   }
 
@@ -688,7 +834,7 @@ trait ACDC_Workflow_Engine_Trait {
       : null;
 
     if ( $existing ) {
-      if ( in_array( (string) $existing->status, array( 'done', 'failed', 'skipped', 'cancelled' ), true ) ) {
+      if ( in_array( (string) $existing->status, $this->acdc_wf_settled_statuses(), true ) ) {
         return;
       }
       $wpdb->update(
@@ -722,6 +868,16 @@ trait ACDC_Workflow_Engine_Trait {
       'created_at'   => $now,
       'updated_at'   => $now,
     ) );
+  }
+
+  /**
+   * Pose une étape DÉJÀ classée « sans objet ». Contrairement à settle_step, qui
+   * ne touche que des lignes existantes, celle-ci crée la ligne si elle manque :
+   * une branche écartée doit se voir à l'écran, pas s'évaporer.
+   */
+  private function acdc_wf_mark_skipped( $run_id, $step_key, $note ) {
+    $this->acdc_wf_upsert_step( $run_id, $step_key, array( 'scheduled_at' => 0 ) );
+    $this->acdc_wf_settle_step( $run_id, $step_key, 'skipped', $note );
   }
 
   /** Clôt une étape encore ouverte. Une étape déjà jouée n'est jamais réécrite. */
@@ -803,7 +959,7 @@ trait ACDC_Workflow_Engine_Trait {
       $wpdb->update(
         $this->workflow_step_table,
         array(
-          'status'      => 'done',
+          'status'      => 'simulated',
           'executed_at' => $now,
           'result_note' => 'Simulation : aucun envoi. Action prévue « ' . (string) $step->label . ' »' . $suffix . '.',
           'attempts'    => (int) $step->attempts + 1,

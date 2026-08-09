@@ -937,8 +937,17 @@ trait ACDC_Sessions_Render_Trait {
                 <?php endforeach; ?>
               </select>
             </p>
-            <p><label>Date de début</label><input type="date" name="start_date" value="<?php echo esc_attr( $session_value( 'start_date', $this->current_date() ) ); ?>"></p>
-            <p><label>Date de fin</label><input type="date" name="end_date" value="<?php echo esc_attr( $session_value( 'end_date', $this->current_date() ) ); ?>"></p>
+            <?php
+            /* ACDC 3.25.186 — La date du jour ne sert de valeur par défaut qu'à
+               la CRÉATION. Sur une séance existante dont la date de fin est vide,
+               elle pré-remplissait le champ avec aujourd'hui : un enregistrement
+               distrait inscrivait une fausse date de fin de formation. Ce n'est
+               pas anodin — c'est cette date qui ancre les cinq enquêtes de fin de
+               parcours et leurs douze relances. Un champ vide reste vide. */
+            $acdc_session_date_default = $session ? '' : $this->current_date();
+            ?>
+            <p><label>Date de début</label><input type="date" name="start_date" value="<?php echo esc_attr( $session_value( 'start_date', $acdc_session_date_default ) ); ?>"></p>
+            <p><label>Date de fin</label><input type="date" name="end_date" value="<?php echo esc_attr( $session_value( 'end_date', $acdc_session_date_default ) ); ?>"></p>
             <p><label>Lieu</label><input type="text" name="location" value="<?php echo esc_attr( $session_value( 'location' ) ); ?>"></p>
             <p><label>Capacité maximale</label><input type="number" min="0" name="max_learners" value="<?php echo esc_attr( (string) $session_value( 'max_learners', '0' ) ); ?>"></p>
           </div>
