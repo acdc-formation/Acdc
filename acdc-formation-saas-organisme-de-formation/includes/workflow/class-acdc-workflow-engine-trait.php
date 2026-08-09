@@ -633,9 +633,21 @@ trait ACDC_Workflow_Engine_Trait {
           ? $this->acdc_wf_add_days( $cursor, (int) $delay )
           : $cursor + ( (int) $delay * (int) $spec['unit'] );
         $due    = $this->acdc_wf_shift_to_business_day( $cursor );
-        $spaced = false;
-        if ( $previous > 0 && $due <= $this->acdc_wf_add_days( $previous, 1 ) ) {
-          $due    = $this->acdc_wf_shift_to_business_day( $this->acdc_wf_add_days( $previous, 1 ) );
+        /* ACDC 3.25.196 — L'écart minimal se mesure dans l'UNITÉ de la chaîne.
+           Deux relances ne doivent jamais tomber à la même minute : quand le
+           report au jour ouvré de la précédente vient occuper l'horodatage de
+           celle-ci, il faut les séparer. Mais séparer d'un JOUR une chaîne
+           réglée en HEURES — l'enquête à chaud, 24 puis 48 puis 72 — déplace
+           l'échéance bien au-delà de ce que le réglage promet. On sépare donc
+           d'une heure une chaîne horaire, et d'un jour ouvré une chaîne
+           journalière. L'écart reste minimal dans les deux cas ; c'est la
+           promesse du réglage qui est préservée. */
+        $spaced   = false;
+        $hourly   = ( HOUR_IN_SECONDS === (int) $spec['unit'] );
+        $min_next = $hourly ? ( $previous + HOUR_IN_SECONDS ) : $this->acdc_wf_add_days( $previous, 1 );
+
+        if ( $previous > 0 && $due <= $min_next ) {
+          $due    = $hourly ? $min_next : $this->acdc_wf_shift_to_business_day( $min_next );
           $spaced = true;
         }
         $previous = $due;
