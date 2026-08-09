@@ -115,7 +115,7 @@ trait ACDC_Sessions_Core_Trait {
       array_push( $values, $like, $like, $like, $like );
     }
 
-    $sql = "SELECT s.*, f.title AS formation_title, f.code AS formation_code, c.city AS formation_city,\n        MAX(g.id) AS group_id, MAX(g.name) AS group_name, MAX(g.trainer_name) AS group_trainer_name, MAX(g.learner_ids) AS group_learner_ids,\n        MAX(l.first_name) AS learner_first_name, MAX(l.usage_last_name) AS learner_usage_last_name, MAX(l.last_name) AS learner_last_name,\n        MAX(t.first_name) AS trainer_first_name, MAX(t.last_name) AS trainer_last_name\n      FROM {$this->session_table} s\n      LEFT JOIN {$this->formation_table} f ON f.id = s.formation_id\n      LEFT JOIN {$this->company_table} c ON c.id = s.company_id\n      LEFT JOIN {$this->group_table} g ON g.session_id = s.id\n      LEFT JOIN {$this->learner_table} l ON l.session_id = s.id\n      LEFT JOIN {$this->trainer_table} t ON t.id = s.trainer_id\n      WHERE " . implode( ' AND ', $where ) . "\n      GROUP BY s.id\n      ORDER BY COALESCE(s.start_at, CONCAT(s.start_date,' 00:00:00'), s.created_at) DESC, s.id DESC";
+    $sql = "SELECT s.*, f.title AS formation_title, f.code AS formation_code, c.city AS formation_city,\n        MAX(g.id) AS group_id, MAX(g.name) AS group_name, MAX(g.trainer_name) AS group_trainer_name, MAX(g.learner_ids) AS group_learner_ids,\n        COUNT(DISTINCT l.id) AS learner_count, MAX(l.first_name) AS learner_first_name, MAX(l.usage_last_name) AS learner_usage_last_name, MAX(l.last_name) AS learner_last_name,\n        MAX(t.first_name) AS trainer_first_name, MAX(t.last_name) AS trainer_last_name\n      FROM {$this->session_table} s\n      LEFT JOIN {$this->formation_table} f ON f.id = s.formation_id\n      LEFT JOIN {$this->company_table} c ON c.id = s.company_id\n      LEFT JOIN {$this->group_table} g ON g.session_id = s.id\n      LEFT JOIN {$this->learner_table} l ON l.session_id = s.id\n      LEFT JOIN {$this->trainer_table} t ON t.id = s.trainer_id\n      WHERE " . implode( ' AND ', $where ) . "\n      GROUP BY s.id\n      ORDER BY COALESCE(s.start_at, CONCAT(s.start_date,' 00:00:00'), s.created_at) DESC, s.id DESC";
 
     $rows = ! empty( $values ) ? $wpdb->get_results( $wpdb->prepare( $sql, $values ) ) : $wpdb->get_results( $sql );
 
@@ -183,6 +183,24 @@ trait ACDC_Sessions_Core_Trait {
     if ( '' !== $group_name ) {
       return $group_name;
     }
+    /* ACDC 3.25.203 — Un MAX() par colonne fabriquait une personne qui n'existe
+       pas.
+       La requête agrégeait indépendamment MAX(prénom), MAX(nom d'usage) et
+       MAX(nom de naissance) sur TOUTES les apprenantes de la séance. Avec
+       Bérengère Valeriano, Ilona Rossa et Léandra Rossa, le plus grand prénom
+       est « Léandra » et le plus grand nom « Valeriano » : la séance s'intitulait
+       donc « Léandra Valeriano », une personne qui n'a jamais existé. Chaque
+       colonne était juste, prise isolément ; c'est leur assemblage qui mentait.
+       Le défaut n'est visible qu'à partir de deux apprenants, ce qui explique
+       qu'il ait traversé toute la recette sans se faire voir.
+       Dès qu'il y a plusieurs apprenants, on ne fabrique plus de nom : on les
+       compte. Un nom propre n'est affiché que lorsqu'une seule personne est
+       rattachée, cas où l'agrégat porte forcément sur une seule ligne. */
+    $learner_count = isset( $session->learner_count ) ? (int) $session->learner_count : 0;
+    if ( $learner_count > 1 ) {
+      return $learner_count . ' apprenants';
+    }
+
     /* ACDC 3.25.201 — Le nom d'usage REMPLACE le nom de naissance, il ne s'y
        ajoute pas.
        Cette ligne concaténait les deux, produisant « Valeriano Valeriano » pour

@@ -11261,7 +11261,7 @@ trait ACDC_Kernel_Render_Trait {
         exit;
       }
       global $wpdb;
-      $session = $wpdb->get_row( $wpdb->prepare( "SELECT s.*, f.title AS formation_title, c.name AS company_name, g.name AS group_name, g.trainer_name AS group_trainer_name, l.first_name AS learner_first_name, l.usage_last_name AS learner_usage_last_name, l.last_name AS learner_last_name FROM {$this->session_table} s LEFT JOIN {$this->formation_table} f ON f.id = s.formation_id LEFT JOIN {$this->company_table} c ON c.id = s.company_id LEFT JOIN {$this->group_table} g ON g.session_id = s.id LEFT JOIN {$this->learner_table} l ON l.session_id = s.id WHERE s.id = %d GROUP BY s.id", $item_id ) );
+      $session = $wpdb->get_row( $wpdb->prepare( "SELECT s.*, f.title AS formation_title, c.name AS company_name, g.name AS group_name, g.trainer_name AS group_trainer_name, COUNT(DISTINCT l.id) AS learner_count, MAX(l.first_name) AS learner_first_name, MAX(l.usage_last_name) AS learner_usage_last_name, MAX(l.last_name) AS learner_last_name FROM {$this->session_table} s LEFT JOIN {$this->formation_table} f ON f.id = s.formation_id LEFT JOIN {$this->company_table} c ON c.id = s.company_id LEFT JOIN {$this->group_table} g ON g.session_id = s.id LEFT JOIN {$this->learner_table} l ON l.session_id = s.id WHERE s.id = %d GROUP BY s.id", $item_id ) );
       ?>
       <section class="acdc-section-head">
         <div>
