@@ -484,7 +484,13 @@ trait ACDC_Workflow_Engine_Trait {
         'target_type'  => 'trainer',
         'target_id'    => (int) $pieces['trainer_id'],
         'target_label' => '' !== (string) $pieces['trainer_name'] ? (string) $pieces['trainer_name'] : 'Formateur non rattaché',
-        'dedupe_key'   => $step_key . ':' . wp_date( 'Y-m-d', $slot['ts'] ),
+        /* La clé porte la séance ET la demi-journée : deux créneaux du même jour
+           sur deux séances distinctes sont deux feuilles d'émargement. */
+        'dedupe_key'   => $step_key . ':' . (int) $slot['session_id'] . ':' . (int) $slot['seance_index'],
+        'payload'      => array(
+          'session_id'   => (int) $slot['session_id'],
+          'seance_index' => (int) $slot['seance_index'],
+        ),
       ) );
     }
   }
@@ -972,7 +978,9 @@ trait ACDC_Workflow_Engine_Trait {
     $slots = array();
 
     foreach ( ( ! empty( $pieces['sessions'] ) ? $pieces['sessions'] : array() ) as $session ) {
-      foreach ( $this->acdc_wf_slots_for_session( $session ) as $slot ) {
+      foreach ( $this->acdc_wf_slots_for_session( $session ) as $index => $slot ) {
+        $slot['session_id']   = (int) $session->id;
+        $slot['seance_index'] = (int) $index;
         $slots[] = $slot;
       }
     }

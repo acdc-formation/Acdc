@@ -271,15 +271,15 @@ trait ACDC_Workflow_Core_Trait {
          volumineux est pire qu'un plan absent : il noie les vraies lignes. */
       'session_hours_missing' => array(
         'phase' => 'animation', 'mode' => 'alert',
-        'label' => 'Renseigner les horaires de la séance — sans eux, aucun rappel d’émargement ne peut être planifié',
+        'label' => 'Renseigner les horaires de la séance — sans eux, la feuille d’émargement ne peut pas être ouverte',
       ),
       'emargement_am' => array(
         'phase' => 'animation', 'mode' => 'auto',
-        'label' => 'Rappel d’émargement au formateur — séance du matin',
+        'label' => 'Ouvrir la feuille d’émargement — séance du matin',
       ),
       'emargement_pm' => array(
         'phase' => 'animation', 'mode' => 'auto',
-        'label' => 'Rappel d’émargement au formateur — séance de l’après-midi',
+        'label' => 'Ouvrir la feuille d’émargement — séance de l’après-midi',
       ),
 
       /* ---- Évaluation ---------------------------------------------------- */

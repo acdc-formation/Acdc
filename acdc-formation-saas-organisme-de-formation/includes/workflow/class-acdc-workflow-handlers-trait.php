@@ -179,44 +179,115 @@ trait ACDC_Workflow_Handlers_Trait {
   }
 
   /**
-   * Le rappel part trente minutes avant la demi-journée, au formateur seul.
+   * ACDC 3.25.193 — Le workflow DÉCLENCHE l'émargement, il ne le réécrit pas.
    *
-   * Il ne contient volontairement aucun lien de signature : l'émargement se fait
-   * depuis l'extranet formateur, où l'identité de celui qui signe est établie.
-   * Un lien d'émargement expédié par e-mail serait un lien transférable.
+   * La 3.25.190 composait son propre message : « pensez à faire émarger depuis
+   * votre extranet ». C'était doublement faux. Le module d'émargement possède
+   * déjà son envoi, et il fait bien plus qu'un rappel : il ouvre la séance,
+   * porte le lien de signature du formateur, et affiche le QR code que chaque
+   * apprenant scanne pour signer depuis son téléphone, le formateur voyant les
+   * présences arriver en temps réel. Envoyer un rappel à côté de ce dispositif,
+   * c'était ajouter un e-mail sans lien à un e-mail qui contient tout.
+   *
+   * Le rôle du workflow se réduit donc à ce qu'il sait faire de mieux : décider
+   * du MOMENT. Trente minutes avant la demi-journée, il ouvre la feuille si elle
+   * n'existe pas encore, et demande au module d'émargement d'envoyer le sien.
+   *
+   * Le garde-fou du mode recette est vérifié AVANT l'appel : le module envoie
+   * par ses propres moyens et ne connaît pas nos adresses autorisées.
    */
   private function acdc_wf_send_emargement_reminder( $step, $half ) {
+    if ( ! class_exists( 'ACDC_Emargement' ) ) {
+      return array( 'success' => false, 'error' => 'Module d’émargement indisponible.' );
+    }
+
     $pieces = $this->acdc_wf_step_context( $step );
     if ( ! $pieces ) {
       return array( 'success' => false, 'error' => 'Dossier introuvable au moment de l’envoi.' );
     }
 
     $trainer = $this->acdc_wf_trainer_record( $pieces );
-    if ( ! $trainer ) {
-      return array( 'success' => false, 'error' => 'Aucun formateur rattaché à la séance.' );
+    if ( ! $trainer || '' === (string) ( $trainer->email ?? '' ) ) {
+      return array( 'success' => false, 'error' => 'Aucun formateur joignable pour ouvrir la feuille d’émargement.' );
     }
 
-    $when = ! empty( $step->scheduled_at ) ? $this->acdc_wf_ts( $step->scheduled_at ) : $this->acdc_wf_now();
-    $date = wp_date( 'd/m/Y', $when );
+    $payload      = json_decode( (string) ( $step->payload_json ?? '' ), true );
+    $session_id   = is_array( $payload ) && ! empty( $payload['session_id'] ) ? (int) $payload['session_id'] : (int) $pieces['session_id'];
+    $seance_index = is_array( $payload ) && isset( $payload['seance_index'] ) ? (int) $payload['seance_index'] : 0;
 
-    return $this->acdc_wf_guarded_send(
-      $trainer->email ?? '',
-      'Émargement à recueillir — séance du ' . $date . ' (' . $half . ')',
-      array(
-        'greeting_name' => trim( (string) $trainer->first_name . ' ' . (string) $trainer->last_name ),
-        'intro_html'    => '<p>Votre séance commence dans quelques minutes.</p>',
-        'summary_title' => 'Séance concernée',
-        'summary_rows'  => array(
-          array( 'label' => 'Formation',   'value' => $this->acdc_wf_formation_title( $pieces ) ),
-          array( 'label' => 'Date',        'value' => $date ),
-          array( 'label' => 'Demi-journée','value' => ucfirst( $half ) ),
-          array( 'label' => 'Apprenants',  'value' => count( $pieces['learners'] ) . ' attendu(s)' ),
-        ),
-        'body_html'     => '<p>Pensez à faire émarger les apprenants présents, et à signaler les absents, '
-          . 'depuis votre extranet formateur. L’émargement est une pièce exigée par Qualiopi : une séance '
-          . 'non émargée ne peut pas être justifiée a posteriori.</p>',
-      ),
-      'Rappel d’émargement (' . $half . ')'
+    if ( $session_id <= 0 ) {
+      return array( 'success' => false, 'error' => 'Séance introuvable pour cette feuille d’émargement.' );
+    }
+
+    $email = sanitize_email( (string) $trainer->email );
+    if ( ! $this->acdc_wf_may_send_to( $email ) ) {
+      return array(
+        'success' => true,
+        'note'    => 'Mode recette : envoi retenu. La feuille d’émargement (' . $half . ') aurait été ouverte et adressée à ' . $email . ', qui ne figure pas dans les adresses autorisées.',
+      );
+    }
+
+    global $wpdb;
+    $emargement = ACDC_Emargement::get_instance();
+    $core       = $emargement->core;
+
+    $sheet = $core->get_by_session_id( $session_id, $seance_index );
+
+    if ( ! $sheet ) {
+      $learners = array();
+      foreach ( $pieces['learners'] as $learner ) {
+        $learners[] = array(
+          'id'    => (int) $learner['id'],
+          'name'  => (string) $learner['name'],
+          'email' => (string) $learner['email'],
+        );
+      }
+      if ( empty( $learners ) ) {
+        return array( 'success' => false, 'error' => 'Aucun apprenant inscrit : la feuille d’émargement serait vide.' );
+      }
+
+      $seance_meta = array();
+      $session_row = $wpdb->get_row( $wpdb->prepare(
+        "SELECT * FROM {$this->session_table} WHERE id = %d",
+        $session_id
+      ) );
+      if ( $session_row && ! empty( $session_row->schedule_json ) ) {
+        $slots = json_decode( (string) $session_row->schedule_json, true );
+        if ( is_array( $slots ) ) {
+          $slots = array_values( $slots );
+          if ( isset( $slots[ $seance_index ] ) ) {
+            $seance_meta = $core->slot_to_meta( $slots[ $seance_index ], $seance_index, max( 1, count( $slots ) ) );
+          }
+        }
+      }
+
+      $sheet_id = $core->create_emarg_session(
+        $session_id,
+        (int) $trainer->id,
+        trim( (string) $trainer->first_name . ' ' . (string) $trainer->last_name ),
+        $email,
+        $learners,
+        $seance_index,
+        $seance_meta
+      );
+      if ( ! $sheet_id ) {
+        return array( 'success' => false, 'error' => 'La feuille d’émargement n’a pas pu être créée.' );
+      }
+      $sheet = $wpdb->get_row( $wpdb->prepare(
+        "SELECT * FROM {$core->table_sessions} WHERE id = %d",
+        (int) $sheet_id
+      ) );
+    }
+
+    if ( ! $sheet ) {
+      return array( 'success' => false, 'error' => 'Feuille d’émargement introuvable après création.' );
+    }
+
+    $emargement->email->send_trainer_email( $sheet );
+
+    return array(
+      'success' => true,
+      'note'    => 'Séance à ouvrir (' . $half . ') envoyée à ' . $email . ' — lien de signature et QR code apprenants inclus.',
     );
   }
 

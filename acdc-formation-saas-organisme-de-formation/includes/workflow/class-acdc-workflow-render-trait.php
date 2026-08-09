@@ -390,7 +390,7 @@ trait ACDC_Workflow_Render_Trait {
         $this->acdc_wf_number_row( 'Analyse des besoins, avant le début (défaut si la convention ne le précise pas)', 'nad_days_before_start', $d, 'jours' );
         $this->acdc_wf_number_row( 'Dossier au formateur, avant le début', 'trainer_pack_days_before', $d, 'jours' );
         $this->acdc_wf_number_row( 'Heure d’envoi de la convocation, la veille', 'convocation_hour', $d, 'h' );
-        $this->acdc_wf_number_row( 'Rappel d’émargement, avant chaque demi-journée', 'emargement_lead_minutes', $d, 'minutes' );
+        $this->acdc_wf_number_row( 'Ouverture de la feuille d’émargement, avant chaque demi-journée', 'emargement_lead_minutes', $d, 'minutes' );
         ?>
       </div>
 
