@@ -293,7 +293,19 @@ trait ACDC_Trainer_Portal_Render_Trait {
             <?php foreach ( $upcoming_sessions as $s ) :
               $title = ! empty( $s->formation_title ) ? $s->formation_title : ( ! empty( $s->title ) ? $s->title : 'Session' );
               $ref   = ! empty( $s->start_at ) ? $s->start_at : ( ! empty( $s->start_date ) ? $s->start_date . ' 00:00:00' : '' );
+              /* ACDC 3.25.188 — Une demi-journée est une séance à part entière.
+                 Sans l'heure, un formateur voyait deux lignes strictement
+                 identiques le 26, deux le 27, deux le 28, sans savoir laquelle
+                 était le matin. L'heure ne s'affiche que si elle est renseignée :
+                 une séance datée sans horaire ne doit pas prétendre commencer à
+                 minuit. */
               $when  = $ref ? mysql2date( 'd/m/Y', $ref ) : '—';
+              if ( ! empty( $s->start_at ) && '00:00:00' !== substr( (string) $s->start_at, 11 ) ) {
+                $when .= ' — ' . mysql2date( 'H\hi', $s->start_at );
+                if ( ! empty( $s->end_at ) ) {
+                  $when .= ' à ' . mysql2date( 'H\hi', $s->end_at );
+                }
+              }
               $loc   = '';
               if ( ! empty( $s->location ) )         { $loc = (string) $s->location; }
               elseif ( ! empty( $s->remote_link ) )  { $loc = 'Distanciel'; }

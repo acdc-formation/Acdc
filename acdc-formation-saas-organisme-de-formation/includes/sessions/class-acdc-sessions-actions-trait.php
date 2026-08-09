@@ -37,6 +37,13 @@ trait ACDC_Sessions_Actions_Trait {
       }
     }
 
+    /* ACDC 3.25.188 — On relit la séance AVANT de composer les données : les
+       champs que le formulaire ne transmet pas doivent être conservés, jamais
+       remis à NULL. */
+    $acdc_existing_session = $session_id
+      ? $wpdb->get_row( $wpdb->prepare( "SELECT * FROM {$this->session_table} WHERE id = %d", $session_id ) )
+      : null;
+
     $data = array(
       'formation_id' => isset( $_POST['formation_id'] ) && absint( wp_unslash( $_POST['formation_id'] ) ) ? absint( wp_unslash( $_POST['formation_id'] ) ) : null,
       'company_id'  => isset( $_POST['company_id'] ) && absint( wp_unslash( $_POST['company_id'] ) ) ? absint( wp_unslash( $_POST['company_id'] ) ) : null,
@@ -45,8 +52,8 @@ trait ACDC_Sessions_Actions_Trait {
       'session_type' => isset( $_POST['session_type'] ) ? sanitize_text_field( wp_unslash( $_POST['session_type'] ) ) : '',
       'attendance_method' => isset( $_POST['attendance_method'] ) ? sanitize_text_field( wp_unslash( $_POST['attendance_method'] ) ) : '',
       'session_format' => isset( $_POST['session_format'] ) ? sanitize_text_field( wp_unslash( $_POST['session_format'] ) ) : '',
-      'start_at'   => isset( $_POST['start_at'] ) ? sanitize_text_field( wp_unslash( $_POST['start_at'] ) ) : null,
-      'end_at'    => isset( $_POST['end_at'] ) ? sanitize_text_field( wp_unslash( $_POST['end_at'] ) ) : null,
+      'start_at'   => $this->acdc_session_datetime_field( 'start', $acdc_existing_session ),
+      'end_at'    => $this->acdc_session_datetime_field( 'end', $acdc_existing_session ),
       'start_date'  => isset( $_POST['start_date'] ) ? sanitize_text_field( wp_unslash( $_POST['start_date'] ) ) : null,
       'end_date'   => isset( $_POST['end_date'] ) ? sanitize_text_field( wp_unslash( $_POST['end_date'] ) ) : null,
       'location'   => isset( $_POST['location'] ) ? sanitize_text_field( wp_unslash( $_POST['location'] ) ) : '',
@@ -54,7 +61,12 @@ trait ACDC_Sessions_Actions_Trait {
       'status'    => isset( $_POST['status'] ) ? sanitize_text_field( wp_unslash( $_POST['status'] ) ) : 'Planifiée',
       'max_learners' => isset( $_POST['max_learners'] ) ? absint( wp_unslash( $_POST['max_learners'] ) ) : 0,
       'is_draft'  => isset( $_POST['is_draft'] ) ? absint( wp_unslash( $_POST['is_draft'] ) ) : 0,
-      'schedule_json' => isset( $_POST['schedule_json'] ) ? wp_json_encode( wp_unslash( $_POST['schedule_json'] ) ) : null,
+      /* ACDC 3.25.188 — Le planning détaillé n'est pas envoyé par le formulaire de
+         modification : l'écraser par NULL détruisait les demi-journées d'une
+         séance née d'une proposition. On ne remplace que ce qui est transmis. */
+      'schedule_json' => isset( $_POST['schedule_json'] )
+        ? wp_json_encode( wp_unslash( $_POST['schedule_json'] ) )
+        : ( $acdc_existing_session ? $acdc_existing_session->schedule_json : null ),
       'notes'    => isset( $_POST['notes'] ) ? sanitize_textarea_field( wp_unslash( $_POST['notes'] ) ) : '',
       'updated_at'  => $this->now_mysql(),
     );
@@ -88,6 +100,45 @@ trait ACDC_Sessions_Actions_Trait {
     }
 
     $this->redirect_to_portal( 'sessions', $message, 'success', $success_args );
+  }
+
+  /**
+   * ACDC 3.25.188 — Composition d'un horaire de séance à partir du formulaire.
+   *
+   * Deux défauts se corrigeaient ensemble ici. D'abord, l'écran de modification
+   * n'offrait AUCUN champ d'heure : une séance dépourvue d'horaires ne pouvait
+   * être corrigée que par suppression et recréation, ce qui est inacceptable sur
+   * un dossier réel. Ensuite — et c'est le plus grave — comme le formulaire
+   * n'envoyait ni start_at ni end_at, chaque enregistrement les remettait à
+   * NULL : modifier le lieu d'une séance née d'une proposition lui effaçait ses
+   * demi-journées, donc ses rappels d'émargement.
+   *
+   * Règle : on ne remplace que ce que le formulaire déclare transmettre. Le
+   * marqueur `session_times_posted` distingue « le champ est vide, efface » de
+   * « ce formulaire ne parle pas des heures, n'y touche pas ».
+   */
+  private function acdc_session_datetime_field( $prefix, $existing ) {
+    $column = $prefix . '_at';
+
+    $raw = isset( $_POST[ $column ] ) ? sanitize_text_field( wp_unslash( $_POST[ $column ] ) ) : '';
+    if ( '' !== $raw ) {
+      return $raw;
+    }
+
+    if ( ! isset( $_POST['session_times_posted'] ) ) {
+      return ( $existing && ! empty( $existing->$column ) ) ? (string) $existing->$column : null;
+    }
+
+    $date = isset( $_POST[ $prefix . '_date' ] ) ? sanitize_text_field( wp_unslash( $_POST[ $prefix . '_date' ] ) ) : '';
+    $time = isset( $_POST[ $prefix . '_time' ] ) ? sanitize_text_field( wp_unslash( $_POST[ $prefix . '_time' ] ) ) : '';
+
+    if ( '' === $date || '' === $time ) {
+      return null;
+    }
+    if ( 5 === strlen( $time ) ) {
+      $time .= ':00';
+    }
+    return $date . ' ' . $time;
   }
 
   public function handle_save_session_builder() {

@@ -948,6 +948,32 @@ trait ACDC_Sessions_Render_Trait {
             ?>
             <p><label>Date de début</label><input type="date" name="start_date" value="<?php echo esc_attr( $session_value( 'start_date', $acdc_session_date_default ) ); ?>"></p>
             <p><label>Date de fin</label><input type="date" name="end_date" value="<?php echo esc_attr( $session_value( 'end_date', $acdc_session_date_default ) ); ?>"></p>
+            <?php
+            /* ACDC 3.25.188 — Les horaires n'existaient QUE dans l'écran de
+               création atteint depuis une proposition. Une séance existante sans
+               heures ne pouvait donc être corrigée que par suppression et
+               recréation. Le workflow, qui refuse désormais d'inventer des
+               demi-journées, signalait à juste titre l'absence d'horaires — mais
+               l'alerte débouchait sur une impasse. Elle a maintenant sa sortie.
+
+               Le marqueur caché dit au traitement que CE formulaire parle des
+               heures : sans lui, un champ vide serait indiscernable d'un
+               formulaire qui n'en parle pas, et l'effacerait. */
+            $acdc_time_value = function( $column ) use ( $session, $state_input ) {
+              $field = ( 'start_at' === $column ) ? 'start_time' : 'end_time';
+              if ( array_key_exists( $field, $state_input ) && ! is_array( $state_input[ $field ] ) ) {
+                return (string) $state_input[ $field ];
+              }
+              if ( $session && ! empty( $session->$column ) ) {
+                return substr( (string) $session->$column, 11, 5 );
+              }
+              return '';
+            };
+            ?>
+            <input type="hidden" name="session_times_posted" value="1">
+            <p><label>Heure de début</label><input type="time" name="start_time" value="<?php echo esc_attr( $acdc_time_value( 'start_at' ) ); ?>"></p>
+            <p><label>Heure de fin</label><input type="time" name="end_time" value="<?php echo esc_attr( $acdc_time_value( 'end_at' ) ); ?>">
+              <span class="description">Renseignez les heures pour que les rappels d'émargement puissent être planifiés. Une séance couvrant matin et après-midi produit deux rappels.</span></p>
             <p><label>Lieu</label><input type="text" name="location" value="<?php echo esc_attr( $session_value( 'location' ) ); ?>"></p>
             <p><label>Capacité maximale</label><input type="number" min="0" name="max_learners" value="<?php echo esc_attr( (string) $session_value( 'max_learners', '0' ) ); ?>"></p>
           </div>
