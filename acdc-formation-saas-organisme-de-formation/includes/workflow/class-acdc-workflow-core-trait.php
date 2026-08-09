@@ -430,7 +430,7 @@ trait ACDC_Workflow_Core_Trait {
     $ts    = (int) $timestamp;
     $guard = 0;
     while ( in_array( (int) wp_date( 'N', $ts ), array( 6, 7 ), true ) && $guard < 7 ) {
-      $ts += DAY_IN_SECONDS;
+      $ts = $this->acdc_wf_add_days( $ts, 1 );
       $guard++;
     }
     return $ts;
@@ -473,6 +473,32 @@ trait ACDC_Workflow_Core_Trait {
       return 0;
     }
     return (int) $date->getTimestamp();
+  }
+
+  /**
+   * ACDC 3.25.187 — Un délai en JOURS se compte en jours calendaires, pas en
+   * paquets de 86 400 secondes.
+   *
+   * L'enquête à froid, posée à 90 jours d'une fin de formation le 5 août à 17 h,
+   * tombait le 3 novembre à 16 h : entre les deux, le passage à l'heure d'hiver.
+   * L'arithmétique en secondes déplace l'heure murale d'une heure à chaque
+   * changement de fuseau, et dans l'autre sens au printemps. On ajoute donc les
+   * jours dans le calendrier local, ce qui conserve l'heure voulue.
+   *
+   * Les délais en HEURES, eux, restent des durées réelles : « relancer après
+   * 24 heures » exprime un temps écoulé, pas un rendez-vous à heure fixe.
+   */
+  private function acdc_wf_add_days( $timestamp, $days ) {
+    $days = (int) $days;
+    if ( 0 === $days ) {
+      return (int) $timestamp;
+    }
+    try {
+      $date = ( new DateTimeImmutable( '@' . (int) $timestamp ) )->setTimezone( wp_timezone() );
+    } catch ( Exception $e ) {
+      return (int) $timestamp + ( $days * DAY_IN_SECONDS );
+    }
+    return (int) $date->modify( sprintf( '%+d days', $days ) )->getTimestamp();
   }
 
   /** Date locale + heure locale → horodatage UTC. */

@@ -135,7 +135,17 @@ trait ACDC_Workflow_Engine_Trait {
         LIMIT %d",
       (int) $batch
     ) );
-    foreach ( (array) $runs as $run ) {
+    /* Le lot est SÉLECTIONNÉ par ancienneté de réconciliation — c'est ce qui
+       garantit que tous les parcours finissent par passer — mais il est TRAITÉ
+       par identifiant croissant. Cet ordre n'est pas cosmétique : c'est lui qui
+       fait qu'un parcours partageant sa séance avec un plus ancien voit toujours
+       ce dernier avoir déjà inscrit la séance, et lui cède la main dès le
+       premier passage plutôt qu'au suivant. Entre-temps, des envois auraient pu
+       partir en double. */
+    $runs = (array) $runs;
+    usort( $runs, static function( $a, $b ) { return (int) $a->id <=> (int) $b->id; } );
+
+    foreach ( $runs as $run ) {
       $this->acdc_wf_reconcile_run( $run );
     }
   }
@@ -162,15 +172,38 @@ trait ACDC_Workflow_Engine_Trait {
     $dates   = $this->acdc_wf_resolve_dates( $pieces );
     $phase   = 'commercial';
 
+    /* La séance est inscrite tout de suite, avant la moindre planification :
+       c'est elle qui sert d'arbitre entre parcours concurrents. */
+    if ( (int) $pieces['session_id'] > 0 && (int) $run->session_id !== (int) $pieces['session_id'] ) {
+      $wpdb->update(
+        $this->workflow_run_table,
+        array( 'session_id' => (int) $pieces['session_id'] ),
+        array( 'id' => $run_id )
+      );
+    }
+
+    /* ACDC 3.25.187 — Une convention signée rend caduques les tâches amont.
+       Quatre dossiers affichaient « Créer le devis — en retard » alors que leur
+       formation était terminée depuis août : le parcours réclamait une pièce
+       que la suite avait rendue inutile. Réclamer un devis après la formation
+       n'est pas un rappel, c'est du bruit. */
+    $engaged = ! empty( $pieces['contract'] )
+      && ( $this->acdc_wf_is_signed( '', $pieces['contract']->signature_status ?? '' )
+        || ! empty( $pieces['contract']->signature_completed_at ) );
+
     /* ---- Commercial : proposition ------------------------------------- */
-    if ( empty( $pieces['proposal'] ) ) {
+    if ( $engaged ) {
+      $this->acdc_wf_settle_step( $run_id, 'proposal_create', 'skipped', 'Dossier engagé : la convention est signée.' );
+      $this->acdc_wf_settle_step( $run_id, 'quote_create', 'skipped', 'Dossier engagé : la convention est signée.' );
+    }
+    if ( empty( $pieces['proposal'] ) && ! $engaged ) {
       $this->acdc_wf_upsert_step( $run_id, 'proposal_create', array( 'scheduled_at' => $now ) );
     } else {
       $this->acdc_wf_settle_step( $run_id, 'proposal_create', 'done', 'Proposition n°' . (int) $pieces['proposal']->id );
     }
 
     /* ---- Commercial : devis -------------------------------------------- */
-    if ( ! empty( $pieces['proposal'] ) && empty( $pieces['quote'] ) ) {
+    if ( ! empty( $pieces['proposal'] ) && empty( $pieces['quote'] ) && ! $engaged ) {
       $this->acdc_wf_upsert_step( $run_id, 'quote_create', array( 'scheduled_at' => $now ) );
     } elseif ( ! empty( $pieces['quote'] ) ) {
       $this->acdc_wf_settle_step( $run_id, 'quote_create', 'done', 'Devis n°' . (int) $pieces['quote']->id );
@@ -180,14 +213,14 @@ trait ACDC_Workflow_Engine_Trait {
     if ( ! empty( $pieces['quote'] ) ) {
       $quote        = $pieces['quote'];
       $quote_signed = $this->acdc_wf_is_signed( $quote->status ?? '', $quote->signature_status ?? '' );
-      $sent_ts      = $this->acdc_wf_ts( $quote->sent_at ?? '' );
+      $sent_ts      = $this->acdc_wf_quote_sent_ts( $quote );
 
       if ( $quote_signed ) {
         $this->acdc_wf_settle_step( $run_id, 'quote_reminder', 'skipped', 'Devis signé : relance sans objet.' );
         $this->acdc_wf_settle_step( $run_id, 'quote_rdv', 'skipped', 'Devis signé.' );
       } elseif ( $sent_ts > 0 ) {
         $due = $this->acdc_wf_shift_to_business_day(
-          $sent_ts + ( (int) $this->acdc_wf_delay( 'quote_reminder_days', 10 ) * DAY_IN_SECONDS )
+          $this->acdc_wf_add_days( $sent_ts, (int) $this->acdc_wf_delay( 'quote_reminder_days', 10 ) )
         );
         $this->acdc_wf_upsert_step( $run_id, 'quote_reminder', array( 'scheduled_at' => $due ) );
         $this->acdc_wf_plan_rdv_after_reminder( $run_id, 'quote_reminder', 'quote_rdv', 'quote_rdv_after_days', 10 );
@@ -211,15 +244,29 @@ trait ACDC_Workflow_Engine_Trait {
         $this->acdc_wf_settle_step( $run_id, 'convention_rdv', 'skipped', 'Convention signée.' );
       } elseif ( $c_sent_ts > 0 ) {
         $due = $this->acdc_wf_shift_to_business_day(
-          $c_sent_ts + ( (int) $this->acdc_wf_delay( 'convention_reminder_days', 3 ) * DAY_IN_SECONDS )
+          $this->acdc_wf_add_days( $c_sent_ts, (int) $this->acdc_wf_delay( 'convention_reminder_days', 3 ) )
         );
         $this->acdc_wf_upsert_step( $run_id, 'convention_reminder', array( 'scheduled_at' => $due ) );
         $this->acdc_wf_plan_rdv_after_reminder( $run_id, 'convention_reminder', 'convention_rdv', 'convention_rdv_after_days', 3 );
       }
     }
 
+    /* ACDC 3.25.187 — Une séance n'est pilotée que par UN parcours.
+       La recette a mis en évidence quatre recueils pointant vers la même
+       convention et la même séance : le moteur produisait quatre plans
+       identiques, donc quatre enquêtes à chaud aux mêmes apprenants et quatre
+       enquêtes entreprise au même commanditaire. Le moteur faisait ce qu'on lui
+       demandait ; c'est la donnée qui piège. Un envoi en quadruple exemplaire
+       n'est pas un désagrément d'affichage, c'est ce qui décrédibilise un
+       organisme auprès de ses stagiaires. Le parcours le plus ancien garde la
+       main, les autres le disent et s'arrêtent après la phase commerciale. */
+    $owner_run_id = $this->acdc_wf_session_owner_run_id( $pieces['session_id'], $run_id );
+    if ( $owner_run_id > 0 ) {
+      $this->acdc_wf_release_downstream_steps( $run_id, $owner_run_id );
+    }
+
     /* ---- Préparation, animation, évaluation ------------------------------ */
-    if ( $convention_signed ) {
+    if ( $convention_signed && 0 === $owner_run_id ) {
       $phase = 'preparation';
       $this->acdc_wf_plan_preparation( $run_id, $pieces );
 
@@ -262,10 +309,17 @@ trait ACDC_Workflow_Engine_Trait {
   }
 
   /**
-   * Le rendez-vous ne se planifie qu'APRÈS une relance réellement partie.
-   * Tant que la relance n'a pas eu lieu, proposer un rendez-vous n'aurait aucun
-   * sens : on demanderait à David de rattraper une signature qu'on n'a pas
-   * encore relancée.
+   * ACDC 3.25.187 — Le rendez-vous se montre dès que la relance est planifiée.
+   *
+   * La 3.25.185 ne le posait qu'une fois la relance réellement partie, au motif
+   * qu'il n'y a rien à rattraper avant. Le raisonnement était juste et le
+   * résultat mauvais : sur une convention envoyée et non signée, l'écran ne
+   * montrait aucune suite, et c'est précisément le dossier qui se perd — celui
+   * pour lequel David a demandé un rendez-vous ET une alerte. Un écran de suivi
+   * sert à voir venir, pas à constater.
+   *
+   * L'échéance s'ancre donc sur la date PRÉVUE de la relance, puis se recale sur
+   * sa date réelle une fois qu'elle est partie.
    */
   private function acdc_wf_plan_rdv_after_reminder( $run_id, $reminder_key, $rdv_key, $delay_key, $fallback_days ) {
     global $wpdb;
@@ -275,15 +329,65 @@ trait ACDC_Workflow_Engine_Trait {
       (int) $run_id,
       $reminder_key
     ) );
-    /* Une relance simulée compte comme jouée : le plan doit continuer à se
-       dérouler en simulation, sinon on ne verrait jamais la suite du parcours. */
-    if ( ! $reminder || ! in_array( (string) $reminder->status, array( 'done', 'simulated' ), true ) || empty( $reminder->executed_at ) ) {
+    if ( ! $reminder ) {
       return;
     }
-    $due = $this->acdc_wf_ts( $reminder->executed_at )
-      + ( (int) $this->acdc_wf_delay( $delay_key, $fallback_days ) * DAY_IN_SECONDS );
+
+    /* Une relance simulée compte comme jouée : le plan doit continuer à se
+       dérouler en simulation, sinon on ne verrait jamais la suite du parcours. */
+    $played = in_array( (string) $reminder->status, array( 'done', 'simulated' ), true ) && ! empty( $reminder->executed_at );
+    $anchor = $played
+      ? $this->acdc_wf_ts( $reminder->executed_at )
+      : $this->acdc_wf_ts( $reminder->scheduled_at ?? '' );
+
+    if ( $anchor <= 0 ) {
+      return;
+    }
+
+    $due = $this->acdc_wf_add_days( $anchor, (int) $this->acdc_wf_delay( $delay_key, $fallback_days ) );
     $this->acdc_wf_upsert_step( $run_id, $rdv_key, array(
       'scheduled_at' => $this->acdc_wf_shift_to_business_day( $due ),
+    ) );
+  }
+
+  /**
+   * Le parcours qui pilote réellement une séance : le plus ancien de ceux qui
+   * la partagent. Renvoie 0 lorsque le parcours courant est ce pilote — donc
+   * qu'il doit dérouler la suite normalement.
+   */
+  private function acdc_wf_session_owner_run_id( $session_id, $run_id ) {
+    global $wpdb;
+    $session_id = (int) $session_id;
+    if ( $session_id <= 0 ) {
+      return 0;
+    }
+    $owner = (int) $wpdb->get_var( $wpdb->prepare(
+      "SELECT MIN(id) FROM {$this->workflow_run_table}
+        WHERE session_id = %d AND status = 'active'",
+      $session_id
+    ) );
+    return ( $owner > 0 && $owner !== (int) $run_id ) ? $owner : 0;
+  }
+
+  /**
+   * Le parcours n'est pas le pilote de sa séance : tout ce qui suit la phase
+   * commerciale lui est retiré, et il le DIT. Un dossier muet laisserait croire
+   * à un oubli du moteur ; un dossier qui affiche « séance pilotée par le
+   * parcours n°X » se comprend d'un coup d'œil.
+   */
+  private function acdc_wf_release_downstream_steps( $run_id, $owner_run_id ) {
+    global $wpdb;
+    $note = 'Séance pilotée par le parcours n°' . (int) $owner_run_id . ' : pas de second envoi aux mêmes destinataires.';
+    $now  = $this->acdc_wf_mysql( $this->acdc_wf_now() );
+    $wpdb->query( $wpdb->prepare(
+      "UPDATE {$this->workflow_step_table}
+          SET status = 'skipped', result_note = %s, executed_at = COALESCE(executed_at, %s), updated_at = %s
+        WHERE run_id = %d AND status IN ('pending','waiting')
+          AND phase IN ('preparation','animation','evaluation')",
+      $note,
+      $now,
+      $now,
+      (int) $run_id
     ) );
   }
 
@@ -303,11 +407,11 @@ trait ACDC_Workflow_Engine_Trait {
       ? (int) $pieces['contract']->nad_delay_days
       : (int) $this->acdc_wf_delay( 'nad_days_before_start', 15 );
 
-    $nad_ts = $start_ts > 0 ? ( $start_ts - ( $nad_days * DAY_IN_SECONDS ) ) : $now;
+    $nad_ts = $start_ts > 0 ? $this->acdc_wf_add_days( $start_ts, -$nad_days ) : $now;
     $nad_ts = max( $nad_ts, $now );
 
     $pack_ts = $start_ts > 0
-      ? max( $now, $start_ts - ( (int) $this->acdc_wf_delay( 'trainer_pack_days_before', 15 ) * DAY_IN_SECONDS ) )
+      ? max( $now, $this->acdc_wf_add_days( $start_ts, -(int) $this->acdc_wf_delay( 'trainer_pack_days_before', 15 ) ) )
       : $now;
 
     $this->acdc_wf_upsert_step( $run_id, 'trainer_pack', array( 'scheduled_at' => $pack_ts ) );
@@ -333,7 +437,7 @@ trait ACDC_Workflow_Engine_Trait {
        formation de trois jours — David a été explicite. */
     if ( $start_ts > 0 ) {
       $hour = max( 0, min( 23, (int) $this->acdc_wf_delay( 'convocation_hour', 17 ) ) );
-      $veille = $this->acdc_wf_local_ts( wp_date( 'Y-m-d', $start_ts - DAY_IN_SECONDS ), sprintf( '%02d:00:00', $hour ) );
+      $veille = $this->acdc_wf_local_ts( wp_date( 'Y-m-d', $this->acdc_wf_add_days( $start_ts, -1 ) ), sprintf( '%02d:00:00', $hour ) );
       $this->acdc_wf_upsert_step( $run_id, 'convocation', array(
         'scheduled_at' => $veille,
         'target_type'  => 'learners',
@@ -410,9 +514,10 @@ trait ACDC_Workflow_Engine_Trait {
          entre avec ses propres relances. Elle reste obligatoire au titre de
          l'indicateur 11. */
       'survey_cold' => array(
-        'offset'    => (int) $this->acdc_wf_delay( 'survey_cold_offset_days', 90 ) * DAY_IN_SECONDS,
-        'reminders' => $this->acdc_wf_delay( 'survey_cold_reminder_days', array( 3, 5, 7 ) ),
-        'unit'      => DAY_IN_SECONDS,
+        'offset'      => 0,
+        'offset_days' => (int) $this->acdc_wf_delay( 'survey_cold_offset_days', 90 ),
+        'reminders'   => $this->acdc_wf_delay( 'survey_cold_reminder_days', array( 3, 5, 7 ) ),
+        'unit'        => DAY_IN_SECONDS,
       ),
     );
 
@@ -440,6 +545,9 @@ trait ACDC_Workflow_Engine_Trait {
       }
 
       $send_ts = $end_ts + (int) $spec['offset'];
+      if ( ! empty( $spec['offset_days'] ) ) {
+        $send_ts = $this->acdc_wf_add_days( $send_ts, (int) $spec['offset_days'] );
+      }
       $this->acdc_wf_upsert_step( $run_id, $step_key, array(
         'scheduled_at' => $send_ts,
         'target_type'  => $target[0],
@@ -458,11 +566,13 @@ trait ACDC_Workflow_Engine_Trait {
       $previous  = 0;
       $reminders = is_array( $spec['reminders'] ) ? array_values( $spec['reminders'] ) : array();
       foreach ( $reminders as $index => $delay ) {
-        $rank    = $index + 1;
-        $cursor += (int) $delay * (int) $spec['unit'];
-        $due     = $this->acdc_wf_shift_to_business_day( $cursor );
-        if ( $previous > 0 && $due <= ( $previous + DAY_IN_SECONDS ) ) {
-          $due = $this->acdc_wf_shift_to_business_day( $previous + DAY_IN_SECONDS );
+        $rank   = $index + 1;
+        $cursor = ( DAY_IN_SECONDS === (int) $spec['unit'] )
+          ? $this->acdc_wf_add_days( $cursor, (int) $delay )
+          : $cursor + ( (int) $delay * (int) $spec['unit'] );
+        $due    = $this->acdc_wf_shift_to_business_day( $cursor );
+        if ( $previous > 0 && $due <= $this->acdc_wf_add_days( $previous, 1 ) ) {
+          $due = $this->acdc_wf_shift_to_business_day( $this->acdc_wf_add_days( $previous, 1 ) );
         }
         $previous = $due;
         $this->acdc_wf_upsert_step( $run_id, $step_key . '_r' . $rank, array(
@@ -471,6 +581,15 @@ trait ACDC_Workflow_Engine_Trait {
           'target_type'  => $target[0],
           'target_label' => $target[1],
         ) );
+      }
+
+      /* ACDC 3.25.187 — Une relance retirée de la configuration doit disparaître
+         du plan. La 3.25.185 n'ajoutait que les étapes manquantes : vider le
+         champ des relances laissait les anciennes en place, et le réglage
+         semblait sans effet. Le moteur reprend maintenant ce qu'il a posé —
+         seulement ce qui est encore à venir, jamais ce qui est derrière nous. */
+      for ( $rank = count( $reminders ) + 1; $rank <= 6; $rank++ ) {
+        $this->acdc_wf_cancel_open_step( $run_id, $step_key . '_r' . $rank, 'Relance retirée de la configuration.' );
       }
     }
   }
@@ -798,6 +917,54 @@ trait ACDC_Workflow_Engine_Trait {
     return $slots;
   }
 
+  /**
+   * ACDC 3.25.187 — Quand un devis est-il RÉELLEMENT parti au client ?
+   *
+   * La 3.25.185 ne regardait que la colonne `sent_at`, qui n'est renseignée que
+   * par l'envoi par e-mail classique. Un devis expédié en SIGNATURE
+   * ÉLECTRONIQUE — le chemin du schéma de David, et le seul que la recette
+   * emprunte — laissait cette colonne vide : la relance à dix jours n'était donc
+   * jamais planifiée. Le défaut ne se voyait pas, puisqu'il se manifestait par
+   * l'ABSENCE d'une ligne.
+   *
+   * On interroge donc trois sources, de la plus fiable à la plus approximative,
+   * et l'on retient la première renseignée.
+   */
+  private function acdc_wf_quote_sent_ts( $quote ) {
+    global $wpdb;
+
+    $sent = $this->acdc_wf_ts( $quote->sent_at ?? '' );
+    if ( $sent > 0 ) {
+      return $sent;
+    }
+
+    if ( ! empty( $quote->signature_request_id ) ) {
+      $requests = $wpdb->prefix . 'acdc_sig_requests';
+      $exists   = $wpdb->get_var( $wpdb->prepare( 'SHOW TABLES LIKE %s', $requests ) );
+      if ( $exists === $requests ) {
+        $created = $wpdb->get_var( $wpdb->prepare(
+          "SELECT created_at FROM {$requests} WHERE id = %d",
+          (int) $quote->signature_request_id
+        ) );
+        $sent = $this->acdc_wf_ts( (string) $created );
+        if ( $sent > 0 ) {
+          return $sent;
+        }
+      }
+    }
+
+    /* Dernier recours : le devis porte un statut qui prouve qu'il est sorti,
+       sans qu'aucune date d'envoi n'ait été conservée. La date de dernière
+       modification vaut alors mieux que rien — une relance approximative reste
+       préférable à pas de relance du tout. */
+    $status = (string) ( $quote->status ?? '' );
+    if ( in_array( $status, array( 'envoye', 'a_signer' ), true ) ) {
+      return $this->acdc_wf_ts( $quote->updated_at ?? '' );
+    }
+
+    return 0;
+  }
+
   private function acdc_wf_is_signed( $status, $signature_status ) {
     return 'signe' === (string) $status || 'signe' === (string) $signature_status;
   }
@@ -878,6 +1045,21 @@ trait ACDC_Workflow_Engine_Trait {
   private function acdc_wf_mark_skipped( $run_id, $step_key, $note ) {
     $this->acdc_wf_upsert_step( $run_id, $step_key, array( 'scheduled_at' => 0 ) );
     $this->acdc_wf_settle_step( $run_id, $step_key, 'skipped', $note );
+  }
+
+  /** Retire du plan une étape encore à venir, sans toucher à ce qui est joué. */
+  private function acdc_wf_cancel_open_step( $run_id, $dedupe_key, $note ) {
+    global $wpdb;
+    $now = $this->acdc_wf_mysql( $this->acdc_wf_now() );
+    $wpdb->query( $wpdb->prepare(
+      "UPDATE {$this->workflow_step_table}
+          SET status = 'cancelled', result_note = %s, updated_at = %s
+        WHERE run_id = %d AND dedupe_key = %s AND status IN ('pending','waiting')",
+      (string) $note,
+      $now,
+      (int) $run_id,
+      (string) $dedupe_key
+    ) );
   }
 
   /** Clôt une étape encore ouverte. Une étape déjà jouée n'est jamais réécrite. */
