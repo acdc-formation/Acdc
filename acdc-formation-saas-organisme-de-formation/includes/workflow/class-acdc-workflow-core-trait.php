@@ -63,7 +63,7 @@ trait ACDC_Workflow_Core_Trait {
       close_reason VARCHAR(190) NOT NULL DEFAULT '',
       formation_start_at DATETIME DEFAULT NULL,
       formation_end_at DATETIME DEFAULT NULL,
-      dates_source VARCHAR(120) NOT NULL DEFAULT '',
+      dates_source VARCHAR(255) NOT NULL DEFAULT '',
       last_reconciled_at DATETIME DEFAULT NULL,
       started_at DATETIME NOT NULL,
       updated_at DATETIME NOT NULL,
@@ -235,7 +235,7 @@ trait ACDC_Workflow_Core_Trait {
          volumineux est pire qu'un plan absent : il noie les vraies lignes. */
       'session_hours_missing' => array(
         'phase' => 'animation', 'mode' => 'alert',
-        'label' => 'Horaires de la séance non renseignés : aucun rappel d’émargement planifiable',
+        'label' => 'Renseigner les horaires de la séance — sans eux, aucun rappel d’émargement ne peut être planifié',
       ),
       'emargement_am' => array(
         'phase' => 'animation', 'mode' => 'auto',

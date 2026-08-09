@@ -810,36 +810,25 @@ trait ACDC_Workflow_Engine_Trait {
 
     $session = $pieces['session'] ?? null;
     if ( $session ) {
-      if ( ! empty( $session->start_at ) ) {
-        $start        = $this->acdc_wf_ts( $session->start_at );
-        $start_source = 'horaire de la séance n°' . (int) $session->id;
-      } elseif ( ! empty( $session->start_date ) ) {
-        $start        = $this->acdc_wf_local_ts( $session->start_date, '09:00:00' );
-        $start_source = 'date de la séance n°' . (int) $session->id;
-      }
-      if ( ! empty( $session->end_at ) ) {
-        $end        = $this->acdc_wf_ts( $session->end_at );
-        $end_source = 'horaire de fin de la séance n°' . (int) $session->id;
-      } elseif ( ! empty( $session->end_date ) ) {
-        $end        = $this->acdc_wf_local_ts( $session->end_date, '17:00:00' );
-        $end_source = 'date de fin de la séance n°' . (int) $session->id;
-      }
+      $id = (int) $session->id;
+      list( $start, $start_source ) = $this->acdc_wf_session_moment( $session, 'start', $id, '09:00:00' );
+      list( $end,   $end_source )   = $this->acdc_wf_session_moment( $session, 'end',   $id, '17:00:00' );
     }
 
     $contract = $pieces['contract'] ?? null;
     if ( $contract ) {
       if ( $start <= 0 && ! empty( $contract->start_date ) ) {
         $start        = $this->acdc_wf_local_ts( $contract->start_date, '09:00:00' );
-        $start_source = 'date de début de la convention n°' . (int) $contract->id;
+        $start_source = 'Début : date de la convention n°' . (int) $contract->id . '.';
       }
       if ( $end <= 0 && ! empty( $contract->end_date ) ) {
         $end        = $this->acdc_wf_local_ts( $contract->end_date, '17:00:00' );
-        $end_source = 'date de fin de la convention n°' . (int) $contract->id;
+        $end_source = 'Fin : date de fin de la convention n°' . (int) $contract->id . '.';
       }
     }
 
-    $source = trim( ( '' !== $start_source ? 'Début : ' . $start_source . '.' : 'Début : non déterminé.' )
-      . ' ' . ( '' !== $end_source ? 'Fin : ' . $end_source . '.' : 'Fin : non déterminée.' ) );
+    $source = trim( ( '' !== $start_source ? $start_source : 'Début : non déterminé.' )
+      . ' ' . ( '' !== $end_source ? $end_source : 'Fin : non déterminée.' ) );
 
     return array( 'start' => $start, 'end' => $end, 'source' => $source );
   }
@@ -847,6 +836,57 @@ trait ACDC_Workflow_Engine_Trait {
   private function acdc_wf_run_end_ts( $pieces ) {
     $resolved = $this->acdc_wf_resolve_dates( $pieces );
     return (int) $resolved['end'];
+  }
+
+  /**
+   * ACDC 3.25.190 — Le JOUR vient de la date, l'HEURE vient de l'horaire.
+   *
+   * Une séance porte deux représentations de son début : `start_date`, que
+   * l'humain saisit, et `start_at`, qui ajoute l'heure. La 3.25.186 préférait
+   * `start_at` sans réserve. Reporter une formation en ne changeant que la date
+   * laissait donc le parcours calé sur l'ancien jour, et — plus grave — l'écran
+   * affichait fièrement « Début : séance n°9 » en citant une valeur que la
+   * séance ne portait plus. Une provenance qui contredit la donnée qu'elle
+   * prétend citer est pire qu'une provenance absente.
+   *
+   * Quand les deux divergent, la DATE fait foi pour le jour et l'horaire ne
+   * fournit plus que l'heure. L'écran le dit explicitement, pour que la
+   * divergence se corrige au lieu de se propager en silence.
+   */
+  private function acdc_wf_session_moment( $session, $prefix, $session_id, $default_time ) {
+    $date_col = $prefix . '_date';
+    $at_col   = $prefix . '_at';
+
+    $date = ! empty( $session->$date_col ) ? substr( (string) $session->$date_col, 0, 10 ) : '';
+    $at   = ! empty( $session->$at_col ) ? (string) $session->$at_col : '';
+
+    if ( '' === $date && '' === $at ) {
+      return array( 0, '' );
+    }
+
+    $label = ( 'start' === $prefix ) ? 'Début' : 'Fin';
+
+    if ( '' === $date ) {
+      return array( $this->acdc_wf_ts( $at ), $label . ' : horaire de la séance n°' . $session_id . '.' );
+    }
+    if ( '' === $at ) {
+      return array( $this->acdc_wf_local_ts( $date, $default_time ), $label . ' : date de la séance n°' . $session_id . '.' );
+    }
+
+    $time    = substr( $at, 11, 8 );
+    $at_date = substr( $at, 0, 10 );
+    if ( '' === $time || '00:00:00' === $time ) {
+      $time = $default_time;
+    }
+
+    if ( $at_date === $date ) {
+      return array( $this->acdc_wf_local_ts( $date, $time ), $label . ' : séance n°' . $session_id . '.' );
+    }
+
+    return array(
+      $this->acdc_wf_local_ts( $date, $time ),
+      $label . ' : date de la séance n°' . $session_id . ' (son horaire indique encore le ' . $at_date . ' — à corriger).',
+    );
   }
 
   /**

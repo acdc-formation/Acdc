@@ -49,9 +49,16 @@ trait ACDC_Sessions_Actions_Trait {
       'company_id'  => isset( $_POST['company_id'] ) && absint( wp_unslash( $_POST['company_id'] ) ) ? absint( wp_unslash( $_POST['company_id'] ) ) : null,
       'trainer_id'  => $trainer_id_session,
       'title'    => $title,
-      'session_type' => isset( $_POST['session_type'] ) ? sanitize_text_field( wp_unslash( $_POST['session_type'] ) ) : '',
-      'attendance_method' => isset( $_POST['attendance_method'] ) ? sanitize_text_field( wp_unslash( $_POST['attendance_method'] ) ) : '',
-      'session_format' => isset( $_POST['session_format'] ) ? sanitize_text_field( wp_unslash( $_POST['session_format'] ) ) : '',
+      /* ACDC 3.25.190 — Ces trois colonnes n'existent PAS dans l'écran de
+         modification d'une séance. Les écrire avec une chaîne vide par défaut
+         revenait à les effacer à chaque enregistrement : ouvrir la fiche d'une
+         séance et cliquer « Modifier », sans rien toucher, lui faisait perdre son
+         type, sa modalité et sa méthode d'émargement — donc sa feuille
+         d'émargement. La règle est désormais générale : on ne réécrit que ce que
+         le formulaire transmet réellement. */
+      'session_type' => $this->acdc_session_preserved_field( 'session_type', $acdc_existing_session, '' ),
+      'attendance_method' => $this->acdc_session_preserved_field( 'attendance_method', $acdc_existing_session, '' ),
+      'session_format' => $this->acdc_session_preserved_field( 'session_format', $acdc_existing_session, '' ),
       'start_at'   => $this->acdc_session_datetime_field( 'start', $acdc_existing_session ),
       'end_at'    => $this->acdc_session_datetime_field( 'end', $acdc_existing_session ),
       'start_date'  => isset( $_POST['start_date'] ) ? sanitize_text_field( wp_unslash( $_POST['start_date'] ) ) : null,
@@ -100,6 +107,19 @@ trait ACDC_Sessions_Actions_Trait {
     }
 
     $this->redirect_to_portal( 'sessions', $message, 'success', $success_args );
+  }
+
+  /**
+   * ACDC 3.25.190 — Un champ absent du formulaire n'est pas un champ vidé.
+   *
+   * Ne remplace la valeur en base que si la requête la transmet. À la création,
+   * faute de valeur existante, on retombe sur le défaut.
+   */
+  private function acdc_session_preserved_field( $key, $existing, $default = '' ) {
+    if ( isset( $_POST[ $key ] ) ) {
+      return sanitize_text_field( wp_unslash( $_POST[ $key ] ) );
+    }
+    return ( $existing && isset( $existing->$key ) ) ? (string) $existing->$key : $default;
   }
 
   /**
