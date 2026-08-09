@@ -749,8 +749,8 @@ trait ACDC_Workflow_Engine_Trait {
       'funder_id'    => $funder_id,
       'funder_name'  => $this->acdc_wf_entity_name( $this->funder_table, $funder_id ),
       'company_name' => $this->acdc_wf_entity_name( $this->company_table, $company_id ),
-      'trainer_id'   => $session && ! empty( $session->trainer_id ) ? (int) $session->trainer_id : 0,
-      'trainer_name' => $this->acdc_wf_trainer_name( $session ),
+      'trainer_id'   => $this->acdc_wf_resolve_trainer_id( $sessions ),
+      'trainer_name' => $this->acdc_wf_trainer_name( $this->acdc_wf_resolve_trainer_id( $sessions ) ),
       'learners'     => $this->acdc_wf_contract_learners( $contract ),
     );
   }
@@ -867,14 +867,41 @@ trait ACDC_Workflow_Engine_Trait {
     return is_array( $rows ) ? $rows : array();
   }
 
-  private function acdc_wf_trainer_name( $session ) {
+  /**
+   * ACDC 3.25.199 — Le formateur du dossier, cherché sur TOUTES ses séances.
+   *
+   * Régression de la 3.25.191, que la recette a localisée avec précision : la
+   * frontière passait exactement entre les étapes déjà jouées, qui nommaient
+   * bien le formateur, et les étapes encore à venir, qui le disaient « non
+   * rattaché ». Autrement dit le formateur était résolu hier et ne l'était plus
+   * aujourd'hui — ce n'était donc pas un défaut d'affichage.
+   *
+   * En passant d'une séance unique à l'ENSEMBLE des séances du dossier, j'ai
+   * continué à lire le formateur sur la seule première d'entre elles. Or
+   * l'élargissement du filtre a fait entrer des séances sans entreprise, donc
+   * parfois sans formateur, et l'une d'elles est devenue la première. Le dossier
+   * avait toujours son formateur ; c'est la question qui était mal posée.
+   *
+   * On retient donc le premier formateur trouvé sur l'ensemble des séances.
+   */
+  private function acdc_wf_resolve_trainer_id( $sessions ) {
+    foreach ( (array) $sessions as $session ) {
+      if ( ! empty( $session->trainer_id ) ) {
+        return (int) $session->trainer_id;
+      }
+    }
+    return 0;
+  }
+
+  private function acdc_wf_trainer_name( $trainer_id ) {
     global $wpdb;
-    if ( ! $session || empty( $session->trainer_id ) ) {
+    $trainer_id = (int) $trainer_id;
+    if ( $trainer_id <= 0 ) {
       return '';
     }
     $row = $wpdb->get_row( $wpdb->prepare(
       "SELECT first_name, last_name FROM {$this->trainer_table} WHERE id = %d",
-      (int) $session->trainer_id
+      $trainer_id
     ) );
     return $row ? trim( (string) $row->first_name . ' ' . (string) $row->last_name ) : '';
   }
