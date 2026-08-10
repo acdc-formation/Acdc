@@ -564,27 +564,73 @@ trait ACDC_Session_Documents_Trait {
   private function acdc_session_docs_unlock( $session, $actor = 'trainer' ) {
     global $wpdb;
     if ( empty( $session->id ) ) {
-      return false;
+      return 'error';
     }
     $state = $this->acdc_session_docs_unlock_state( $session );
     if ( 'manual' === $state['reason'] ) {
-      return false; // Déjà débloquée : on ne renvoie pas un second avis.
+      return 'already'; // Déjà débloquée : on ne renvoie pas un second avis.
     }
 
-    $now = current_time( 'mysql' );
-    $wpdb->update(
+    /* ACDC 3.25.208 — La colonne est vérifiée, et créée si elle manque.
+       La recette a observé un déblocage « sans effet » : sans cette garde, une
+       colonne absente — parce que la montée de schéma n'a pas encore eu lieu sur
+       cette installation — fait échouer l'UPDATE en silence, et l'écran annonce
+       quand même une réussite. Un écran qui affirme ce qu'il n'a pas vérifié
+       vaut moins que pas d'écran du tout. */
+    if ( ! $this->acdc_schema_has_column( $this->session_table, 'documents_unlocked_at' ) ) {
+      $this->maybe_add_table_column( $this->session_table, 'documents_unlocked_at', 'DATETIME NULL' );
+    }
+    if ( ! $this->acdc_schema_has_column( $this->session_table, 'documents_unlocked_at' ) ) {
+      $this->log_error( 'learner_portal', 'Déblocage impossible : colonne documents_unlocked_at absente.', array(
+        'session_id' => (int) $session->id,
+      ) );
+      return 'error';
+    }
+
+    $now     = current_time( 'mysql' );
+    $written = $wpdb->update(
       $this->session_table,
       array( 'documents_unlocked_at' => $now ),
       array( 'id' => (int) $session->id )
     );
 
-    $this->log_error( 'learner_portal', 'Documents de séance débloqués.', array(
-      'session_id' => (int) $session->id,
-      'par'        => $actor,
+    if ( false === $written ) {
+      $this->log_error( 'learner_portal', 'Déblocage refusé par la base.', array(
+        'session_id' => (int) $session->id,
+        'db_error'   => (string) $wpdb->last_error,
+      ) );
+      return 'error';
+    }
+
+    $this->insert_system_log( array(
+      'log_level'   => 'info',
+      'event_type'  => 'session_documents_unlocked',
+      'action_key'  => 'session_documents_unlock',
+      'object_type' => 'session',
+      'object_id'   => (int) $session->id,
+      'message'     => 'Documents de séance débloqués par ' . $actor . '.',
     ) );
 
-    $this->acdc_session_docs_notify_unlock( (int) $session->id );
-    return true;
+    /* ACDC 3.25.208 — L'AVIS AUX APPRENANTS SORT DE LA REQUÊTE.
+       Il partait jusqu'ici en ligne, dans le clic. Sur cette séance-là il n'y
+       avait aucun destinataire — l'envoi n'a donc pas pu être la cause du
+       blocage observé — mais le principe reste faux : une action d'écran ne
+       doit jamais dépendre du temps de réponse d'un serveur de messagerie. Dix
+       apprenants et un SMTP lent suffisent à faire expirer la page, et
+       l'utilisateur reclique, et la deuxième salve part.
+       Le déblocage est écrit, la page rend la main, les e-mails suivent. */
+    if ( ! wp_next_scheduled( 'acdc_of_session_documents_unlock_notice', array( (int) $session->id ) ) ) {
+      wp_schedule_single_event( time() + 30, 'acdc_of_session_documents_unlock_notice', array( (int) $session->id ) );
+    }
+
+    return 'done';
+  }
+
+  /**
+   * Le porteur de l'avis différé. Appelé par le cron, jamais par un écran.
+   */
+  public function handle_session_documents_unlock_notice( $session_id ) {
+    $this->acdc_session_docs_notify_unlock( (int) $session_id );
   }
 
   /**
@@ -828,22 +874,49 @@ trait ACDC_Session_Documents_Trait {
 
   /** Déblocage anticipé par le formateur. */
   public function handle_trainer_unlock_session_documents() {
-    check_admin_referer( 'acdc_trainer_unlock_session_documents' );
-    $account    = $this->trainer_portal_require_auth();
     $session_id = isset( $_POST['session_id'] ) ? absint( wp_unslash( $_POST['session_id'] ) ) : 0;
+
+    /* ACDC 3.25.208 — Une trace dès la PREMIÈRE ligne, avant toute vérification.
+       La recette a observé une requête qui n'a jamais rendu la main et n'a rien
+       appliqué. Les deux faits ensemble disent que l'écriture n'a pas eu lieu,
+       donc que le handler n'est pas allé jusque-là — mais rien, dans les
+       journaux, ne permettait de savoir s'il avait seulement été atteint.
+       Cette ligne tranche la question au prochain essai : si elle apparaît, le
+       blocage est ici ; si elle manque, il est en amont de nous. */
+    $this->insert_system_log( array(
+      'log_level'   => 'info',
+      'event_type'  => 'session_documents_unlock_request',
+      'action_key'  => 'session_documents_unlock',
+      'object_type' => 'session',
+      'object_id'   => $session_id,
+      'message'     => 'Demande de déblocage reçue.',
+    ) );
+
+    check_admin_referer( 'acdc_trainer_unlock_session_documents' );
+    $account = $this->trainer_portal_require_auth();
 
     $session = $this->acdc_session_docs_trainer_owns_session( (int) $account->trainer_id, $session_id );
     if ( ! $session ) {
       $this->trainer_portal_redirect( 'sessions', 'Séance introuvable, ou vous n’y êtes pas associé.', 'error' );
     }
 
-    $done = $this->acdc_session_docs_unlock( $session, 'formateur #' . (int) $account->trainer_id );
-    $this->trainer_portal_log_event( (int) $account->id, 'session_documents_unlocked', array( 'session_id' => $session_id ), (int) $account->trainer_id );
+    $result = $this->acdc_session_docs_unlock( $session, 'formateur #' . (int) $account->trainer_id );
+    $this->trainer_portal_log_event( (int) $account->id, 'session_documents_unlocked', array(
+      'session_id' => $session_id,
+      'result'     => $result,
+    ), (int) $account->trainer_id );
+
+    $messages = array(
+      'done'    => 'Documents débloqués : les apprenants y ont accès. L’avis par e-mail part dans la minute qui suit.',
+      'already' => 'Ces documents étaient déjà débloqués.',
+      'error'   => 'Le déblocage n’a pas pu être enregistré. Rien n’a changé — le détail est dans le journal système.',
+    );
+    $types = array( 'done' => 'success', 'already' => 'info', 'error' => 'error' );
 
     $this->trainer_portal_redirect(
       'sessions',
-      $done ? 'Documents débloqués : les apprenants y ont accès et ont été prévenus.' : 'Ces documents étaient déjà débloqués.',
-      $done ? 'success' : 'info',
+      $messages[ $result ] ?? $messages['error'],
+      $types[ $result ] ?? 'error',
       array( 'session_id' => $session_id )
     );
   }

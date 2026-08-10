@@ -355,6 +355,9 @@ class ACDC_Formation_SAAS_Plugin {
     add_action( 'admin_post_nopriv_acdc_learner_download_session_document', array( $this, 'handle_learner_download_session_document' ) );
     add_action( 'admin_post_acdc_admin_download_session_document', array( $this, 'handle_admin_download_session_document' ) );
     add_action( 'admin_post_acdc_admin_delete_session_document', array( $this, 'handle_admin_delete_session_document' ) );
+    /* ACDC 3.25.208 — L'avis de déblocage part par le cron, hors de la requête
+       qui a cliqué : aucune action d'écran ne doit attendre un serveur de mail. */
+    add_action( 'acdc_of_session_documents_unlock_notice', array( $this, 'handle_session_documents_unlock_notice' ) );
     add_shortcode( 'acdc_trainer_portal_login', array( $this, 'render_trainer_portal_login_shortcode' ) );
     add_action( 'admin_post_acdc_front_login', array( $this, 'handle_front_login' ) );
     add_action( 'admin_post_acdc_front_logout', array( $this, 'handle_front_logout' ) );

@@ -1345,6 +1345,23 @@ trait ACDC_Trainer_Portal_Render_Trait {
       <div class="acdc-panel acdc-tportal-sdocs">
         <h3>📎 Documents remis aux apprenants</h3>
 
+        <?php
+        /* ACDC 3.25.208 — Le bandeau compte ce qu'il annonce.
+           Il affirmait « les supports s'ouvriront à la fin de la séance » alors
+           qu'un document déposé en visibilité « tout de suite » était déjà
+           consultable : le formateur pouvait croire que rien n'était parti. Le
+           message distingue maintenant ce qui est ouvert de ce qui attend. */
+        $sdocs_open_now = 0;
+        $sdocs_waiting  = 0;
+        foreach ( (array) $session_documents as $sdoc_count ) {
+          if ( 'immediate' === (string) $sdoc_count->visibility ) {
+            $sdocs_open_now++;
+          } else {
+            $sdocs_waiting++;
+          }
+        }
+        $sdocs_learner_count = count( (array) $learners );
+        ?>
         <div class="acdc-sdocs-state">
           <?php if ( ! empty( $unlock_state['unlocked'] ) ) : ?>
             <?php if ( 'manual' === $unlock_state['reason'] ) : ?>
@@ -1354,15 +1371,51 @@ trait ACDC_Trainer_Portal_Render_Trait {
             <?php endif; ?>
           <?php else : ?>
             <span class="acdc-sdocs-badge is-locked">
-              Les supports s’ouvriront à la fin de la séance<?php echo ! empty( $unlock_state['end_at'] ) ? esc_html( ' (' . mysql2date( 'd/m/Y à H:i', $unlock_state['end_at'] ) . ')' ) : ''; ?>.
+              <?php if ( $sdocs_open_now > 0 && $sdocs_waiting > 0 ) : ?>
+                <?php echo esc_html( $sdocs_open_now ); ?> document<?php echo $sdocs_open_now > 1 ? 's' : ''; ?> déjà visible<?php echo $sdocs_open_now > 1 ? 's' : ''; ?> ;
+                <?php echo esc_html( $sdocs_waiting ); ?> autre<?php echo $sdocs_waiting > 1 ? 's' : ''; ?> s’ouvrira<?php echo $sdocs_waiting > 1 ? 'ont' : ''; ?> à la fin de la séance<?php echo ! empty( $unlock_state['end_at'] ) ? esc_html( ' (' . mysql2date( 'd/m/Y à H:i', $unlock_state['end_at'] ) . ')' ) : ''; ?>.
+              <?php elseif ( $sdocs_open_now > 0 ) : ?>
+                Tous les documents déposés sont déjà visibles par les apprenants.
+              <?php else : ?>
+                Les supports s’ouvriront à la fin de la séance<?php echo ! empty( $unlock_state['end_at'] ) ? esc_html( ' (' . mysql2date( 'd/m/Y à H:i', $unlock_state['end_at'] ) . ')' ) : ''; ?>.
+              <?php endif; ?>
             </span>
-            <form method="post" action="<?php echo esc_url( admin_url( 'admin-post.php' ) ); ?>" style="display:inline-block;margin-left:10px;"
-                  onsubmit="return confirm('Débloquer maintenant l’accès de tous les apprenants de cette séance ? Ils en seront prévenus par e-mail.');">
-              <input type="hidden" name="action" value="acdc_trainer_unlock_session_documents">
-              <?php wp_nonce_field( 'acdc_trainer_unlock_session_documents' ); ?>
-              <input type="hidden" name="session_id" value="<?php echo (int) $session_id; ?>">
-              <button type="submit" class="acdc-button acdc-button-soft" style="height:32px;padding:0 14px;font-size:13px;">Débloquer maintenant</button>
-            </form>
+
+            <?php
+            /* Le bouton n'apparaît QUE s'il y a quelque chose à débloquer et
+               quelqu'un à prévenir. Il s'affichait sur une séance vide, sans
+               document ni apprenant : proposer de débloquer un ensemble vide et
+               d'en avertir personne n'est pas une action, c'est un piège. */
+            ?>
+            <?php if ( $sdocs_waiting > 0 && $sdocs_learner_count > 0 ) : ?>
+              <?php
+              /* La confirmation ne repose sur AUCUN script : un gestionnaire
+                 d'événement en ligne peut être retiré par un filtre de contenu
+                 ou une politique de sécurité, et l'action partirait alors au
+                 premier clic. Le repli en <details> est du HTML pur : le bouton
+                 réel n'existe à l'écran qu'une fois l'avertissement déplié. */
+              ?>
+              <details class="acdc-sdocs-confirm">
+                <summary>Débloquer maintenant</summary>
+                <div class="acdc-sdocs-confirm-body">
+                  <p>
+                    <?php echo esc_html( $sdocs_waiting ); ?> document<?php echo $sdocs_waiting > 1 ? 's' : ''; ?>
+                    deviendra<?php echo $sdocs_waiting > 1 ? 'ont' : ''; ?> immédiatement accessible<?php echo $sdocs_waiting > 1 ? 's' : ''; ?>
+                    à <?php echo esc_html( $sdocs_learner_count ); ?> apprenant<?php echo $sdocs_learner_count > 1 ? 's' : ''; ?>,
+                    qui recevr<?php echo $sdocs_learner_count > 1 ? 'ont' : 'a'; ?> un e-mail. Cette action ne s’annule pas.
+                  </p>
+                  <form method="post" action="<?php echo esc_url( admin_url( 'admin-post.php' ) ); ?>"
+                        onsubmit="return confirm('Débloquer maintenant ? Les apprenants en seront prévenus par e-mail.');">
+                    <input type="hidden" name="action" value="acdc_trainer_unlock_session_documents">
+                    <?php wp_nonce_field( 'acdc_trainer_unlock_session_documents' ); ?>
+                    <input type="hidden" name="session_id" value="<?php echo (int) $session_id; ?>">
+                    <button type="submit" class="acdc-button acdc-button-primary" style="height:34px;padding:0 16px;font-size:13px;">Oui, débloquer et prévenir</button>
+                  </form>
+                </div>
+              </details>
+            <?php elseif ( $sdocs_waiting > 0 ) : ?>
+              <span class="acdc-sdocs-note">Aucun apprenant inscrit sur cette séance : il n’y a personne à prévenir.</span>
+            <?php endif; ?>
           <?php endif; ?>
         </div>
 
@@ -1467,6 +1520,13 @@ trait ACDC_Trainer_Portal_Render_Trait {
         .acdc-tportal-sdocs input[type=text],.acdc-tportal-sdocs select,.acdc-tportal-sdocs input[type=file]{width:100%;border:1px solid #d6dbe4;border-radius:8px;padding:9px 12px;font-size:13px;color:#1E4777;box-sizing:border-box;background:#fff}
         .acdc-tportal-sdocs small{display:block;margin-top:4px;color:#9ba8b5;font-size:11px}
         .acdc-tportal-sdocs .acdc-sdocs-notify{display:block;margin-top:14px;font-size:13px;color:#1E4777}
+        .acdc-tportal-sdocs .acdc-sdocs-note{display:inline-block;margin-left:10px;font-size:12px;color:#9ba8b5}
+        .acdc-tportal-sdocs .acdc-sdocs-confirm{display:inline-block;margin-left:10px;vertical-align:middle}
+        .acdc-tportal-sdocs .acdc-sdocs-confirm>summary{display:inline-block;cursor:pointer;padding:6px 14px;border:1px solid #d6dbe4;border-radius:8px;background:#fff;color:#1E4777;font-size:13px;font-weight:600;list-style:none}
+        .acdc-tportal-sdocs .acdc-sdocs-confirm>summary::-webkit-details-marker{display:none}
+        .acdc-tportal-sdocs .acdc-sdocs-confirm[open]>summary{background:#f7f9fc}
+        .acdc-tportal-sdocs .acdc-sdocs-confirm-body{margin-top:10px;padding:14px 16px;background:#fff8e6;border:1px solid #f0d690;border-radius:10px;max-width:520px}
+        .acdc-tportal-sdocs .acdc-sdocs-confirm-body p{margin:0 0 12px;font-size:13px;color:#a06b00;line-height:1.55}
         @media(max-width:600px){.acdc-tportal-sdocs .acdc-sdocs-grid{grid-template-columns:1fr}}
       </style>
 
