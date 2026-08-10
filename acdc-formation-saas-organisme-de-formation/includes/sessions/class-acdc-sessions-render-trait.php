@@ -580,11 +580,25 @@ trait ACDC_Sessions_Render_Trait {
             </select>
           </div>
         </div>
-        <div class="acdc-contract-grid acdc-session-field-individuelle" style="display:none">
+        <?php /* ACDC 3.25.214 — CES BLOCS NE SONT PLUS CACHÉS PAR DÉFAUT.
+                 Ils l'étaient par un style en dur, et seul le script les
+                 rouvrait au choix du type. Conséquence : si ce script ne
+                 s'exécute pas — une erreur ailleurs dans la page suffit — les
+                 champs Apprenant et Groupe restent introuvables, sans le
+                 moindre signe. C'est ce que deux observations distinctes ont
+                 décrit : « aucun champ apprenant en type Individuelle » et
+                 « le groupe n'apparaît pas quand on choisit Groupe ».
+                 Le script les REFERME au chargement. En cas de défaillance, on
+                 voit deux champs de trop plutôt qu'aucun : un écran encombré se
+                 corrige, un écran muet se subit. */ ?>
+        <div class="acdc-contract-grid acdc-session-field-individuelle">
           <div class="acdc-contract-label">Apprenant</div>
           <div>
             <select name="session_builder[learner_id]">
               <option value="0">— Sélectionner un apprenant —</option>
+              <?php if ( empty( $learners_raw ) ) : ?>
+                <option value="0" disabled>Aucun apprenant au répertoire — créez-le d’abord dans Répertoires › Apprenants</option>
+              <?php endif; ?>
               <?php foreach ( $learners_raw as $l ) :
                 $ln = ! empty( $l->usage_last_name ) ? $l->usage_last_name : $l->last_name;
                 $label = trim( $l->first_name . ' ' . $ln );
@@ -596,11 +610,16 @@ trait ACDC_Sessions_Render_Trait {
             <p class="acdc-registration-help">L'apprenant sera automatiquement rattaché à la séance créée.</p>
           </div>
         </div>
-        <div class="acdc-contract-grid acdc-session-field-groupe" style="display:none">
+        <div class="acdc-contract-grid acdc-session-field-groupe">
           <div class="acdc-contract-label">Groupe</div>
           <div>
             <select name="session_builder[group_id]" id="acdc-session-group-select">
               <option value="0">— Sélectionner un groupe —</option>
+              <?php if ( empty( $groups_raw ) ) : ?>
+                <?php /* Un menu vide ne dit pas s'il n'y a pas de groupe ou si
+                         l'écran est en panne. On tranche à sa place. */ ?>
+                <option value="0" disabled>Aucun groupe enregistré — créez-le d’abord dans Répertoires › Groupes</option>
+              <?php endif; ?>
               <?php foreach ( $groups_raw as $g ) :
                 $g_label = $g->name;
                 if ( ! empty( $g->formation_title ) ) { $g_label .= ' — ' . $g->formation_title; }
