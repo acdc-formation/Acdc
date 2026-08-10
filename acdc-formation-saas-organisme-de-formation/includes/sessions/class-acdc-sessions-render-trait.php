@@ -63,6 +63,7 @@ trait ACDC_Sessions_Render_Trait {
           </div>
         <?php endforeach; ?>
       </div>
+      <?php $this->render_session_documents_panel( $session ); ?>
       <?php
       return;
     }

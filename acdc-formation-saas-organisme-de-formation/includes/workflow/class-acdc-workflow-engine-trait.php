@@ -674,25 +674,21 @@ trait ACDC_Workflow_Engine_Trait {
       $cursor    = $send_ts;
       $previous  = 0;
       $reminders = is_array( $spec['reminders'] ) ? array_values( $spec['reminders'] ) : array();
-      /* L'unité de la chaîne ne change pas d'une relance à l'autre : on la lit
-         une fois, AVANT la boucle. Calculée à l'intérieur, elle n'existait pas
-         encore au premier tour. */
-      $hourly    = ( HOUR_IN_SECONDS === (int) $spec['unit'] );
       foreach ( $reminders as $index => $delay ) {
         $rank   = $index + 1;
         $cursor = ( DAY_IN_SECONDS === (int) $spec['unit'] )
           ? $this->acdc_wf_add_days( $cursor, (int) $delay )
           : $cursor + ( (int) $delay * (int) $spec['unit'] );
-        /* ACDC 3.25.205 — Le report au jour ouvré ne s'applique qu'aux chaînes
-           exprimées en JOURS.
-           Sur une chaîne horaire, il produit l'absurde : une relance à 48 heures
-           reportée du samedi au lundi vient buter sur la suivante, qui se
-           retrouve une heure plus tard. « 48 heures » accouchait d'une heure
-           d'écart — et une relance à une heure d'intervalle ne relance personne.
-           Un délai en heures exprime un temps écoulé, pas un rendez-vous ouvré :
-           il part quand il doit partir. La règle « décaler au jour ouvré » garde
-           tout son sens là où David l'a formulée, sur les relances en jours. */
-        $due    = $hourly ? $cursor : $this->acdc_wf_shift_to_business_day( $cursor );
+        /* ACDC 3.25.207 — RETOUR EN ARRIÈRE ASSUMÉ sur la 3.25.205.
+           J'avais retiré le report au jour ouvré des chaînes horaires pour
+           supprimer un effet de bord cosmétique : deux relances séparées d'une
+           heure après avoir été rassemblées sur le lundi. La recette a mesuré le
+           coût de ce raccourci — une enquête à chaud relancée le SAMEDI. J'avais
+           payé une règle explicite de David (« on décale au jour ouvré suivant »,
+           sans distinguer les heures des jours) pour régler une gêne d'affichage.
+           La bonne cible était la collision, pas le report ; elle est traitée
+           quelques lignes plus bas. */
+        $due    = $this->acdc_wf_shift_to_business_day( $cursor );
         /* ACDC 3.25.196 — L'écart minimal se mesure dans l'UNITÉ de la chaîne.
            Deux relances ne doivent jamais tomber à la même minute : quand le
            report au jour ouvré de la précédente vient occuper l'horodatage de
@@ -703,10 +699,20 @@ trait ACDC_Workflow_Engine_Trait {
            journalière. L'écart reste minimal dans les deux cas ; c'est la
            promesse du réglage qui est préservée. */
         $spaced   = false;
-        $min_next = $hourly ? ( $previous + HOUR_IN_SECONDS ) : $this->acdc_wf_add_days( $previous, 1 );
+        $min_next = $this->acdc_wf_add_days( $previous, 1 );
 
         if ( $previous > 0 && $due <= $min_next ) {
-          $due    = $hourly ? $min_next : $this->acdc_wf_shift_to_business_day( $min_next );
+          /* ACDC 3.25.207 — Deux relances rassemblées par le report se séparent
+             d'un JOUR OUVRÉ, y compris sur une chaîne horaire.
+             La 3.25.196 les séparait d'une heure pour ne pas trahir un réglage
+             exprimé en heures. L'intention était juste, le résultat ne l'était
+             pas : deux messages à soixante minutes d'intervalle ne relancent
+             personne, ils agacent. Et le cas ne se produit JAMAIS en semaine —
+             il naît uniquement du report du week-end, qui vient d'empiler deux
+             échéances sur le même lundi. Les écarter d'un jour ouvré rend à la
+             chaîne la cadence que le réglage promettait, sans jamais reculer une
+             relance avant sa date théorique. */
+          $due    = $this->acdc_wf_shift_to_business_day( $min_next );
           $spaced = true;
         }
         $previous = $due;
@@ -1450,11 +1456,19 @@ trait ACDC_Workflow_Engine_Trait {
       array( 'status' => (string) $status, 'close_reason' => (string) $reason, 'closed_at' => $now, 'updated_at' => $now ),
       array( 'id' => (int) $run_id )
     );
+    /* ACDC 3.25.207 — La clôture d'un parcours horodate ce qu'elle annule.
+       C'était la SECONDE source des lignes de journal sans date : le balayage a
+       été corrigé en 3.25.205, mais la fermeture d'un parcours annulait ses
+       étapes restantes sans jamais écrire `executed_at`. La purge unique
+       nettoierait le passé et cette ligne aurait refabriqué le défaut au premier
+       recueil supprimé. Un journal d'audit ne porte pas d'entrée sans date. */
     $wpdb->query( $wpdb->prepare(
       "UPDATE {$this->workflow_step_table}
-          SET status = 'cancelled', result_note = %s, updated_at = %s
+          SET status = 'cancelled', result_note = %s,
+              executed_at = COALESCE(executed_at, %s), updated_at = %s
         WHERE run_id = %d AND status IN ('pending','waiting')",
       (string) $reason,
+      $now,
       $now,
       (int) $run_id
     ) );

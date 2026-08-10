@@ -1515,8 +1515,14 @@ trait ACDC_Learner_Portal_Core_Trait {
       'results'      => array( 'label' => 'Résultats', 'items' => array() ),
       'certificates' => array( 'label' => 'Certificats et attestations', 'items' => array() ),
       'contracts'    => array( 'label' => 'Conventions / contrats', 'items' => array() ),
+      'session_docs' => array( 'label' => 'Documents de séance', 'items' => array() ),
       'shared'       => array( 'label' => 'Documents partagés', 'items' => array() ),
     );
+
+    /* ACDC 3.25.207 — État du verrou, dossier par dossier. On le calcule une
+       seule fois et on l'applique en fin de construction : chaque document sait
+       ainsi s'il est déjà consultable ou s'il attend la fin de la formation. */
+    $unlocked_by_registration = array();
 
     foreach ( $this->learner_portal_get_access_items_for_email( $email ) as $item ) {
       $registration = $item['registration'];
@@ -1529,6 +1535,8 @@ trait ACDC_Learner_Portal_Core_Trait {
         'formation' => $formation_title,
         'registration_id' => (int) $registration->id,
       );
+
+      $unlocked_by_registration[ (int) $registration->id ] = $this->acdc_session_docs_registration_unlocked( $item );
 
       $prog_url = '';
       if ( $formation && ! empty( $formation->id ) ) {
@@ -1606,6 +1614,12 @@ trait ACDC_Learner_Portal_Core_Trait {
             $groups['results']['items'][] = array_merge( $base, array(
               'label'         => $purpose_label . ' - ' . $qr->quiz_title . ( $date_str ? ' (' . $date_str . ')' : '' ),
               'document_type' => 'quiz_result',
+              /* ACDC 3.25.207 — L'intention du quiz décide de sa visibilité :
+                 le positionnement et le diagnostic se passent AVANT la
+                 formation, leur résultat appartient à l'apprenant tout de
+                 suite. L'évaluation des acquis et le quiz live attendent la
+                 fin, avec le reste. */
+              'quiz_purpose'  => (string) $qr->quiz_purpose,
               'doc_index'     => 0,
               'available'     => true,
               'url'           => (string) $qr->result_document_url,
@@ -1654,10 +1668,11 @@ trait ACDC_Learner_Portal_Core_Trait {
       // ACDC 3.21.08 — Convention : chercher dans acdc_of_registration_contracts
       // via FIND_IN_SET sur learner_id du dossier d'inscription courant
       $contract_doc_url = '';
+      $contract_kind    = '';
       if ( ! empty( $registration->learner_id ) ) {
         global $wpdb;
         $rc = $wpdb->get_row( $wpdb->prepare(
-          "SELECT document_url FROM {$this->registration_contract_table}
+          "SELECT document_url, commanditaire_type FROM {$this->registration_contract_table}
            WHERE document_url != ''
              AND document_url IS NOT NULL
              AND ( FIND_IN_SET( %d, learner_ids ) > 0
@@ -1667,15 +1682,26 @@ trait ACDC_Learner_Portal_Core_Trait {
           (string) $registration->learner_id
         ) );
         $contract_doc_url = $rc && ! empty( $rc->document_url ) ? esc_url_raw( (string) $rc->document_url ) : '';
+        $contract_kind    = $rc && ! empty( $rc->commanditaire_type ) ? (string) $rc->commanditaire_type : '';
       }
-      $groups['contracts']['items'][] = array_merge( $base, array(
-        'label'         => 'Convention / contrat',
-        'document_type' => 'contract',
-        'doc_index'     => 0,
-        'available'     => ! empty( $contract_doc_url ),
-        'url'           => $contract_doc_url,
-        'direct_url'    => true,
-      ) );
+      /* ACDC 3.25.207 — « La convention ne concerne que le commanditaire ».
+         Quand une entreprise commande la formation, la convention est signée
+         entre elle et l'organisme : l'apprenant n'en est pas partie, et elle
+         porte des informations — tarif négocié, conditions — qui ne le
+         regardent pas. Elle disparaît donc de son espace.
+         Le contrat conclu avec un PARTICULIER est l'exact inverse : le
+         commanditaire, c'est lui. Il le garde. */
+      $contract_is_for_learner = ( 'Particulier' === $contract_kind );
+      if ( $contract_is_for_learner ) {
+        $groups['contracts']['items'][] = array_merge( $base, array(
+          'label'         => 'Contrat de formation',
+          'document_type' => 'contract',
+          'doc_index'     => 0,
+          'available'     => ! empty( $contract_doc_url ),
+          'url'           => $contract_doc_url,
+          'direct_url'    => true,
+        ) );
+      }
 
       // ACDC 3.25.22 — Analyses du besoin de l'apprenant (PDFs générés)
       if ( ! empty( $registration->learner_id ) ) {
@@ -1716,9 +1742,93 @@ trait ACDC_Learner_Portal_Core_Trait {
           'url' => $this->learner_portal_get_document_download_url( $registration->id, 'shared_doc', array( 'doc_index' => $index ) ),
         ) );
       }
+
+      /* ACDC 3.25.207 — Documents déposés par le formateur sur les séances de
+         cet apprenant. Ils ne passent JAMAIS par une URL publique : le lien
+         pointe vers un point d'entrée qui revérifie, à chaque téléchargement, à
+         qui s'adresse le document et si le verrou est levé. */
+      $learner_id = ! empty( $item['learner']->id ) ? (int) $item['learner']->id : 0;
+      foreach ( $this->acdc_session_docs_sessions_for_item( $item ) as $doc_session ) {
+        foreach ( $this->acdc_session_documents( (int) $doc_session->id, $learner_id ) as $sdoc ) {
+          if ( isset( $sdoc->is_visible_to_learners ) && ! (int) $sdoc->is_visible_to_learners ) {
+            continue;
+          }
+          $groups['session_docs']['items'][] = array_merge( $base, array(
+            'label'         => $this->acdc_session_document_label( $sdoc )
+                               . ( (int) $sdoc->learner_id > 0 ? ' (document personnel)' : '' ),
+            'document_type' => 'session_document',
+            'doc_index'     => (int) $sdoc->id,
+            'available'     => true,
+            'url'           => wp_nonce_url(
+              admin_url( 'admin-post.php?action=acdc_learner_download_session_document&document_id=' . (int) $sdoc->id ),
+              'acdc_learner_download_session_document_' . (int) $sdoc->id
+            ),
+            /* Le dépôt porte sa propre règle : « tout de suite » ou « à la fin ». */
+            'gate_override' => ( 'immediate' === (string) $sdoc->visibility ) ? 'immediate' : 'unlock',
+          ) );
+        }
+      }
+    }
+
+    /* ─────────────────────────────────────────────────────────────────
+       LE VERROU, APPLIQUÉ EN DERNIER
+
+       Il s'applique après coup, en un seul endroit, plutôt qu'à chaque
+       fabrication d'élément : une règle de visibilité recopiée à quinze
+       endroits finit toujours par diverger sur l'un d'eux, et c'est celui-là
+       qui laissera fuir un document.
+
+       Un document verrouillé perd son URL. On ne se contente pas de griser le
+       lien : tant qu'il est présent dans la page, il est atteignable.
+       ───────────────────────────────────────────────────────────────── */
+    $immediate = $this->acdc_session_docs_immediate_types();
+    foreach ( $groups as $group_key => $group ) {
+      if ( empty( $group['items'] ) ) {
+        continue;
+      }
+      foreach ( $group['items'] as $index => $doc ) {
+        $registration_key = isset( $doc['registration_id'] ) ? (int) $doc['registration_id'] : 0;
+        $unlocked = ! empty( $unlocked_by_registration[ $registration_key ] );
+
+        $locked = ! $unlocked;
+        if ( isset( $doc['gate_override'] ) ) {
+          $locked = ( 'immediate' === $doc['gate_override'] ) ? false : ! $unlocked;
+        } elseif ( in_array( (string) ( $doc['document_type'] ?? '' ), $immediate, true ) ) {
+          $locked = false;
+        } elseif ( 'quiz_result' === (string) ( $doc['document_type'] ?? '' ) ) {
+          $purpose = (string) ( $doc['quiz_purpose'] ?? '' );
+          $locked  = ! in_array( $purpose, array( 'positioning', 'diagnostic' ), true ) && ! $unlocked;
+        }
+
+        if ( $locked ) {
+          $groups[ $group_key ]['items'][ $index ]['locked']    = true;
+          $groups[ $group_key ]['items'][ $index ]['available'] = false;
+          $groups[ $group_key ]['items'][ $index ]['url']       = '';
+        } else {
+          $groups[ $group_key ]['items'][ $index ]['locked'] = false;
+        }
+      }
     }
 
     return $groups;
+  }
+
+  /**
+   * ACDC 3.25.207 — Le mot juste sous chaque document.
+   *
+   * « Bientôt disponible » et « verrouillé » ne disent pas la même chose. Le
+   * premier signifie que la pièce n'existe pas encore ; le second, qu'elle
+   * existe et qu'elle attend une date. Employer le même mot pour les deux
+   * laisse l'apprenant croire à un oubli de l'organisme.
+   */
+  private function learner_portal_document_status_label( $doc ) {
+    if ( ! empty( $doc['available'] ) ) {
+      return 'Disponible';
+    }
+    if ( ! empty( $doc['locked'] ) ) {
+      return 'À la fin de la formation';
+    }
+    return 'Bientôt disponible';
   }
 
   private function learner_portal_get_document_count_by_group( $groups ) {
@@ -1812,6 +1922,15 @@ trait ACDC_Learner_Portal_Core_Trait {
 
     $registration = $item['registration'];
     $formation    = ! empty( $item['formation'] ) ? $item['formation'] : null;
+
+    /* ACDC 3.25.207 — Le verrou s'applique ICI, au moment de servir le fichier.
+       Le retirer de l'écran ne suffit pas : un lien obtenu la veille resterait
+       valable le lendemain. Les pièces officielles traversent sans condition,
+       le reste attend la fin de la formation ou le déblocage du formateur. */
+    if ( ! in_array( (string) $document_type, $this->acdc_session_docs_immediate_types(), true )
+      && ! $this->acdc_session_docs_registration_unlocked( $item ) ) {
+      return '';
+    }
 
     switch ( $document_type ) {
       case 'program':

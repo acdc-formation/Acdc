@@ -2045,6 +2045,24 @@ dbDelta( $sql_companies );
     ) {$charset_collate};";
     dbDelta( $sql_trainer_resources );
 
+    /* ACDC 3.25.207 — Documents de séance : la table existait depuis la 3.20.82,
+       déclarée et créée, mais jamais écrite ni lue. Elle est faite pour cela —
+       « ressources pédagogiques que le formateur partage avec les apprenants ».
+       On la complète plutôt que d'en créer une seconde à côté : deux tables pour
+       la même chose finissent toujours par diverger.
+       Quatre colonnes manquaient au besoin réel : le destinataire nommé, le
+       moment de visibilité, l'auteur du dépôt et l'avis aux apprenants. */
+    $this->maybe_add_table_column( $this->trainer_resource_table, 'learner_id', 'BIGINT UNSIGNED NOT NULL DEFAULT 0' );
+    $this->maybe_add_table_column( $this->trainer_resource_table, 'visibility', "VARCHAR(20) NOT NULL DEFAULT 'unlock'" );
+    $this->maybe_add_table_column( $this->trainer_resource_table, 'notify_learners', 'TINYINT(1) NOT NULL DEFAULT 0' );
+    $this->maybe_add_table_column( $this->trainer_resource_table, 'uploaded_by', "VARCHAR(20) NOT NULL DEFAULT 'trainer'" );
+    $this->maybe_add_table_column( $this->trainer_resource_table, 'uploader_user_id', 'BIGINT UNSIGNED NOT NULL DEFAULT 0' );
+    $this->maybe_add_table_index( $this->trainer_resource_table, 'learner_id', 'INDEX learner_id (learner_id)' );
+
+    /* Le déblocage anticipé de l'extranet apprenant se décide séance par séance :
+       c'est le formateur qui sait que sa formation est finie avant l'heure. */
+    $this->maybe_add_table_column( $this->session_table, 'documents_unlocked_at', 'DATETIME NULL' );
+
     /* ACDC 3.20.83 — Auth custom du portail formateur (4 tables symétriques à l'apprenant). */
     $sql_trainer_portal_accounts = "CREATE TABLE {$this->trainer_portal_account_table} (
       id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
@@ -3632,6 +3650,11 @@ dbDelta( $sql_companies );
       'qz_logs'           => $qz . 'logs',
       'workflow_runs'     => $this->workflow_run_table,
       'workflow_steps'    => $this->workflow_step_table,
+      /* ACDC 3.25.207 — Les documents déposés sur une séance sont des pièces
+         Qualiopi : ils entrent dans les deux périmètres, sauvegarde et purge,
+         au même titre que l'émargement. Une preuve qu'une restauration ne
+         rendrait pas n'est pas une preuve. */
+      'session_documents' => $this->trainer_resource_table,
     );
   }
 

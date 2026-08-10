@@ -901,7 +901,7 @@ trait ACDC_Learner_Portal_Render_Trait {
           <?php foreach ( array( 'program', 'convocations', 'results', 'certificates' ) as $group_key ) : ?>
             <?php if ( empty( $docs[ $group_key ]['items'] ) ) { continue; } ?>
             <?php foreach ( $docs[ $group_key ]['items'] as $doc ) : ?>
-              <li><?php echo esc_html( $doc['label'] ); ?> — <?php if ( ! empty( $doc['available'] ) ) : ?><a href="<?php echo esc_url( $doc['url'] ); ?>">Télécharger</a><?php else : ?><span>bientôt disponible</span><?php endif; ?></li>
+              <li><?php echo esc_html( $doc['label'] ); ?> — <?php if ( ! empty( $doc['available'] ) ) : ?><a href="<?php echo esc_url( $doc['url'] ); ?>">Télécharger</a><?php else : ?><span><?php echo esc_html( $this->learner_portal_document_status_label( $doc ) ); ?></span><?php endif; ?></li>
             <?php endforeach; ?>
           <?php endforeach; ?>
         </ul>
@@ -1046,6 +1046,26 @@ trait ACDC_Learner_Portal_Render_Trait {
         <p>Consultez et téléchargez vos documents classés par type.</p>
       </div>
     </section>
+    <?php
+    /* ACDC 3.25.207 — Dire la règle plutôt que la laisser deviner. Un apprenant
+       qui voit « à la fin de la formation » sans explication croit à une panne ;
+       il écrit à l'organisme, et l'organisme lui répond ce que cette phrase
+       aurait suffi à dire. */
+    $has_locked = false;
+    foreach ( $groups as $group ) {
+      foreach ( (array) ( $group['items'] ?? array() ) as $doc ) {
+        if ( ! empty( $doc['locked'] ) ) {
+          $has_locked = true;
+          break 2;
+        }
+      }
+    }
+    ?>
+    <?php if ( $has_locked ) : ?>
+      <div class="acdc-panel acdc-mb-18" style="border-left:4px solid #C5A253;">
+        <p style="margin:0;">Vos documents officiels — programme, convocation, livret d’accueil, règlement intérieur — sont disponibles dès maintenant. Les supports de cours et les résultats d’évaluation s’ouvriront à la fin de votre formation, ou plus tôt si votre formateur les débloque.</p>
+      </div>
+    <?php endif; ?>
     <div class="acdc-inline-wrap acdc-mb-18">
       <?php foreach ( $groups as $group_key => $group ) : ?>
         <a class="acdc-button <?php echo $group_key === $active_group ? 'acdc-button-primary' : 'acdc-button-soft'; ?>" href="<?php echo esc_url( $this->learner_portal_page_url( 'documents', array_filter( array( 'doc_tab' => $group_key, 'registration_id' => $registration_id ?: null ) ) ) ); ?>"><?php echo esc_html( $group['label'] . ' (' . ( isset( $counts[ $group_key ] ) ? (int) $counts[ $group_key ] : 0 ) . ')' ); ?></a>
@@ -1102,7 +1122,7 @@ trait ACDC_Learner_Portal_Render_Trait {
                   $nom_clean    = $doc['label'];
                   $date_display = '—';
                 }
-                $statut = ! empty( $doc['available'] ) ? 'Disponible' : 'Bientôt disponible';
+                $statut = $this->learner_portal_document_status_label( $doc );
                 $is_new = ! empty( $doc['available'] ) && ! empty( $doc_type )
                           && $this->learner_portal_is_document_new(
                               (int) $account->id,
@@ -1159,7 +1179,7 @@ trait ACDC_Learner_Portal_Render_Trait {
                 <tr class="<?php echo empty( $doc['available'] ) ? 'acdc-learner-doc-unavailable' : ''; ?>">
                   <td><?php echo esc_html( $doc['label'] ); ?><?php if ( ! empty( $doc['available'] ) && ! empty( $doc['document_type'] ) && $this->learner_portal_is_document_new( (int) $account->id, (int) $doc['registration_id'], $doc['document_type'], isset( $doc['doc_index'] ) ? (int) $doc['doc_index'] : 0 ) ) : ?> <span class="acdc-learner-badge-new">Nouveau</span><?php endif; ?></td>
                   <td><?php echo esc_html( $doc['formation'] ); ?></td>
-                  <td><?php echo ! empty( $doc['available'] ) ? 'Disponible' : 'Bientôt disponible'; ?></td>
+                  <td><?php echo esc_html( $this->learner_portal_document_status_label( $doc ) ); ?></td>
                   <td><?php if ( ! empty( $doc['available'] ) ) : ?><a href="<?php echo esc_url( $doc['url'] ); ?>" target="_blank" rel="noopener">📄 Ouvrir</a><?php else : ?><span>—</span><?php endif; ?></td>
                 </tr>
               <?php endforeach; ?>

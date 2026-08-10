@@ -114,6 +114,7 @@ trait ACDC_Workflow_Core_Trait {
 
     $this->acdc_wf_migrate_replan_after_timezone_fix();
     $this->acdc_wf_migrate_mark_human_dismissals();
+    $this->acdc_wf_migrate_purge_dateless_cancellations();
   }
 
   /**
@@ -178,6 +179,54 @@ trait ACDC_Workflow_Core_Trait {
     $exists = $wpdb->get_var( $wpdb->prepare( 'SHOW TABLES LIKE %s', $this->workflow_step_table ) );
     if ( $exists === $this->workflow_step_table ) {
       $wpdb->query( "DELETE FROM {$this->workflow_step_table}" );
+    }
+  }
+
+  /**
+   * ACDC 3.25.207 — Les étapes annulées par les versions précédentes.
+   *
+   * La 3.25.205 a bien cessé d'ANNULER une étape jamais jouée : elle l'efface.
+   * Mais elle ne corrigeait que l'avenir. Le balayage ne relit que les étapes
+   * encore ouvertes — `status IN ('pending','waiting')` — et les neuf lignes
+   * signalées par la recette étaient déjà « Annulée » depuis une version
+   * antérieure : plus aucun passage du moteur ne les regardait. D'où le constat,
+   * exact, qu'« elles ne se résorbent pas d'elles-mêmes ».
+   *
+   * Le critère de suppression est sûr, et il faut voir pourquoi : TOUS les
+   * chemins légitimes de clôture écrivent `executed_at = COALESCE(executed_at,
+   * maintenant)` — la neutralisation inter-parcours comme l'écartement manuel.
+   * Une étape sans `executed_at` n'a donc pu être close que par le balayage,
+   * qui était le seul à ne pas horodater. Les lignes « Séance pilotée par le
+   * parcours n°1 », que la recette a justement saluées, portent leur date et ne
+   * sont pas concernées ; les écartements humains sont protégés deux fois.
+   *
+   * Le drapeau est posé avant le travail : rejouer une purge en boucle coûte
+   * plus cher que de la manquer une fois.
+   */
+  private function acdc_wf_migrate_purge_dateless_cancellations() {
+    global $wpdb;
+
+    if ( '1' === (string) get_option( 'acdc_of_workflow_purge_dateless_3_25_207', '' ) ) {
+      return;
+    }
+    update_option( 'acdc_of_workflow_purge_dateless_3_25_207', '1', false );
+
+    $exists = $wpdb->get_var( $wpdb->prepare( 'SHOW TABLES LIKE %s', $this->workflow_step_table ) );
+    if ( $exists !== $this->workflow_step_table ) {
+      return;
+    }
+
+    $deleted = $wpdb->query(
+      "DELETE FROM {$this->workflow_step_table}
+        WHERE executed_at IS NULL
+          AND status = 'cancelled'
+          AND settled_by <> 'human'"
+    );
+
+    if ( $deleted ) {
+      $this->log_error( 'workflow', 'Étapes annulées sans horodatage supprimées.', array(
+        'count' => (int) $deleted,
+      ) );
     }
   }
 
@@ -277,13 +326,19 @@ trait ACDC_Workflow_Core_Trait {
         'phase' => 'animation', 'mode' => 'alert',
         'label' => 'Rattacher une séance au dossier — sans elle, ni convocation ni émargement ne peuvent être planifiés',
       ),
+      /* ACDC 3.25.207 — Le libellé nomme le destinataire.
+         « Ouvrir la feuille d'émargement » décrivait l'action demandée mais
+         taisait à qui : la recette a cru, deux fois de suite, que le rappel au
+         formateur avait disparu du plan alors qu'il s'agissait de cette
+         étape-là, renommée en 3.25.193. Une ligne de plan doit se lire sans
+         connaître l'historique des versions. */
       'emargement_am' => array(
         'phase' => 'animation', 'mode' => 'auto',
-        'label' => 'Ouvrir la feuille d’émargement — séance du matin',
+        'label' => 'Rappel au formateur : ouvrir la feuille d’émargement — séance du matin',
       ),
       'emargement_pm' => array(
         'phase' => 'animation', 'mode' => 'auto',
-        'label' => 'Ouvrir la feuille d’émargement — séance de l’après-midi',
+        'label' => 'Rappel au formateur : ouvrir la feuille d’émargement — séance de l’après-midi',
       ),
 
       /* ---- Évaluation ---------------------------------------------------- */

@@ -48,6 +48,7 @@ class ACDC_Formation_SAAS_Plugin {
   use ACDC_Sessions_Core_Trait;
   use ACDC_Sessions_Actions_Trait;
   use ACDC_Sessions_Render_Trait;
+  use ACDC_Session_Documents_Trait;
   use ACDC_Dossiers_Contracts_Core_Trait;
   use ACDC_Dossiers_Contracts_Actions_Trait;
   use ACDC_Dossiers_Contracts_Render_Trait;
@@ -338,6 +339,22 @@ class ACDC_Formation_SAAS_Plugin {
     /* ACDC 3.24.28 — M8b : Bilan post-formation + cahier de texte. */
     add_action( 'admin_post_acdc_trainer_save_session_report', array( $this, 'handle_trainer_save_session_report' ) );
     add_action( 'admin_post_acdc_trainer_save_logbook_entry', array( $this, 'handle_trainer_save_logbook_entry' ) );
+    /* ACDC 3.25.207 — Documents de séance : dépôt formateur, accès apprenant,
+       accès organisme. Les portails apprenant et formateur ont leur propre
+       authentification : leurs points d'entrée doivent répondre aussi aux
+       visiteurs non connectés à WordPress, d'où les variantes « nopriv ». */
+    add_action( 'admin_post_acdc_trainer_upload_session_document', array( $this, 'handle_trainer_upload_session_document' ) );
+    add_action( 'admin_post_nopriv_acdc_trainer_upload_session_document', array( $this, 'handle_trainer_upload_session_document' ) );
+    add_action( 'admin_post_acdc_trainer_delete_session_document', array( $this, 'handle_trainer_delete_session_document' ) );
+    add_action( 'admin_post_nopriv_acdc_trainer_delete_session_document', array( $this, 'handle_trainer_delete_session_document' ) );
+    add_action( 'admin_post_acdc_trainer_download_session_document', array( $this, 'handle_trainer_download_session_document' ) );
+    add_action( 'admin_post_nopriv_acdc_trainer_download_session_document', array( $this, 'handle_trainer_download_session_document' ) );
+    add_action( 'admin_post_acdc_trainer_unlock_session_documents', array( $this, 'handle_trainer_unlock_session_documents' ) );
+    add_action( 'admin_post_nopriv_acdc_trainer_unlock_session_documents', array( $this, 'handle_trainer_unlock_session_documents' ) );
+    add_action( 'admin_post_acdc_learner_download_session_document', array( $this, 'handle_learner_download_session_document' ) );
+    add_action( 'admin_post_nopriv_acdc_learner_download_session_document', array( $this, 'handle_learner_download_session_document' ) );
+    add_action( 'admin_post_acdc_admin_download_session_document', array( $this, 'handle_admin_download_session_document' ) );
+    add_action( 'admin_post_acdc_admin_delete_session_document', array( $this, 'handle_admin_delete_session_document' ) );
     add_shortcode( 'acdc_trainer_portal_login', array( $this, 'render_trainer_portal_login_shortcode' ) );
     add_action( 'admin_post_acdc_front_login', array( $this, 'handle_front_login' ) );
     add_action( 'admin_post_acdc_front_logout', array( $this, 'handle_front_logout' ) );

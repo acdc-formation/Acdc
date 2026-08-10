@@ -163,7 +163,20 @@ trait ACDC_Workflow_Render_Trait {
             </td>
             <td>
               <?php if ( 'active' === (string) $run->status ) : ?>
-                En cours
+                <?php /* ACDC 3.25.207 — Un parcours actif dont plus aucune étape
+                         n'attend n'est pas « en cours » : il n'y a plus rien à
+                         faire. C'est le cas des dossiers dont toutes les étapes
+                         ont été neutralisées parce qu'un autre parcours pilote
+                         la même séance. On le dit.
+                         Le parcours reste ACTIF en base, volontairement : s'il
+                         gagne demain une séance ou un devis, le moteur doit
+                         pouvoir replanifier. Fermer le dossier pour faire joli à
+                         l'écran le rendrait sourd à la suite. */ ?>
+                <?php if ( ! $next ) : ?>
+                  Réglé<br><span class="description">Plus aucune étape en attente.</span>
+                <?php else : ?>
+                  En cours
+                <?php endif; ?>
               <?php else : ?>
                 <?php echo esc_html( ucfirst( (string) $run->status ) ); ?>
                 <?php if ( '' !== (string) $run->close_reason ) : ?>
@@ -266,14 +279,33 @@ trait ACDC_Workflow_Render_Trait {
     ?>
     <div class="acdc-panel">
       <table class="acdc-table">
-        <thead><tr><th></th><th>À faire</th><th>Dossier</th><th>Depuis</th><th></th></tr></thead>
+        <?php /* ACDC 3.25.207 — « Depuis » affirmait qu'une tâche traînait
+                 depuis une date à venir. La colonne dit maintenant ce qu'elle
+                 montre : une échéance passée se lit « depuis le », une échéance
+                 future « prévu le ».
+                 La tâche future reste affichée, et c'est délibéré : le
+                 rendez-vous de relance se montre dès qu'il est planifié (voir la
+                 note de la 3.25.187), parce que le dossier qui se perd est
+                 justement celui qu'on ne voit pas venir. Ce qu'il fallait
+                 corriger, c'est le mot, pas la présence. */ ?>
+        <thead><tr><th></th><th>À faire</th><th>Dossier</th><th>Échéance</th><th></th></tr></thead>
         <tbody>
         <?php foreach ( $tasks as $task ) : ?>
           <tr>
             <td><?php echo (int) $task->is_alert ? '<span title="Alerte" style="color:#b32d2e">&#9888;</span>' : ''; ?></td>
             <td><strong><?php echo esc_html( $task->label ); ?></strong></td>
             <td><?php echo esc_html( $this->acdc_wf_run_display_label( $task ) ); ?></td>
-            <td><?php echo ! empty( $task->scheduled_at ) ? esc_html( wp_date( 'd/m/Y', $this->acdc_wf_ts( $task->scheduled_at ) ) ) : '—'; ?></td>
+            <td>
+              <?php
+              if ( empty( $task->scheduled_at ) ) {
+                echo '—';
+              } else {
+                $due_ts = $this->acdc_wf_ts( $task->scheduled_at );
+                $word   = ( $due_ts > $this->acdc_wf_now() ) ? 'prévu le' : 'depuis le';
+                echo esc_html( $word . ' ' . wp_date( 'd/m/Y', $due_ts ) );
+              }
+              ?>
+            </td>
             <td>
               <form method="post" action="<?php echo esc_url( admin_url( 'admin-post.php' ) ); ?>">
                 <?php wp_nonce_field( 'acdc_wf_dismiss_task' ); ?>

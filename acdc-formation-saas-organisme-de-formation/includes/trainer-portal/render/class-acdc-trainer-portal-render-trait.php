@@ -1327,6 +1327,151 @@ trait ACDC_Trainer_Portal_Render_Trait {
 
       <?php
       /* ---------------------------------------------------------------
+       * ACDC 3.25.207 — BLOC C : Documents remis aux apprenants.
+       *
+       * Le formateur dépose ici ce qui ne concerne QUE cette séance : un
+       * support retravaillé la veille, une consigne, un corrigé individuel.
+       * Ces pièces ne rejoignent pas la bibliothèque de la formation — elles
+       * appartiennent au dossier de cette séance, et l'organisme y accède
+       * comme preuve Qualiopi.
+       *
+       * Deux choix au moment du dépôt, et ils ne sont pas décoratifs :
+       *   — pour toute la séance, ou pour un apprenant nommé ;
+       *   — visible tout de suite, ou à la fin de la formation.
+       * --------------------------------------------------------------- */
+      $unlock_state     = $this->acdc_session_docs_unlock_state( $session );
+      $session_documents = $this->acdc_session_documents( (int) $session_id );
+      ?>
+      <div class="acdc-panel acdc-tportal-sdocs">
+        <h3>📎 Documents remis aux apprenants</h3>
+
+        <div class="acdc-sdocs-state">
+          <?php if ( ! empty( $unlock_state['unlocked'] ) ) : ?>
+            <?php if ( 'manual' === $unlock_state['reason'] ) : ?>
+              <span class="acdc-sdocs-badge is-open">Espace débloqué le <?php echo esc_html( mysql2date( 'd/m/Y à H:i', $unlock_state['unlocked_at'] ) ); ?></span>
+            <?php else : ?>
+              <span class="acdc-sdocs-badge is-open">Séance terminée : les apprenants ont accès à l’ensemble de leurs documents.</span>
+            <?php endif; ?>
+          <?php else : ?>
+            <span class="acdc-sdocs-badge is-locked">
+              Les supports s’ouvriront à la fin de la séance<?php echo ! empty( $unlock_state['end_at'] ) ? esc_html( ' (' . mysql2date( 'd/m/Y à H:i', $unlock_state['end_at'] ) . ')' ) : ''; ?>.
+            </span>
+            <form method="post" action="<?php echo esc_url( admin_url( 'admin-post.php' ) ); ?>" style="display:inline-block;margin-left:10px;"
+                  onsubmit="return confirm('Débloquer maintenant l’accès de tous les apprenants de cette séance ? Ils en seront prévenus par e-mail.');">
+              <input type="hidden" name="action" value="acdc_trainer_unlock_session_documents">
+              <?php wp_nonce_field( 'acdc_trainer_unlock_session_documents' ); ?>
+              <input type="hidden" name="session_id" value="<?php echo (int) $session_id; ?>">
+              <button type="submit" class="acdc-button acdc-button-soft" style="height:32px;padding:0 14px;font-size:13px;">Débloquer maintenant</button>
+            </form>
+          <?php endif; ?>
+        </div>
+
+        <form method="post" action="<?php echo esc_url( admin_url( 'admin-post.php' ) ); ?>" enctype="multipart/form-data" class="acdc-sdocs-form">
+          <input type="hidden" name="action" value="acdc_trainer_upload_session_document">
+          <?php wp_nonce_field( 'acdc_trainer_upload_session_document' ); ?>
+          <input type="hidden" name="session_id" value="<?php echo (int) $session_id; ?>">
+
+          <div class="acdc-sdocs-grid">
+            <label>
+              <span>Fichier</span>
+              <input type="file" name="document_file" required>
+              <small>PDF, JPG, PNG, DOC, DOCX, PPTX — 100 Mo maximum.</small>
+            </label>
+            <label>
+              <span>Intitulé</span>
+              <input type="text" name="label" placeholder="Support de la journée 2, corrigé de l’exercice…">
+              <small>Laissé vide, le nom du fichier sera utilisé.</small>
+            </label>
+            <label>
+              <span>Destinataire</span>
+              <select name="learner_id">
+                <option value="0">Tous les apprenants de la séance</option>
+                <?php foreach ( (array) $learners as $l ) :
+                  $l_last = ! empty( $l->usage_last_name ) ? $l->usage_last_name : $l->last_name; ?>
+                  <option value="<?php echo (int) $l->id; ?>"><?php echo esc_html( trim( $l->first_name . ' ' . $l_last ) ); ?></option>
+                <?php endforeach; ?>
+              </select>
+              <small>Un document nominatif n’est visible que par la personne désignée.</small>
+            </label>
+            <label>
+              <span>Visibilité</span>
+              <select name="visibility">
+                <option value="unlock">À la fin de la formation</option>
+                <option value="immediate">Tout de suite</option>
+              </select>
+              <small>Une consigne pour demain part tout de suite ; un corrigé attend.</small>
+            </label>
+          </div>
+
+          <label class="acdc-sdocs-notify">
+            <input type="checkbox" name="notify" value="1">
+            Prévenir les apprenants par e-mail (uniquement pour un document visible tout de suite).
+          </label>
+
+          <div style="margin-top:14px;">
+            <button type="submit" class="acdc-button acdc-button-primary" style="height:40px;padding:0 24px;">Déposer le document</button>
+          </div>
+        </form>
+
+        <?php if ( empty( $session_documents ) ) : ?>
+          <div class="acdc-empty" style="margin-top:18px;padding:18px 16px;background:#f7f9fc;border:1px dashed #d6dbe4;border-radius:10px;color:#5a6577;font-size:13px;text-align:center;">Aucun document déposé sur cette séance.</div>
+        <?php else : ?>
+          <table class="acdc-table" style="margin-top:18px;">
+            <thead><tr><th>Document</th><th>Destinataire</th><th>Visibilité</th><th>Déposé le</th><th></th></tr></thead>
+            <tbody>
+            <?php foreach ( $session_documents as $sdoc ) :
+              $download_url = wp_nonce_url(
+                admin_url( 'admin-post.php?action=acdc_trainer_download_session_document&document_id=' . (int) $sdoc->id ),
+                'acdc_trainer_download_session_document_' . (int) $sdoc->id
+              );
+              $may_delete = $this->acdc_session_document_trainer_may_delete( $sdoc, $session ) && (int) $sdoc->trainer_id === (int) $trainer_id;
+              $target     = 'Toute la séance';
+              if ( (int) $sdoc->learner_id > 0 ) {
+                foreach ( (array) $learners as $l ) {
+                  if ( (int) $l->id === (int) $sdoc->learner_id ) {
+                    $target = trim( $l->first_name . ' ' . ( ! empty( $l->usage_last_name ) ? $l->usage_last_name : $l->last_name ) );
+                    break;
+                  }
+                }
+              }
+            ?>
+              <tr>
+                <td><a href="<?php echo esc_url( $download_url ); ?>"><?php echo esc_html( $this->acdc_session_document_label( $sdoc ) ); ?></a></td>
+                <td><?php echo esc_html( $target ); ?></td>
+                <td><?php echo 'immediate' === (string) $sdoc->visibility ? 'Tout de suite' : 'À la fin de la formation'; ?></td>
+                <td><?php echo esc_html( ! empty( $sdoc->created_at ) ? mysql2date( 'd/m/Y à H:i', $sdoc->created_at ) : '—' ); ?></td>
+                <td>
+                  <?php if ( $may_delete ) : ?>
+                    <a href="<?php echo esc_url( wp_nonce_url( admin_url( 'admin-post.php?action=acdc_trainer_delete_session_document&document_id=' . (int) $sdoc->id ), 'acdc_trainer_delete_session_document_' . (int) $sdoc->id ) ); ?>"
+                       onclick="return confirm('Retirer ce document ?');" style="color:#b03030;">Retirer</a>
+                  <?php else : ?>
+                    <span style="color:#9ba8b5;font-size:12px;" title="La séance est terminée : le document est devenu une pièce du dossier.">—</span>
+                  <?php endif; ?>
+                </td>
+              </tr>
+            <?php endforeach; ?>
+            </tbody>
+          </table>
+          <p style="margin:10px 0 0;color:#5a6577;font-size:12px;">Un document déposé peut être retiré tant que la séance n’est pas terminée. Ensuite, il fait partie du dossier de formation : seul l’organisme peut encore intervenir.</p>
+        <?php endif; ?>
+      </div>
+      <style>
+        .acdc-tportal-sdocs h3{margin:0 0 14px;color:#1E4777;font-size:18px}
+        .acdc-tportal-sdocs .acdc-sdocs-state{margin-bottom:16px}
+        .acdc-tportal-sdocs .acdc-sdocs-badge{display:inline-block;padding:6px 12px;border-radius:8px;font-size:13px}
+        .acdc-tportal-sdocs .acdc-sdocs-badge.is-open{background:#e7f4ec;border:1px solid #bcdcc4;color:#1a7d3b}
+        .acdc-tportal-sdocs .acdc-sdocs-badge.is-locked{background:#fff8e6;border:1px solid #f0d690;color:#a06b00}
+        .acdc-tportal-sdocs .acdc-sdocs-grid{display:grid;grid-template-columns:1fr 1fr;gap:16px}
+        .acdc-tportal-sdocs .acdc-sdocs-grid label{display:block}
+        .acdc-tportal-sdocs .acdc-sdocs-grid label>span{display:block;font-size:12px;font-weight:600;color:#5a6577;margin-bottom:6px;text-transform:uppercase;letter-spacing:.4px}
+        .acdc-tportal-sdocs input[type=text],.acdc-tportal-sdocs select,.acdc-tportal-sdocs input[type=file]{width:100%;border:1px solid #d6dbe4;border-radius:8px;padding:9px 12px;font-size:13px;color:#1E4777;box-sizing:border-box;background:#fff}
+        .acdc-tportal-sdocs small{display:block;margin-top:4px;color:#9ba8b5;font-size:11px}
+        .acdc-tportal-sdocs .acdc-sdocs-notify{display:block;margin-top:14px;font-size:13px;color:#1E4777}
+        @media(max-width:600px){.acdc-tportal-sdocs .acdc-sdocs-grid{grid-template-columns:1fr}}
+      </style>
+
+      <?php
+      /* ---------------------------------------------------------------
        * ACDC 3.24.28 — BLOC B : Bilan post-formation.
        * --------------------------------------------------------------- */
       $report_submitted = ! empty( $session->report_submitted_at );

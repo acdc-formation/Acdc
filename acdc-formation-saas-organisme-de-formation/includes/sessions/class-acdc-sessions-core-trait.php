@@ -557,7 +557,9 @@ trait ACDC_Sessions_Core_Trait {
     $hours = (int) floor( $minutes / 60 );
     $rest = $minutes % 60;
     if ( $hours > 0 && $rest > 0 ) {
-      return sprintf( '%dh%02d min', $hours, $rest );
+      /* ACDC 3.25.207 — « 3h30 min » doublait l'unité : les minutes étaient
+         déjà dites par le « 30 ». On écrit « 3 h 30 », comme un horaire. */
+      return sprintf( '%d h %02d', $hours, $rest );
     }
     if ( $hours > 0 ) {
       return sprintf( '%dh', $hours );
