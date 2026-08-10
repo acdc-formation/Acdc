@@ -6084,6 +6084,51 @@ dbDelta( $sql_companies );
     return array( $email, $prenom );
   }
 
+  /**
+   * ACDC 3.25.211 — Le nom qui désigne une analyse du besoin.
+   *
+   * Quatre notifications se sont succédé pour un même dossier, dont deux
+   * portant exactement « Bérengère Valeriano » : elle est à la fois la
+   * signataire de Skill Conseil et une apprenante de la formation. Deux
+   * analyses distinctes, deux réponses distinctes, un seul intitulé — rien ne
+   * permettait de savoir laquelle venait d'arriver.
+   *
+   * Deux choses manquaient, et il faut les deux :
+   *   — L'ENTREPRISE. Dès qu'un commanditaire est identifié, c'est lui qui
+   *     nomme le dossier ; la personne vient ensuite, « à l'attention de ».
+   *     C'est la règle que David a fixée, et c'est aussi la convention du
+   *     courrier professionnel.
+   *   — LE RÔLE. Il ne suffit pas d'ajouter l'entreprise : les deux analyses de
+   *     Bérengère porteraient alors le même « Skill Conseil — à l'attention de
+   *     Bérengère Valeriano ». Ce qui les sépare n'est pas la personne, c'est
+   *     la qualité en laquelle elle a répondu.
+   */
+  private function nad_analysis_display_label( $analysis ) {
+    $person = trim( (string) ( $analysis->repondant_prenom ?? '' ) . ' ' . (string) ( $analysis->repondant_nom ?? '' ) );
+
+    $company = '';
+    if ( ! empty( $analysis->entreprise_id ) ) {
+      $row = $this->get_company( (int) $analysis->entreprise_id );
+      if ( $row && ! empty( $row->name ) ) {
+        $company = trim( (string) $row->name );
+      }
+    }
+
+    $profil = strtolower( (string) ( $analysis->profil ?? '' ) );
+    $role   = ( 'entreprise' === $profil || 'independant' === $profil ) ? 'commanditaire' : 'apprenant';
+
+    if ( '' === $person && '' === $company ) {
+      return 'Répondant inconnu';
+    }
+    if ( '' === $company ) {
+      return $person . ' (' . $role . ')';
+    }
+    if ( '' === $person ) {
+      return $company;
+    }
+    return $company . ' — à l’attention de ' . $person . ' (' . $role . ')';
+  }
+
   /** Envoi initial de l'analyse du besoin (appelé par le cron si délai > 0). */
   private function nad_send_initial_email( $analysis ) {
     list( $email, $prenom ) = $this->nad_resolve_recipient( $analysis );

@@ -1142,13 +1142,11 @@ trait ACDC_Trainer_Portal_Render_Trait {
 
     $learners = array();
     if ( $can_see_learners ) {
-      $learners = $wpdb->get_results( $wpdb->prepare(
-        "SELECT id, first_name, last_name, usage_last_name, email, phone, status
-         FROM {$this->learner_table}
-         WHERE session_id = %d
-         ORDER BY last_name ASC, first_name ASC, id ASC",
-        $session_id
-      ) );
+      /* ACDC 3.25.211 — La liste se déduit du dossier, elle ne se lit plus dans
+         une colonne qui ne peut désigner qu'une seule séance. Voir la note du
+         résolveur : sur une formation de deux jours, le second jour affichait
+         « aucun apprenant inscrit » alors que trois personnes y assistaient. */
+      $learners = $this->acdc_session_learners( $session );
     }
 
     $period = '';

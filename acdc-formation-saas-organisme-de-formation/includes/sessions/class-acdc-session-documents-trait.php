@@ -210,6 +210,100 @@ trait ACDC_Session_Documents_Trait {
     return $sessions;
   }
 
+  /**
+   * ACDC 3.25.211 — LES APPRENANTS D'UNE SÉANCE SE DÉDUISENT DU DOSSIER.
+   *
+   * Le portail formateur lisait `learner.session_id` : une colonne, donc UNE
+   * séance par apprenant. Or une formation de deux jours tient en deux séances,
+   * et l'inscription ne rattache l'apprenant qu'à la PREMIÈRE. Résultat observé
+   * sur un dossier de trois apprenants : deux noms le premier jour, « aucun
+   * apprenant inscrit » le second. Ce n'est pas un oubli de saisie — c'est une
+   * question à laquelle la donnée ne peut pas répondre telle qu'elle est posée.
+   *
+   * On ne déplace pas la colonne, on cesse de lui demander ce qu'elle ne sait
+   * pas. La liste se reconstruit à partir de trois sources qui, elles, savent :
+   * le rattachement direct, les groupes de la séance, et les conventions qui
+   * portent la même formation sur des dates couvrant ce jour-là.
+   *
+   * C'est le même principe que le moteur du workflow : relire le dossier plutôt
+   * que se fier à un raccourci écrit une fois.
+   */
+  private function acdc_session_learners( $session ) {
+    global $wpdb;
+
+    if ( empty( $session->id ) ) {
+      return array();
+    }
+
+    $session_id = (int) $session->id;
+    $ids        = array();
+
+    /* 1. Rattachement direct — le chemin historique, conservé tel quel. */
+    $direct = $wpdb->get_col( $wpdb->prepare(
+      "SELECT id FROM {$this->learner_table} WHERE session_id = %d",
+      $session_id
+    ) );
+    foreach ( (array) $direct as $id ) {
+      $ids[ (int) $id ] = true;
+    }
+
+    /* 2. Groupes de la séance. */
+    $group_lists = $wpdb->get_col( $wpdb->prepare(
+      "SELECT learner_ids FROM {$this->group_table} WHERE session_id = %d",
+      $session_id
+    ) );
+    foreach ( (array) $group_lists as $list ) {
+      foreach ( array_filter( array_map( 'absint', explode( ',', (string) $list ) ) ) as $id ) {
+        $ids[ $id ] = true;
+      }
+    }
+
+    /* 3. Conventions couvrant cette séance.
+       La date de la séance est comparée au CRÉNEAU de la convention. Une
+       convention sans dates couvre toute la formation : ne pas l'exclure vaut
+       mieux que renvoyer une salle vide. */
+    $formation_id = isset( $session->formation_id ) ? (int) $session->formation_id : 0;
+    if ( $formation_id > 0 ) {
+      $day = '';
+      if ( ! empty( $session->start_date ) ) {
+        $day = substr( (string) $session->start_date, 0, 10 );
+      } elseif ( ! empty( $session->start_at ) ) {
+        $day = substr( (string) $session->start_at, 0, 10 );
+      }
+      if ( '' !== $day ) {
+        $contract_lists = $wpdb->get_col( $wpdb->prepare(
+          "SELECT learner_ids FROM {$this->registration_contract_table}
+            WHERE formation_id = %d
+              AND learner_ids IS NOT NULL AND learner_ids <> ''
+              AND ( start_date IS NULL OR start_date = '0000-00-00' OR start_date <= %s )
+              AND ( end_date   IS NULL OR end_date   = '0000-00-00' OR end_date   >= %s )",
+          $formation_id,
+          $day,
+          $day
+        ) );
+        foreach ( (array) $contract_lists as $list ) {
+          foreach ( array_filter( array_map( 'absint', explode( ',', (string) $list ) ) ) as $id ) {
+            $ids[ $id ] = true;
+          }
+        }
+      }
+    }
+
+    $ids = array_keys( $ids );
+    if ( empty( $ids ) ) {
+      return array();
+    }
+
+    $placeholders = implode( ',', array_fill( 0, count( $ids ), '%d' ) );
+    return (array) $wpdb->get_results( $wpdb->prepare(
+      "SELECT id, first_name, last_name, usage_last_name, email, phone, status
+        FROM {$this->learner_table}
+        WHERE id IN ({$placeholders})
+        ORDER BY last_name ASC, first_name ASC, id ASC",
+      $ids
+    ) );
+  }
+
   /* ═══════════════════════════════════════════════════════════════════
      STOCKAGE
      ═══════════════════════════════════════════════════════════════════ */
@@ -736,12 +830,17 @@ trait ACDC_Session_Documents_Trait {
     /* Un dépôt nominatif ne vaut que pour un apprenant DE CETTE SÉANCE. */
     $learner_id = isset( $_POST['learner_id'] ) ? absint( wp_unslash( $_POST['learner_id'] ) ) : 0;
     if ( $learner_id > 0 ) {
-      global $wpdb;
-      $belongs = (int) $wpdb->get_var( $wpdb->prepare(
-        "SELECT COUNT(*) FROM {$this->learner_table} WHERE id = %d AND session_id = %d",
-        $learner_id,
-        $session_id
-      ) );
+      /* Le contrôle interroge la MÊME liste que celle proposée à l'écran. Un
+         garde plus étroit que le menu qu'il protège refuse des choix qu'on
+         vient d'offrir : ici, tout apprenant venu de la convention aurait été
+         rejeté après avoir été proposé. */
+      $belongs = false;
+      foreach ( $this->acdc_session_learners( $session ) as $candidate ) {
+        if ( (int) $candidate->id === $learner_id ) {
+          $belongs = true;
+          break;
+        }
+      }
       if ( ! $belongs ) {
         $this->trainer_portal_redirect( 'sessions', 'Cet apprenant n’appartient pas à la séance.', 'error', array( 'session_id' => $session_id ) );
       }

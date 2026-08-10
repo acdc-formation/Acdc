@@ -5385,7 +5385,10 @@ public function handle_purge_plugin_data() {
     // ACDC 3.21.29-hotfix4b — Notification interne : alerte l'admin/formateur que l'analyse a été soumise.
     $company_profile  = get_option( 'acdc_of_company_profile', array() );
     $internal_email   = ! empty( $company_profile['email'] ) ? sanitize_email( $company_profile['email'] ) : get_option( 'admin_email' );
-    $repondant_label  = trim( ( (string) ( $analysis->repondant_prenom ?? '' ) ) . ' ' . ( (string) ( $analysis->repondant_nom ?? '' ) ) );
+    /* ACDC 3.25.211 — L'intitulé nomme l'entreprise, puis la personne, puis sa
+       qualité : deux analyses d'une même signataire qui est aussi apprenante ne
+       peuvent plus arriver sous le même titre. */
+    $repondant_label  = $this->nad_analysis_display_label( $analysis );
     $analysis_url     = $this->portal_page_url( array( 'tab' => 'need_analyses', 'action' => 'view', 'item_id' => (int) $analysis->id ) );
     if ( $internal_email ) {
       $this->acdc_send_transactional_email(
