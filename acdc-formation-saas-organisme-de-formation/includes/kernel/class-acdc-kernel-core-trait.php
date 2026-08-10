@@ -227,6 +227,37 @@ private function acdc_send_transactional_email( $to, $subject, $template_args = 
     if ( '' === $to || ! is_email( $to ) ) {
       return false;
     }
+
+    /* ACDC 3.25.218 — LE MODE RECETTE PROTÈGE ENFIN TOUTES LES PORTES.
+       Il n'arbitrait que les envois du workflow. Toutes les autres sorties —
+       analyses du besoin, convocations, invitations de quiz, demandes de
+       signature — passaient directement à wp_mail sans jamais consulter la
+       liste des destinataires autorisés. Le filet ne couvrait donc qu'une
+       porte sur dix, et l'on croyait la maison fermée.
+       La recette l'a démontré de la pire façon : une analyse du besoin
+       NOMINATIVE est partie vers un domaine étranger, à cause d'une adresse
+       mal saisie sur une fiche apprenant. Le mode recette était décoché ce
+       jour-là — mais coché, il n'aurait rien empêché non plus, puisque ce
+       chemin ne le consultait pas.
+       Le contrôle est donc remonté ici, au point de passage commun. Un envoi
+       refusé est journalisé nommément : un blocage silencieux ferait chercher
+       pendant des heures un e-mail qui n'est jamais parti. */
+    if ( method_exists( $this, 'acdc_wf_may_send_to' ) && ! $this->acdc_wf_may_send_to( $to ) ) {
+      $this->insert_system_log( array(
+        'log_level'   => 'warning',
+        'event_type'  => 'email_blocked_test_mode',
+        'action_key'  => 'transactional_email',
+        'object_type' => 'email',
+        'object_id'   => 0,
+        'message'     => 'Envoi bloqué par le mode recette : destinataire hors liste autorisée.',
+        'context_json' => array(
+          'destinataire' => $to,
+          'objet'        => wp_strip_all_tags( (string) $subject ),
+        ),
+      ) );
+      return false;
+    }
+
     $html = $this->acdc_build_transactional_email_html( $template_args );
     $headers = $this->acdc_get_transactional_email_headers( $header_args );
     return wp_mail( $to, wp_strip_all_tags( (string) $subject ), $html, $headers );

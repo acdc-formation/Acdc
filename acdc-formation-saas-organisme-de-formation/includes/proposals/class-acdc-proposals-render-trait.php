@@ -1816,7 +1816,10 @@ startxref
     <?php if ( 'ok' === $resend_status ) : ?>
     <div style="background:#ecfdf5;border:1px solid #6ee7b7;border-radius:10px;padding:12px 18px;margin-bottom:18px;font-size:13px;color:#065f46;display:flex;align-items:center;gap:8px;">
       <?php echo $this->render_inline_icon( 'check-circle', 18 ); ?>
-      Proposition envoy&#233;e avec succ&#232;s &#224; <strong><?php echo esc_html( $p->client_email ); ?></strong>.
+      <?php /* ACDC 3.25.218 — Le bandeau lisait la colonne brute, vide dès que
+               l'adresse vient du prospect : il annonçait « envoyée avec succès
+               à . ». Il interroge la même cascade que l'envoi. */ ?>
+      Proposition envoy&#233;e avec succ&#232;s&#160;<?php $sent_to = $this->acdc_proposal_recipient_email( $p ); echo $sent_to ? '&#224; <strong>' . esc_html( $sent_to ) . '</strong>' : ''; ?>.
     </div>
     <?php elseif ( 'error' === $resend_status ) : ?>
     <div style="background:#fff0f0;border:1px solid #fca5a5;border-radius:10px;padding:12px 18px;margin-bottom:18px;font-size:13px;color:#991b1b;display:flex;align-items:center;gap:8px;">
