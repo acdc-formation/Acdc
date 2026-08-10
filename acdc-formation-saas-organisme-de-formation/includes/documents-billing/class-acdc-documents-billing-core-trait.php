@@ -260,8 +260,11 @@ trait ACDC_Documents_Billing_Core_Trait {
       'status_label'        => $this->get_quote_status_labels()[ $q->status ] ?? ucfirst( (string) $q->status ),
       'relance_date'        => $q->last_relance_at ? mysql2date( 'j F Y H:i', $q->last_relance_at ) : 'Aucune relance',
       'relance_count'       => (int) $q->relance_count,
-      'formation'           => (string) $q->formation_title,
-      'formation_full'      => (string) $q->formation_title,
+      /* ACDC 3.25.204 — Le devis nomme la formation avec son repère de famille :
+         « 1.0 » et « 1.1 » sont la même formation en deux modalités et à deux
+         tarifs. Sans lui, deux devis voisins semblent porter la même offre. */
+      'formation'           => $this->acdc_formation_labelled( $q->formation_id ?? 0, $q->formation_title ),
+      'formation_full'      => $this->acdc_formation_labelled( $q->formation_id ?? 0, $q->formation_title ),
       'format'              => (string) $q->format,
       'formation_address'   => (string) $q->formation_address,
       'formation_postal_code' => (string) $q->formation_postal_code,

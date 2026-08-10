@@ -13572,7 +13572,11 @@ Nb de questions réussies / Nb de questions : <?php echo esc_html( (int) $contex
             <?php if ( ! empty( $formations ) ) : foreach ( $formations as $entry ) : ?>
               <?php $is_archived = ( (int) $entry->is_active !== 1 ) || ( isset( $entry->status ) && 'ARCHIVÉE' === strtoupper( (string) $entry->status ) ); ?>
               <tr>
-                <td><?php echo esc_html( ! empty( $entry->code ) ? $entry->code : $entry->id ); ?></td>
+                <?php /* ACDC 3.25.204 — Le repère de famille remplace l'identifiant brut :
+                         « 1.0 » et « 1.1 » disent d'un coup d'œil que ces deux lignes
+                         sont la même formation en deux modalités. Un code saisi à la
+                         main reste prioritaire, c'est la référence de l'organisme. */ ?>
+                <td><?php echo esc_html( ! empty( $entry->code ) ? $entry->code : $this->acdc_formation_reference( $entry->id ) ); ?></td>
                 <td><?php echo esc_html( $entry->status ? $entry->status : ( (int) $entry->is_active ? 'VALIDÉE' : 'ARCHIVÉE' ) ); ?></td>
                 <td class="acdc-formation-qualiopi-cell"><?php if ( (int) $entry->qualiopi_compliant === 1 ) : ?><span class="acdc-origin-status acdc-origin-status-yes" aria-label="Parcours Qualiopi conforme" title="Parcours Qualiopi conforme">✓</span><?php else : ?><span class="acdc-origin-status acdc-origin-status-no" aria-label="Parcours Qualiopi non conforme" title="Parcours Qualiopi non conforme">×</span><?php endif; ?></td>
                 <td><?php echo esc_html( $entry->title ); ?></td>

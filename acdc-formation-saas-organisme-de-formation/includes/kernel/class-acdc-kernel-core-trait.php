@@ -3648,6 +3648,124 @@ dbDelta( $sql_companies );
     return is_dir( $dir ) ? $dir : '';
   }
 
+  /**
+   * ACDC 3.25.204 — Le repère de formation : « 1.0 » et « 1.1 ».
+   *
+   * Une même formation existe en présentiel et en distanciel : deux fiches, deux
+   * tarifs, deux identifiants techniques qui se suivent sans rien dire de leur
+   * parenté. La liste affichait 1 et 2, puis 3 et 4, et rien ne signalait que 1
+   * et 2 sont la même formation.
+   *
+   * Le repère est un AFFICHAGE, jamais l'identifiant réel. La colonne `id` est
+   * référencée par les devis, les conventions, les séances et les inscriptions :
+   * la renuméroter romprait tous ces rattachements. On calcule donc un numéro de
+   * famille par-dessus, sans toucher à la base.
+   *
+   * Deux formations appartiennent à la même famille lorsqu'elles portent le même
+   * intitulé — ou, mieux, lorsque l'une déclare l'autre comme formation de base.
+   * Une variante au titre différent (« … en 2 jours ») forme donc sa propre
+   * famille : c'est une autre offre, avec sa durée et son prix.
+   *
+   * Le rang dans la famille suit la modalité : le présentiel porte .0, le
+   * distanciel .1, le reste ensuite. Une formation sans jumelle porte quand même
+   * un .0, pour que la colonne reste homogène et qu'une jumelle puisse arriver.
+   */
+  private function acdc_formation_reference_map() {
+    static $map = null;
+    if ( null !== $map ) {
+      return $map;
+    }
+
+    global $wpdb;
+    $map = array();
+
+    $rows = $wpdb->get_results(
+      "SELECT id, title, modality, base_formation_id FROM {$this->formation_table} ORDER BY id ASC"
+    );
+    if ( empty( $rows ) ) {
+      return $map;
+    }
+
+    /* Regroupement par famille, dans l'ordre d'apparition des identifiants :
+       la numérotation affichée suit ainsi l'ordre que David connaît déjà. */
+    $families = array();
+    $by_title = array();
+    foreach ( $rows as $row ) {
+      $key = '';
+      if ( ! empty( $row->base_formation_id ) ) {
+        $key = 'base:' . (int) $row->base_formation_id;
+      } else {
+        $normalised = strtolower( trim( preg_replace( '/\s+/u', ' ', (string) $row->title ) ) );
+        if ( ! isset( $by_title[ $normalised ] ) ) {
+          $by_title[ $normalised ] = 'title:' . (int) $row->id;
+        }
+        $key = $by_title[ $normalised ];
+      }
+      if ( ! isset( $families[ $key ] ) ) {
+        $families[ $key ] = array();
+      }
+      $families[ $key ][] = $row;
+    }
+
+    $family_number = 0;
+    foreach ( $families as $members ) {
+      $family_number++;
+
+      usort( $members, static function( $a, $b ) {
+        $rank = static function( $modality ) {
+          $modality = strtolower( (string) $modality );
+          if ( false !== strpos( $modality, 'présentiel' ) || false !== strpos( $modality, 'presentiel' ) ) {
+            return 0;
+          }
+          if ( false !== strpos( $modality, 'distanciel' ) ) {
+            return 1;
+          }
+          return 2;
+        };
+        $ra = $rank( $a->modality );
+        $rb = $rank( $b->modality );
+        return ( $ra === $rb ) ? ( (int) $a->id <=> (int) $b->id ) : ( $ra <=> $rb );
+      } );
+
+      foreach ( array_values( $members ) as $index => $member ) {
+        $map[ (int) $member->id ] = $family_number . '.' . $index;
+      }
+    }
+
+    return $map;
+  }
+
+  /**
+   * Le repère affiché d'une formation. Renvoie l'identifiant technique tel quel
+   * si la formation est introuvable — mieux vaut un numéro brut qu'une case vide.
+   */
+  public function acdc_formation_reference( $formation_id ) {
+    $formation_id = (int) $formation_id;
+    if ( $formation_id <= 0 ) {
+      return '';
+    }
+    $map = $this->acdc_formation_reference_map();
+    return isset( $map[ $formation_id ] ) ? $map[ $formation_id ] : (string) $formation_id;
+  }
+
+  /**
+   * Le titre d'une formation précédé de son repère de famille : « 1.0 — Créer
+   * et animer une page Facebook ». Utilisé partout où la formation est nommée
+   * dans une pièce qui sort de l'application.
+   */
+  public function acdc_formation_labelled( $formation_id, $title ) {
+    $title = trim( (string) $title );
+    $ref   = $this->acdc_formation_reference( $formation_id );
+    if ( '' === $ref || '' === $title ) {
+      return $title;
+    }
+    /* Un repère déjà présent en tête du titre ne se redouble pas. */
+    if ( 0 === strpos( $title, $ref . ' ' ) || 0 === strpos( $title, $ref . ' —' ) ) {
+      return $title;
+    }
+    return $ref . ' — ' . $title;
+  }
+
   private function get_backup_retention_count() {
     $count = absint( get_option( 'acdc_of_backup_retention_count', 30 ) );
     return $count > 0 ? $count : 30;
