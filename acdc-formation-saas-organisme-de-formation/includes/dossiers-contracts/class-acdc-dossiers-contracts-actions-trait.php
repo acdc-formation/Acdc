@@ -170,6 +170,54 @@ public function handle_save_training_registration() {
         $session_location = implode( ', ', $addr_parts );
         $session_format   = ! empty( $formation_for_session->modality ) ? (string) $formation_for_session->modality : '';
       }
+
+      /* ACDC 3.25.213 — LE LIEU EST CELUI DU COMMANDITAIRE, comme la convention.
+         La séance héritait de l'adresse portée par la FORMATION, c'est-à-dire
+         celle de l'organisme : « 7 avenue Paul Cézanne, Cogolin » s'affichait
+         alors que la convention engage une intervention chez le client. Le
+         document et la fiche disaient deux lieux différents pour la même
+         journée. Dès qu'une entreprise commande, c'est chez elle. */
+      if ( $company_id ) {
+        $company_for_session = $this->get_company( (int) $company_id );
+        if ( $company_for_session ) {
+          $company_addr = array_filter( array(
+            ! empty( $company_for_session->address ) ? trim( (string) $company_for_session->address ) : '',
+            trim( ( ! empty( $company_for_session->postal_code ) ? (string) $company_for_session->postal_code : '' )
+              . ' ' . ( ! empty( $company_for_session->city ) ? (string) $company_for_session->city : '' ) ),
+          ) );
+          if ( ! empty( $company_addr ) ) {
+            $session_location = implode( ', ', $company_addr );
+          }
+        }
+      }
+
+      /* ACDC 3.25.213 — LES HORAIRES SONT POSÉS, PAS LAISSÉS VIDES.
+         La séance ne portait qu'un « 09:00 » de début, sans fin, sans journée
+         de fin et sans découpage. Trois conséquences en cascade : la durée
+         restait vide, la méthode d'émargement aussi, et surtout le workflow ne
+         pouvait planifier NI convocation NI rappel d'émargement — il n'avait
+         aucune demi-journée à viser. Un dossier complet se retrouvait bloqué
+         par une information que personne n'avait été invité à saisir.
+         On pose donc la journée type de l'organisme, en deux demi-journées.
+         C'est une valeur de départ, modifiable séance par séance : proposer une
+         journée éditable vaut mieux qu'exiger une saisie que rien ne réclame. */
+      $day_morning_start   = '09:00:00';
+      $day_morning_end     = '12:30:00';
+      $day_afternoon_start = '13:30:00';
+      $day_afternoon_end   = '17:00:00';
+
+      /* Groupe ou individuelle : la question se tranche en comptant les
+         apprenants nommés dans la convention, pas en laissant la case vide.
+         Le décompte se lit ICI, avant la création des séances — la liste
+         utilisée plus bas pour créer les dossiers n'existe pas encore. */
+      $session_learner_count = 1;
+      if ( $autofill_contract_id ) {
+        $contract_for_count = $this->get_registration_contract( $autofill_contract_id );
+        if ( $contract_for_count && ! empty( $contract_for_count->learner_ids ) ) {
+          $session_learner_count = count( array_filter( array_map( 'absint', explode( ',', (string) $contract_for_count->learner_ids ) ) ) );
+        }
+      }
+      $session_type = $session_learner_count > 1 ? 'Groupe' : 'Individuelle';
       foreach ( $seances_arr as $idx => $sdate ) {
         // Anti-doublon : pas deux séances même formation + même date
         $exists = $wpdb->get_var( $wpdb->prepare(
@@ -186,11 +234,25 @@ public function handle_save_training_registration() {
           'company_id'     => $company_id ?: null,
           'title'          => $session_title,
           'start_date'     => $sdate,
-          'start_at'       => $sdate . ' 09:00:00',
+          'end_date'       => $sdate,
+          'start_at'       => $sdate . ' ' . $day_morning_start,
+          'end_at'         => $sdate . ' ' . $day_afternoon_end,
+          /* Les deux demi-journées sont écrites explicitement : c'est ce que lit
+             le moteur pour poser un rappel d'émargement 30 minutes avant chaque
+             séance, matin et après-midi. */
+          'schedule_json'  => wp_json_encode( array(
+            array( 'start_date' => $sdate, 'start_at' => $sdate . ' ' . $day_morning_start,   'end_at' => $sdate . ' ' . $day_morning_end,   'half' => 'am' ),
+            array( 'start_date' => $sdate, 'start_at' => $sdate . ' ' . $day_afternoon_start, 'end_at' => $sdate . ' ' . $day_afternoon_end, 'half' => 'pm' ),
+          ) ),
           'status'         => 'Planifiée',
           'trainer_id'     => $trainer_id ?: null,
           'location'       => $session_location,
           'session_format' => $session_format,
+          'session_type'      => $session_type,
+          /* L'émargement du plugin EST électronique : feuille ouverte par le
+             formateur, QR code, signature des apprenants. Laisser la case vide
+             décrivait mal ce que l'outil fait déjà. */
+          'attendance_method' => 'Électronique',
           'is_draft'       => 0,
           'created_at'     => $now_s,
           'updated_at'     => $now_s,
