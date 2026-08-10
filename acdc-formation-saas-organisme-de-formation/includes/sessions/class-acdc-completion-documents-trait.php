@@ -250,4 +250,36 @@ trait ACDC_Completion_Documents_Trait {
 
     return $eligibility;
   }
+
+  /**
+   * ACDC 3.25.220 — Le pont entre un dossier d'inscription et la réalité.
+   *
+   * Les écrans travaillent avec un dossier ; le calcul, lui, a besoin d'un
+   * apprenant et des séances qu'il a pu suivre. Cette fonction fait la
+   * traduction, une fois, pour que les deux contextes de document n'aient pas
+   * chacun leur version.
+   */
+  private function acdc_completion_state_for_registration( $registration ) {
+    global $wpdb;
+
+    $empty = $this->acdc_completion_eligibility( 0, array(), array() );
+    if ( empty( $registration->learner_id ) ) {
+      return $empty;
+    }
+
+    $formation_id = isset( $registration->formation_id ) ? (int) $registration->formation_id : 0;
+    $session_ids  = array();
+    if ( $formation_id > 0 ) {
+      $session_ids = $wpdb->get_col( $wpdb->prepare(
+        "SELECT id FROM {$this->session_table} WHERE formation_id = %d",
+        $formation_id
+      ) );
+    }
+
+    return $this->acdc_completion_eligibility(
+      (int) $registration->learner_id,
+      $session_ids,
+      array( (int) $registration->id )
+    );
+  }
 }

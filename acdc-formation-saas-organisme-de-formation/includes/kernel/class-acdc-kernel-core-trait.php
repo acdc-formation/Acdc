@@ -8648,7 +8648,21 @@ dbDelta( $sql_companies );
   $context['certificate_title'] = 'Certificat de réalisation';
   $context['source_label'] = 'Plateforme';
   $context['result_label'] = ( ! empty( $document['url'] ) || ! empty( $document['path'] ) ) ? 'Complété' : 'Disponible';
-  $context['assiduity'] = 'Oui';
+  /* ACDC 3.25.220 — L'ASSIDUITÉ SE LIT, ELLE NE S'AFFIRME PAS.
+     Ce champ valait « Oui » en dur, sans jamais consulter le moindre
+     émargement : le certificat de réalisation — la pièce même que réclame le
+     financeur pour solder un dossier — attestait une présence que personne
+     n'avait vérifiée. C'est la définition d'un faux, et c'est le document sur
+     lequel il ne fallait surtout pas se le permettre.
+     Il porte désormais les heures RÉELLEMENT signées, et l'assiduité n'est
+     acquise que si la personne a émargé au moins une demi-journée. */
+  $acdc_state = $this->acdc_completion_state_for_registration( $registration );
+  $context['completion_state'] = $acdc_state;
+  $context['hours_label']      = $acdc_state['time']['label'];
+  $context['hours_minutes']    = (int) $acdc_state['time']['minutes'];
+  $context['half_days']        = (int) $acdc_state['time']['half_days'];
+  $context['assiduity']        = $acdc_state['time']['half_days'] > 0 ? 'Oui' : 'Non';
+  $context['is_due']           = ! empty( $acdc_state['certificat'] );
   $context['issuer_city'] = ! empty( $profile['city'] ) ? (string) $profile['city'] : 'Cogolin';
   $context['issuer_name'] = ! empty( $profile['enterprise'] ) ? (string) $profile['enterprise'] : 'ACDC-Formation';
   $signatory = trim( (string) ( $profile['first_name'] ?? '' ) . ' ' . (string) ( $profile['last_name'] ?? '' ) );
@@ -8826,7 +8840,28 @@ dbDelta( $sql_companies );
   $profile = $this->get_company_profile_options();
   $context['document'] = $document;
   $context['source_label'] = 'Plateforme';
-  $context['result_label'] = ( ! empty( $document['url'] ) || ! empty( $document['path'] ) ) ? 'Complétée' : 'Disponible';
+  /* ACDC 3.25.220 — Le RÉSULTAT décrivait l'état du FICHIER, pas celui des
+     acquis : « Complétée » signifiait « un PDF existe », et l'attestation de
+     fin de formation ne lisait jamais l'évaluation qu'elle est censée
+     attester. Elle porte maintenant le score réel, la mention de réussite, et
+     ne se déclare due que si l'évaluation a été passée ET réussie. */
+  $acdc_state = $this->acdc_completion_state_for_registration( $registration );
+  $context['completion_state'] = $acdc_state;
+  $context['hours_label']      = $acdc_state['time']['label'];
+  $context['assessment_taken'] = ! empty( $acdc_state['assessment']['taken'] );
+  $context['assessment_score'] = ( null !== $acdc_state['assessment']['score'] )
+    ? number_format( (float) $acdc_state['assessment']['score'], 1, ',', '' ) . ' %'
+    : '';
+  $context['assessment_quiz']  = (string) $acdc_state['assessment']['quiz_title'];
+  $context['is_due']           = ! empty( $acdc_state['attestation'] );
+  $context['due_reason']       = (string) $acdc_state['reason'];
+  if ( ! $context['assessment_taken'] ) {
+    $context['result_label'] = 'Évaluation des acquis non passée';
+  } elseif ( true === $acdc_state['assessment']['passed'] ) {
+    $context['result_label'] = 'Acquis validés' . ( '' !== $context['assessment_score'] ? ' — ' . $context['assessment_score'] : '' );
+  } else {
+    $context['result_label'] = 'Acquis non validés' . ( '' !== $context['assessment_score'] ? ' — ' . $context['assessment_score'] : '' );
+  }
   $context['issuer_city'] = ! empty( $profile['city'] ) ? (string) $profile['city'] : 'Cogolin';
   $context['issuer_name'] = ! empty( $profile['enterprise'] ) ? (string) $profile['enterprise'] : 'ACDC-Formation';
   $signatory = trim( (string) ( $profile['first_name'] ?? '' ) . ' ' . (string) ( $profile['last_name'] ?? '' ) );
