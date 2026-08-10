@@ -1216,9 +1216,27 @@ trait ACDC_Quizzes_Render_Results_Trait {
      * Petit cadenas décoratif en haut à droite des sections (style legacy).
      * 3.21.04.1-hotfix4
      */
+    /**
+     * ACDC 3.25.215 — Le cadenas porte ses propres dimensions.
+     *
+     * Ce SVG ne déclarait qu'un `viewBox` : sa taille, sa couleur et son
+     * remplissage venaient entièrement de quizzes-admin.css. Or cette feuille
+     * n'est chargée que sur les écrans quiz de l'organisme, jamais sur
+     * l'extranet apprenant — où le même code est pourtant appelé. Sans elle, le
+     * navigateur étire l'image sur toute la largeur disponible et la remplit en
+     * noir : l'onglet « Mes quiz » de l'apprenant affichait un cadenas géant qui
+     * repoussait le tableau des quiz complétés à un écran et demi plus bas.
+     *
+     * Une icône ne doit pas dépendre d'une feuille de style pour avoir une
+     * taille. Les attributs intrinsèques sont donc portés par le balisage ; la
+     * feuille de style, là où elle est chargée, affirme exactement les mêmes
+     * valeurs et ne change donc rien à l'écran de l'organisme.
+     */
     private function qz_section_lock_svg() {
-        return '<span class="acdc-qz-results-section-lock" aria-hidden="true">'
-            . '<svg viewBox="0 0 24 24"><rect x="6" y="11" width="12" height="9" rx="1.5"/><path d="M8.5 11V8a3.5 3.5 0 0 1 7 0v3"/></svg>'
+        return '<span class="acdc-qz-results-section-lock" aria-hidden="true" style="display:inline-flex;align-items:center;justify-content:center;width:28px;height:28px;color:#d6a353;">'
+            . '<svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round">'
+            . '<rect x="6" y="11" width="12" height="9" rx="1.5"/><path d="M8.5 11V8a3.5 3.5 0 0 1 7 0v3"/>'
+            . '</svg>'
             . '</span>';
     }
 

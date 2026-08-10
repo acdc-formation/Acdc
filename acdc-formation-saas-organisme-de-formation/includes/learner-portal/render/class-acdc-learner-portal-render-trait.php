@@ -438,7 +438,15 @@ trait ACDC_Learner_Portal_Render_Trait {
               } else {
                 $result_label = '<span style="color:#5a6577;">—</span>';
               }
-              $detail_url = $this->learner_portal_page_url( 'mes_quiz' ) . '&qz_participant=' . (int) $p->participant_id;
+              /* ACDC 3.25.215 — Le lien « Détail » sortait du portail.
+                 Il collait « &qz_participant=… » à la fin d'un permalien qui ne
+                 porte aucun paramètre : l'adresse obtenue se terminait par
+                 « /mes-quiz/&qz_participant=3 », que WordPress ne sait pas
+                 résoudre. Il tentait alors de deviner la page voulue et
+                 atterrissait ailleurs — sur les CGU, en l'occurrence.
+                 On passe le paramètre par la fonction, qui l'ajoute proprement,
+                 avec un « ? » si c'est le premier. */
+              $detail_url = $this->learner_portal_page_url( 'mes_quiz', array( 'qz_participant' => (int) $p->participant_id ) );
               $has_pdf    = ! empty( $p->result_document_url );
             ?>
             <tr>
