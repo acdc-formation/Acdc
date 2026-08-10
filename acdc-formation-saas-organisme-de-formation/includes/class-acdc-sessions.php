@@ -19,6 +19,8 @@ $acdc_sessions_manifest = array(
     'class-acdc-sessions-render-trait.php'  => 'ACDC_Sessions_Render_Trait',
     /* ACDC 3.25.207 — Documents de séance et verrou de l'extranet apprenant. */
     'class-acdc-session-documents-trait.php' => 'ACDC_Session_Documents_Trait',
+    /* ACDC 3.25.220 — Pièces de fin de formation : heures émargées et acquis. */
+    'class-acdc-completion-documents-trait.php' => 'ACDC_Completion_Documents_Trait',
 );
 
 foreach ( $acdc_sessions_manifest as $file => $trait_name ) {

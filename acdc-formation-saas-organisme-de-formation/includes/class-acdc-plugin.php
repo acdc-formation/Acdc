@@ -49,6 +49,7 @@ class ACDC_Formation_SAAS_Plugin {
   use ACDC_Sessions_Actions_Trait;
   use ACDC_Sessions_Render_Trait;
   use ACDC_Session_Documents_Trait;
+  use ACDC_Completion_Documents_Trait;
   use ACDC_Dossiers_Contracts_Core_Trait;
   use ACDC_Dossiers_Contracts_Actions_Trait;
   use ACDC_Dossiers_Contracts_Render_Trait;

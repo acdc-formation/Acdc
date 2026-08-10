@@ -1,0 +1,253 @@
+<?php
+/**
+ * ACDC — Pièces de fin de formation : ce qui est VRAI avant ce qui est BEAU.
+ *
+ * Trois documents sortent à la fin d'une formation, et ils ne disent pas la
+ * même chose. Les confondre serait la faute grave de ce module.
+ *
+ *   • CERTIFICAT DE RÉALISATION — le document des HEURES. Il atteste que la
+ *     personne a suivi l'action. C'est la pièce réglementaire que réclament
+ *     les OPCO et les financeurs publics pour solder un dossier : elle doit
+ *     donc sortir dès qu'il y a eu présence, sans dépendre d'aucun résultat.
+ *
+ *   • ATTESTATION DE FIN DE FORMATION — le document des ACQUIS. Elle reprend
+ *     le résultat de l'évaluation des acquis. Elle n'est due que si cette
+ *     évaluation a été passée ET réussie ; sinon la décision revient à
+ *     l'organisme, jamais à une machine.
+ *
+ *   • ATTESTATION D'ABSENCE — pour qui n'a rien signé du tout. Elle part au
+ *     COMMANDITAIRE, pas à l'apprenant : c'est lui qui a commandé et payé.
+ *
+ * Ce fichier ne fabrique aucun PDF. Il répond d'abord aux deux questions dont
+ * tout le reste dépend, et dont aucune n'avait de réponse dans le plugin :
+ * combien d'heures cette personne a-t-elle RÉELLEMENT signées, et où en est
+ * son évaluation des acquis. Un gabarit qui se tromperait là-dessus produirait
+ * une fausse attestation — c'est-à-dire un faux.
+ *
+ * LA RÈGLE QUI GOUVERNE TOUT : on compte ce qui est SIGNÉ, jamais ce qui était
+ * prévu. Une demi-journée planifiée mais non émargée ne compte pas. C'est la
+ * seule lecture qui tienne devant un auditeur, et c'est aussi la seule qui
+ * rende l'absence visible sans qu'on ait à la déclarer.
+ *
+ * @since 3.25.220
+ */
+
+if ( ! defined( 'ABSPATH' ) ) {
+  exit;
+}
+
+trait ACDC_Completion_Documents_Trait {
+
+  /** Les statuts d'émargement qui valent PRÉSENCE. Tout le reste est absence. */
+  private function acdc_completion_present_statuses() {
+    return array( 'signed', 'signe', 'present', 'présent' );
+  }
+
+  /**
+   * Les heures réellement émargées par un apprenant sur une formation.
+   *
+   * On additionne la durée des demi-journées qu'il a SIGNÉES, en lisant
+   * l'horaire porté par la feuille elle-même — pas celui de la séance. Les
+   * deux peuvent différer : une matinée qui s'est terminée plus tôt est une
+   * matinée plus courte, et c'est la feuille qui en porte la trace.
+   *
+   * @param int   $learner_id
+   * @param int[] $session_ids Les séances du dossier.
+   * @return array{minutes:int,half_days:int,label:string,first_at:string,last_at:string}
+   */
+  private function acdc_completion_signed_time( $learner_id, $session_ids ) {
+    global $wpdb;
+
+    $result = array(
+      'minutes'   => 0,
+      'half_days' => 0,
+      'label'     => '0 h',
+      'first_at'  => '',
+      'last_at'   => '',
+    );
+
+    $learner_id  = (int) $learner_id;
+    $session_ids = array_values( array_filter( array_map( 'absint', (array) $session_ids ) ) );
+    if ( $learner_id <= 0 || empty( $session_ids ) ) {
+      return $result;
+    }
+
+    $emarg_sessions = $wpdb->prefix . 'acdc_of_emarg_sessions';
+    $emarg_learners = $wpdb->prefix . 'acdc_of_emarg_learners';
+
+    $placeholders = implode( ',', array_fill( 0, count( $session_ids ), '%d' ) );
+    $statuses     = $this->acdc_completion_present_statuses();
+    $status_ph    = implode( ',', array_fill( 0, count( $statuses ), '%s' ) );
+
+    $rows = $wpdb->get_results( $wpdb->prepare(
+      "SELECT es.seance_start_at, es.seance_end_at
+         FROM {$emarg_learners} el
+         INNER JOIN {$emarg_sessions} es ON es.id = el.emarg_session_id
+        WHERE el.learner_id = %d
+          AND el.session_id IN ({$placeholders})
+          AND LOWER( el.status ) IN ({$status_ph})
+        ORDER BY es.seance_start_at ASC",
+      array_merge( array( $learner_id ), $session_ids, $statuses )
+    ) );
+
+    if ( empty( $rows ) ) {
+      return $result;
+    }
+
+    $minutes = 0;
+    foreach ( $rows as $row ) {
+      $result['half_days']++;
+
+      if ( '' === $result['first_at'] && ! empty( $row->seance_start_at ) ) {
+        $result['first_at'] = (string) $row->seance_start_at;
+      }
+      if ( ! empty( $row->seance_start_at ) ) {
+        $result['last_at'] = (string) $row->seance_start_at;
+      }
+
+      /* Une demi-journée sans horaire complet ne vaut pas zéro : elle a bien
+         été suivie. On lui compte la demi-journée type de l'organisme plutôt
+         que de sous-estimer les heures d'un apprenant présent — une pièce qui
+         minore le temps suivi dessert autant l'apprenant que l'organisme. */
+      if ( empty( $row->seance_start_at ) || empty( $row->seance_end_at ) ) {
+        $minutes += 210; // 3 h 30, la demi-journée de référence.
+        continue;
+      }
+
+      $span = ( strtotime( (string) $row->seance_end_at ) - strtotime( (string) $row->seance_start_at ) ) / 60;
+      $minutes += ( $span > 0 ) ? (int) round( $span ) : 210;
+    }
+
+    $result['minutes'] = $minutes;
+    $result['label']   = $this->acdc_completion_minutes_label( $minutes );
+
+    return $result;
+  }
+
+  /** « 14 h », « 10 h 30 » — jamais « 10h30 min », qui double l'unité. */
+  private function acdc_completion_minutes_label( $minutes ) {
+    $minutes = max( 0, (int) $minutes );
+    $hours   = (int) floor( $minutes / 60 );
+    $rest    = $minutes % 60;
+
+    if ( $hours > 0 && $rest > 0 ) {
+      return sprintf( '%d h %02d', $hours, $rest );
+    }
+    if ( $hours > 0 ) {
+      return $hours . ' h';
+    }
+    return $rest . ' min';
+  }
+
+  /**
+   * Le résultat de l'évaluation des acquis d'un apprenant.
+   *
+   * On retient la passation TERMINÉE la plus récente. Une évaluation repassée
+   * remplace la précédente : c'est le dernier état des acquis qui fait foi.
+   *
+   * @return array{passed:bool|null,score:float|null,taken:bool,completed_at:string,quiz_title:string}
+   */
+  private function acdc_completion_assessment_result( $learner_id, $registration_ids = array() ) {
+    global $wpdb;
+
+    $out = array(
+      'passed'       => null,
+      'score'        => null,
+      'taken'        => false,
+      'completed_at' => '',
+      'quiz_title'   => '',
+    );
+
+    $qz_p = $wpdb->prefix . 'acdc_of_qz_participants';
+    $qz_s = $wpdb->prefix . 'acdc_of_qz_sessions';
+    $qz_q = $wpdb->prefix . 'acdc_of_qz_quizzes';
+
+    $registration_ids = array_values( array_filter( array_map( 'absint', (array) $registration_ids ) ) );
+
+    $where  = array( "qq.quiz_purpose = 'assessment'", 'qp.completed_at IS NOT NULL' );
+    $params = array();
+
+    if ( ! empty( $registration_ids ) ) {
+      $ph      = implode( ',', array_fill( 0, count( $registration_ids ), '%d' ) );
+      $where[] = "qp.registration_id IN ({$ph})";
+      $params  = array_merge( $params, $registration_ids );
+    } else {
+      $where[]  = 'qp.learner_id = %d';
+      $params[] = (int) $learner_id;
+    }
+
+    $sql = "SELECT qp.total_score_percentage, qp.is_passed, qp.completed_at, qq.title
+              FROM {$qz_p} qp
+              INNER JOIN {$qz_s} qs ON qs.id = qp.session_id
+              INNER JOIN {$qz_q} qq ON qq.id = qs.quiz_id
+             WHERE " . implode( ' AND ', $where ) . "
+             ORDER BY qp.completed_at DESC
+             LIMIT 1";
+
+    $row = $wpdb->get_row( $wpdb->prepare( $sql, $params ) );
+    if ( ! $row ) {
+      return $out;
+    }
+
+    $out['taken']        = true;
+    $out['score']        = ( null !== $row->total_score_percentage ) ? (float) $row->total_score_percentage : null;
+    $out['passed']       = ( null !== $row->is_passed ) ? ( 1 === (int) $row->is_passed ) : null;
+    $out['completed_at'] = (string) $row->completed_at;
+    $out['quiz_title']   = (string) $row->title;
+
+    return $out;
+  }
+
+  /**
+   * Quelles pièces sont dues à cet apprenant, et pourquoi.
+   *
+   * Cette fonction ne produit rien : elle DÉCIDE. Elle est volontairement le
+   * seul endroit où la règle est écrite, pour qu'un gabarit ne puisse jamais
+   * la contredire.
+   *
+   * @return array{
+   *   certificat:bool, attestation:bool, absence:bool,
+   *   time:array, assessment:array, reason:string
+   * }
+   */
+  private function acdc_completion_eligibility( $learner_id, $session_ids, $registration_ids = array() ) {
+    $time       = $this->acdc_completion_signed_time( $learner_id, $session_ids );
+    $assessment = $this->acdc_completion_assessment_result( $learner_id, $registration_ids );
+
+    $eligibility = array(
+      'certificat'  => false,
+      'attestation' => false,
+      'absence'     => false,
+      'time'        => $time,
+      'assessment'  => $assessment,
+      'reason'      => '',
+    );
+
+    /* AUCUNE signature : la personne n'est pas venue. Ni certificat ni
+       attestation — les deux seraient des faux — mais une pièce qui le dit,
+       adressée au commanditaire. */
+    if ( $time['half_days'] <= 0 ) {
+      $eligibility['absence'] = true;
+      $eligibility['reason']  = 'Aucun émargement signé : absence totale.';
+      return $eligibility;
+    }
+
+    /* Présence, même partielle : le certificat de réalisation est dû, avec les
+       heures réelles. Elles diront d'elles-mêmes ce qui s'est passé. */
+    $eligibility['certificat'] = true;
+
+    if ( ! $assessment['taken'] ) {
+      $eligibility['reason'] = 'Certificat dû. Attestation en attente : évaluation des acquis non passée.';
+      return $eligibility;
+    }
+    if ( true !== $assessment['passed'] ) {
+      $eligibility['reason'] = 'Certificat dû. Attestation non délivrée automatiquement : évaluation des acquis non réussie — décision à l’organisme.';
+      return $eligibility;
+    }
+
+    $eligibility['attestation'] = true;
+    $eligibility['reason']      = 'Certificat et attestation dus : présence émargée et acquis validés.';
+
+    return $eligibility;
+  }
+}
