@@ -429,6 +429,56 @@ trait Acdc_Proposals_Core_Trait {
     return $data;
   }
 
+  /**
+   * ACDC 3.25.217 — L'adresse à qui part une proposition, en un seul endroit.
+   *
+   * Trois sources, dans cet ordre : l'adresse saisie sur la proposition, le
+   * contact rattaché, puis le prospect du recueil d'origine. C'est exactement
+   * la cascade qu'appliquait l'envoi ; elle est désormais lisible aussi par
+   * l'écran, qui grisait son bouton faute de la connaître.
+   */
+  private function acdc_proposal_recipient_email( $proposal ) {
+    if ( empty( $proposal ) ) {
+      return '';
+    }
+
+    if ( ! empty( $proposal->client_email ) ) {
+      $email = sanitize_email( (string) $proposal->client_email );
+      if ( is_email( $email ) ) {
+        return $email;
+      }
+    }
+
+    if ( ! empty( $proposal->contact_id ) ) {
+      $contact = $this->get_contact( (int) $proposal->contact_id );
+      if ( $contact && ! empty( $contact->email ) ) {
+        $email = sanitize_email( (string) $contact->email );
+        if ( is_email( $email ) ) {
+          return $email;
+        }
+      }
+    }
+
+    if ( ! empty( $proposal->need_id ) ) {
+      global $wpdb;
+      $need_row = $wpdb->get_row( $wpdb->prepare(
+        "SELECT source_prospect_id FROM {$this->need_table} WHERE id = %d LIMIT 1",
+        (int) $proposal->need_id
+      ) );
+      if ( $need_row && ! empty( $need_row->source_prospect_id ) ) {
+        $prospect = $this->get_prospect( (int) $need_row->source_prospect_id );
+        if ( $prospect ) {
+          $email = sanitize_email( (string) $this->get_prospect_primary_email( $prospect ) );
+          if ( is_email( $email ) ) {
+            return $email;
+          }
+        }
+      }
+    }
+
+    return '';
+  }
+
   /* ---------------------------------------------------------------
    * Récupère les champs de besoin du recueil le plus récent lié au prospect
    * --------------------------------------------------------------- */

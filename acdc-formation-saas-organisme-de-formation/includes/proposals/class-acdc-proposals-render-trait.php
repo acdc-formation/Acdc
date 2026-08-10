@@ -1833,15 +1833,17 @@ startxref
           <p class="acdc-screen-subtitle"><?php echo esc_html( $p->client_company ); ?><?php if ( $p->client_name ) echo ' &mdash; ' . esc_html( $p->client_name ); ?></p>
         </div>
         <?php /* M18 \u2014 \u00ab Envoyer \u00bb tant que jamais envoy\u00e9e, \u00ab Renvoyer \u00bb ensuite. */
-        $prop_send_label = ! empty( $p->last_sent_at ) ? 'Renvoyer' : 'Envoyer'; ?>
+        $prop_send_label = ! empty( $p->last_sent_at ) ? 'Renvoyer' : 'Envoyer';
+        /* ACDC 3.25.217 — L'écran interroge la même cascade que l'envoi. */
+        $prop_recipient  = $this->acdc_proposal_recipient_email( $p ); ?>
         <div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap;">
           <a href="<?php echo esc_url( $list_url ); ?>" class="acdc-button acdc-button-soft">&#8592; Retour</a>
           <a href="<?php echo esc_url( $edit_url ); ?>" class="acdc-button acdc-button-soft"><?php echo $this->render_inline_icon( 'edit', 18 ); ?> Modifier</a>
           <a href="<?php echo esc_url( $this->get_proposal_pdf_url( $p->id ) ); ?>" target="_blank" class="acdc-button acdc-button-soft"><?php echo $this->render_inline_icon( 'file-text', 18 ); ?> Ouvrir la proposition</a>
-          <?php if ( ! empty( $p->client_email ) ) : ?>
+          <?php if ( ! empty( $prop_recipient ) ) : ?>
             <a href="<?php echo esc_url( $resend_url ); ?>"
                class="acdc-button acdc-button-primary"
-               onclick="return confirm('Envoyer la proposition par email \u00e0 <?php echo esc_js( $p->client_email ); ?> ?');">
+               onclick="return confirm('Envoyer la proposition par email \u00e0 <?php echo esc_js( $prop_recipient ); ?> ?');">
               <?php echo $this->render_inline_icon( 'send', 18 ); ?> <?php echo esc_html( $prop_send_label ); ?>
             </a>
           <?php else : ?>
@@ -1849,7 +1851,7 @@ startxref
               <?php echo $this->render_inline_icon( 'send', 18 ); ?> <?php echo esc_html( $prop_send_label ); ?>
             </span>
           <?php endif; ?>
-          <?php if ( empty( $p->client_email ) ) : ?>
+          <?php if ( empty( $prop_recipient ) ) : ?>
             <span style="font-size:12px;color:#c2410c;display:inline-flex;align-items:center;gap:5px;margin-left:4px;">
               <?php echo $this->render_inline_icon( 'alert-circle', 14 ); ?>
               Aucun email &mdash; <a href="<?php echo esc_url( $edit_url ); ?>" style="color:#c2410c;text-decoration:underline;">Modifier</a>
@@ -1880,7 +1882,7 @@ startxref
           <div style="padding:16px;font-size:13px;line-height:1.7;color:#0f2c52;">
             <p><strong>Entreprise :</strong> <?php echo esc_html( $p->client_company ); ?></p>
             <?php if ( $p->client_name ) : ?><p><strong>Contact :</strong> <?php echo esc_html( $p->client_name ); ?><?php if ( $p->client_title ) echo ' — ' . esc_html( $p->client_title ); ?></p><?php endif; ?>
-            <?php if ( ! empty( $p->client_email ) ) : ?><p><strong>Email :</strong> <a href="mailto:<?php echo esc_attr( $p->client_email ); ?>" style="color:#0f2c52;"><?php echo esc_html( $p->client_email ); ?></a></p><?php endif; ?>
+            <?php if ( ! empty( $prop_recipient ) ) : ?><p><strong>Email :</strong> <a href="mailto:<?php echo esc_attr( $prop_recipient ); ?>" style="color:#0f2c52;"><?php echo esc_html( $prop_recipient ); ?></a></p><?php endif; ?>
             <?php if ( $p->client_siret ) : ?><p><strong>SIRET :</strong> <?php echo esc_html( $p->client_siret ); ?></p><?php endif; ?>
             <?php if ( $p->client_address ) : ?><p><strong>Adresse :</strong> <?php echo esc_html( $p->client_address ); ?></p><?php endif; ?>
             <?php if ( $p->client_activity ) : ?><p><strong>Activit&#233; :</strong> <?php echo esc_html( $p->client_activity ); ?></p><?php endif; ?>
@@ -2980,7 +2982,13 @@ startxref
       var btn = document.getElementById('acdc-full-save-gen-btn');
       btn.disabled = true;
       var data = acdcFullCollect();
-      data['status'] = 'envoyee';
+      /* ACDC 3.25.217 — GÉNÉRER N'EST PAS ENVOYER.
+         Ce bouton forçait le statut « Envoyée » avant tout envoi : la ligne
+         s'affichait envoyée avec une colonne « Dernier envoi » vide, et
+         personne ne pouvait plus savoir si le client avait reçu quoi que ce
+         soit. Le statut et l'horodatage sont posés par l'envoi réel, et par
+         lui seul — c'est d'ailleurs ce que promettait déjà le commentaire du
+         gestionnaire de sauvegarde. */
       var fd = new FormData();
       fd.append('action', 'acdc_proposal_save_full');
       fd.append('nonce', _acdcFullNonce);

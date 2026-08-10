@@ -466,33 +466,19 @@ trait Acdc_Proposals_Actions_Trait {
       return new WP_Error( 'not_found', 'Proposition introuvable.' );
     }
 
-    /* Résolution de l'email destinataire */
-    $recipient_email = '';
+    /* ACDC 3.25.217 — La résolution du destinataire est PARTAGÉE avec l'écran.
+       Elle vivait ici seule : l'expéditeur savait retrouver l'adresse par le
+       prospect du recueil, la fiche de consultation, elle, ne lisait que la
+       colonne `client_email`. Sur une proposition dont l'adresse n'est connue
+       que du prospect, l'écran annonçait « Aucun email » et grisait le bouton
+       d'un envoi qui aurait parfaitement fonctionné. Deux écrans, deux
+       vérités : c'est l'écran qui bloquait, pas le mécanisme. */
+    $recipient_email = $this->acdc_proposal_recipient_email( $proposal );
     $recipient_name  = trim( (string) $proposal->client_name ) ?: (string) $proposal->client_company;
-
-    if ( ! empty( $proposal->client_email ) ) {
-      $recipient_email = sanitize_email( (string) $proposal->client_email );
-    }
-    if ( ! $recipient_email && ! empty( $proposal->contact_id ) ) {
+    if ( ! $recipient_name && ! empty( $proposal->contact_id ) ) {
       $contact = $this->get_contact( (int) $proposal->contact_id );
-      if ( $contact && ! empty( $contact->email ) ) {
-        $recipient_email = sanitize_email( (string) $contact->email );
-        if ( ! $recipient_name ) {
-          $recipient_name = trim( $contact->first_name . ' ' . $contact->last_name );
-        }
-      }
-    }
-    if ( ! $recipient_email && ! empty( $proposal->need_id ) ) {
-      global $wpdb;
-      $need_row = $wpdb->get_row( $wpdb->prepare(
-        "SELECT source_prospect_id FROM {$this->need_table} WHERE id = %d LIMIT 1",
-        (int) $proposal->need_id
-      ) );
-      if ( $need_row && ! empty( $need_row->source_prospect_id ) ) {
-        $prospect = $this->get_prospect( (int) $need_row->source_prospect_id );
-        if ( $prospect ) {
-          $recipient_email = $this->get_prospect_primary_email( $prospect );
-        }
+      if ( $contact ) {
+        $recipient_name = trim( $contact->first_name . ' ' . $contact->last_name );
       }
     }
 
