@@ -135,6 +135,28 @@ trait ACDC_Sessions_Core_Trait {
         }
       }
       foreach ( $rows as $row ) {
+        /* ACDC 3.25.212 — Le nombre d'apprenants et le commanditaire se
+           déduisent du dossier, comme dans le portail formateur.
+           La requête ci-dessus compte les apprenants par `learner.session_id` :
+           sur une formation de deux jours, elle en trouvait deux le premier jour
+           et aucun le second, alors que trois personnes suivaient les deux. La
+           colonne ne peut pas désigner plus d'une séance ; on ne lui demande
+           donc plus de le faire. */
+        $resolved_learners = $this->acdc_session_learners( $row );
+        if ( count( $resolved_learners ) > (int) $row->learner_count ) {
+          $row->learner_count = count( $resolved_learners );
+          if ( 1 === count( $resolved_learners ) ) {
+            $only = $resolved_learners[0];
+            $row->learner_first_name      = (string) $only->first_name;
+            $row->learner_last_name       = (string) $only->last_name;
+            $row->learner_usage_last_name = (string) $only->usage_last_name;
+          }
+        }
+        $resolved_company = $this->acdc_session_company_name( $row );
+        if ( '' !== $resolved_company ) {
+          $row->company_name = $resolved_company;
+        }
+
         $row->learner_or_group_label = $this->get_session_validated_learner_or_group_label( $row );
         $row->trainer_display_name = $this->get_session_validated_trainer_label( $row );
         $row->location_display = $this->get_session_validated_location_label( $row );
@@ -240,18 +262,28 @@ trait ACDC_Sessions_Core_Trait {
     return '—';
   }
 
+  /**
+   * ACDC 3.25.212 — Le lieu de la séance, et RIEN d'autre.
+   *
+   * Cette fonction collait deux informations sans rapport : l'adresse où se
+   * tient la séance, et la ville du COMMANDITAIRE. D'où l'affichage relevé par
+   * David — « 7 avenue Paul Cézanne, Cogolin — SIX-FOURS-LES-PLAGES » — qui
+   * annonce deux villes pour un même lieu. Un formateur qui lit cette ligne ne
+   * sait pas où se rendre, et c'est la seule chose qu'elle devait lui dire.
+   *
+   * La ville de l'entreprise n'est ajoutée que lorsque la séance n'a AUCUNE
+   * adresse : elle vaut alors mieux que rien, mais elle ne complète jamais une
+   * adresse existante.
+   */
   private function get_session_validated_location_label( $session ) {
-    $parts = array();
-    if ( ! empty( $session->location ) ) {
-      $parts[] = $session->location;
+    $location = isset( $session->location ) ? trim( (string) $session->location ) : '';
+    if ( '' !== $location ) {
+      return $location;
     }
     if ( ! empty( $session->formation_city ) ) {
-      $parts[] = strtoupper( (string) $session->formation_city );
+      return strtoupper( (string) $session->formation_city );
     }
-    if ( empty( $parts ) ) {
-      return '—';
-    }
-    return implode( ' — ', $parts );
+    return '—';
   }
 
   private function get_session_validated_filter_options( $items, $field ) {
@@ -294,7 +326,15 @@ trait ACDC_Sessions_Core_Trait {
       return mysql2date( 'd/m/Y', $start_date ) . ' → ' . mysql2date( 'd/m/Y', $end_date );
     }
     if ( ! empty( $start_date ) ) {
-      return mysql2date( 'd/m/Y', $start_date );
+      /* ACDC 3.25.212 — La colonne s'intitule « date et heures » ; quand les
+         heures manquent, on le DIT au lieu de laisser croire qu'elles n'ont
+         pas d'importance. C'est aussi ce qui empêche de planifier l'émargement
+         et la convocation : le savoir en lisant la ligne évite d'aller le
+         chercher dans le journal. */
+      return mysql2date( 'd/m/Y', $start_date ) . ' — horaires non renseignés';
+    }
+    if ( ! empty( $start_at ) ) {
+      return mysql2date( 'd/m/Y H\hi', $start_at ) . ' — heure de fin non renseignée';
     }
 
     return '—';
@@ -331,28 +371,49 @@ trait ACDC_Sessions_Core_Trait {
     $sections = array();
     $formation_title = ! empty( $session->formation_title ) ? $session->formation_title : '—';
     $company_name = ! empty( $session->company_name ) ? $session->company_name : '—';
+    /* ACDC 3.25.212 — La fiche disait trois fois la même chose et taisait
+       l'essentiel. « Titre », « Formation » et « Intitulé de la séance »
+       portaient la même chaîne dans trois blocs différents, pendant qu'il
+       fallait quitter l'écran pour savoir QUI anime et QUI suit la séance.
+       On ne répète plus l'intitulé, et l'on répond d'abord aux questions
+       qu'on se pose devant une séance. */
+    $learners = $this->acdc_session_learners( $session );
+    $learner_names = array();
+    foreach ( $learners as $learner ) {
+      $last = ! empty( $learner->usage_last_name ) ? $learner->usage_last_name : $learner->last_name;
+      $learner_names[] = trim( (string) $learner->first_name . ' ' . (string) $last );
+    }
+
     $sections[] = array(
       'title' => 'Informations principales',
       'items' => array(
-        'Titre' => ! empty( $session->title ) ? $session->title : '—',
+        'Intitulé' => ! empty( $session->title ) ? $session->title : '—',
         'Formation' => $formation_title,
-        'Entreprise' => $company_name,
-        'Type de séance' => ! empty( $session->session_type ) ? $session->session_type : '—',
+        'Commanditaire' => $company_name,
+        'Formateur' => $this->get_session_validated_trainer_label( $session ),
+        'Type de séance' => ! empty( $session->session_type ) ? $session->session_type : 'Non renseigné',
       ),
     );
     $sections[] = array(
       'title' => 'Planification',
       'items' => array(
-        'Dates personnalisées' => $this->get_session_datetime_label( $session ),
-        'Méthode d’émargement' => ! empty( $session->attendance_method ) ? $session->attendance_method : '—',
+        'Date et horaires' => $this->get_session_datetime_label( $session ),
+        'Durée' => $this->get_session_duration_label( $session ),
+        'Lieu' => $this->get_session_validated_location_label( $session ),
         'Format de la séance' => ! empty( $session->session_format ) ? $session->session_format : '—',
+        'Méthode d’émargement' => ! empty( $session->attendance_method ) ? $session->attendance_method : 'Non renseignée',
         'Statut' => $this->get_session_status_badge_label( $session ),
+      ),
+    );
+    $sections[] = array(
+      'title' => 'Apprenants (' . count( $learners ) . ')',
+      'items' => array(
+        'Inscrits' => ! empty( $learner_names ) ? implode( "\n", $learner_names ) : 'Aucun apprenant rattaché à cette séance.',
       ),
     );
     $sections[] = array(
       'title' => 'Notes',
       'items' => array(
-        'Intitulé de la séance' => ! empty( $session->title ) ? $session->title : '—',
         'Note formateur / admin' => ! empty( $session->notes ) ? $session->notes : '—',
       ),
     );

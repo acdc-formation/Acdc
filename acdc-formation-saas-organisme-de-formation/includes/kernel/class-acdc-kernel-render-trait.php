@@ -11376,7 +11376,12 @@ trait ACDC_Kernel_Render_Trait {
                 <td><input type="checkbox" aria-label="Sélectionner cette feuille"></td>
                 <td>
                   <div><?php echo esc_html( $entry->learner_or_group_label ); ?></div>
-                  <?php if ( ! empty( $entry->title ) ) : ?><small><?php echo esc_html( $entry->title ); ?></small><?php endif; ?>
+                  <?php /* ACDC 3.25.212 — Le sous-titre ne répète plus la ligne
+                           du dessus. Quand aucun apprenant n'est rattaché, le
+                           libellé retombe sur l'intitulé de la séance, et la
+                           cellule affichait deux fois la même phrase — ce qui
+                           donnait à lire du bruit à la place d'une information. */ ?>
+                  <?php if ( ! empty( $entry->title ) && $entry->title !== $entry->learner_or_group_label ) : ?><small><?php echo esc_html( $entry->title ); ?></small><?php endif; ?>
                 </td>
                 <td><?php echo esc_html( $entry->attendance_created_label ); ?></td>
                 <td><?php echo esc_html( ! empty( $entry->attendance_method ) ? $entry->attendance_method : '—' ); ?></td>

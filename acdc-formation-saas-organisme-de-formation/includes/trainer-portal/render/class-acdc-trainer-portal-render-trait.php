@@ -1369,13 +1369,14 @@ trait ACDC_Trainer_Portal_Render_Trait {
             <?php endif; ?>
           <?php else : ?>
             <span class="acdc-sdocs-badge is-locked">
+              <?php $sdocs_when = ! empty( $unlock_state['end_label'] ) ? ' (' . $unlock_state['end_label'] . ')' : ''; ?>
               <?php if ( $sdocs_open_now > 0 && $sdocs_waiting > 0 ) : ?>
                 <?php echo esc_html( $sdocs_open_now ); ?> document<?php echo $sdocs_open_now > 1 ? 's' : ''; ?> déjà visible<?php echo $sdocs_open_now > 1 ? 's' : ''; ?> ;
-                <?php echo esc_html( $sdocs_waiting ); ?> autre<?php echo $sdocs_waiting > 1 ? 's' : ''; ?> s’ouvrira<?php echo $sdocs_waiting > 1 ? 'ont' : ''; ?> à la fin de la séance<?php echo ! empty( $unlock_state['end_at'] ) ? esc_html( ' (' . mysql2date( 'd/m/Y à H:i', $unlock_state['end_at'] ) . ')' ) : ''; ?>.
+                <?php echo esc_html( $sdocs_waiting ); ?> autre<?php echo $sdocs_waiting > 1 ? 's' : ''; ?> s’ouvrira<?php echo $sdocs_waiting > 1 ? 'ont' : ''; ?> à la fin de la séance<?php echo esc_html( $sdocs_when ); ?>.
               <?php elseif ( $sdocs_open_now > 0 ) : ?>
                 Tous les documents déposés sont déjà visibles par les apprenants.
               <?php else : ?>
-                Les supports s’ouvriront à la fin de la séance<?php echo ! empty( $unlock_state['end_at'] ) ? esc_html( ' (' . mysql2date( 'd/m/Y à H:i', $unlock_state['end_at'] ) . ')' ) : ''; ?>.
+                Les supports s’ouvriront à la fin de la séance<?php echo esc_html( $sdocs_when ); ?>.
               <?php endif; ?>
             </span>
 

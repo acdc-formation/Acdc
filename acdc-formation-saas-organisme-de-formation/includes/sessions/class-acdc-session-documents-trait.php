@@ -90,6 +90,7 @@ trait ACDC_Session_Documents_Trait {
       'unlocked'    => false,
       'reason'      => '',
       'end_at'      => '',
+      'end_label'   => '',
       'unlocked_at' => '',
     );
     if ( empty( $session ) ) {
@@ -112,11 +113,25 @@ trait ACDC_Session_Documents_Trait {
     } elseif ( ! empty( $session->end_date ) ) {
       $end = substr( (string) $session->end_date, 0, 10 ) . ' 23:59:59';
     } elseif ( ! empty( $session->start_at ) ) {
-      $end = (string) $session->start_at;
+      /* ACDC 3.25.212 — Faute de mon fait, relevée à l'écran : sans heure de
+         fin, on retenait l'heure de DÉBUT, et la fiche annonçait « verrouillé
+         jusqu'à la fin de la séance (12/08/2026 à 09:00) » — soit une fin
+         placée au matin, avant la formation. Une séance sans horaire de fin se
+         termine avec sa journée, pas à l'instant où elle commence. */
+      $end = substr( (string) $session->start_at, 0, 10 ) . ' 23:59:59';
     } elseif ( ! empty( $session->start_date ) ) {
       $end = substr( (string) $session->start_date, 0, 10 ) . ' 23:59:59';
     }
     $state['end_at'] = $end;
+    /* Le libellé dit la vérité sur ce qu'on sait : une heure quand la séance en
+       porte une, la journée seulement quand elle n'en porte pas. Annoncer
+       « 23:59 » à un formateur laisserait croire à un horaire décidé. */
+    if ( '' !== $end ) {
+      $has_real_end    = ! empty( $session->end_at );
+      $state['end_label'] = $has_real_end
+        ? mysql2date( 'd/m/Y \à H:i', $end )
+        : 'fin de la journée du ' . mysql2date( 'd/m/Y', $end );
+    }
 
     if ( ! $state['unlocked'] && '' !== $end && $end <= current_time( 'mysql' ) ) {
       $state['unlocked'] = true;
@@ -302,6 +317,54 @@ trait ACDC_Session_Documents_Trait {
         ORDER BY last_name ASC, first_name ASC, id ASC",
       $ids
     ) );
+  }
+
+  /**
+   * ACDC 3.25.212 — Le commanditaire d'une séance, déduit lui aussi du dossier.
+   *
+   * « Entreprise : — » sur toutes les fiches, alors que la formation est
+   * commandée par Skill Conseil : la colonne `company_id` de la séance n'est
+   * renseignée que lorsqu'on la saisit à la main, ce que le parcours
+   * d'inscription ne fait pas. La convention, elle, sait qui commande.
+   */
+  private function acdc_session_company_name( $session ) {
+    global $wpdb;
+
+    if ( ! empty( $session->company_name ) ) {
+      return (string) $session->company_name;
+    }
+
+    $formation_id = isset( $session->formation_id ) ? (int) $session->formation_id : 0;
+    if ( $formation_id <= 0 ) {
+      return '';
+    }
+
+    $day = '';
+    if ( ! empty( $session->start_date ) ) {
+      $day = substr( (string) $session->start_date, 0, 10 );
+    } elseif ( ! empty( $session->start_at ) ) {
+      $day = substr( (string) $session->start_at, 0, 10 );
+    }
+    if ( '' === $day ) {
+      return '';
+    }
+
+    $company_id = (int) $wpdb->get_var( $wpdb->prepare(
+      "SELECT company_id FROM {$this->registration_contract_table}
+        WHERE formation_id = %d AND company_id IS NOT NULL AND company_id > 0
+          AND ( start_date IS NULL OR start_date = '0000-00-00' OR start_date <= %s )
+          AND ( end_date   IS NULL OR end_date   = '0000-00-00' OR end_date   >= %s )
+        ORDER BY updated_at DESC, id DESC LIMIT 1",
+      $formation_id,
+      $day,
+      $day
+    ) );
+    if ( $company_id <= 0 ) {
+      return '';
+    }
+
+    $company = $this->get_company( $company_id );
+    return ( $company && ! empty( $company->name ) ) ? (string) $company->name : '';
   }
 
   /* ═══════════════════════════════════════════════════════════════════
@@ -1101,7 +1164,7 @@ trait ACDC_Session_Documents_Trait {
         <?php if ( ! empty( $state['unlocked'] ) ) : ?>
           <br>Accès apprenant : <strong>ouvert</strong><?php echo 'manual' === $state['reason'] && ! empty( $state['unlocked_at'] ) ? esc_html( ' (débloqué le ' . mysql2date( 'd/m/Y à H:i', $state['unlocked_at'] ) . ')' ) : ' (séance terminée)'; ?>.
         <?php else : ?>
-          <br>Accès apprenant : <strong>verrouillé</strong> jusqu’à la fin de la séance<?php echo ! empty( $state['end_at'] ) ? esc_html( ' (' . mysql2date( 'd/m/Y à H:i', $state['end_at'] ) . ')' ) : ''; ?>.
+          <br>Accès apprenant : <strong>verrouillé</strong> jusqu’à la fin de la séance<?php echo ! empty( $state['end_label'] ) ? esc_html( ' (' . $state['end_label'] . ')' ) : ''; ?>.
         <?php endif; ?>
       </p>
 
