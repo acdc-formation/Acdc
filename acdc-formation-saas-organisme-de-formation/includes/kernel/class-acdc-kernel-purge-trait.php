@@ -1,0 +1,596 @@
+<?php
+/**
+ * ACDC Noyau — purge sélective des données du plugin.
+ *
+ * Le bouton « Suppression totale » existe depuis longtemps et il est fait pour
+ * un cas unique : tout jeter. Pendant une recette, ce n'est presque jamais ce
+ * que l'on veut. On veut repartir d'un dossier commercial vierge en gardant le
+ * catalogue de formations ; ou vider les séances sans perdre les apprenants ;
+ * ou tout effacer SAUF les financeurs, qui sont, seuls dans cette base, des
+ * données réelles.
+ *
+ * D'où cet écran : une case par ensemble, et la case des financeurs décochée,
+ * isolée, et protégée par sa propre confirmation.
+ *
+ * TROIS PRINCIPES, et le troisième est celui qui compte le plus.
+ *
+ *  1. On ne coche pas des ÉCRANS, on coche des ENSEMBLES DE DONNÉES.
+ *     Le menu compte une trentaine d'entrées « Documents » — convocations,
+ *     certificats, attestations, résultats — qui sont toutes des VUES sur les
+ *     mêmes lignes d'inscription. Offrir une case par entrée de menu aurait été
+ *     fidèle au menu et mensonger sur l'effet : décocher « Convocations » tout
+ *     en cochant « Dossiers de formation » ne peut rien vouloir dire, la
+ *     convocation étant une colonne du dossier. Chaque groupe indique donc où
+ *     il se trouve dans le menu, et ce qu'il emporte réellement.
+ *
+ *  2. Rien ne part sans copie. La sauvegarde de sécurité est prise avant, et
+ *     son échec annule la purge — pas d'avertissement, pas de « continuer quand
+ *     même ».
+ *
+ *  3. Ce qui est supprimé est COMPTÉ et JOURNALISÉ, ligne par ligne. Une purge
+ *     qui ne dit pas ce qu'elle a emporté oblige à faire confiance ; on préfère
+ *     pouvoir vérifier.
+ *
+ * @since 3.25.209
+ */
+
+if ( ! defined( 'ABSPATH' ) ) {
+  exit;
+}
+
+trait ACDC_Kernel_Purge_Trait {
+
+  /**
+   * Les ensembles proposés à la suppression, dans l'ordre du menu.
+   *
+   * `menu`      : où l'ensemble se trouve dans la navigation, pour que David
+   *               retrouve à l'écran ce qu'il coche ici.
+   * `emporte`   : ce qui disparaît, dit en français et sans euphémisme.
+   * `garde`     : ce qui SURVIT, quand la nuance n'est pas évidente. C'est la
+   *               ligne qui évite les mauvaises surprises.
+   * `tables`    : les tables réellement vidées.
+   * `options`   : motifs LIKE d'options supprimées.
+   * `sensitive` : l'ensemble contient des données réelles ; il est décoché,
+   *               isolé, et demande sa propre confirmation.
+   */
+  private function acdc_purge_groups() {
+    global $wpdb;
+
+    $qz = $wpdb->prefix . 'acdc_of_qz_';
+
+    $groups = array(
+
+      'crm' => array(
+        'label'   => 'Prospects et suivi commercial',
+        'menu'    => 'Commercial › CRM',
+        'emporte' => 'Prospects, rendez-vous, activités commerciales et rendez-vous préalables.',
+        'tables'  => array(
+          $this->prospect_table,
+          $this->prospect_rdv_table,
+          $this->prospect_activity_table,
+          $this->pre_meeting_table,
+        ),
+      ),
+
+      'needs' => array(
+        'label'   => 'Recueils des besoins',
+        'menu'    => 'Commercial › CRM › Recueil des besoins',
+        'emporte' => 'Les recueils des besoins.',
+        'garde'   => 'La bibliothèque de blocs et de questions, qui est un paramétrage et non une donnée de dossier.',
+        'tables'  => array( $this->need_table ),
+      ),
+
+      'workflow' => array(
+        'label'   => 'Parcours du workflow',
+        'menu'    => 'Commercial › Workflow',
+        'emporte' => 'Les parcours et toutes leurs étapes planifiées ou jouées.',
+        'garde'   => 'La configuration du workflow : délais, relances, mode simulation, destinataires autorisés.',
+        'tables'  => array( $this->workflow_run_table, $this->workflow_step_table ),
+      ),
+
+      'proposals' => array(
+        'label'   => 'Propositions, devis et factures',
+        'menu'    => 'Comptabilité › Devis & Factures',
+        'emporte' => 'Propositions commerciales, devis, factures et avoirs.',
+        'garde'   => 'Les paramètres de facturation et les mentions légales.',
+        'tables'  => array(
+          $wpdb->prefix . 'acdc_of_proposals',
+          $this->quote_table,
+          $this->invoice_table,
+        ),
+      ),
+
+      'contracts' => array(
+        'label'   => 'Conventions, contrats et dossiers de formation',
+        'menu'    => 'Actions de formation › Inscription / Suivi',
+        'emporte' => 'Conventions et contrats d’inscription, dossiers de formation, inscriptions en cours et validées.',
+        'tables'  => array(
+          $this->registration_contract_table,
+          $this->training_registration_table,
+        ),
+      ),
+
+      'sessions' => array(
+        'label'   => 'Séances, groupes et émargements',
+        'menu'    => 'Actions de formation › Séances',
+        'emporte' => 'Séances, groupes, feuilles d’émargement et signatures de présence.',
+        'tables'  => array(
+          $this->session_table,
+          $this->group_table,
+          $wpdb->prefix . 'acdc_of_emarg_sessions',
+          $wpdb->prefix . 'acdc_of_emarg_learners',
+          /* Les documents déposés par le formateur sur une séance partent avec
+             elle : ils n'ont aucun sens sans la séance qu'ils documentent. */
+          $this->trainer_resource_table,
+          $this->trainer_logbook_table,
+        ),
+      ),
+
+      'learners' => array(
+        'label'   => 'Apprenants et extranet apprenant',
+        'menu'    => 'Config. pré-formation › Répertoires › Apprenants',
+        'emporte' => 'Le répertoire des apprenants, leurs comptes d’extranet, leurs sessions de connexion et leurs journaux.',
+        'tables'  => array(
+          $this->learner_table,
+          $this->learner_portal_account_table,
+          $this->learner_portal_token_table,
+          $this->learner_portal_session_table,
+          $this->learner_portal_log_table,
+        ),
+      ),
+
+      'companies' => array(
+        'label'   => 'Commanditaires et contacts',
+        'menu'    => 'Config. pré-formation › Répertoires › Commanditaires',
+        'emporte' => 'Entreprises commanditaires et contacts rattachés.',
+        'tables'  => array( $this->company_table, $this->contact_table ),
+      ),
+
+      'trainers' => array(
+        'label'   => 'Formateurs et portail formateur',
+        'menu'    => 'Config. pré-formation › Répertoires › Formateurs',
+        'emporte' => 'Le répertoire des formateurs, leurs contrats de mission, leurs bilans, leur bibliothèque personnelle et leurs comptes de portail.',
+        'tables'  => array(
+          $this->trainer_table,
+          $this->trainer_contract_table,
+          $this->trainer_evaluation_table,
+          $this->trainer_document_table,
+          $this->trainer_portal_account_table,
+          $this->trainer_portal_token_table,
+          $this->trainer_portal_session_table,
+          $this->trainer_portal_log_table,
+        ),
+      ),
+
+      'formations' => array(
+        'label'   => 'Formations et thématiques',
+        'menu'    => 'Config. pré-formation › Répertoires › Formations',
+        'emporte' => 'Le catalogue des formations et les thématiques.',
+        'garde'   => 'Les réglages du catalogue public et les pages WordPress.',
+        'tables'  => array( $this->formation_table, $this->thematique_table ),
+      ),
+
+      'quizzes' => array(
+        'label'   => 'Quiz, tests de positionnement et évaluations',
+        'menu'    => 'Évaluation & Enquêtes › Avant / Pendant la formation',
+        'emporte' => 'Les quiz et leurs questions, les tests de positionnement, les évaluations, ainsi que toutes les participations et réponses.',
+        'tables'  => array(
+          $this->quiz_table,
+          $this->positioning_test_table,
+          $this->evaluation_table,
+          $qz . 'quizzes',
+          $qz . 'questions',
+          $qz . 'answers',
+          $qz . 'objectives',
+          $qz . 'sessions',
+          $qz . 'participants',
+          $qz . 'player_answers',
+          $qz . 'logs',
+        ),
+      ),
+
+      'surveys' => array(
+        'label'   => 'Enquêtes et questionnaires',
+        'menu'    => 'Évaluation & Enquêtes › Après la formation, Enquêtes par public',
+        'emporte' => 'Campagnes d’enquêtes, participants, réponses, actions et journaux d’envoi.',
+        'garde'   => 'Les modèles de questionnaires ne sont supprimés que si vous cochez aussi « Modèles de questionnaires ».',
+        'tables'  => array(
+          $this->questionnaire_session_table,
+          $this->questionnaire_participant_table,
+          $this->questionnaire_answer_table,
+          $this->questionnaire_action_table,
+          $this->questionnaire_log_table,
+        ),
+      ),
+
+      'survey_models' => array(
+        'label'   => 'Modèles de questionnaires',
+        'menu'    => 'Évaluation & Enquêtes',
+        'emporte' => 'Les modèles de questionnaires — c’est un paramétrage, pas une donnée de dossier.',
+        'tables'  => array( $this->questionnaire_model_table ),
+      ),
+
+      'need_analyses' => array(
+        'label'   => 'Analyses du besoin',
+        'menu'    => 'Actions de formation › Inscription / Suivi › Analyse du besoin',
+        'emporte' => 'Les analyses du besoin renseignées.',
+        'garde'   => 'Les blocs et questions de la bibliothèque, qui servent à en construire de nouvelles.',
+        'tables'  => array( $this->need_analysis_table ),
+      ),
+
+      'need_library' => array(
+        'label'   => 'Bibliothèque de blocs et de questions',
+        'menu'    => 'Actions de formation › Analyse du besoin › Bibliothèque des blocs',
+        'emporte' => 'Les blocs et les questions réutilisables.',
+        'tables'  => array( $this->need_block_table, $this->need_question_table ),
+      ),
+
+      'signatures' => array(
+        'label'   => 'Signature électronique',
+        'menu'    => 'Transverse — devis, conventions, émargements',
+        'emporte' => 'Les demandes de signature et leur piste d’audit.',
+        'tables'  => array(
+          $wpdb->prefix . 'acdc_sig_requests',
+          $wpdb->prefix . 'acdc_sig_audit',
+        ),
+      ),
+
+      'quality' => array(
+        'label'   => 'Qualité et conformité',
+        'menu'    => 'Évaluation & Enquêtes › Qualité & conformité',
+        'emporte' => 'Réclamations, veille, améliorations continues, conseil de perfectionnement, partenaires PSH, locaux, sous-traitants, prestations et BPF.',
+        'tables'  => array( $this->complaint_table, $this->watch_items_table ),
+        'options' => array( 'acdc_of_quality_%', 'acdc_of_bpf_%', 'acdc_of_psh_%', 'acdc_of_improvement_%' ),
+      ),
+
+      'marketing' => array(
+        'label'   => 'Communication et campagnes',
+        'menu'    => 'Communication',
+        'emporte' => 'Campagnes, scénarios, modèles d’e-mails, formulaires, contacts, listes, segments, étiquettes, imports, désinscriptions, journaux et file d’attente.',
+        'garde'   => 'La page publique du module et l’identifiant qui la désigne.',
+        'options' => array( 'acdc_of_marketing_%' ),
+        'keep_options' => array( 'acdc_of_marketing_public_page_id' ),
+      ),
+
+      'documents' => array(
+        'label'   => 'Documents générés et fichiers sur le disque',
+        'menu'    => 'Actions de formation › Documents',
+        'emporte' => 'Le répertoire des documents ET les fichiers produits par le plugin dans le dossier des téléversements — PDF de conventions, devis, attestations, programmes.',
+        'tables'  => array( $this->document_table ),
+        'files'   => true,
+      ),
+
+      'logs' => array(
+        'label'   => 'Journaux système',
+        'menu'    => 'Transverse',
+        'emporte' => 'Le journal technique du plugin.',
+        'garde'   => 'Rien d’autre : ce journal ne porte aucune donnée de dossier.',
+        'tables'  => array( $this->system_log_table ),
+      ),
+
+      /* ─────────────────────────────────────────────────────────────────
+         ET, TOUT SEUL EN BAS, L'ENSEMBLE QUI N'EST PAS FICTIF.
+         ───────────────────────────────────────────────────────────────── */
+      'funders' => array(
+        'label'     => 'Financeurs (OPCO)',
+        'menu'      => 'Config. pré-formation › Répertoires › Financeurs',
+        'emporte'   => 'Le répertoire des financeurs.',
+        'garde'     => '',
+        'tables'    => array( $this->funder_table ),
+        'sensitive' => true,
+      ),
+    );
+
+    /* Une table dont la propriété n'est pas renseignée ne doit pas se glisser
+       dans une requête sous forme de chaîne vide : on nettoie ici plutôt que
+       d'y penser à chaque appel. */
+    foreach ( $groups as $key => $group ) {
+      $tables = array_filter( array_map( 'strval', (array) ( $group['tables'] ?? array() ) ) );
+      $groups[ $key ]['tables'] = array_values( array_unique( $tables ) );
+    }
+
+    return $groups;
+  }
+
+  /**
+   * Le mot à saisir pour libérer la suppression des financeurs.
+   *
+   * Il est différent de celui de la purge générale, et c'est délibéré : deux
+   * gestes distincts pour deux décisions distinctes. Recopier machinalement la
+   * même phrase deux fois ne serait pas une confirmation.
+   */
+  private function acdc_purge_funders_confirmation_word() {
+    return 'FINANCEURS';
+  }
+
+  /* ═══════════════════════════════════════════════════════════════════
+     L'ÉCRAN
+     ═══════════════════════════════════════════════════════════════════ */
+
+  private function render_selective_purge_panel() {
+    $groups     = $this->acdc_purge_groups();
+    /* Le blocage se lit par la MÊME fonction que celle qui refuse l'action.
+       Un écran qui recalcule la règle de son côté finit toujours par afficher
+       un bouton actif devant un serveur qui dit non. */
+    $blocked    = $this->is_production_purge_blocked();
+    $phrase     = $this->get_plugin_data_purge_confirmation_phrase();
+
+    $counts = $this->acdc_purge_group_counts( $groups );
+    ?>
+    <div class="acdc-panel acdc-selective-purge" style="margin-top:18px;border-color:#E0B96D;background:#fffdf6;">
+      <h3 style="color:#8a6300;">Remise à zéro sélective</h3>
+      <p>
+        Cochez ce que vous voulez effacer. Chaque ensemble indique où il se trouve dans le menu et ce qu’il emporte
+        réellement. Une sauvegarde de sécurité est prise avant toute suppression : si elle échoue, rien n’est touché.
+      </p>
+      <p class="acdc-help">
+        Les entrées de menu qui n’apparaissent pas ici sont des vues sur les données ci-dessous, et non des ensembles
+        séparés : les vingt écrans « Documents » lisent tous les mêmes dossiers de formation, il n’y a donc rien à y
+        supprimer indépendamment.
+      </p>
+
+      <form method="post" action="<?php echo esc_url( admin_url( 'admin-post.php' ) ); ?>">
+        <?php wp_nonce_field( 'acdc_purge_selected_data' ); ?>
+        <input type="hidden" name="action" value="acdc_purge_selected_data">
+        <?php if ( is_admin() ) : ?><input type="hidden" name="page" value="acdc-of-dashboard"><?php endif; ?>
+
+        <p style="margin:16px 0 10px;">
+          <button type="button" class="acdc-button acdc-button-soft" data-acdc-purge-all>Tout cocher (sauf les financeurs)</button>
+          <button type="button" class="acdc-button acdc-button-soft" data-acdc-purge-none>Tout décocher</button>
+        </p>
+
+        <div class="acdc-purge-grid">
+          <?php foreach ( $groups as $key => $group ) : ?>
+            <?php if ( ! empty( $group['sensitive'] ) ) { continue; } ?>
+            <label class="acdc-purge-item">
+              <input type="checkbox" name="acdc_purge_groups[]" value="<?php echo esc_attr( $key ); ?>" data-acdc-purge-box>
+              <span>
+                <strong><?php echo esc_html( $group['label'] ); ?></strong>
+                <?php if ( isset( $counts[ $key ] ) ) : ?>
+                  <em class="acdc-purge-count"><?php echo esc_html( $counts[ $key ] ); ?> ligne<?php echo (int) $counts[ $key ] > 1 ? 's' : ''; ?></em>
+                <?php endif; ?>
+                <small class="acdc-purge-menu"><?php echo esc_html( $group['menu'] ); ?></small>
+                <small><?php echo esc_html( $group['emporte'] ); ?></small>
+                <?php if ( ! empty( $group['garde'] ) ) : ?>
+                  <small class="acdc-purge-keep">Conservé : <?php echo esc_html( $group['garde'] ); ?></small>
+                <?php endif; ?>
+              </span>
+            </label>
+          <?php endforeach; ?>
+        </div>
+
+        <?php $funders = $groups['funders']; ?>
+        <div class="acdc-purge-sensitive">
+          <h4>Financeurs — données réelles</h4>
+          <p>
+            C’est le seul répertoire de cette base qui ne contient pas des données fictives : les OPCO y sont de vrais
+            organismes, avec de vraies coordonnées. Il est exclu de « Tout cocher », et sa suppression demande sa propre
+            confirmation.
+          </p>
+          <label class="acdc-purge-item">
+            <input type="checkbox" name="acdc_purge_groups[]" value="funders">
+            <span>
+              <strong><?php echo esc_html( $funders['label'] ); ?></strong>
+              <?php if ( isset( $counts['funders'] ) ) : ?>
+                <em class="acdc-purge-count"><?php echo esc_html( $counts['funders'] ); ?> ligne<?php echo (int) $counts['funders'] > 1 ? 's' : ''; ?></em>
+              <?php endif; ?>
+              <small class="acdc-purge-menu"><?php echo esc_html( $funders['menu'] ); ?></small>
+            </span>
+          </label>
+          <p style="margin-top:10px;">
+            <label>
+              Pour les supprimer, saisissez <strong><?php echo esc_html( $this->acdc_purge_funders_confirmation_word() ); ?></strong> :
+              <input type="text" name="acdc_purge_funders_confirm" value="" placeholder="<?php echo esc_attr( $this->acdc_purge_funders_confirmation_word() ); ?>" autocomplete="off">
+            </label>
+          </p>
+        </div>
+
+        <div class="acdc-purge-confirm">
+          <p>
+            <label for="acdc-selective-purge-confirm"><strong>Saisissez <?php echo esc_html( $phrase ); ?></strong></label><br>
+            <input id="acdc-selective-purge-confirm" type="text" name="acdc_purge_confirm" value="" placeholder="<?php echo esc_attr( $phrase ); ?>" autocomplete="off" required>
+          </p>
+          <p>
+            <label><input type="checkbox" name="acdc_purge_acknowledge" value="yes" required>
+              Je comprends que les ensembles cochés seront supprimés définitivement.</label>
+          </p>
+          <?php if ( $blocked ) : ?>
+            <p style="color:#8f1d1d;font-weight:600;">Purge bloquée : environnement de production détecté.</p>
+          <?php endif; ?>
+          <button type="submit" class="acdc-button" style="background:#fff;border:1px solid #E0B96D;color:#8a6300;" <?php disabled( $blocked ); ?>>
+            Supprimer les ensembles cochés
+          </button>
+        </div>
+      </form>
+    </div>
+    <style>
+      .acdc-selective-purge .acdc-purge-grid{display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-top:6px}
+      .acdc-selective-purge .acdc-purge-item{display:flex;gap:10px;align-items:flex-start;padding:12px 14px;background:#fff;border:1px solid #e6ddc4;border-radius:10px}
+      .acdc-selective-purge .acdc-purge-item span{display:block}
+      .acdc-selective-purge .acdc-purge-item small{display:block;margin-top:3px;color:#6b7280;font-size:12px;line-height:1.45}
+      .acdc-selective-purge .acdc-purge-menu{color:#8a6300!important;font-weight:600}
+      .acdc-selective-purge .acdc-purge-keep{color:#1a7d3b!important}
+      .acdc-selective-purge .acdc-purge-count{display:inline-block;margin-left:8px;padding:1px 8px;border-radius:999px;background:#f2f4f8;color:#1E4777;font-style:normal;font-size:11px;font-weight:700}
+      .acdc-selective-purge .acdc-purge-sensitive{margin-top:18px;padding:16px 18px;background:#fff7f7;border:1px solid #E06D6D;border-radius:10px}
+      .acdc-selective-purge .acdc-purge-sensitive h4{margin:0 0 8px;color:#8f1d1d}
+      .acdc-selective-purge .acdc-purge-confirm{margin-top:18px;padding-top:14px;border-top:1px solid #e6ddc4}
+      @media(max-width:900px){.acdc-selective-purge .acdc-purge-grid{grid-template-columns:1fr}}
+    </style>
+    <script>
+    (function(){
+      var all = document.querySelector('[data-acdc-purge-all]');
+      var none = document.querySelector('[data-acdc-purge-none]');
+      function setAll(v){ document.querySelectorAll('[data-acdc-purge-box]').forEach(function(b){ b.checked = v; }); }
+      if (all)  { all.addEventListener('click', function(){ setAll(true); }); }
+      if (none) { none.addEventListener('click', function(){
+        document.querySelectorAll('input[name="acdc_purge_groups[]"]').forEach(function(b){ b.checked = false; });
+      }); }
+    })();
+    </script>
+    <?php
+  }
+
+  /**
+   * Le nombre de lignes de chaque ensemble.
+   *
+   * Il change tout à l'usage : cocher « Séances » en sachant qu'il y en a 14 et
+   * cocher « Séances » à l'aveugle ne sont pas le même geste. Un ensemble déjà
+   * vide se voit aussi, et l'on n'a pas à se demander si la purge a fonctionné.
+   */
+  private function acdc_purge_group_counts( $groups ) {
+    global $wpdb;
+
+    $counts = array();
+    foreach ( $groups as $key => $group ) {
+      if ( empty( $group['tables'] ) ) {
+        continue;
+      }
+      $total = 0;
+      foreach ( $group['tables'] as $table ) {
+        $exists = $wpdb->get_var( $wpdb->prepare( 'SHOW TABLES LIKE %s', $table ) );
+        if ( $exists !== $table ) {
+          continue;
+        }
+        $total += (int) $wpdb->get_var( "SELECT COUNT(*) FROM {$table}" );
+      }
+      $counts[ $key ] = $total;
+    }
+    return $counts;
+  }
+
+  /* ═══════════════════════════════════════════════════════════════════
+     L'ACTION
+     ═══════════════════════════════════════════════════════════════════ */
+
+  public function handle_purge_selected_data() {
+    if ( ! is_user_logged_in() || ! $this->is_admin_manager() ) {
+      wp_die( esc_html( 'Accès refusé.' ) );
+    }
+    check_admin_referer( 'acdc_purge_selected_data' );
+
+    if ( $this->is_production_purge_blocked() ) {
+      $this->redirect_to_portal( 'settings', 'Purge bloquée : environnement de production détecté.', 'error' );
+    }
+
+    $ack = isset( $_POST['acdc_purge_acknowledge'] ) ? sanitize_text_field( wp_unslash( $_POST['acdc_purge_acknowledge'] ) ) : '';
+    if ( 'yes' !== $ack ) {
+      $this->redirect_to_portal( 'settings', 'Confirmation de sécurité incomplète.', 'error' );
+    }
+
+    $confirm  = isset( $_POST['acdc_purge_confirm'] ) ? strtoupper( trim( sanitize_text_field( wp_unslash( $_POST['acdc_purge_confirm'] ) ) ) ) : '';
+    $expected = strtoupper( $this->get_plugin_data_purge_confirmation_phrase() );
+    if ( $confirm !== $expected ) {
+      $this->redirect_to_portal( 'settings', 'Confirmation incorrecte. Saisissez exactement « ' . $this->get_plugin_data_purge_confirmation_phrase() . ' ».', 'error' );
+    }
+
+    $groups    = $this->acdc_purge_groups();
+    $requested = isset( $_POST['acdc_purge_groups'] ) && is_array( $_POST['acdc_purge_groups'] )
+      ? array_map( 'sanitize_key', wp_unslash( $_POST['acdc_purge_groups'] ) )
+      : array();
+    $requested = array_values( array_intersect( $requested, array_keys( $groups ) ) );
+
+    if ( empty( $requested ) ) {
+      $this->redirect_to_portal( 'settings', 'Aucun ensemble coché : rien n’a été supprimé.', 'info' );
+    }
+
+    /* Les financeurs ne partent qu'avec leur propre mot, saisi exprès. Sans lui,
+       on ne bloque PAS toute l'opération : on retire simplement les financeurs
+       de la liste et on le dit. Faire échouer l'ensemble pour un mot oublié
+       pousserait à tout recommencer, et c'est en recommençant que l'on coche
+       trop vite. */
+    $funders_refused = false;
+    if ( in_array( 'funders', $requested, true ) ) {
+      $word = isset( $_POST['acdc_purge_funders_confirm'] ) ? strtoupper( trim( sanitize_text_field( wp_unslash( $_POST['acdc_purge_funders_confirm'] ) ) ) ) : '';
+      if ( $word !== strtoupper( $this->acdc_purge_funders_confirmation_word() ) ) {
+        $requested = array_values( array_diff( $requested, array( 'funders' ) ) );
+        $funders_refused = true;
+      }
+    }
+
+    if ( empty( $requested ) ) {
+      $this->redirect_to_portal( 'settings', 'Suppression des financeurs refusée : mot de confirmation absent ou incorrect. Rien n’a été supprimé.', 'error' );
+    }
+
+    $backup = $this->create_safety_backup_snapshot( 'purge_selected_data', array(
+      'user_id' => get_current_user_id(),
+      'groupes' => implode( ', ', $requested ),
+    ) );
+    if ( empty( $backup ) ) {
+      $this->redirect_to_portal( 'settings', 'Purge annulée : la sauvegarde de sécurité n’a pas pu être créée. Aucune donnée n’a été touchée.', 'error' );
+    }
+
+    global $wpdb;
+    $report  = array();
+    $deleted = 0;
+
+    foreach ( $requested as $key ) {
+      $group = $groups[ $key ];
+
+      foreach ( (array) $group['tables'] as $table ) {
+        $exists = $wpdb->get_var( $wpdb->prepare( 'SHOW TABLES LIKE %s', $table ) );
+        if ( $exists !== $table ) {
+          continue;
+        }
+        $rows = (int) $wpdb->get_var( "SELECT COUNT(*) FROM {$table}" );
+        $wpdb->query( "DELETE FROM {$table}" );
+        $wpdb->query( "ALTER TABLE {$table} AUTO_INCREMENT = 1" );
+        $deleted += $rows;
+        if ( $rows > 0 ) {
+          $report[] = $table . ' : ' . $rows;
+        }
+      }
+
+      foreach ( (array) ( $group['options'] ?? array() ) as $pattern ) {
+        $keep = (array) ( $group['keep_options'] ?? array() );
+        $rows = $wpdb->get_col( $wpdb->prepare(
+          "SELECT option_name FROM {$wpdb->options} WHERE option_name LIKE %s",
+          $pattern
+        ) );
+        foreach ( (array) $rows as $option_name ) {
+          if ( in_array( $option_name, $keep, true ) ) {
+            continue;
+          }
+          delete_option( $option_name );
+          $deleted++;
+        }
+      }
+
+      if ( ! empty( $group['files'] ) ) {
+        $paths = $this->collect_plugin_generated_file_paths();
+        $files = $this->delete_plugin_generated_files( $paths );
+        $count = is_array( $files ) ? count( $files ) : (int) $files;
+        if ( $count > 0 ) {
+          $report[] = 'fichiers générés : ' . $count;
+        }
+      }
+    }
+
+    /* Le décompte est journalisé nommément : une purge qui ne dit pas ce qu'elle
+       a emporté oblige à la croire sur parole. */
+    $this->insert_system_log( array(
+      'log_level'   => 'warning',
+      'event_type'  => 'selective_purge',
+      'action_key'  => 'purge_selected_data',
+      'object_type' => 'system',
+      'object_id'   => 0,
+      'message'     => 'Purge sélective : ' . implode( ', ', $requested ) . '.',
+      'context_json' => array(
+        'groupes' => $requested,
+        'detail'  => $report,
+        'total'   => $deleted,
+        'backup'  => is_string( $backup ) ? $backup : '',
+      ),
+    ) );
+
+    $message = sprintf(
+      '%d élément(s) supprimé(s) sur %d ensemble(s). Une sauvegarde a été prise juste avant.',
+      $deleted,
+      count( $requested )
+    );
+    if ( $funders_refused ) {
+      $message .= ' Les financeurs ont été ÉPARGNÉS : le mot de confirmation était absent ou incorrect.';
+    }
+
+    $this->redirect_to_portal( 'settings', $message, $funders_refused ? 'error' : 'success' );
+  }
+}

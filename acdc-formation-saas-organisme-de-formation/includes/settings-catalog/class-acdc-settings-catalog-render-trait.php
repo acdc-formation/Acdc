@@ -1278,6 +1278,13 @@ private function render_front_settings_general_section() {
       <p>Conservez cette protection activée en production. La suppression des données ne doit jamais être implicite.</p><p>La purge est bloquée par défaut en production et nécessite une double confirmation.</p>
     </div>
   </div>
+  <?php
+  /* ACDC 3.25.209 — La remise à zéro sélective précède la suppression totale.
+     L'ordre n'est pas neutre : pendant une recette on veut presque toujours
+     vider un ensemble précis, et presque jamais tout. Placer l'outil fin avant
+     l'outil brutal, c'est proposer le bon geste en premier. */
+  $this->render_selective_purge_panel();
+  ?>
   <div class="acdc-panel" style="margin-top:18px;border-color:#E06D6D;background:#fff7f7;">
     <h3 style="color:#8f1d1d;">Suppression totale des entrées du plugin</h3>
     <p>Ce bouton vide toutes les données métier du plugin : prospects, apprenants, entreprises, financeurs, formateurs, formations, séances, inscriptions, conventions, devis, factures, évaluations, enquêtes, campagnes, journaux, files d’attente et documents générés.</p>

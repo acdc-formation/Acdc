@@ -68,6 +68,7 @@ class ACDC_Formation_SAAS_Plugin {
   use ACDC_Trainer_Portal_Results_Render_Trait;
   use ACDC_Kernel_Core_Trait;
   use ACDC_Kernel_Actions_Trait;
+  use ACDC_Kernel_Purge_Trait;
   /* ACDC 3.25.144 — Module MCP : abilities exposées via mcp-adapter. */
   use ACDC_Mcp_Abilities_Trait;
   /* ACDC 3.23.11 — Module veille automatisée IA (V1→V6). */
@@ -245,6 +246,15 @@ class ACDC_Formation_SAAS_Plugin {
     /* ACDC 3.25.185 — Workflow : le parcours et ses étapes. */
     $this->workflow_run_table  = $wpdb->prefix . 'acdc_of_workflow_runs';
     $this->workflow_step_table = $wpdb->prefix . 'acdc_of_workflow_steps';
+    /* ACDC 3.25.209 — LA TABLE DU JOURNAL SYSTÈME N'AVAIT JAMAIS DE NOM.
+       La propriété était déclarée, la table décrite par un CREATE TABLE complet,
+       la fonction d'écriture appelée depuis des dizaines d'endroits — mais
+       l'affectation manquait. Le CREATE portait donc un nom vide et échouait, et
+       insert_system_log() sortait sur sa garde « table vide » à chaque appel.
+       Autrement dit : le plugin croyait tenir un journal depuis le début, et
+       n'écrivait que dans le journal d'erreurs de PHP. Toutes les traces
+       destinées à l'écran d'audit étaient perdues en silence. */
+    $this->system_log_table    = $wpdb->prefix . 'acdc_of_system_logs';
 
     add_action( 'init', array( $this, 'maybe_upgrade' ) );
     /* ACDC 3.25.157 — Les pages wp-admin du plugin sont enregistrées puis retirées
@@ -471,6 +481,8 @@ class ACDC_Formation_SAAS_Plugin {
     add_action( 'admin_post_acdc_agent_audit_create_user', array( $this, 'handle_agent_audit_create_user' ) );
     add_action( 'admin_post_acdc_agent_audit_delete_user', array( $this, 'handle_agent_audit_delete_user' ) );
     add_action( 'admin_post_acdc_purge_plugin_data', array( $this, 'handle_purge_plugin_data' ) );
+    /* ACDC 3.25.209 — Remise à zéro sélective : une case par ensemble. */
+    add_action( 'admin_post_acdc_purge_selected_data', array( $this, 'handle_purge_selected_data' ) );
     add_action( 'admin_post_acdc_create_manual_backup', array( $this, 'handle_create_manual_backup' ) );
     add_action( 'admin_post_acdc_download_backup', array( $this, 'handle_download_backup' ) );
     add_action( 'admin_post_acdc_restore_backup_import', array( $this, 'handle_restore_backup_import' ) );
