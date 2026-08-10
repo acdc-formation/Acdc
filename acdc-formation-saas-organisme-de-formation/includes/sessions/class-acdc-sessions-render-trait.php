@@ -32,8 +32,14 @@ trait ACDC_Sessions_Render_Trait {
         wp_safe_redirect( add_query_arg( array( 'notice' => rawurlencode( 'Séance introuvable.' ), 'notice_type' => 'error' ), $list_url ) );
         exit;
       }
-      global $wpdb;
-      $session = $wpdb->get_row( $wpdb->prepare( "SELECT s.*, f.title AS formation_title, c.name AS company_name, g.name AS group_name, g.trainer_name AS group_trainer_name, COUNT(DISTINCT l.id) AS learner_count, MAX(l.first_name) AS learner_first_name, MAX(l.usage_last_name) AS learner_usage_last_name, MAX(l.last_name) AS learner_last_name FROM {$this->session_table} s LEFT JOIN {$this->formation_table} f ON f.id = s.formation_id LEFT JOIN {$this->company_table} c ON c.id = s.company_id LEFT JOIN {$this->group_table} g ON g.session_id = s.id LEFT JOIN {$this->learner_table} l ON l.session_id = s.id WHERE s.id = %d GROUP BY s.id", $item_id ) );
+      /* ACDC 3.25.205 — Même correction que sur la feuille d'émargement : la
+         fiche de séance dupliquait la requête de la liste sans la jointure du
+         formateur ni la ville de l'entreprise. Elle lit maintenant la ligne
+         enrichie produite par la liste. */
+      $rows = $this->get_validated_sessions( array( 'id' => (string) (int) $item_id ) );
+      if ( ! empty( $rows ) ) {
+        $session = $rows[0];
+      }
       ?>
       <section class="acdc-section-head">
         <div>

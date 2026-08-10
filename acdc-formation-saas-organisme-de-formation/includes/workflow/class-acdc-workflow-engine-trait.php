@@ -346,7 +346,7 @@ trait ACDC_Workflow_Engine_Trait {
     global $wpdb;
 
     $open = $wpdb->get_results( $wpdb->prepare(
-      "SELECT id, dedupe_key FROM {$this->workflow_step_table}
+      "SELECT id, dedupe_key, executed_at FROM {$this->workflow_step_table}
         WHERE run_id = %d AND status IN ('pending','waiting') AND settled_by <> 'human'",
       (int) $run_id
     ) );
@@ -360,6 +360,23 @@ trait ACDC_Workflow_Engine_Trait {
       if ( isset( $this->acdc_wf_touched_keys[ (string) $row->dedupe_key ] ) ) {
         continue;
       }
+
+      /* ACDC 3.25.205 — Une étape JAMAIS JOUÉE et sortie du plan est effacée,
+         pas classée.
+         La conserver « Annulée » créait deux torts. À l'écran, l'ancienne ligne
+         « Rappel d'émargement au formateur » cohabitait à la minute près avec la
+         nouvelle « Ouvrir la feuille d'émargement » — deux libellés pour la même
+         action, l'un annulé, l'autre planifié : la recette en a conclu, très
+         logiquement, que le formateur ne serait plus rappelé. Et au journal, ces
+         lignes n'avaient pas de date, puisqu'elles n'avaient jamais été jouées :
+         un journal d'audit ne peut pas porter d'entrée sans horodatage.
+         Le journal doit dire ce que le moteur A FAIT. Une étape planifiée puis
+         déplanifiée sans jamais partir n'appartient pas à cette histoire. */
+      if ( empty( $row->executed_at ) ) {
+        $wpdb->delete( $this->workflow_step_table, array( 'id' => (int) $row->id ) );
+        continue;
+      }
+
       $wpdb->update(
         $this->workflow_step_table,
         array(
@@ -657,12 +674,25 @@ trait ACDC_Workflow_Engine_Trait {
       $cursor    = $send_ts;
       $previous  = 0;
       $reminders = is_array( $spec['reminders'] ) ? array_values( $spec['reminders'] ) : array();
+      /* L'unité de la chaîne ne change pas d'une relance à l'autre : on la lit
+         une fois, AVANT la boucle. Calculée à l'intérieur, elle n'existait pas
+         encore au premier tour. */
+      $hourly    = ( HOUR_IN_SECONDS === (int) $spec['unit'] );
       foreach ( $reminders as $index => $delay ) {
         $rank   = $index + 1;
         $cursor = ( DAY_IN_SECONDS === (int) $spec['unit'] )
           ? $this->acdc_wf_add_days( $cursor, (int) $delay )
           : $cursor + ( (int) $delay * (int) $spec['unit'] );
-        $due    = $this->acdc_wf_shift_to_business_day( $cursor );
+        /* ACDC 3.25.205 — Le report au jour ouvré ne s'applique qu'aux chaînes
+           exprimées en JOURS.
+           Sur une chaîne horaire, il produit l'absurde : une relance à 48 heures
+           reportée du samedi au lundi vient buter sur la suivante, qui se
+           retrouve une heure plus tard. « 48 heures » accouchait d'une heure
+           d'écart — et une relance à une heure d'intervalle ne relance personne.
+           Un délai en heures exprime un temps écoulé, pas un rendez-vous ouvré :
+           il part quand il doit partir. La règle « décaler au jour ouvré » garde
+           tout son sens là où David l'a formulée, sur les relances en jours. */
+        $due    = $hourly ? $cursor : $this->acdc_wf_shift_to_business_day( $cursor );
         /* ACDC 3.25.196 — L'écart minimal se mesure dans l'UNITÉ de la chaîne.
            Deux relances ne doivent jamais tomber à la même minute : quand le
            report au jour ouvré de la précédente vient occuper l'horodatage de
@@ -673,7 +703,6 @@ trait ACDC_Workflow_Engine_Trait {
            journalière. L'écart reste minimal dans les deux cas ; c'est la
            promesse du réglage qui est préservée. */
         $spaced   = false;
-        $hourly   = ( HOUR_IN_SECONDS === (int) $spec['unit'] );
         $min_next = $hourly ? ( $previous + HOUR_IN_SECONDS ) : $this->acdc_wf_add_days( $previous, 1 );
 
         if ( $previous > 0 && $due <= $min_next ) {

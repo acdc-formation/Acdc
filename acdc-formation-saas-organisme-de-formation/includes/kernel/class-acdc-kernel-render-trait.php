@@ -11260,8 +11260,20 @@ trait ACDC_Kernel_Render_Trait {
         wp_safe_redirect( add_query_arg( array( 'notice' => rawurlencode( 'Feuille d’émargement introuvable.' ), 'notice_type' => 'error' ), $list_url ) );
         exit;
       }
-      global $wpdb;
-      $session = $wpdb->get_row( $wpdb->prepare( "SELECT s.*, f.title AS formation_title, c.name AS company_name, g.name AS group_name, g.trainer_name AS group_trainer_name, COUNT(DISTINCT l.id) AS learner_count, MAX(l.first_name) AS learner_first_name, MAX(l.usage_last_name) AS learner_usage_last_name, MAX(l.last_name) AS learner_last_name FROM {$this->session_table} s LEFT JOIN {$this->formation_table} f ON f.id = s.formation_id LEFT JOIN {$this->company_table} c ON c.id = s.company_id LEFT JOIN {$this->group_table} g ON g.session_id = s.id LEFT JOIN {$this->learner_table} l ON l.session_id = s.id WHERE s.id = %d GROUP BY s.id", $item_id ) );
+      /* ACDC 3.25.205 — La carte se fabriquait sa propre requête, recopiée de
+         celle de la liste mais amputée de la jointure du formateur : le champ
+         n'était alimenté sur AUCUNE feuille, d'où « Formateur : — » partout.
+         Chercher un cas de données aurait été inutile — il n'y avait pas de cas,
+         il y avait une colonne absente.
+         Plutôt que d'ajouter la jointure manquante à une copie qui divergera de
+         nouveau, la carte lit désormais la MÊME ligne que la liste : même
+         requête, mêmes libellés dérivés, même émargement préchargé. Un tableau
+         et sa fiche de détail ne peuvent plus se contredire puisqu'ils ne lisent
+         plus qu'une seule source. */
+      $rows = $this->get_validated_sessions( array( 'id' => (string) (int) $item_id ) );
+      if ( ! empty( $rows ) ) {
+        $session = $rows[0];
+      }
       ?>
       <section class="acdc-section-head">
         <div>
