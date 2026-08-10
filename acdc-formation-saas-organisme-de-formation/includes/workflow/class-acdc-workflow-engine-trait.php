@@ -1506,6 +1506,31 @@ trait ACDC_Workflow_Engine_Trait {
    * faite avec la mention de ce qui AURAIT été envoyé. C'est le seul moyen de
    * regarder un parcours complet, daté, avant de laisser partir un seul e-mail.
    */
+  /**
+   * Le module qui porte réellement une étape, quand ce n'est pas le moteur.
+   *
+   * La clé d'une relance porte un suffixe de rang — « survey_hot_r2 » — que
+   * l'on retire avant la recherche : une relance est portée par le même module
+   * que l'envoi qu'elle relance.
+   *
+   * @return string Nom du module, ou chaîne vide si l'étape devrait être jouée ici.
+   */
+  private function acdc_wf_step_delegate( $step_key ) {
+    $base = preg_replace( '/_r\d+$/', '', (string) $step_key );
+
+    $delegated = array(
+      'nad_send'       => 'module Analyse du besoin',
+      'survey_hot'     => 'module Enquêtes',
+      'survey_cold'    => 'module Enquêtes',
+      'survey_mid'     => 'module Enquêtes',
+      'survey_company' => 'module Enquêtes',
+      'survey_funder'  => 'module Enquêtes',
+      'survey_trainer' => 'module Enquêtes',
+    );
+
+    return isset( $delegated[ $base ] ) ? $delegated[ $base ] : '';
+  }
+
   private function acdc_wf_execute_step( $step ) {
     global $wpdb;
 
@@ -1530,11 +1555,43 @@ trait ACDC_Workflow_Engine_Trait {
     }
 
     if ( ! method_exists( $this, $handler ) ) {
+      /* ACDC 3.25.219 — UNE ÉTAPE DÉLÉGUÉE N'EST PAS UNE ÉTAPE EN ÉCHEC.
+         Quatorze étapes automatiques, cinq gestionnaires : toutes les autres
+         tombaient ici et s'affichaient « En échec — aucun traitement branché »
+         alors que leur envoi avait bien eu lieu, porté par son propre module.
+         C'est le choix d'architecture de David lui-même — « garde le cron de
+         l'analyse des besoins et intègre-le au workflow » : le moteur ORDONNE,
+         il ne réexécute pas ce qu'un module fait déjà.
+         La recette a mesuré le coût de ce mensonge : elle a conclu, une fois,
+         qu'une phase entière était hors d'atteinte. Un utilisateur aurait
+         renoncé à des étapes qui fonctionnent.
+         On distingue donc deux cas. L'étape DÉLÉGUÉE se clôt normalement, en
+         nommant le module qui la porte. L'étape réellement non branchée reste
+         signalée — mais en disant ce qui manque, l'automatisation, et non en
+         laissant croire que l'action métier a échoué. */
+      $delegate = $this->acdc_wf_step_delegate( (string) $step->step_key );
+
+      if ( '' !== $delegate ) {
+        $wpdb->update(
+          $this->workflow_step_table,
+          array(
+            'status'      => 'done',
+            'executed_at' => $now,
+            'result_note' => 'Étape portée par le ' . $delegate . ' : le moteur ordonne, le module exécute.',
+            'settled_by'  => 'engine',
+            'attempts'    => (int) $step->attempts + 1,
+            'updated_at'  => $now,
+          ),
+          array( 'id' => (int) $step->id )
+        );
+        return;
+      }
+
       $wpdb->update(
         $this->workflow_step_table,
         array(
           'status'      => 'failed',
-          'last_error'  => 'Aucun traitement branché pour cette étape (' . (string) $step->step_key . ').',
+          'last_error'  => 'Automatisation manquante : aucun envoi automatique n’est rattaché à cette étape (' . (string) $step->step_key . '). L’action métier, elle, peut avoir été faite à la main.',
           'attempts'    => (int) $step->attempts + 1,
           'updated_at'  => $now,
         ),
