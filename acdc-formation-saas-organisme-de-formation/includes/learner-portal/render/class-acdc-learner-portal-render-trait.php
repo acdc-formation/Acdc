@@ -315,6 +315,22 @@ trait ACDC_Learner_Portal_Render_Trait {
    * ACDC 3.21.06 — Onglet "Mes quiz" du portail apprenant.
    * Deux sections : quiz en attente (avec lien de passation) + quiz complétés.
    */
+  /**
+   * ACDC 3.25.216 — L'onglet « Mes quiz » adopte l'habillage du portail.
+   *
+   * Il était bâti sur les classes du module quiz — acdc-results-section,
+   * acdc-results-eyebrow, acdc-results-table — définies dans quizzes-admin.css.
+   * Cette feuille n'est chargée que sur les écrans de l'organisme : côté
+   * apprenant, aucune de ces classes n'existait. D'où un tableau nu posé sur le
+   * fond de page, des intitulés sans relief, un bouton d'action réduit à trois
+   * points, et le cadenas géant qui a occupé l'écran jusqu'à la 3.25.215.
+   *
+   * On ne rapatrie pas la feuille du module — elle porte des centaines de règles
+   * conçues pour un autre contexte. On emploie les classes du portail, celles
+   * qui habillent « Ma bibliothèque » : `acdc-section-head`, `acdc-panel`,
+   * `acdc-table`. Même structure, même rendu, et plus aucune dépendance à un
+   * fichier qui n'arrive pas jusqu'ici.
+   */
   private function render_learner_portal_mes_quiz_tab( $account ) {
     $pending   = $this->get_learner_pending_quizzes( $account->email );
     $completed = $this->get_learner_completed_quizzes( $account->email );
@@ -337,26 +353,15 @@ trait ACDC_Learner_Portal_Render_Trait {
     <section class="acdc-section-head">
       <div>
         <h2>Mes quiz</h2>
-        <p class="acdc-section-subtitle">Retrouvez vos tests de positionnement, évaluations et quiz à compléter.</p>
+        <p>Retrouvez vos tests de positionnement, évaluations et quiz à compléter.</p>
       </div>
     </section>
 
-    <?php if ( ! empty( $pending ) ) : ?>
-    <div class="acdc-results-section" style="margin-bottom:28px;">
-      <?php echo $this->qz_section_lock_svg(); ?>
-      <div class="acdc-results-eyebrow">À COMPLÉTER</div>
-      <div class="acdc-results-inner">
-        <table class="acdc-results-table">
-          <thead>
-            <tr>
-              <th>Quiz / Test</th>
-              <th>Type</th>
-              <th>Statut</th>
-              <th>Reçu le</th>
-              <th>Expire le</th>
-              <th>Action</th>
-            </tr>
-          </thead>
+    <div class="acdc-panel acdc-mb-18">
+      <h3>À compléter</h3>
+      <?php if ( ! empty( $pending ) ) : ?>
+        <table class="acdc-table">
+          <thead><tr><th>Quiz / Test</th><th>Type</th><th>Statut</th><th>Reçu le</th><th>Expire le</th><th>Action</th></tr></thead>
           <tbody>
             <?php foreach ( $pending as $p ) :
               $passation_url = $this->build_qz_async_public_url( (string) $p->secure_token );
@@ -364,68 +369,33 @@ trait ACDC_Learner_Portal_Render_Trait {
               $status_label  = isset( $status_labels[ $p->participant_status ] ) ? $status_labels[ $p->participant_status ] : (string) $p->participant_status;
               $expires_label = ! empty( $p->token_expires_at ) ? $this->learner_portal_format_date( $p->token_expires_at, true ) : '—';
               $invited_label = ! empty( $p->invited_at ) ? $this->learner_portal_format_date( $p->invited_at, true ) : '—';
+              $resume        = ( 'partial' === $p->participant_status || 'started' === $p->participant_status );
             ?>
-            <tr>
-              <td><strong><?php echo esc_html( $p->quiz_title ); ?></strong></td>
-              <td><?php echo esc_html( $purpose_label ); ?></td>
-              <td>
-                <span style="display:inline-flex;align-items:center;gap:6px;padding:3px 10px;border-radius:20px;font-size:12px;font-weight:600;background:#fff4d6;color:#8a6d2a;">
-                  <?php echo esc_html( $status_label ); ?>
-                </span>
-              </td>
-              <td><?php echo esc_html( $invited_label ); ?></td>
-              <td><?php echo esc_html( $expires_label ); ?></td>
-              <td>
-                <a href="<?php echo esc_url( $passation_url ); ?>" class="acdc-button acdc-button-primary" style="height:32px;padding:0 14px;font-size:13px;display:inline-flex;align-items:center;border-radius:8px;" target="_blank">
-                  <?php echo 'partial' === $p->participant_status || 'started' === $p->participant_status ? 'Reprendre' : 'Commencer'; ?>
-                </a>
-              </td>
-            </tr>
+              <tr>
+                <td><strong><?php echo esc_html( $p->quiz_title ); ?></strong></td>
+                <td><?php echo esc_html( $purpose_label ); ?></td>
+                <td><span class="acdc-learner-badge-new"><?php echo esc_html( $status_label ); ?></span></td>
+                <td><?php echo esc_html( $invited_label ); ?></td>
+                <td><?php echo esc_html( $expires_label ); ?></td>
+                <td>
+                  <a href="<?php echo esc_url( $passation_url ); ?>" target="_blank" rel="noopener">
+                    <?php echo $resume ? 'Reprendre' : 'Commencer'; ?>
+                  </a>
+                </td>
+              </tr>
             <?php endforeach; ?>
           </tbody>
         </table>
-      </div>
+      <?php else : ?>
+        <p>Aucun quiz ou test en attente pour le moment.</p>
+      <?php endif; ?>
     </div>
-    <?php else : ?>
-    <div class="acdc-panel" style="margin-bottom:28px;">
-      <p>Aucun quiz ou test en attente pour le moment.</p>
-    </div>
-    <?php endif; ?>
 
-    <?php if ( empty( $completed ) ) : ?>
-      <?php /* ACDC 3.25.176 — La section « Complétés » n'existait QUE si l'apprenant
-               avait au moins une passation : sans elle, la page ne montrait rien et rien
-               n'indiquait qu'un historique existe. Un apprenant — et la recette — en
-               concluait que la consultation de ses résultats n'était pas prévue. */ ?>
-      <div class="acdc-results-section">
-        <div class="acdc-results-eyebrow">MES RÉSULTATS</div>
-        <div class="acdc-results-inner" style="padding:18px 20px;">
-          <p style="margin:0 0 6px;">Aucune passation terminée pour le moment.</p>
-          <p style="margin:0;color:#5a6577;font-size:13px;">
-            Vos résultats apparaîtront ici dès qu'un test ou une évaluation aura été
-            passé et corrigé. Une évaluation passée en salle n'y figure que si vous vous
-            êtes identifié en rejoignant la session.
-          </p>
-        </div>
-      </div>
-    <?php endif; ?>
-
-    <?php if ( ! empty( $completed ) ) : ?>
-    <div class="acdc-results-section">
-      <?php echo $this->qz_section_lock_svg(); ?>
-      <div class="acdc-results-eyebrow">COMPLÉTÉS</div>
-      <div class="acdc-results-inner">
-        <table class="acdc-results-table">
-          <thead>
-            <tr>
-              <th>Quiz / Test</th>
-              <th>Type</th>
-              <th>Complété le</th>
-              <th>Score</th>
-              <th>Résultat</th>
-              <th>Actions</th>
-            </tr>
-          </thead>
+    <div class="acdc-panel acdc-mb-18">
+      <h3>Mes résultats</h3>
+      <?php if ( ! empty( $completed ) ) : ?>
+        <table class="acdc-table">
+          <thead><tr><th>Quiz / Test</th><th>Type</th><th>Complété le</th><th>Score</th><th>Résultat</th><th>Action</th></tr></thead>
           <tbody>
             <?php foreach ( $completed as $p ) :
               $purpose_label  = isset( $purpose_labels[ $p->quiz_purpose ] ) ? $purpose_labels[ $p->quiz_purpose ] : ucfirst( (string) $p->quiz_purpose );
@@ -438,43 +408,42 @@ trait ACDC_Learner_Portal_Render_Trait {
               } else {
                 $result_label = '<span style="color:#5a6577;">—</span>';
               }
-              /* ACDC 3.25.215 — Le lien « Détail » sortait du portail.
-                 Il collait « &qz_participant=… » à la fin d'un permalien qui ne
-                 porte aucun paramètre : l'adresse obtenue se terminait par
-                 « /mes-quiz/&qz_participant=3 », que WordPress ne sait pas
-                 résoudre. Il tentait alors de deviner la page voulue et
-                 atterrissait ailleurs — sur les CGU, en l'occurrence.
-                 On passe le paramètre par la fonction, qui l'ajoute proprement,
-                 avec un « ? » si c'est le premier. */
+              /* ACDC 3.25.215 — Le paramètre passe par la fonction d'URL : collé
+                 avec un « & » à un permalien sans paramètre, il produisait une
+                 adresse que WordPress ne savait pas résoudre. */
               $detail_url = $this->learner_portal_page_url( 'mes_quiz', array( 'qz_participant' => (int) $p->participant_id ) );
               $has_pdf    = ! empty( $p->result_document_url );
             ?>
-            <tr>
-              <td><strong><?php echo esc_html( $p->quiz_title ); ?></strong></td>
-              <td><?php echo esc_html( $purpose_label ); ?></td>
-              <td><?php echo esc_html( $completed_date ); ?></td>
-              <td><?php echo esc_html( $score_pct ); ?></td>
-              <td><?php echo $result_label; ?></td>
-              <td style="white-space:nowrap">
-                <a class="acdc-button acdc-button-soft" href="<?php echo esc_url( $detail_url ); ?>"
-                   style="padding:4px 10px;font-size:12px;">
-                  🔍 Détail
-                </a>
-                <?php if ( $has_pdf ) : ?>
-                  <a class="acdc-button acdc-button-soft" href="<?php echo esc_url( (string) $p->result_document_url ); ?>"
-                     download target="_blank"
-                     style="padding:4px 10px;font-size:12px;margin-left:4px;">
-                    📄 PDF
-                  </a>
-                <?php endif; ?>
-              </td>
-            </tr>
+              <tr>
+                <td><strong><?php echo esc_html( $p->quiz_title ); ?></strong></td>
+                <td><?php echo esc_html( $purpose_label ); ?></td>
+                <td><?php echo esc_html( $completed_date ); ?></td>
+                <td><?php echo esc_html( $score_pct ); ?></td>
+                <td><?php echo $result_label; ?></td>
+                <td>
+                  <a href="<?php echo esc_url( $detail_url ); ?>">Voir le détail</a>
+                  <?php if ( $has_pdf ) : ?>
+                    &nbsp;·&nbsp;
+                    <a href="<?php echo esc_url( (string) $p->result_document_url ); ?>" target="_blank" rel="noopener">PDF</a>
+                  <?php endif; ?>
+                </td>
+              </tr>
             <?php endforeach; ?>
           </tbody>
         </table>
-      </div>
+      <?php else : ?>
+        <?php /* ACDC 3.25.176 — La section « Complétés » n'existait QUE si l'apprenant
+                 avait au moins une passation : sans elle, la page ne montrait rien et rien
+                 n'indiquait qu'un historique existe. Un apprenant — et la recette — en
+                 concluait que la consultation de ses résultats n'était pas prévue. */ ?>
+        <p>Aucune passation terminée pour le moment.</p>
+        <p class="acdc-help">
+          Vos résultats apparaîtront ici dès qu'un test ou une évaluation aura été passé et
+          corrigé. Une évaluation passée en salle n'y figure que si vous vous êtes identifié
+          en rejoignant la session.
+        </p>
+      <?php endif; ?>
     </div>
-    <?php endif; ?>
     <?php
   }
 
@@ -560,8 +529,8 @@ trait ACDC_Learner_Portal_Render_Trait {
 
     <!-- Détail question par question -->
     <?php if ( empty( $questions ) ) : ?>
-      <div class="acdc-results-section">
-        <p style="padding:16px;">Les questions de ce quiz ne sont plus disponibles.</p>
+      <div class="acdc-panel">
+        <p>Les questions de ce quiz ne sont plus disponibles.</p>
       </div>
     <?php else : ?>
     <section class="acdc-qz-results-section">
@@ -688,12 +657,14 @@ trait ACDC_Learner_Portal_Render_Trait {
       </div>
     </section>
 
+    <?php /* ACDC 3.25.216 — Même correction que sur « Mes quiz » : cet écran
+             empruntait les classes du module quiz, absentes du portail
+             apprenant. Il adopte celles de « Ma bibliothèque ». */ ?>
     <?php if ( ! empty( $requests ) ) : ?>
-    <div class="acdc-results-section" style="margin-bottom:28px;">
-      <?php echo $this->qz_section_lock_svg(); ?>
-      <div class="acdc-results-eyebrow">DOCUMENTS</div>
-      <div class="acdc-results-inner">
-        <table class="acdc-results-table">
+    <div class="acdc-panel acdc-mb-18">
+      <h3>Documents</h3>
+      <div>
+        <table class="acdc-table">
           <thead>
             <tr>
               <th>Type de document</th>
