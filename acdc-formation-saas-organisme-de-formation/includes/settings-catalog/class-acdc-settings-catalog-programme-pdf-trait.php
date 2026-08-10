@@ -231,6 +231,12 @@ trait ACDC_Settings_Catalog_Programme_PDF_Trait {
 
 		return array(
 			'titre'             => isset( $formation->title ) ? (string) $formation->title : '',
+			/* ACDC 3.25.206 — Le repère de famille voyage avec le programme.
+			   Deux programmes de la même formation, l'un en présentiel, l'autre à
+			   distance, portent le même intitulé : sans repère, ni la page ni le
+			   fichier téléchargé ne disent lequel on tient en main — et les deux
+			   fichiers s'écrasaient l'un l'autre dans le dossier de destination. */
+			'reference'         => isset( $formation->id ) ? $this->acdc_formation_reference( (int) $formation->id ) : '',
 			'date_maj'          => wp_date( 'd/m/Y' ),
 			'pourquoi'          => isset( $formation->accroche ) ? (string) $formation->accroche : '',
 			'objectif_general'  => isset( $formation->objectives ) ? (string) $formation->objectives : '',
@@ -269,7 +275,7 @@ trait ACDC_Settings_Catalog_Programme_PDF_Trait {
 		$t            = esc_html( $d['titre'] );
 		$logo_url     = $this->get_prog_pdf_logo_url();
 		$hero_url     = $this->get_prog_pdf_hero_url();
-		$pdf_filename = $this->get_prog_pdf_filename( $d['titre'] );
+		$pdf_filename = $this->get_prog_pdf_filename( $d['titre'], isset( $d['reference'] ) ? $d['reference'] : '' );
 
 		ob_start();
 		?>
@@ -722,10 +728,17 @@ body{font-family:'Rubik',sans-serif;font-size:14px;color:var(--text);background:
 	/* ─────────────────────────────────────────
 	   HELPER : NOM DU FICHIER PDF
 	───────────────────────────────────────── */
-	private function get_prog_pdf_filename( $title ) {
+	private function get_prog_pdf_filename( $title, $reference = '' ) {
 		$slug = sanitize_title( $title );
 		if ( ! $slug ) {
 			$slug = 'programme-formation';
+		}
+		/* Le repère précède l'intitulé : deux modalités de la même formation
+		   produisaient jusqu'ici deux fichiers de nom identique, dont le second
+		   écrasait silencieusement le premier au téléchargement. */
+		$reference = trim( (string) $reference );
+		if ( '' !== $reference ) {
+			$slug = sanitize_title( $reference ) . '-' . $slug;
 		}
 		return 'Programme-' . $slug . '.pdf';
 	}
@@ -742,7 +755,8 @@ body{font-family:'Rubik',sans-serif;font-size:14px;color:var(--text);background:
 		echo '<div class="page-header">';
 		echo '<div class="header-left">';
 		echo '<div class="date-line">Date de dernière mise à jour : ' . $date . '</div>';
-		echo '<div class="formation-lbl">FORMATION :</div>';
+		$ref = isset( $d['reference'] ) ? trim( (string) $d['reference'] ) : '';
+		echo '<div class="formation-lbl">FORMATION' . ( '' !== $ref ? ' N° ' . esc_html( $ref ) : '' ) . ' :</div>';
 		echo '<div class="titre-formation">' . $t . '</div>';
 		echo '</div>';
 		echo '<img class="page-logo" src="' . esc_url( $logo_url ) . '" alt="Logo ACDC Formation">';

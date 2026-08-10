@@ -1947,6 +1947,18 @@ private function build_contract_pdf_pages( $context ) {
   }
 
   $formation_title = $normalize( $formation->title ?? '', $normalize( $contract->formation_title ?? '', 'Formation non renseignée' ) );
+  /* ACDC 3.25.206 — La convention nomme la formation avec son repère de famille.
+     « 1.0 » et « 1.1 » portent le même intitulé et sont deux offres distinctes,
+     l'une en présentiel, l'autre à distance, avec leur durée et leur tarif. Une
+     convention qui ne dit que l'intitulé n'engage pas sur la modalité contractée
+     — et c'est précisément ce que l'auditeur vient vérifier.
+     On ne pose le repère que si l'on connaît réellement la formation : sur un
+     contrat qui ne porte qu'un intitulé libre, l'aide renvoie le titre inchangé
+     plutôt que d'inventer un numéro. */
+  $formation_ref_id = ! empty( $formation->id ) ? (int) $formation->id : (int) ( $contract->formation_id ?? 0 );
+  if ( $formation_ref_id > 0 && 'Formation non renseignée' !== $formation_title ) {
+    $formation_title = $this->acdc_formation_labelled( $formation_ref_id, $formation_title );
+  }
   $duration = $normalize( $formation->duration ?? '', 'A définir' );
   $duration = preg_replace( '/\s*heures?\s*$/iu', '', (string) $duration );
   $format = $normalize( $formation->modality ?? '', $normalize( $session->format ?? '', 'À définir' ) );

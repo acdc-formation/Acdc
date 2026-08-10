@@ -618,7 +618,13 @@ trait ACDC_Settings_Catalog_Render_Trait {
         ?>
           <tr>
             <td><input type="checkbox" disabled></td>
-            <td><?php echo esc_html( $row->id ); ?></td>
+            <?php /* ACDC 3.25.206 — La colonne ID du catalogue porte le repère de
+                     famille, comme le répertoire des formations : deux lignes au
+                     même intitulé s'y suivaient sous deux numéros sans rapport
+                     l'un avec l'autre. Le code propre à la formation, quand il
+                     existe, garde la priorité — c'est la référence que David a
+                     lui-même saisie. */ ?>
+            <td><?php echo esc_html( ! empty( $row->code ) ? $row->code : $this->acdc_formation_reference( $row->id ) ); ?></td>
             <td><span style="color:#C5A253;font-weight:600;"><?php echo esc_html( $row->title ); ?></span></td>
             <td><?php echo esc_html( $row->modality ); ?></td>
             <td><?php echo esc_html( $row->duration ); ?></td>
