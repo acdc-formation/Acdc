@@ -4891,7 +4891,13 @@ public function handle_purge_plugin_data() {
   check_admin_referer( 'acdc_purge_plugin_data' );
 
   if ( $this->is_production_purge_blocked() ) {
-    $this->redirect_to_portal( 'settings', 'Purge bloquée : environnement de production détecté.', 'error' );
+    /* ACDC 3.25.210 — Le message disait le blocage sans dire comment le lever.
+       Un refus qui n'indique pas la sortie oblige à chercher dans le code. */
+    $this->redirect_to_portal(
+      'settings',
+      'Purge bloquée : environnement de production détecté. WordPress répond « production » tant qu’aucun environnement n’est déclaré. Cochez « Autoriser la purge en production » dans ACDC → Configuration, ou déclarez WP_ENVIRONMENT_TYPE dans wp-config.php.',
+      'error'
+    );
   }
 
   $ack = isset( $_POST['acdc_purge_acknowledge'] ) ? sanitize_text_field( wp_unslash( $_POST['acdc_purge_acknowledge'] ) ) : '';

@@ -6021,10 +6021,72 @@ dbDelta( $sql_companies );
     );
   }
 
-  /** Envoi initial de l'analyse du besoin (appelé par le cron si délai > 0). */
-  private function nad_send_initial_email( $analysis ) {
+  /**
+   * ACDC 3.25.210 — L'adresse du destinataire se RELIT sur la fiche apprenant.
+   *
+   * L'analyse du besoin recopiait l'adresse au moment de sa création, et ne la
+   * relisait plus jamais. Corriger l'e-mail dans la fiche de l'apprenant ne
+   * changeait donc rien : les relances repartaient à l'ancienne adresse, sans
+   * aucun moyen de les rediriger. C'est la même erreur que le moteur du
+   * workflow évite par construction — ne pas mémoriser ce que l'on peut relire.
+   *
+   * Le rattrapage vaut pour l'APPRENANT seulement, et c'est délibéré : la fiche
+   * d'un apprenant porte une adresse et une seule, celle de la personne
+   * désignée. Pour un commanditaire, le répondant est une personne nommée dans
+   * l'entreprise, et l'adresse générique de l'entreprise n'est pas la sienne :
+   * la relire reviendrait à réexpédier son courrier à l'accueil. La copie
+   * enregistrée reste donc la référence de ce côté-là.
+   *
+   * La correction est aussi ÉCRITE sur la fiche d'analyse : sans cela, l'écran
+   * continuerait d'afficher l'ancienne adresse tout en envoyant à la nouvelle,
+   * et l'on remplacerait un défaut par un mensonge.
+   *
+   * @return array{0:string,1:string} l'adresse et le prénom retenus.
+   */
+  private function nad_resolve_recipient( $analysis ) {
     $email  = ! empty( $analysis->repondant_email ) ? (string) $analysis->repondant_email : '';
     $prenom = ! empty( $analysis->repondant_prenom ) ? (string) $analysis->repondant_prenom : ( ! empty( $analysis->repondant_nom ) ? (string) $analysis->repondant_nom : '' );
+
+    $learner_id = isset( $analysis->apprenant_id ) ? (int) $analysis->apprenant_id : 0;
+    if ( $learner_id <= 0 ) {
+      return array( $email, $prenom );
+    }
+
+    $learner = $this->get_learner( $learner_id );
+    if ( ! $learner || ! is_email( (string) $learner->email ) ) {
+      return array( $email, $prenom );
+    }
+
+    $fresh = sanitize_email( (string) $learner->email );
+    if ( 0 !== strcasecmp( $fresh, $email ) ) {
+      global $wpdb;
+      $wpdb->update(
+        $this->need_analysis_table,
+        array( 'repondant_email' => $fresh, 'updated_at' => current_time( 'mysql' ) ),
+        array( 'id' => (int) $analysis->id )
+      );
+      $this->insert_system_log( array(
+        'log_level'   => 'info',
+        'event_type'  => 'nad_recipient_refreshed',
+        'action_key'  => 'need_analysis',
+        'object_type' => 'need_analysis',
+        'object_id'   => (int) $analysis->id,
+        'message'     => 'Adresse du répondant realignée sur la fiche apprenant.',
+        'context_json' => array( 'apprenant_id' => $learner_id ),
+      ) );
+      $email = $fresh;
+    }
+
+    if ( '' !== trim( (string) $learner->first_name ) ) {
+      $prenom = (string) $learner->first_name;
+    }
+
+    return array( $email, $prenom );
+  }
+
+  /** Envoi initial de l'analyse du besoin (appelé par le cron si délai > 0). */
+  private function nad_send_initial_email( $analysis ) {
+    list( $email, $prenom ) = $this->nad_resolve_recipient( $analysis );
     if ( ! is_email( $email ) || empty( $analysis->token_public ) ) { return; }
     $form_url   = $this->nad_get_public_form_url( (string) $analysis->token_public );
     $is_cmd     = ( 'entreprise' === ( $analysis->profil ?? '' ) || 'independant' === ( $analysis->profil ?? '' ) );
@@ -6042,8 +6104,10 @@ dbDelta( $sql_companies );
 
   /** Envoi d'une relance (numéro 1, 2 ou 3). */
   private function nad_send_relance_email( $analysis, $num ) {
-    $email  = ! empty( $analysis->repondant_email ) ? (string) $analysis->repondant_email : '';
-    $prenom = ! empty( $analysis->repondant_prenom ) ? (string) $analysis->repondant_prenom : ( ! empty( $analysis->repondant_nom ) ? (string) $analysis->repondant_nom : '' );
+    /* Une relance part à l'adresse d'AUJOURD'HUI, pas à celle du jour de la
+       création : c'est précisément quand la première n'est pas arrivée que
+       l'adresse a été corrigée entre-temps. */
+    list( $email, $prenom ) = $this->nad_resolve_recipient( $analysis );
     if ( ! is_email( $email ) || empty( $analysis->token_public ) ) { return; }
 
     $form_url = $this->nad_get_public_form_url( (string) $analysis->token_public );

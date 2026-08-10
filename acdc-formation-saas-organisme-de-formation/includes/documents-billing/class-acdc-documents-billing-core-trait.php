@@ -88,6 +88,12 @@ trait ACDC_Documents_Billing_Core_Trait {
     // SIRET du client (commanditaire) — pour l'afficher sur le devis.
     $this->maybe_add_table_column( $this->quote_table, 'client_siret',         "VARCHAR(20) NOT NULL DEFAULT ''" );
     $this->maybe_add_table_column( $this->quote_table, 'client_signature_path', "VARCHAR(255) NOT NULL DEFAULT ''" );
+    /* ACDC 3.25.210 — La DATE de la signature du client manquait en base.
+       Elle n'existait que dans la variable locale du gabarit d'e-mail : la pièce
+       jointe de l'instant portait « signé le … », et toute relecture ultérieure
+       affichait une signature sans date. Sur un document commercial, une
+       signature non datée vaut beaucoup moins que la même signature datée. */
+    $this->maybe_add_table_column( $this->quote_table, 'client_signed_at', 'DATETIME NULL' );
   }
 
   private function get_quotes( $args = array() ) {
@@ -249,6 +255,10 @@ trait ACDC_Documents_Billing_Core_Trait {
       'client_company'      => (string) $q->client_company,
       'client_siret'        => isset( $q->client_siret ) ? (string) $q->client_siret : '',
       'client_signature_uri' => ( ! empty( $q->client_signature_path ) && file_exists( (string) $q->client_signature_path ) ) ? $this->quote_file_to_data_uri( (string) $q->client_signature_path ) : '',
+      /* ACDC 3.25.210 — La date accompagne la signature dans TOUS les rendus.
+         Elle n'était posée qu'à la main, dans le seul envoi qui suit la
+         signature ; partout ailleurs le devis montrait un paraphe sans date. */
+      'client_signed_date'  => ! empty( $q->client_signed_at ) ? mysql2date( 'd/m/Y', (string) $q->client_signed_at ) : '',
       'client_contact'      => (string) $q->apprenant_name,
       'client_address_full' => trim( (string) $q->client_address . ( ! empty( $q->client_address_complement ) ? ' ' . $q->client_address_complement : '' ) ),
       'client_postal_city'  => trim( $q->client_postal_code . ' ' . $q->client_city ),

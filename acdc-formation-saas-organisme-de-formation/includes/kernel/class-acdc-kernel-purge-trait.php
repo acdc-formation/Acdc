@@ -396,6 +396,13 @@ trait ACDC_Kernel_Purge_Trait {
           </p>
           <?php if ( $blocked ) : ?>
             <p style="color:#8f1d1d;font-weight:600;">Purge bloquée : environnement de production détecté.</p>
+            <p class="acdc-help" style="margin-top:-6px;">
+              WordPress répond « production » tant qu’aucun environnement n’est déclaré : ce n’est pas un diagnostic, c’est
+              son défaut. Pour débloquer, cochez « Autoriser la purge en production » dans
+              <a href="<?php echo esc_url( admin_url( 'admin.php?page=acdc-of-configuration' ) ); ?>">ACDC → Configuration</a>,
+              ou déclarez la vérité une fois pour toutes dans <code>wp-config.php</code> :
+              <code>define( 'WP_ENVIRONMENT_TYPE', 'staging' );</code>
+            </p>
           <?php endif; ?>
           <button type="submit" class="acdc-button" style="background:#fff;border:1px solid #E0B96D;color:#8a6300;" <?php disabled( $blocked ); ?>>
             Supprimer les ensembles cochés
@@ -469,7 +476,11 @@ trait ACDC_Kernel_Purge_Trait {
     check_admin_referer( 'acdc_purge_selected_data' );
 
     if ( $this->is_production_purge_blocked() ) {
-      $this->redirect_to_portal( 'settings', 'Purge bloquée : environnement de production détecté.', 'error' );
+      $this->redirect_to_portal(
+        'settings',
+        'Purge bloquée : environnement de production détecté. WordPress répond « production » tant qu’aucun environnement n’est déclaré. Cochez « Autoriser la purge en production » dans ACDC → Configuration, ou déclarez WP_ENVIRONMENT_TYPE dans wp-config.php.',
+        'error'
+      );
     }
 
     $ack = isset( $_POST['acdc_purge_acknowledge'] ) ? sanitize_text_field( wp_unslash( $_POST['acdc_purge_acknowledge'] ) ) : '';

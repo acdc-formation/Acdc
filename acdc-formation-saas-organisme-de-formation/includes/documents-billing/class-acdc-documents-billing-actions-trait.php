@@ -1137,18 +1137,50 @@ trait ACDC_Documents_Billing_Actions_Trait {
       if ( file_exists( (string) $sig_files_q[0] ) ) { $client_sig_path = (string) $sig_files_q[0]; }
     }
 
+    $signed_at = current_time( 'mysql' );
+
     $update_data    = array(
       'signature_status'     => 'signée',
       'status'               => 'signe',
       'signed_document_url'  => $signed_url,
+      'client_signed_at'     => $signed_at,
     );
-    $update_formats = array( '%s', '%s', '%s' );
+    $update_formats = array( '%s', '%s', '%s', '%s' );
     if ( '' !== $client_sig_path ) {
       $update_data['client_signature_path'] = $client_sig_path;
       $update_formats[] = '%s';
     }
     $wpdb->update( $this->quote_table, $update_data, array( 'id' => $quote_id ), $update_formats, array( '%d' ) );
-    $signed_at   = current_time( 'mysql' );
+
+    /* ACDC 3.25.210 — LE DOCUMENT EN LIGNE EST REFABRIQUÉ APRÈS LA SIGNATURE.
+       C'est le défaut signalé par David : « la signature n'apparaît pas sur le
+       devis signé, alors que la convention est parfaite ». Les deux flux ne se
+       ressemblaient qu'en apparence. La convention REMPLACE son document par le
+       PDF signé que produit le module de signature. Le devis, lui, est un
+       fichier HTML écrit sur le disque au moment de l'envoi, puis jamais
+       retouché : le lien reçu par le commanditaire — et le devis qu'il
+       télécharge ensuite — pointait donc sur la version d'AVANT la signature.
+       Le gabarit savait pourtant l'afficher depuis toujours ; personne ne lui
+       redemandait de le faire.
+       On relit donc le devis une fois la signature enregistrée, on regénère le
+       fichier, et le lien « devis signé » désigne enfin un document signé.
+       L'ordre compte : la signature est en base AVANT la regénération, sinon on
+       réécrirait à l'identique. */
+    $quote_after = $this->get_quote( $quote_id );
+    if ( $quote_after && method_exists( $this, 'generate_quote_html' ) ) {
+      $regenerated = $this->generate_quote_html( $quote_after );
+      if ( $regenerated ) {
+        $wpdb->update(
+          $this->quote_table,
+          array( 'html_url' => $regenerated, 'signed_document_url' => $regenerated ),
+          array( 'id' => $quote_id ),
+          array( '%s', '%s' ),
+          array( '%d' )
+        );
+        $signed_url = $regenerated;
+        $quote      = $this->get_quote( $quote_id ) ?: $quote;
+      }
+    }
     $profile_s   = $this->get_company_profile_options();
     $from_name_s = ! empty( $profile_s['enterprise_contact_name'] )  ? sanitize_text_field( (string) $profile_s['enterprise_contact_name'] )  : get_bloginfo( 'name' );
     $from_email_s= ! empty( $profile_s['enterprise_contact_email'] ) ? sanitize_email( (string) $profile_s['enterprise_contact_email'] )       : sanitize_email( (string) get_option( 'admin_email' ) );
