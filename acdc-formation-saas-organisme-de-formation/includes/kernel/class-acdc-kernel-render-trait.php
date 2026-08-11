@@ -9737,17 +9737,22 @@ trait ACDC_Kernel_Render_Trait {
       }
     }
 
-    foreach ( $logs as $log ) {
-      $message = isset( $log['message'] ) ? strtolower( (string) $log['message'] ) : '';
-      $context = isset( $log['context'] ) && is_array( $log['context'] ) ? $log['context'] : array();
-      $entity = isset( $context['entity'] ) ? sanitize_key( (string) $context['entity'] ) : '';
-      if ( false !== strpos( $message, 'relance' ) || false !== strpos( $message, 'email' ) || in_array( $entity, array( 'emails', 'followup', 'prospect_followup' ), true ) ) {
-        if ( ! empty( $log['date'] ) ) {
-          $timestamp = strtotime( (string) $log['date'] );
-          if ( false !== $timestamp && $timestamp >= strtotime( '-7 days' ) ) {
-            $recent_sent_count++;
-          }
-        }
+    /* ACDC 3.25.224 — « Envois récents : 0 » pendant que l'archive comptait
+       cinquante destinataires. Cette carte comptait des LIGNES DE JOURNAL
+       marketing dont le texte contient « relance » ou « email » — un journal
+       qui n'est alimenté que par le module marketing avancé, jamais par les
+       envois du parcours. Elle compte maintenant les e-mails réellement
+       archivés, c'est-à-dire la seule trace qui prouve qu'un message est
+       parti. */
+    $cutoff_recent = current_time( 'timestamp' ) - 7 * DAY_IN_SECONDS;
+    foreach ( (array) $this->get_marketing_email_archive() as $mail ) {
+      $mail = (array) $mail;
+      if ( empty( $mail['sent_at'] ) ) {
+        continue;
+      }
+      $timestamp = strtotime( (string) $mail['sent_at'] );
+      if ( false !== $timestamp && $timestamp >= $cutoff_recent ) {
+        $recent_sent_count++;
       }
     }
 
@@ -11861,31 +11866,190 @@ Nb de questions réussies / Nb de questions : <?php echo esc_html( (int) $contex
       .acdc-filter-toggle-icons-only:hover{color:#0C2D52}
     </style>
     <?php
-  }  private function render_front_emails_summary_tab() {
+  }
+  /**
+   * ACDC 3.25.224 — CET ÉCRAN N'AVAIT JAMAIS RIEN LU.
+   *
+   * « Aucune donnée ne correspond aux critères demandés » n'était pas un
+   * résultat : c'était du texte écrit en dur. Aucune requête, aucun filtre,
+   * un champ de recherche sans destination et un picto sans effet — pendant
+   * que l'archive comptait cinquante destinataires. La recette l'a relevé
+   * comme « un écran de suivi qui ne remonte rien » ; il ne remontait rien
+   * parce qu'il ne cherchait rien.
+   *
+   * L'écran lit désormais l'archive réelle : le total par module, la part
+   * d'échecs, et les derniers envois nommés. La recherche porte sur l'objet,
+   * le destinataire et le module.
+   */
+  private function render_front_emails_summary_tab() {
+    $search = isset( $_GET['q'] ) ? sanitize_text_field( wp_unslash( $_GET['q'] ) ) : '';
+    $days   = isset( $_GET['days'] ) ? absint( wp_unslash( $_GET['days'] ) ) : 0;
+    $base_url = is_admin() ? $this->admin_tab_url( 'emails_summary' ) : $this->portal_page_url( array( 'tab' => 'emails_summary' ) );
+
+    $archive = $this->get_marketing_email_archive();
+    $needle  = strtolower( trim( $search ) );
+    $cutoff  = $days > 0 ? ( current_time( 'timestamp' ) - $days * DAY_IN_SECONDS ) : 0;
+
+    $entries  = array();
+    $by_module = array();
+    $sent = 0;
+    $failed = 0;
+    $recipients = 0;
+
+    foreach ( (array) $archive as $entry ) {
+      $entry = (array) $entry;
+      $to    = isset( $entry['to'] ) ? (array) $entry['to'] : array();
+
+      if ( $cutoff > 0 ) {
+        $ts = ! empty( $entry['sent_at'] ) ? strtotime( (string) $entry['sent_at'] ) : 0;
+        if ( ! $ts || $ts < $cutoff ) {
+          continue;
+        }
+      }
+
+      if ( '' !== $needle ) {
+        $haystack = strtolower( implode( ' ', array_filter( array(
+          (string) ( $entry['subject'] ?? '' ),
+          implode( ' ', array_map( 'strval', $to ) ),
+          (string) ( $entry['source_module'] ?? '' ),
+          (string) ( $entry['source_action'] ?? '' ),
+          (string) ( $entry['category'] ?? '' ),
+        ) ) ) );
+        if ( false === strpos( $haystack, $needle ) ) {
+          continue;
+        }
+      }
+
+      $module = (string) ( $entry['source_module'] ?? 'plugin' );
+      if ( ! isset( $by_module[ $module ] ) ) {
+        $by_module[ $module ] = array( 'total' => 0, 'failed' => 0, 'recipients' => 0, 'last' => '' );
+      }
+      $by_module[ $module ]['total']++;
+      $by_module[ $module ]['recipients'] += count( $to );
+      if ( '' === $by_module[ $module ]['last'] ) {
+        $by_module[ $module ]['last'] = (string) ( $entry['sent_at'] ?? '' );
+      }
+
+      $recipients += count( $to );
+      if ( 'sent' === (string) ( $entry['status'] ?? '' ) ) {
+        $sent++;
+      } else {
+        $failed++;
+        $by_module[ $module ]['failed']++;
+      }
+
+      $entries[] = $entry;
+    }
+
+    uasort( $by_module, static function( $a, $b ) {
+      return (int) $b['total'] <=> (int) $a['total'];
+    } );
+
+    $recent = array_slice( $entries, 0, 50 );
     ?>
-    <section class="acdc-section-head"><div><h2>Récapitulatif des e-mails et relances</h2></div></section>
+    <section class="acdc-section-head">
+      <div>
+        <h2>Récapitulatif des e-mails et relances</h2>
+        <p>Ce que le plugin a réellement envoyé, module par module, d'après l'archive des envois.</p>
+      </div>
+    </section>
     <div class="acdc-panel acdc-mb-18">
-      <form method="get" action="">
+      <form class="acdc-search-bar" method="get" action="<?php echo esc_url( $base_url ); ?>">
         <?php if ( is_admin() ) : ?><input type="hidden" name="page" value="acdc-of-dashboard"><?php endif; ?>
         <input type="hidden" name="tab" value="emails_summary">
-        <div class="acdc-inline-wrap acdc-inline-wrap-center">
-          <input type="search" name="q" value="" placeholder="Rechercher" style="max-width:420px;">
+        <div class="acdc-search-row">
+          <input type="search" name="q" value="<?php echo esc_attr( $search ); ?>" placeholder="Rechercher un objet, un destinataire, un module">
+          <select name="days">
+            <option value="0" <?php selected( $days, 0 ); ?>>Tout l'historique</option>
+            <option value="7" <?php selected( $days, 7 ); ?>>7 derniers jours</option>
+            <option value="30" <?php selected( $days, 30 ); ?>>30 derniers jours</option>
+            <option value="90" <?php selected( $days, 90 ); ?>>90 derniers jours</option>
+          </select>
+          <button type="submit" class="acdc-button acdc-button-primary">Appliquer</button>
+          <a class="acdc-button acdc-button-soft" href="<?php echo esc_url( $base_url ); ?>">Réinitialiser</a>
         </div>
       </form>
     </div>
-    <div class="acdc-panel">
-      <div style="display:flex;justify-content:flex-end;align-items:center;padding:8px 0 18px;">
-        <button type="button" class="acdc-filter-toggle-icons-only" aria-label="Filtres" title="Filtres"><?php echo $this->render_inline_icon( 'filter', 18 ); ?></button>
+
+    <?php if ( empty( $entries ) ) : ?>
+      <div class="acdc-panel">
+        <div class="acdc-empty-state" style="padding:72px 24px;text-align:center;">
+          <div class="acdc-empty-state-icon" aria-hidden="true"><?php echo $this->render_inline_icon( 'emails', 54 ); ?></div>
+          <p style="margin:0;color:#1E4777;">
+            <?php if ( '' !== $search || $days > 0 ) : ?>
+              Aucun envoi ne correspond à cette recherche. L'archive compte <?php echo (int) count( (array) $archive ); ?> envoi(s) au total.
+            <?php else : ?>
+              L'archive des envois est vide : aucun e-mail n'est encore parti depuis ce site.
+            <?php endif; ?>
+          </p>
+        </div>
       </div>
-      <div class="acdc-empty-state" style="padding:72px 24px;text-align:center;">
-        <div class="acdc-empty-state-icon" aria-hidden="true"><?php echo $this->render_inline_icon( 'survey', 54 ); ?></div>
-        <p style="margin:0;color:#1E4777;">Aucune donnée ne correspond aux critères demandés.</p>
+    <?php else : ?>
+      <div class="acdc-panel acdc-mb-18">
+        <div class="acdc-inline-wrap" style="gap:28px;flex-wrap:wrap;">
+          <div><div class="acdc-contract-label">Envois</div><div style="font-size:22px;font-weight:700;color:#1E4777;"><?php echo (int) count( $entries ); ?></div></div>
+          <div><div class="acdc-contract-label">Destinataires</div><div style="font-size:22px;font-weight:700;color:#1E4777;"><?php echo (int) $recipients; ?></div></div>
+          <div><div class="acdc-contract-label">Aboutis</div><div style="font-size:22px;font-weight:700;color:#1e7a41;"><?php echo (int) $sent; ?></div></div>
+          <div><div class="acdc-contract-label">En échec</div><div style="font-size:22px;font-weight:700;color:<?php echo $failed > 0 ? '#b32d2e' : '#1E4777'; ?>;"><?php echo (int) $failed; ?></div></div>
+        </div>
       </div>
-    </div>
-    <style>
-      .acdc-filter-toggle-icons-only{padding:0;border:none;background:transparent;color:#1E4777;display:inline-flex;align-items:center;gap:8px;cursor:pointer}
-      .acdc-filter-toggle-icons-only:hover{color:#0C2D52}
-    </style>
+
+      <div class="acdc-panel acdc-mb-18">
+        <h3 style="margin:0 0 12px;">Par module</h3>
+        <div class="acdc-table-wrap">
+          <table class="acdc-table">
+            <thead><tr><th>Module</th><th>Envois</th><th>Destinataires</th><th>En échec</th><th>Dernier envoi</th></tr></thead>
+            <tbody>
+            <?php foreach ( $by_module as $module => $stats ) : ?>
+              <tr>
+                <td><strong><?php echo esc_html( $module ); ?></strong></td>
+                <td><?php echo (int) $stats['total']; ?></td>
+                <td><?php echo (int) $stats['recipients']; ?></td>
+                <td<?php echo $stats['failed'] > 0 ? ' style="color:#b32d2e;font-weight:700"' : ''; ?>><?php echo (int) $stats['failed']; ?></td>
+                <td><?php echo esc_html( $stats['last'] ? mysql2date( 'd/m/Y H:i', $stats['last'] ) : '—' ); ?></td>
+              </tr>
+            <?php endforeach; ?>
+            </tbody>
+          </table>
+        </div>
+      </div>
+
+      <div class="acdc-panel">
+        <h3 style="margin:0 0 12px;">Derniers envois</h3>
+        <div class="acdc-table-wrap">
+          <table class="acdc-table">
+            <thead><tr><th>Date</th><th>Destinataire(s)</th><th>Objet</th><th>Module / action</th><th>État</th></tr></thead>
+            <tbody>
+            <?php foreach ( $recent as $entry ) :
+              $entry = (array) $entry;
+              $to    = isset( $entry['to'] ) ? (array) $entry['to'] : array();
+              $ok    = 'sent' === (string) ( $entry['status'] ?? '' );
+              ?>
+              <tr>
+                <td><?php echo esc_html( ! empty( $entry['sent_at'] ) ? mysql2date( 'd/m/Y H:i', (string) $entry['sent_at'] ) : '—' ); ?></td>
+                <td><?php echo esc_html( implode( ', ', array_map( 'strval', $to ) ) ); ?></td>
+                <td><?php echo esc_html( (string) ( $entry['subject'] ?? '' ) ); ?></td>
+                <td><?php echo esc_html( (string) ( $entry['source_module'] ?? '' ) . ' / ' . (string) ( $entry['source_action'] ?? '' ) ); ?></td>
+                <td>
+                  <?php if ( $ok ) : ?>
+                    <span class="acdc-status-pill acdc-status-pill-success">Abouti</span>
+                  <?php else : ?>
+                    <span class="acdc-status-pill" style="background:#f8d7da;color:#721c24">Échec</span>
+                    <?php if ( ! empty( $entry['error_message'] ) ) : ?>
+                      <div style="font-size:11px;color:#721c24;margin-top:3px"><?php echo esc_html( (string) $entry['error_message'] ); ?></div>
+                    <?php endif; ?>
+                  <?php endif; ?>
+                </td>
+              </tr>
+            <?php endforeach; ?>
+            </tbody>
+          </table>
+        </div>
+        <?php if ( count( $entries ) > count( $recent ) ) : ?>
+          <p class="description" style="margin-top:10px;">Les <?php echo (int) count( $recent ); ?> envois les plus récents sur <?php echo (int) count( $entries ); ?>. Affinez la recherche pour voir les autres.</p>
+        <?php endif; ?>
+      </div>
+    <?php endif; ?>
     <?php
   }  private function render_front_companies_tab( $action, $item_id ) {
     $company  = $item_id ? $this->get_company( $item_id ) : null;

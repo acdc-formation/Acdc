@@ -132,8 +132,7 @@ class ACDC_Emargement {
 
             $session = $wpdb->get_row( $wpdb->prepare( "SELECT * FROM {$session_table} WHERE id = %d", $session_id ) );
             if ( ! $session ) {
-                wp_safe_redirect( add_query_arg( 'emarg_err', 'session', wp_get_referer() ?: admin_url() ) );
-                exit;
+                $this->redirect_with_notice( 'Séance introuvable : rien n’a été envoyé.', 'error', array( 'emarg_err' => 'session' ) );
             }
 
             // Formateur
@@ -173,17 +172,49 @@ class ACDC_Emargement {
 
             $emarg_id = $this->core->create_emarg_session( $session_id, $trainer_id, $trainer_name, $trainer_email, $learners, $seance_index, $seance_meta );
             if ( ! $emarg_id ) {
-                wp_safe_redirect( add_query_arg( 'emarg_err', 'create', wp_get_referer() ?: admin_url() ) );
-                exit;
+                $this->redirect_with_notice( 'La feuille d’émargement n’a pas pu être créée : rien n’a été envoyé.', 'error', array( 'emarg_err' => 'create' ) );
             }
             $emarg = $wpdb->get_row( $wpdb->prepare( "SELECT * FROM {$this->core->table_sessions} WHERE id = %d", $emarg_id ) );
         }
 
-        if ( $emarg && $emarg->trainer_email ) {
+        if ( $emarg && ! empty( $emarg->trainer_email ) ) {
             $this->email->send_trainer_email( $emarg );
+            $this->redirect_with_notice(
+                'La feuille d’émargement a été envoyée à ' . $emarg->trainer_email . '.',
+                'success',
+                array( 'emarg_ok' => 'trainer_sent' )
+            );
         }
 
-        wp_safe_redirect( add_query_arg( 'emarg_ok', 'trainer_sent', wp_get_referer() ?: admin_url() ) );
+        /* Aucun formateur joignable : le clic a bien été reçu, et rien n'est
+           parti. Le taire aurait donné exactement la même page qu'un envoi
+           réussi. */
+        $this->redirect_with_notice(
+            'Aucune adresse de formateur sur cette séance : rien n’a été envoyé.',
+            'error',
+            array( 'emarg_err' => 'no_trainer' )
+        );
+    }
+
+    /**
+     * ACDC 3.25.224 — Un envoi qui ne dit pas qu'il est parti n'a pas eu lieu.
+     *
+     * Le bouton d'émargement revenait avec « emarg_ok=trainer_sent » dans
+     * l'URL et pas un mot à l'écran : l'e-mail partait vraiment, mais rien ne
+     * distinguait le succès de l'échec, ni même du clic sans effet. L'écran
+     * porte déjà un mécanisme de message — « notice » / « notice_type » — que
+     * ce module n'utilisait pas. On s'y branche.
+     */
+    private function redirect_with_notice( $message, $type = 'success', $extra = array() ) {
+        $base = wp_get_referer() ?: admin_url();
+        $args = array_merge( (array) $extra, array(
+            'notice'      => rawurlencode( (string) $message ),
+            'notice_type' => in_array( $type, array( 'success', 'error', 'warning', 'info' ), true ) ? $type : 'info',
+            '_acdc_rt'    => time(),
+        ) );
+
+        nocache_headers();
+        wp_safe_redirect( add_query_arg( $args, $base ) );
         exit;
     }
 

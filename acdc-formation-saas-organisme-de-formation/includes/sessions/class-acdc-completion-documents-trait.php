@@ -124,6 +124,91 @@ trait ACDC_Completion_Documents_Trait {
     return $result;
   }
 
+  /**
+   * ACDC 3.25.224 — Les heures PRÉVUES, quand rien n'est encore signé.
+   *
+   * La colonne « Durée (H) » des trois écrans de documents affichait « — » sur
+   * un dossier de quatre demi-journées : elle lisait la durée saisie sur la
+   * fiche formation, un champ libre que personne ne remplit, au lieu de
+   * regarder les séances réellement planifiées. Une pièce de fin de formation
+   * qui ne sait pas dire combien d'heures elle couvre ne vaut rien devant un
+   * financeur.
+   *
+   * On additionne donc les créneaux du planning. C'est la valeur d'attente ;
+   * dès qu'un émargement existe, ce sont les heures SIGNÉES qui priment —
+   * jamais l'inverse.
+   *
+   * @param int[] $session_ids
+   * @return array{minutes:int,half_days:int,label:string,first_at:string,last_at:string}
+   */
+  private function acdc_completion_planned_time( $session_ids ) {
+    global $wpdb;
+
+    $out = array(
+      'minutes'   => 0,
+      'half_days' => 0,
+      'label'     => '',
+      'first_at'  => '',
+      'last_at'   => '',
+    );
+
+    $session_ids = array_values( array_filter( array_map( 'absint', (array) $session_ids ) ) );
+    if ( empty( $session_ids ) ) {
+      return $out;
+    }
+
+    $placeholders = implode( ',', array_fill( 0, count( $session_ids ), '%d' ) );
+    $rows = $wpdb->get_results( $wpdb->prepare(
+      "SELECT id, start_at, end_at, start_date, end_date, schedule_json
+         FROM {$this->session_table}
+        WHERE id IN ({$placeholders})",
+      $session_ids
+    ) );
+
+    $slots = array();
+    foreach ( (array) $rows as $row ) {
+      $decoded = ! empty( $row->schedule_json ) ? json_decode( (string) $row->schedule_json, true ) : null;
+      if ( is_array( $decoded ) && ! empty( $decoded ) ) {
+        foreach ( array_values( $decoded ) as $slot ) {
+          $slot  = (array) $slot;
+          $start = ! empty( $slot['start_at'] ) ? (string) $slot['start_at'] : '';
+          $end   = ! empty( $slot['end_at'] ) ? (string) $slot['end_at'] : '';
+          if ( '' !== $start && '' !== $end ) {
+            $slots[] = array( $start, $end );
+          }
+        }
+        continue;
+      }
+      if ( ! empty( $row->start_at ) && ! empty( $row->end_at ) ) {
+        $slots[] = array( (string) $row->start_at, (string) $row->end_at );
+      }
+    }
+
+    if ( empty( $slots ) ) {
+      return $out;
+    }
+
+    usort( $slots, static function( $a, $b ) {
+      return strcmp( $a[0], $b[0] );
+    } );
+
+    $minutes = 0;
+    foreach ( $slots as $slot ) {
+      $span = ( strtotime( $slot[1] ) - strtotime( $slot[0] ) ) / 60;
+      if ( $span > 0 ) {
+        $minutes += (int) round( $span );
+      }
+    }
+
+    $out['minutes']   = $minutes;
+    $out['half_days'] = count( $slots );
+    $out['label']     = $minutes > 0 ? $this->acdc_completion_minutes_label( $minutes ) : '';
+    $out['first_at']  = $slots[0][0];
+    $out['last_at']   = $slots[ count( $slots ) - 1 ][1];
+
+    return $out;
+  }
+
   /** « 14 h », « 10 h 30 » — jamais « 10h30 min », qui double l'unité. */
   private function acdc_completion_minutes_label( $minutes ) {
     $minutes = max( 0, (int) $minutes );
@@ -276,10 +361,19 @@ trait ACDC_Completion_Documents_Trait {
       ) );
     }
 
-    return $this->acdc_completion_eligibility(
+    $state = $this->acdc_completion_eligibility(
       (int) $registration->learner_id,
       $session_ids,
       array( (int) $registration->id )
     );
+
+    /* ACDC 3.25.224 — Le prévu accompagne le réel, il ne le remplace pas.
+       Les écrans ont besoin des deux : ce qui était planifié tant que rien
+       n'est signé, ce qui a été signé dès qu'il y a une signature. Les
+       confondre serait rouvrir la porte au certificat qui atteste des heures
+       que personne n'a suivies. */
+    $state['planned'] = $this->acdc_completion_planned_time( $session_ids );
+
+    return $state;
   }
 }

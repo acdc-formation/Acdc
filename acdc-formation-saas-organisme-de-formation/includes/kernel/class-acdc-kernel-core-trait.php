@@ -5384,9 +5384,26 @@ dbDelta( $sql_companies );
       $start_date = ! empty( $registration->created_at ) ? gmdate( 'Y-m-d', strtotime( (string) $registration->created_at ) ) : '';
       $end_date = $start_date;
     }
+    /* ACDC 3.25.224 — LA LIGNE DU COMMANDITAIRE PORTAIT LE NOM DE SA
+       SIGNATAIRE. Un dossier de trois apprenantes affichait quatre lignes dont
+       deux au nom de Bérengère Valeriano : elle signe pour Skill Conseil ET
+       suit la formation. La quatrième ligne n'est pas un doublon, c'est la
+       ligne du commanditaire — mais elle empruntait l'identité d'une personne
+       physique au lieu de porter la raison sociale, ce qui la rendait
+       indiscernable d'une inscription.
+       La règle de David est sans exception : dès qu'il y a une entreprise,
+       c'est l'entreprise qui nomme. La personne vient après, jamais à la
+       place. */
+    $is_commanditaire = empty( $registration->learner_id ) && ! empty( $registration->company_id );
+
     $learner_name = '';
     if ( $learner ) {
       $learner_name = trim( $learner->first_name . ' ' . ( ! empty( $learner->usage_last_name ) ? $learner->usage_last_name : $learner->last_name ) );
+    } elseif ( $is_commanditaire && $company && ! empty( $company->name ) ) {
+      $learner_name = (string) $company->name;
+      if ( ! empty( $registration->learner_label ) ) {
+        $learner_name .= ' — à l’attention de ' . (string) $registration->learner_label;
+      }
     } elseif ( ! empty( $registration->learner_label ) ) {
       $learner_name = (string) $registration->learner_label;
     } elseif ( ! empty( $registration->learners_label ) ) {
@@ -5398,7 +5415,14 @@ dbDelta( $sql_companies );
     }
     $formation_title = $formation && ! empty( $formation->title ) ? (string) $formation->title : (string) $registration->formation_title;
     $format = $formation && ! empty( $formation->modality ) ? (string) $formation->modality : '—';
-    $duration = $formation && ! empty( $formation->duration ) ? (string) $formation->duration : '—';
+    $duration = $formation && ! empty( $formation->duration ) ? (string) $formation->duration : '';
+    if ( '' === $duration ) {
+      /* ACDC 3.25.224 — La durée de la fiche formation est un champ libre que
+         personne ne remplit. Plutôt qu'un tiret sur une convocation, on
+         additionne les créneaux réellement planifiés. */
+      $planned = $this->acdc_completion_planned_time( wp_list_pluck( $sessions, 'id' ) );
+      $duration = ! empty( $planned['label'] ) ? $planned['label'] : '—';
+    }
     $email = $learner && ! empty( $learner->email ) ? (string) $learner->email : '—';
     $phone = $learner && ! empty( $learner->phone ) ? (string) $learner->phone : '—';
     $document = $this->get_training_convocation_document_info( $registration, array(
@@ -5413,6 +5437,7 @@ dbDelta( $sql_companies );
       'start_date' => $start_date,
       'end_date' => $end_date,
       'learner_name' => $learner_name,
+      'is_commanditaire' => $is_commanditaire,
       'formation_title' => $formation_title,
       'format' => $format,
       'duration' => $duration,
@@ -5444,6 +5469,12 @@ dbDelta( $sql_companies );
     $rows = array();
     foreach ( (array) $items as $entry ) {
       $context = $this->get_training_convocation_context( $entry );
+      /* ACDC 3.25.224 — « Le commanditaire n'a pas lieu d'avoir de
+         convocation, ce sont uniquement les apprenants. » Règle de David,
+         appliquée à la source plutôt qu'écran par écran. */
+      if ( ! empty( $context['is_commanditaire'] ) ) {
+        continue;
+      }
       $haystack = strtolower( implode( ' ', array_filter( array(
         (string) $entry->id,
         (string) $context['learner_name'],
@@ -5491,35 +5522,104 @@ dbDelta( $sql_companies );
     $formation_title = $context['formation_title'];
     $format = $context['format'];
     $dates_text = 'Dates de l’action de formation : ' . $this->format_pdf_date( $context['start_date'] ) . ' au ' . $this->format_pdf_date( $context['end_date'] );
-    $start_hour = '09:00';
-    if ( ! empty( $context['sessions'] ) ) {
-      $first_session = $context['sessions'][0];
-      if ( ! empty( $first_session->start_at ) ) {
-        $start_hour = date_i18n( 'H:i', strtotime( (string) $first_session->start_at ) );
+
+    /* ACDC 3.25.224 — LA CONVOCATION NE DOIT RIEN INVENTER, ET NE RIEN TAIRE.
+       Elle annonçait « à 09:00 » par défaut — un horaire écrit en dur, donc
+       potentiellement faux — n'affichait aucune date de fin exploitable, et
+       tombait sur « — » pour le lieu dès qu'une séance existait sans adresse
+       propre : la branche de repli était derrière un `elseif` qui ne pouvait
+       plus être atteint. Une convocation est le document sur lequel la
+       personne se fonde pour se déplacer ; s'y tromper d'heure ou de lieu est
+       la faute la plus concrète du parcours.
+       On lit donc le planning réel, demi-journée par demi-journée, et l'on
+       nomme explicitement ce qui manque plutôt que de le combler. */
+    $slots = array();
+    foreach ( (array) ( $context['sessions'] ?? array() ) as $session_row ) {
+      $decoded = ! empty( $session_row->schedule_json ) ? json_decode( (string) $session_row->schedule_json, true ) : null;
+      if ( is_array( $decoded ) && ! empty( $decoded ) ) {
+        foreach ( array_values( $decoded ) as $slot ) {
+          $slot = (array) $slot;
+          if ( ! empty( $slot['start_at'] ) ) {
+            $slots[] = array( (string) $slot['start_at'], (string) ( $slot['end_at'] ?? '' ) );
+          }
+        }
+        continue;
+      }
+      if ( ! empty( $session_row->start_at ) ) {
+        $slots[] = array( (string) $session_row->start_at, (string) ( $session_row->end_at ?? '' ) );
       }
     }
-    $location = '—';
-    if ( ! empty( $context['sessions'] ) ) {
-      $first_session = $context['sessions'][0];
-      if ( ! empty( $first_session->location ) ) {
-        $location = (string) $first_session->location;
+    usort( $slots, static function( $a, $b ) {
+      return strcmp( $a[0], $b[0] );
+    } );
+
+    $start_hour = '';
+    if ( ! empty( $slots ) ) {
+      $start_hour = date_i18n( 'H:i', strtotime( $slots[0][0] ) );
+    }
+
+    $schedule_lines = array();
+    foreach ( $slots as $slot ) {
+      $line = date_i18n( 'l d/m/Y', strtotime( $slot[0] ) ) . ' — ' . date_i18n( 'H:i', strtotime( $slot[0] ) );
+      if ( '' !== $slot[1] ) {
+        $line .= ' à ' . date_i18n( 'H:i', strtotime( $slot[1] ) );
       }
-    } elseif ( ! empty( $context['formation']->address ) ) {
+      $schedule_lines[] = $line;
+    }
+
+    /* Le lieu, en cascade et sans trou : la séance, puis la formation, puis
+       l'adresse du commanditaire — « dans la convention c'est sur le lieu de
+       l'entreprise ». */
+    $location = '';
+    foreach ( (array) ( $context['sessions'] ?? array() ) as $session_row ) {
+      if ( ! empty( $session_row->location ) ) {
+        $location = (string) $session_row->location;
+        break;
+      }
+    }
+    if ( '' === $location && ! empty( $context['formation']->address ) ) {
       $location = trim( implode( ' ', array_filter( array( $context['formation']->address, $context['formation']->postal_code, $context['formation']->city ) ) ) );
+    }
+    if ( '' === $location && ! empty( $context['company'] ) ) {
+      $company_row = $context['company'];
+      $location = trim( implode( ' ', array_filter( array(
+        (string) ( $company_row->address ?? '' ),
+        (string) ( $company_row->postal_code ?? '' ),
+        (string) ( $company_row->city ?? '' ),
+      ) ) ) );
+    }
+    if ( '' === $location ) {
+      $location = 'à préciser — aucune adresse n’est renseignée sur la séance, la formation ni le commanditaire';
     }
 
     $blocks = array(
       array( 'type' => 'title', 'text' => 'CONVOCATION EN FORMATION' ),
       array( 'type' => 'spacer' ),
-      array( 'type' => 'line', 'text' => 'M. ' . $learner_name ),
+      /* Pas de civilité devinée : « M. » était écrit en dur devant chaque
+         nom, y compris ceux de trois apprenantes. */
+      array( 'type' => 'line', 'text' => $learner_name ),
       array( 'type' => 'paragraph', 'text' => 'Nous avons le plaisir de vous adresser notre convocation à la formation : ' . $formation_title . '.' ),
       array( 'type' => 'paragraph', 'text' => 'Vous trouverez ci-dessous toutes les informations pratiques à savoir :' ),
       array( 'type' => 'line', 'text' => 'Format de la formation : ' . $format ),
       array( 'type' => 'line', 'text' => $dates_text ),
       array( 'type' => 'line', 'text' => 'Durée de l’action de formation : ' . $context['duration'] ),
-      array( 'type' => 'line', 'text' => 'Votre formation débutera le ' . $this->format_pdf_date( $context['start_date'] ) . ' à ' . $start_hour ),
-      array( 'type' => 'heading', 'text' => 'Pour les séances de formation' ),
+      array(
+        'type' => 'line',
+        'text' => '' !== $start_hour
+          ? 'Votre formation débutera le ' . $this->format_pdf_date( $context['start_date'] ) . ' à ' . $start_hour
+          : 'Votre formation débutera le ' . $this->format_pdf_date( $context['start_date'] ) . ' — horaire communiqué séparément',
+      ),
       array( 'type' => 'paragraph', 'text' => 'La formation se déroulera dans les locaux situés à l’adresse suivante : ' . $location ),
+    );
+
+    if ( ! empty( $schedule_lines ) ) {
+      $blocks[] = array( 'type' => 'heading', 'text' => 'Vos horaires, demi-journée par demi-journée' );
+      foreach ( $schedule_lines as $schedule_line ) {
+        $blocks[] = array( 'type' => 'line', 'text' => $schedule_line );
+      }
+    }
+
+    $blocks = array_merge( $blocks, array(
       array( 'type' => 'heading', 'text' => 'Recommandations pour suivre la formation' ),
       array( 'type' => 'paragraph', 'text' => ! empty( $params['training_recommendations'] ) ? $params['training_recommendations'] : 'Merci de vous présenter 10 minutes avant le début de la session et de prévoir de quoi prendre des notes.' ),
       array( 'type' => 'heading', 'text' => 'Moyens d’accès à la formation' ),
@@ -5528,7 +5628,7 @@ dbDelta( $sql_companies );
       array( 'type' => 'paragraph', 'text' => ! empty( $params['pmr_access_details'] ) ? $params['pmr_access_details'] : 'Détail accès PMR non renseigné.' ),
       array( 'type' => 'line', 'text' => 'Référent de l’organisme de formation : ' . ( ! empty( $params['training_contact_person'] ) ? $params['training_contact_person'] : $org_name ) ),
       array( 'type' => 'line', 'text' => 'Contact de l’organisme de formation : ' . ( ! empty( $params['training_contact_details'] ) ? $params['training_contact_details'] : $org_email ) ),
-    );
+    ) );
     if ( ! empty( $params['additional_sections'] ) && is_array( $params['additional_sections'] ) ) {
       foreach ( $params['additional_sections'] as $section ) {
         if ( empty( $section['title'] ) && empty( $section['content'] ) ) {
@@ -6160,6 +6260,48 @@ dbDelta( $sql_companies );
     return $company . ' — à l’attention de ' . $person . ' (' . $role . ')';
   }
 
+  /**
+   * ACDC 3.25.224 — L'entreprise nomme le courrier, comme elle nomme l'écran.
+   *
+   * La 3.25.211 avait fait entrer la raison sociale dans les intitulés des
+   * analyses, à l'écran. Les e-mails, eux, étaient restés anonymes : « Un petit
+   * rappel pour votre analyse du besoin », sans un mot sur le dossier concerné.
+   * Une signataire qui reçoit deux relances — l'une comme commanditaire de son
+   * entreprise, l'autre comme apprenante — se retrouve avec deux messages
+   * rigoureusement identiques dans sa boîte, et n'a aucun moyen de savoir
+   * lequel répond à quoi. C'est la même faute que celle corrigée à l'écran,
+   * commise dans le canal où elle coûte le plus cher.
+   *
+   * @return array{0:string,1:string} Le préfixe d'objet, et la mention
+   *                                  « à l'attention de » quand elle a un sens.
+   */
+  private function nad_email_identity( $analysis ) {
+    $company = '';
+    if ( ! empty( $analysis->entreprise_id ) ) {
+      $row = $this->get_company( (int) $analysis->entreprise_id );
+      if ( $row && ! empty( $row->name ) ) {
+        $company = trim( (string) $row->name );
+      }
+    }
+
+    if ( '' === $company ) {
+      return array( '', '' );
+    }
+
+    $person  = trim( (string) ( $analysis->repondant_prenom ?? '' ) . ' ' . (string) ( $analysis->repondant_nom ?? '' ) );
+    $profil  = strtolower( (string) ( $analysis->profil ?? '' ) );
+    $role    = ( 'entreprise' === $profil || 'independant' === $profil ) ? 'commanditaire' : 'apprenant';
+
+    $attention = '';
+    if ( '' !== $person ) {
+      $attention = '<p style="font-size:14px;color:#6b7280;margin:0 0 14px;">'
+                 . esc_html( $company ) . ' — à l’attention de ' . esc_html( $person )
+                 . ' (' . esc_html( $role ) . ')</p>';
+    }
+
+    return array( $company . ' — ', $attention );
+  }
+
   /** Envoi initial de l'analyse du besoin (appelé par le cron si délai > 0). */
   private function nad_send_initial_email( $analysis ) {
     list( $email, $prenom ) = $this->nad_resolve_recipient( $analysis );
@@ -6171,10 +6313,11 @@ dbDelta( $sql_companies );
       global $wpdb;
       $fake_contract = $wpdb->get_row( $wpdb->prepare( "SELECT * FROM {$this->registration_contract_table} WHERE id = %d", (int) $analysis->dossier_id ) );
     }
+    $identity = $this->nad_email_identity( $analysis );
     if ( $is_cmd ) {
-      $this->nad_send_email_commanditaire( $email, $prenom, (string) ( $analysis->title ?? '' ), $form_url, $fake_contract );
+      $this->nad_send_email_commanditaire( $email, $prenom, (string) ( $analysis->title ?? '' ), $form_url, $fake_contract, $identity );
     } else {
-      $this->nad_send_email_apprenant( $email, $prenom, (string) ( $analysis->title ?? '' ), $form_url, $fake_contract );
+      $this->nad_send_email_apprenant( $email, $prenom, (string) ( $analysis->title ?? '' ), $form_url, $fake_contract, $identity );
     }
   }
 
@@ -6206,13 +6349,15 @@ dbDelta( $sql_companies );
       3 => 'Dernier rappel — votre analyse du besoin',
     );
 
+    list( $prefix, $attention ) = $this->nad_email_identity( $analysis );
+
     $branding = $this->acdc_get_transactional_email_branding();
     $this->acdc_send_transactional_email(
       $email,
-      $subjects[ $num ],
+      $prefix . $subjects[ $num ],
       array(
         'greeting_name' => $prenom,
-        'intro_html'    => $intros[ $num ],
+        'intro_html'    => $attention . $intros[ $num ],
         'body_html'     => $cta . '<p style="font-size:13px;color:#888;text-align:center;">Ce lien est personnel et valable 30 jours après la signature de votre convention.</p>',
         'footer_notice' => 'Cet e-mail a été envoyé dans le cadre de votre inscription en formation. Vos données sont traitées conformément au RGPD.',
       ),
@@ -6453,7 +6598,19 @@ dbDelta( $sql_companies );
 
     // Envoyer email commanditaire immédiatement si délai = 0
     if ( $cmd_analysis_id && $send_now && is_email( $cmd_email ) ) {
-      $this->nad_send_email_commanditaire( $cmd_email, $cmd_prenom ?: $cmd_nom, $form_title, $this->nad_get_public_form_url( $cmd_token ), $contract );
+      $this->nad_send_email_commanditaire(
+        $cmd_email,
+        $cmd_prenom ?: $cmd_nom,
+        $form_title,
+        $this->nad_get_public_form_url( $cmd_token ),
+        $contract,
+        $this->nad_email_identity( (object) array(
+          'entreprise_id'    => $company_id,
+          'repondant_prenom' => $cmd_prenom,
+          'repondant_nom'    => $cmd_nom,
+          'profil'           => $cmd_profil,
+        ) )
+      );
       $wpdb->update( $this->need_analysis_table, array( 'sent_at' => $now ), array( 'id' => $cmd_analysis_id ) );
     }
 
@@ -6524,15 +6681,28 @@ dbDelta( $sql_companies );
       $app_analysis_id = (int) $wpdb->insert_id;
 
       if ( $app_analysis_id && $send_now && is_email( $learner->email ) ) {
-        $this->nad_send_email_apprenant( $learner->email, (string) $learner->first_name, $form_title, $this->nad_get_public_form_url( $app_token ), $contract );
+        $this->nad_send_email_apprenant(
+          $learner->email,
+          (string) $learner->first_name,
+          $form_title,
+          $this->nad_get_public_form_url( $app_token ),
+          $contract,
+          $this->nad_email_identity( (object) array(
+            'entreprise_id'    => $company_id,
+            'repondant_prenom' => (string) $learner->first_name,
+            'repondant_nom'    => (string) $learner->last_name,
+            'profil'           => 'apprenant',
+          ) )
+        );
         $wpdb->update( $this->need_analysis_table, array( 'sent_at' => $now ), array( 'id' => $app_analysis_id ) );
       }
     }
   }
 
   /** Email au commanditaire avec lien vers le formulaire. */
-  private function nad_send_email_commanditaire( $to, $prenom, $formation_title, $form_url, $contract ) {
-    $subject = 'Votre analyse du besoin — ' . ( $formation_title ?: 'Formation' );
+  private function nad_send_email_commanditaire( $to, $prenom, $formation_title, $form_url, $contract, $identity = array( '', '' ) ) {
+    list( $prefix, $attention ) = array_pad( (array) $identity, 2, '' );
+    $subject = $prefix . 'Votre analyse du besoin — ' . ( $formation_title ?: 'Formation' );
     $cta     = '<div style="text-align:center;margin:32px 0;">'
              . '<a href="' . esc_url( $form_url ) . '" style="display:inline-block;background:#d6a353;color:#fff;font-weight:700;font-size:18px;padding:16px 40px;border-radius:10px;text-decoration:none;">Remplir l\'analyse du besoin</a>'
              . '</div>';
@@ -6541,7 +6711,8 @@ dbDelta( $sql_companies );
       $subject,
       array(
         'greeting_name' => $prenom,
-        'intro_html'    => '<p style="font-size:17px;line-height:1.7;">Dans le cadre de la convention de formation que vous avez signée, nous avons préparé une <strong>analyse du besoin</strong> personnalisée.</p>'
+        'intro_html'    => $attention
+                         . '<p style="font-size:17px;line-height:1.7;">Dans le cadre de la convention de formation que vous avez signée, nous avons préparé une <strong>analyse du besoin</strong> personnalisée.</p>'
                          . '<p style="font-size:17px;line-height:1.7;">Cette analyse nous permettra d\'adapter le contenu de la formation à vos objectifs et à ceux de vos collaborateurs.</p>',
         'summary_title' => 'Formation concernée',
         'summary_rows'  => array(
@@ -6557,8 +6728,9 @@ dbDelta( $sql_companies );
   }
 
   /** Email à un apprenant avec lien vers le formulaire. */
-  private function nad_send_email_apprenant( $to, $prenom, $formation_title, $form_url, $contract ) {
-    $subject = 'Votre analyse du besoin — ' . ( $formation_title ?: 'Formation' );
+  private function nad_send_email_apprenant( $to, $prenom, $formation_title, $form_url, $contract, $identity = array( '', '' ) ) {
+    list( $prefix, $attention ) = array_pad( (array) $identity, 2, '' );
+    $subject = $prefix . 'Votre analyse du besoin — ' . ( $formation_title ?: 'Formation' );
     $cta     = '<div style="text-align:center;margin:32px 0;">'
              . '<a href="' . esc_url( $form_url ) . '" style="display:inline-block;background:#d6a353;color:#fff;font-weight:700;font-size:18px;padding:16px 40px;border-radius:10px;text-decoration:none;">Remplir mon analyse du besoin</a>'
              . '</div>';
@@ -6567,7 +6739,8 @@ dbDelta( $sql_companies );
       $subject,
       array(
         'greeting_name' => $prenom,
-        'intro_html'    => '<p style="font-size:17px;line-height:1.7;">Vous allez prochainement participer à une formation et nous souhaitons vous offrir la <strong>meilleure expérience d\'apprentissage possible</strong>.</p>'
+        'intro_html'    => $attention
+                         . '<p style="font-size:17px;line-height:1.7;">Vous allez prochainement participer à une formation et nous souhaitons vous offrir la <strong>meilleure expérience d\'apprentissage possible</strong>.</p>'
                          . '<p style="font-size:17px;line-height:1.7;">Pour cela, nous avons besoin de mieux vous connaître : vos objectifs, votre niveau actuel et vos attentes. Cela ne prendra que quelques minutes.</p>',
         'summary_title' => 'Formation concernée',
         'summary_rows'  => array(
@@ -8493,6 +8666,13 @@ dbDelta( $sql_companies );
     $convocation_context['total_questions'] = $total_questions;
     $convocation_context['questions_details'] = $questions_details;
     $convocation_context['document'] = $document;
+    /* ACDC 3.25.224 — Le troisième écran de documents affichait la même durée
+       vide et la même période approchée que les deux autres. Il lit désormais
+       la même source. */
+    $convocation_context = $this->acdc_apply_completion_period(
+      $convocation_context,
+      $this->acdc_completion_state_for_registration( $registration )
+    );
     return $convocation_context;
   }  private function get_positioning_result_download_url( $registration, $mode = 'attachment' ) {
     if ( ! $registration || empty( $registration->id ) ) {
@@ -8509,6 +8689,10 @@ dbDelta( $sql_companies );
         continue;
       }
       $context = $this->get_positioning_result_context( $entry );
+      /* Un test de positionnement se passe : le commanditaire n'en passe pas. */
+      if ( ! empty( $context['is_commanditaire'] ) ) {
+        continue;
+      }
       $formation_enabled = ! empty( $context['formation'] ) && ! empty( $context['formation']->positioning_test_enabled );
       if ( ! $formation_enabled && empty( $context['test'] ) && empty( $context['document']['url'] ) && empty( $context['document']['path'] ) ) {
         continue;
@@ -8640,7 +8824,55 @@ dbDelta( $sql_companies );
   $learner = isset( $context['learner_name'] ) ? (string) $context['learner_name'] : ( ! empty( $registration->learner_label ) ? (string) $registration->learner_label : 'apprenant' );
   $formation = isset( $context['formation_title'] ) ? (string) $context['formation_title'] : ( ! empty( $registration->formation_title ) ? (string) $registration->formation_title : 'formation' );
   return sanitize_file_name( 'certificat-realisation-' . $learner . '-' . $formation . '.pdf' );
-}private function get_completion_certificate_context( $registration ) {
+}
+  /**
+   * ACDC 3.25.224 — Une seule durée, une seule période, sur les trois écrans.
+   *
+   * La recette a relevé deux contradictions sur des pièces qui font preuve :
+   * « Durée (H) » vide sur les quatre lignes d'un dossier de quatre
+   * demi-journées, et une heure de fin qui n'était pas la même que celle
+   * affichée par le parcours. Les deux ont la même origine : ces écrans
+   * lisaient la fiche FORMATION — une durée saisie à la main, jamais remplie,
+   * et des dates approchées — au lieu du planning et de l'émargement.
+   *
+   * On applique la hiérarchie qui vaut pour toutes les pièces de fin :
+   * ce qui est SIGNÉ prime, le PRÉVU comble le silence, et le mot le dit
+   * explicitement pour qu'aucun lecteur ne prenne l'un pour l'autre. Les
+   * dates redeviennent des dates : l'heure de fin d'une action de formation
+   * n'a de sens que sur une feuille d'émargement, pas sur un certificat qui
+   * couvre plusieurs journées.
+   */
+  private function acdc_apply_completion_period( $context, $acdc_state ) {
+    $signed  = isset( $acdc_state['time'] ) && is_array( $acdc_state['time'] ) ? $acdc_state['time'] : array();
+    $planned = isset( $acdc_state['planned'] ) && is_array( $acdc_state['planned'] ) ? $acdc_state['planned'] : array();
+
+    if ( ! empty( $signed['half_days'] ) && ! empty( $signed['label'] ) ) {
+      $context['duration']        = $signed['label'] . ' émargées';
+      $context['duration_source'] = 'signed';
+    } elseif ( ! empty( $planned['label'] ) ) {
+      $context['duration']        = $planned['label'] . ' prévues';
+      $context['duration_source'] = 'planned';
+    } else {
+      $context['duration_source'] = 'formation';
+    }
+
+    $first = ! empty( $signed['first_at'] ) ? (string) $signed['first_at'] : (string) ( $planned['first_at'] ?? '' );
+    $last  = ! empty( $signed['last_at'] ) ? (string) $signed['last_at'] : (string) ( $planned['last_at'] ?? '' );
+
+    if ( '' !== $first ) {
+      $context['start_date'] = substr( $first, 0, 10 );
+    }
+    if ( '' !== $last ) {
+      $context['end_date'] = substr( $last, 0, 10 );
+    }
+
+    $context['period_start_at'] = $first;
+    $context['period_end_at']   = $last;
+
+    return $context;
+  }
+
+  private function get_completion_certificate_context( $registration ) {
   $context = $this->get_training_convocation_context( $registration );
   $document = $this->get_completion_certificate_document_info( $registration, $context );
   $profile = $this->get_company_profile_options();
@@ -8663,6 +8895,7 @@ dbDelta( $sql_companies );
   $context['half_days']        = (int) $acdc_state['time']['half_days'];
   $context['assiduity']        = $acdc_state['time']['half_days'] > 0 ? 'Oui' : 'Non';
   $context['is_due']           = ! empty( $acdc_state['certificat'] );
+  $context = $this->acdc_apply_completion_period( $context, $acdc_state );
   $context['issuer_city'] = ! empty( $profile['city'] ) ? (string) $profile['city'] : 'Cogolin';
   $context['issuer_name'] = ! empty( $profile['enterprise'] ) ? (string) $profile['enterprise'] : 'ACDC-Formation';
   $signatory = trim( (string) ( $profile['first_name'] ?? '' ) . ' ' . (string) ( $profile['last_name'] ?? '' ) );
@@ -8687,6 +8920,13 @@ dbDelta( $sql_companies );
       continue;
     }
     $context = $this->get_completion_certificate_context( $entry );
+    /* ACDC 3.25.224 — Un certificat de réalisation est NOMINATIF : il atteste
+       qu'une personne a suivi des heures. Le commanditaire, lui, n'a suivi
+       aucune heure — il a commandé et payé. Sa ligne n'a donc rien à faire
+       ici, et c'est elle qui donnait l'impression d'un doublon. */
+    if ( ! empty( $context['is_commanditaire'] ) ) {
+      continue;
+    }
     $formation_enabled = ! empty( $context['formation'] ) && ! empty( $context['formation']->end_documents_enabled );
     if ( ! $formation_enabled && empty( $context['document']['url'] ) && empty( $context['document']['path'] ) ) {
       continue;
@@ -8855,6 +9095,7 @@ dbDelta( $sql_companies );
   $context['assessment_quiz']  = (string) $acdc_state['assessment']['quiz_title'];
   $context['is_due']           = ! empty( $acdc_state['attestation'] );
   $context['due_reason']       = (string) $acdc_state['reason'];
+  $context = $this->acdc_apply_completion_period( $context, $acdc_state );
   if ( ! $context['assessment_taken'] ) {
     $context['result_label'] = 'Évaluation des acquis non passée';
   } elseif ( true === $acdc_state['assessment']['passed'] ) {
@@ -8886,6 +9127,12 @@ dbDelta( $sql_companies );
       continue;
     }
     $context = $this->get_end_training_certificate_context( $entry );
+    /* Même règle que le certificat : une attestation de fin de formation
+       nomme la personne dont les acquis ont été évalués. Le commanditaire
+       n'en a pas. */
+    if ( ! empty( $context['is_commanditaire'] ) ) {
+      continue;
+    }
     $haystack = strtolower( implode( ' ', array_filter( array(
       (string) $entry->id,
       (string) $context['learner_name'],
