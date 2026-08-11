@@ -2806,6 +2806,17 @@ dbDelta( $sql_companies );
        est NULL, la mission signée n'est pas supprimable : c'est ce qui garantit qu'une
        pièce comptable n'est jamais détruite sans copie. */
     $this->maybe_add_table_column( $this->trainer_contract_table, 'archived_at',          'DATETIME DEFAULT NULL' );
+    /* ACDC 3.25.227 — La mission d'un formateur était reliée à sa formation par
+       une CHAÎNE DE CARACTÈRES. La recette l'a relevé : le sélecteur listait
+       vingt et une options pour dix titres — les variantes d'une même formation
+       portent le même intitulé et devenaient indiscernables — et renommer une
+       formation aurait rendu tous les contrats muets. On stocke l'identifiant,
+       la chaîne ne servant plus qu'à l'affichage et à la rétrocompatibilité. */
+    $this->maybe_add_table_column( $this->trainer_contract_table, 'formation_id', 'BIGINT UNSIGNED DEFAULT NULL' );
+    /* ACDC 3.25.227 — L'horodatage de la signature. Il n'était nulle part :
+       le contrat passait « signée » sans que l'on sache QUAND. C'est
+       précisément ce qui manquait au PDF pour valoir preuve. */
+    $this->maybe_add_table_column( $this->trainer_contract_table, 'signature_completed_at', 'DATETIME DEFAULT NULL' );
 
     /* ACDC 3.24.11 — Bilans compétences formateurs (indicateur 21 Qualiopi). */
     $sql_trainer_evaluations = "CREATE TABLE IF NOT EXISTS {$this->trainer_evaluation_table} (" . "  id             BIGINT UNSIGNED NOT NULL AUTO_INCREMENT," . "  trainer_id     BIGINT UNSIGNED NOT NULL," . "  evaluation_date DATE NOT NULL," . "  eval_type      VARCHAR(50) NOT NULL DEFAULT 'entretien'," . "  skills_evaluated TEXT," . "  level_reached  TINYINT UNSIGNED NOT NULL DEFAULT 0," . "  objectives_set TEXT," . "  comment_text   TEXT," . "  created_at     DATETIME NOT NULL," . "  PRIMARY KEY (id)," . "  KEY trainer_id (trainer_id)," . "  KEY evaluation_date (evaluation_date)" . ") {$charset_collate};";

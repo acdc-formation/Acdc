@@ -7462,6 +7462,16 @@ trait ACDC_Kernel_Render_Trait {
     $cats     = $this->get_acdc_trainer_document_categories();
     $grouped  = $this->get_trainer_documents_grouped( (int) $trainer->id );
     $is_admin = is_admin();
+
+    /* ACDC 3.25.227 — DEUX BLOCS DU MÊME NOM, UN SEUL ALIMENTÉ.
+       La catégorie « Contrats formateurs » de la bibliothèque affichait 0 et
+       « Aucun document », pendant qu'un bloc homonyme, quelques lignes plus
+       bas, listait le contrat signé. La catégorie a toujours été déclarée
+       « générée automatiquement depuis acdc_of_trainer_contracts » — mais
+       personne ne la générait. Deux comptes contradictoires sur le même écran
+       font douter des deux : on retire la carte vide, et le bloc qui porte les
+       vrais contrats reste seul à porter ce nom. */
+    unset( $cats['trainer_contract'] );
     ?>
     <style>
       .acdc-tdoc-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:14px;margin-top:16px}
@@ -7720,7 +7730,7 @@ trait ACDC_Kernel_Render_Trait {
     if ( isset( $this->trainer_contract_table ) ) {
       global $wpdb;
       $contracts_docs = (array) $wpdb->get_results( $wpdb->prepare(
-        "SELECT id, label, formation_ref, date_start, date_end, statut, signature_status, contract_pdf_url, signed_document_url FROM {$this->trainer_contract_table} WHERE trainer_id = %d ORDER BY date_start DESC",
+        "SELECT id, label, formation_ref, formation_id, date_start, date_end, statut, signature_status, contract_pdf_url, signed_document_url FROM {$this->trainer_contract_table} WHERE trainer_id = %d ORDER BY date_start DESC",
         (int) $trainer->id
       ) );
       if ( ! empty( $contracts_docs ) ) : ?>
@@ -7821,6 +7831,21 @@ trait ACDC_Kernel_Render_Trait {
       <div class="acdc-needs-section-title" style="display:flex;align-items:center;gap:10px;">
         <span>📋 Contrats &amp; missions</span>
       </div>
+      <?php if ( $read_only ) : ?>
+      <?php
+      /* ACDC 3.25.227 — En consultation, ce bloc affichait « Aucune mission
+         enregistrée » et RIEN D'AUTRE : ni bouton, ni chemin, ni explication.
+         La recette a dû deviner que la création se fait en mode Modifier. Un
+         écran qui ne peut pas agir doit au moins dire où l'on agit. */
+      $tc_edit_url = is_admin()
+        ? admin_url( 'admin.php?page=acdc-of-trainers&action=edit&item_id=' . (int) $trainer->id )
+        : $this->portal_page_url( array( 'tab' => 'trainers', 'action' => 'edit', 'item_id' => (int) $trainer->id ) );
+      ?>
+      <p style="margin:12px 0 0;font-size:13px;color:#5a6577;">
+        Les missions se créent, se génèrent et s'envoient en signature depuis la fiche en modification.
+        <a href="<?php echo esc_url( $tc_edit_url ); ?>" style="font-weight:600;">Modifier ce formateur →</a>
+      </p>
+      <?php endif; ?>
       <?php if ( ! $read_only ) : ?>
       <div class="acdc-tc-header" style="margin-top:12px;">
         <button type="button" class="acdc-button acdc-button-soft" id="acdc-tc-add-btn">+ Ajouter une mission</button>
@@ -7991,15 +8016,22 @@ trait ACDC_Kernel_Render_Trait {
               $all_formations = $this->get_formations( array( 'archived' => false ) );
               $current_ref    = $edit_contract ? (string) $edit_contract->formation_ref : '';
               ?>
-              <select id="acdc_tc_ref_<?php echo $tid; ?>" name="formation_ref">
+              <?php
+              /* ACDC 3.25.227 — On transmet l'IDENTIFIANT, et l'on affiche le
+                 titre PRÉFIXÉ DE SA RÉFÉRENCE. Les variantes d'une formation
+                 partagent leur intitulé : sans la référence, la liste proposait
+                 vingt et une lignes dont on ne pouvait distinguer la moitié. */
+              $current_fid = $edit_contract && ! empty( $edit_contract->formation_id ) ? (int) $edit_contract->formation_id : 0;
+              ?>
+              <select id="acdc_tc_ref_<?php echo $tid; ?>" name="formation_id">
                 <option value="">— Aucune formation liée —</option>
                 <?php foreach ( $all_formations as $f ) : ?>
-                <option value="<?php echo esc_attr( $f->title ); ?>" <?php selected( $current_ref, $f->title ); ?>><?php echo esc_html( $f->title ); ?></option>
+                <option value="<?php echo (int) $f->id; ?>" <?php selected( $current_fid > 0 ? $current_fid : -1, (int) $f->id ); ?>><?php echo esc_html( $this->acdc_formation_labelled( (int) $f->id, (string) $f->title ) ); ?></option>
                 <?php endforeach; ?>
-                <?php if ( '' !== $current_ref && ! in_array( $current_ref, array_column( (array) $all_formations, 'title' ), true ) ) : ?>
-                <option value="<?php echo esc_attr( $current_ref ); ?>" selected><?php echo esc_html( $current_ref ); ?> (saisie libre)</option>
-                <?php endif; ?>
               </select>
+              <?php if ( 0 === $current_fid && '' !== $current_ref ) : ?>
+                <p class="description" style="margin-top:6px;">Mission créée avant le rattachement par identifiant : <strong><?php echo esc_html( $current_ref ); ?></strong>. Choisissez la formation ci-dessus pour la rattacher pour de bon.</p>
+              <?php endif; ?>
             </div>
           </div>
           <div class="acdc-tc-row">

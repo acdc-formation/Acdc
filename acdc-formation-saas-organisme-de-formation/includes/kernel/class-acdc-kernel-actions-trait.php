@@ -1606,10 +1606,28 @@ trait ACDC_Kernel_Actions_Trait {
     $date_start = isset( $_POST['date_start'] ) && '' !== sanitize_text_field( wp_unslash( $_POST['date_start'] ) ) ? sanitize_text_field( wp_unslash( $_POST['date_start'] ) ) : null;
     $date_end   = isset( $_POST['date_end'] )   && '' !== sanitize_text_field( wp_unslash( $_POST['date_end'] ) )   ? sanitize_text_field( wp_unslash( $_POST['date_end'] ) )   : null;
     global $wpdb;
+
+    /* ACDC 3.25.227 — L'identifiant fait foi ; le libellé s'en déduit.
+       Le formulaire transmettait auparavant le TITRE de la formation, et lui
+       seul : deux variantes portant le même intitulé étaient indiscernables, et
+       renommer une formation aurait rendu muets tous les contrats déjà signés.
+       On garde malgré tout le libellé en base, parce que c'est lui qui
+       s'imprime sur le contrat — un document contractuel doit rester lisible
+       même si la formation disparaît du catalogue. */
+    $formation_id  = isset( $_POST['formation_id'] ) ? absint( wp_unslash( $_POST['formation_id'] ) ) : 0;
+    $formation_ref = isset( $_POST['formation_ref'] ) ? sanitize_text_field( wp_unslash( $_POST['formation_ref'] ) ) : '';
+    if ( $formation_id > 0 ) {
+      $formation_row = $this->get_formation( $formation_id );
+      if ( $formation_row && ! empty( $formation_row->title ) ) {
+        $formation_ref = $this->acdc_formation_labelled( $formation_id, (string) $formation_row->title );
+      }
+    }
+
     $data = array(
       'trainer_id'    => $trainer_id,
       'label'         => isset( $_POST['label'] )         ? sanitize_text_field( wp_unslash( $_POST['label'] ) )         : '',
-      'formation_ref' => isset( $_POST['formation_ref'] ) ? sanitize_text_field( wp_unslash( $_POST['formation_ref'] ) ) : '',
+      'formation_id'  => $formation_id > 0 ? $formation_id : null,
+      'formation_ref' => $formation_ref,
       'date_start'    => $date_start,
       'date_end'      => $date_end,
       'nb_heures'     => $nb_heures,
@@ -1618,7 +1636,7 @@ trait ACDC_Kernel_Actions_Trait {
       'statut'        => isset( $_POST['statut'] ) ? sanitize_text_field( wp_unslash( $_POST['statut'] ) ) : 'En attente',
       'notes'         => isset( $_POST['notes'] )  ? sanitize_textarea_field( wp_unslash( $_POST['notes'] ) ) : '',
     );
-    $formats = array( '%d', '%s', '%s', '%s', '%s', '%f', '%f', '%f', '%s', '%s' );
+    $formats = array( '%d', '%s', '%d', '%s', '%s', '%s', '%f', '%f', '%f', '%s', '%s' );
     if ( $contract_id ) {
       $wpdb->update( $this->trainer_contract_table, $data, array( 'id' => $contract_id ), $formats, array( '%d' ) );
       $msg = 'Mission mise à jour.';
@@ -2593,6 +2611,47 @@ trait ACDC_Kernel_Actions_Trait {
       $p2[] = array( 'type' => 'rect', 'x' => $tr_sig_x, 'y' => $sig_img_y - 40, 'width' => $sign_box_w, 'height' => 0.5, 'fill_color' => '#aab4c0' );
       $p2[] = array( 'text' => 'Signature électronique en attente', 'x' => $tr_sig_x, 'y' => $sig_img_y - 52, 'size' => 7, 'font' => 'Helvetica', 'color' => '#9ca3af' );
     }
+
+    /* ACDC 3.25.227 — LE DOCUMENT SIGNÉ NE DISAIT PAS QU'IL L'ÉTAIT.
+       La recette l'a formulé exactement : « le PDF signé ne porte aucune
+       mention horodatée de la signature ; l'image remplace simplement la ligne
+       d'attente ». Une image manuscrite, seule, ne prouve rien — n'importe qui
+       peut coller un dessin dans un PDF. Ce qui fait la valeur probante d'une
+       signature électronique, c'est la trace de son procédé : quand, par quel
+       moyen, avec quelle vérification. Ce contrat a exigé un code à usage
+       unique envoyé par e-mail ; le document ne le mentionnait nulle part.
+       On écrit donc, sous la signature, ce que l'application sait avec
+       certitude — et rien d'autre. */
+    if ( $handwritten_image && ! empty( $contract->signature_completed_at ) ) {
+      $proof_y = max( 30, $sig_img_y - 62 );
+      $p2[] = array(
+        'text'  => 'Signée électroniquement le ' . mysql2date( 'd/m/Y à H\hi', (string) $contract->signature_completed_at ),
+        'x'     => $tr_sig_x,
+        'y'     => $proof_y,
+        'size'  => 6.6,
+        'font'  => 'Helvetica-Bold',
+        'color' => '#4b5563',
+      );
+      $p2[] = array(
+        'text'  => 'Identité vérifiée par code à usage unique adressé par e-mail au signataire.',
+        'x'     => $tr_sig_x,
+        'y'     => $proof_y - 8,
+        'size'  => 6,
+        'font'  => 'Helvetica',
+        'color' => '#6b7280',
+      );
+      if ( ! empty( $contract->signature_request_id ) ) {
+        $p2[] = array(
+          'text'  => 'Référence de la demande de signature : ' . (int) $contract->signature_request_id . '.',
+          'x'     => $tr_sig_x,
+          'y'     => $proof_y - 16,
+          'size'  => 6,
+          'font'  => 'Helvetica',
+          'color' => '#6b7280',
+        );
+      }
+    }
+
     $add_footer( $p2 );
     return array( $p1, $p2 );
   }
@@ -2734,6 +2793,23 @@ trait ACDC_Kernel_Actions_Trait {
     $sig_files  = glob( $sig_dir . 'signature-*.png' );
     if ( ! empty( $sig_files ) ) { rsort( $sig_files ); }
     $sig_img_path = ! empty( $sig_files ) ? (string) $sig_files[0] : '';
+    /* ACDC 3.25.227 — L'horodatage est posé AVANT la régénération du PDF.
+       C'est ce qui permet au document de porter sa propre preuve : le bloc
+       « Signée électroniquement le … » lit cette valeur. L'ordre n'est pas un
+       détail — l'écrire après aurait produit un PDF muet, et il aurait fallu
+       le régénérer une seconde fois pour qu'il dise la vérité. */
+    $signature_completed_at = current_time( 'mysql' );
+    if ( $this->acdc_schema_has_column( $this->trainer_contract_table, 'signature_completed_at' ) ) {
+      $wpdb->update(
+        $this->trainer_contract_table,
+        array( 'signature_completed_at' => $signature_completed_at ),
+        array( 'id' => $contract_id ),
+        array( '%s' ),
+        array( '%d' )
+      );
+      $contract->signature_completed_at = $signature_completed_at;
+    }
+
     // ── ACDC 3.22.5 — Régénérer le PDF avec la signature manuscrite apposée ──
     $pages = $this->build_trainer_contract_pdf_pages( $trainer, $contract, $sig_img_path );
     $pdf_c = '';
@@ -2771,8 +2847,14 @@ trait ACDC_Kernel_Actions_Trait {
        pas, et la recette l'a vu retomber sur « plugin / wp_mail » alors que les
        deux autres e-mails du parcours étaient qualifiés. Ces deux envois — copie
        organisme et copie formateur — portent désormais leur attribution. */
+    /* ACDC 3.25.227 — Deux e-mails partaient à la même seconde sous la MÊME
+       source « signature / signed_copy » : l'accusé de réception émis par le
+       module de signature, et l'exemplaire contresigné émis ici. Dans la boîte
+       du formateur comme dans l'archive, cela se lit comme un doublon. Ce sont
+       deux messages différents ; ils portent désormais deux attributions
+       différentes. */
     $headers_s[] = 'X-ACDC-Source-Module: signature';
-    $headers_s[] = 'X-ACDC-Source-Action: signed_copy';
+    $headers_s[] = 'X-ACDC-Source-Action: trainer_contract_countersigned_copy';
     $headers_s[] = 'X-ACDC-Email-Category: signature';
     $headers_s[] = 'X-ACDC-Related-Entity-Type: trainer_contract';
     $headers_s[] = 'X-ACDC-Related-Entity-Id: ' . (int) $contract_id;
