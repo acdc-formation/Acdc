@@ -594,10 +594,41 @@ trait ACDC_Workflow_Engine_Trait {
    * ===================================================================== */
 
   private function acdc_wf_plan_preparation( $run_id, $pieces ) {
+    global $wpdb;
+
     $now      = $this->acdc_wf_now();
     $start_ts = $this->acdc_wf_run_start_ts( $pieces );
 
-    $this->acdc_wf_upsert_step( $run_id, 'registration', array( 'scheduled_at' => $now ) );
+    /* ACDC 3.25.228 — « INSCRIRE LES APPRENANTS » S'AFFICHAIT EN ÉCHEC
+       ALORS QUE LES INSCRIPTIONS EXISTAIENT.
+       Cette étape n'a jamais eu d'automatisation, et n'en aura pas : inscrire
+       quelqu'un en formation est un acte de gestion, pas un envoi. Le moteur
+       la déclarait pourtant « auto », tentait de la jouer, ne trouvait aucun
+       gestionnaire, et la peignait en rouge — un état alarmant sur une étape
+       déjà faite, sur un dossier qui allait bien.
+       On la traite pour ce qu'elle est : un constat. Si les apprenants sont
+       inscrits, elle est FAITE, et l'on dit combien. Sinon, elle reste à faire,
+       entre les mains de l'organisme. */
+    $learner_count = is_array( $pieces['learners'] ?? null ) ? count( $pieces['learners'] ) : 0;
+
+    if ( $learner_count > 0 ) {
+      $this->acdc_wf_settle_step(
+        $run_id,
+        'registration',
+        'done',
+        sprintf( '%d apprenant(s) inscrit(s) au dossier.', $learner_count )
+      );
+    } else {
+      $this->acdc_wf_upsert_step( $run_id, 'registration', array( 'scheduled_at' => $now ) );
+      /* Les parcours ouverts par une version antérieure portent encore
+         mode='auto' sur cette ligne : sans cette remise à niveau, ils
+         continueraient d'échouer indéfiniment. */
+      $wpdb->update(
+        $this->workflow_step_table,
+        array( 'mode' => 'task', 'is_alert' => 0 ),
+        array( 'run_id' => (int) $run_id, 'step_key' => 'registration' )
+      );
+    }
 
     /* Le délai d'envoi de l'analyse des besoins est saisi DANS la convention —
        c'est la règle du schéma. À défaut, le réglage général s'applique. */

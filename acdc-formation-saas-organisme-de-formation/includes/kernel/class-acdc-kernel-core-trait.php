@@ -6337,8 +6337,30 @@ dbDelta( $sql_companies );
     }
 
     $person  = trim( (string) ( $analysis->repondant_prenom ?? '' ) . ' ' . (string) ( $analysis->repondant_nom ?? '' ) );
+
+    /* ACDC 3.25.228 — « Skill Conseil — à l'attention de Skill Conseil — à
+       l'attention de Bérengère Valeriano ». La 3.25.226 a bien empêché le
+       libellé d'affichage de se déverser dans les colonnes de nom, mais elle
+       n'a pas nettoyé les analyses DÉJÀ créées : leur `repondant_nom` contient
+       encore la chaîne entière, et le gabarit la repréfixait. On la démonte
+       donc aussi à la lecture — c'est de toute façon la seule défense qui
+       vaille pour une donnée que trois versions ont pu polluer. */
+    if ( false !== mb_strpos( $person, 'attention de' ) ) {
+      $split = preg_split( '/\s*—?\s*à l[’\']attention de\s*/u', $person );
+      if ( is_array( $split ) && ! empty( $split ) ) {
+        $person = trim( (string) end( $split ) );
+      }
+    }
+
     $profil  = strtolower( (string) ( $analysis->profil ?? '' ) );
     $role    = ( 'entreprise' === $profil || 'independant' === $profil ) ? 'commanditaire' : 'apprenant';
+
+    /* La personne ne peut pas être l'entreprise elle-même : sur un dossier où
+       les deux se confondent, « à l'attention de Skill Conseil » n'apprend
+       rien et se lit comme une erreur. */
+    if ( '' !== $person && 0 === strcasecmp( $person, $company ) ) {
+      $person = '';
+    }
 
     $attention = '';
     if ( '' !== $person ) {
@@ -6372,13 +6394,25 @@ dbDelta( $sql_companies );
     }
   }
 
-  /** Envoi d'une relance (numéro 1, 2 ou 3). */
+  /**
+   * Envoi d'une relance (numéro 1, 2 ou 3).
+   *
+   * ACDC 3.25.228 — CETTE FONCTION NE DISAIT PAS SI ELLE AVAIT ENVOYÉ.
+   * Elle sortait silencieusement quand l'adresse était invalide ou le jeton
+   * absent, et le mode recette pouvait refuser le destinataire sans qu'elle
+   * en sache rien. L'appelant, lui, annonçait « Relance N envoyée à … » dans
+   * tous les cas. La recette a mis le doigt dessus : un avis de succès, zéro
+   * e-mail dans l'archive. Un écran qui ment sur un envoi est pire qu'un écran
+   * muet — on ne cherche pas ce qu'on croit avoir fait.
+   *
+   * @return bool Vrai si l'e-mail est réellement parti.
+   */
   private function nad_send_relance_email( $analysis, $num ) {
     /* Une relance part à l'adresse d'AUJOURD'HUI, pas à celle du jour de la
        création : c'est précisément quand la première n'est pas arrivée que
        l'adresse a été corrigée entre-temps. */
     list( $email, $prenom ) = $this->nad_resolve_recipient( $analysis );
-    if ( ! is_email( $email ) || empty( $analysis->token_public ) ) { return; }
+    if ( ! is_email( $email ) || empty( $analysis->token_public ) ) { return false; }
 
     $form_url = $this->nad_get_public_form_url( (string) $analysis->token_public );
     $cta = '<div style="text-align:center;margin:32px 0;">'
@@ -6413,7 +6447,7 @@ dbDelta( $sql_companies );
     }
 
     $branding = $this->acdc_get_transactional_email_branding();
-    $this->acdc_send_transactional_email(
+    return (bool) $this->acdc_send_transactional_email(
       $email,
       $prefix . $subjects[ $num ],
       array(

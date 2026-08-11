@@ -397,7 +397,87 @@ trait ACDC_Workflow_Handlers_Trait {
       );
     }
 
+    /* ACDC 3.25.228 — L'INFORMATION AU COMMANDITAIRE AVAIT DISPARU AVEC SON
+       ORDONNANCEUR. Elle existait dans le cron des séances, elle a été
+       renommée en 3.25.225 — mais la règle « un seul chef d'orchestre » fait
+       taire ce cron dès qu'un parcours pilote la séance. Résultat mesuré en
+       recette : les trois apprenantes convoquées, et rien du tout à l'entreprise
+       qui a commandé la formation. Un envoi qui ne survit pas au branchement du
+       moteur n'a pas été déplacé, il a été perdu.
+       Ce message n'est pas une convocation — le commanditaire n'en a pas lieu
+       d'avoir — c'est l'information de qui est convoqué, adressée à l'employeur
+       qui doit libérer ses salariés. */
+    $this->acdc_wf_notify_sponsor_of_convocations( $pieces, $formation, $rows, $sent );
+
     return $this->acdc_wf_recipient_report( 'Convocation', $sent, $held, $failed );
+  }
+
+  /**
+   * Informe le commanditaire des apprenants convoqués. Jamais une convocation.
+   *
+   * @param array    $pieces    Contexte du dossier.
+   * @param string   $formation Intitulé de la formation.
+   * @param array    $rows      Lignes de résumé déjà composées pour les apprenants.
+   * @param string[] $sent      Noms des apprenants réellement convoqués.
+   * @return void
+   */
+  private function acdc_wf_notify_sponsor_of_convocations( $pieces, $formation, $rows, $sent ) {
+    if ( empty( $sent ) || empty( $pieces['company_id'] ) ) {
+      return;
+    }
+
+    $company = $this->get_company( (int) $pieces['company_id'] );
+    if ( ! $company ) {
+      return;
+    }
+
+    $email = '';
+    foreach ( array( 'enterprise_contact_email', 'email', 'signer_email' ) as $field ) {
+      if ( ! empty( $company->{$field} ) && is_email( (string) $company->{$field} ) ) {
+        $email = sanitize_email( (string) $company->{$field} );
+        break;
+      }
+    }
+    if ( '' === $email || ! $this->acdc_wf_may_send_to( $email ) ) {
+      return;
+    }
+
+    $count = count( $sent );
+    $list  = '<ul style="margin:0 0 20px;padding-left:20px;font-size:16px;line-height:1.8;">';
+    foreach ( $sent as $name ) {
+      $list .= '<li style="color:#24324a;">' . esc_html( (string) $name ) . '</li>';
+    }
+    $list .= '</ul>';
+
+    $body  = '<p style="font-size:18px;line-height:1.7;margin:0 0 18px;">Nous vous informons que '
+           . ( $count > 1 ? 'les personnes suivantes sont convoquées' : 'la personne suivante est convoquée' )
+           . ' à la formation indiquée ci-dessus :</p>' . $list;
+    $body .= '<p style="font-size:16px;line-height:1.7;margin:0 0 18px;color:#4b5d76;">Merci de vous assurer '
+           . ( $count > 1 ? 'qu\'elles sont disponibles et informées' : 'qu\'elle est disponible et informée' )
+           . '. Chaque personne a reçu sa convocation nominative.</p>';
+
+    $this->acdc_send_transactional_email(
+      $email,
+      'Information — vos collaborateurs sont convoqués : ' . $formation,
+      array(
+        'greeting_name' => ! empty( $company->name ) ? (string) $company->name : 'Madame, Monsieur',
+        'intro_html'    => '',
+        'summary_title' => 'DÉTAILS DE LA FORMATION',
+        'summary_rows'  => array_merge( $rows, array(
+          array( 'label' => 'Nombre de participant(s)', 'value' => (string) $count ),
+        ) ),
+        'body_html'     => $body,
+        'footer_notice' => 'Cet e-mail est une information adressée au commanditaire de la formation. La convocation elle-même est adressée nominativement à chaque apprenant.',
+      ),
+      array(
+        'source_module'       => 'workflow',
+        'source_action'       => 'information_company',
+        'related_entity_type' => 'session',
+        'related_entity_id'   => (int) $pieces['session_id'],
+        'email_category'      => 'information_commanditaire',
+        'email_audience'      => 'entreprise',
+      )
+    );
   }
 
   /* =====================================================================

@@ -5663,26 +5663,51 @@ public function handle_purge_plugin_data() {
       exit;
     }
 
+    /* ACDC 3.25.228 — Même correction que sur le renvoi depuis la liste : on
+       envoie, on constate, PUIS on enregistre et on annonce. Écrire la date de
+       relance avant de savoir si le message est parti avançait le compteur
+       pour rien et affichait un succès imaginaire. */
     $now = current_time( 'mysql' );
     $r1  = ! empty( $analysis->relance_1_at );
     $r2  = ! empty( $analysis->relance_2_at );
     $r3  = ! empty( $analysis->relance_3_at );
 
-    if ( ! $r1 ) {
-      $this->nad_send_relance_email( $analysis, 1 );
-      $wpdb->update( $this->need_analysis_table, array( 'relance_1_at' => $now, 'statut' => 'a_traiter', 'updated_at' => $now ), array( 'id' => $analysis_id ) );
-      $msg = 'Relance 1 envoyée à ' . esc_html( $analysis->repondant_email ) . '.';
-    } elseif ( ! $r2 ) {
-      $this->nad_send_relance_email( $analysis, 2 );
-      $wpdb->update( $this->need_analysis_table, array( 'relance_2_at' => $now, 'updated_at' => $now ), array( 'id' => $analysis_id ) );
-      $msg = 'Relance 2 envoyée à ' . esc_html( $analysis->repondant_email ) . '.';
-    } elseif ( ! $r3 ) {
-      $this->nad_send_relance_email( $analysis, 3 );
-      $wpdb->update( $this->need_analysis_table, array( 'relance_3_at' => $now, 'updated_at' => $now ), array( 'id' => $analysis_id ) );
-      $msg = 'Relance 3 (dernière) envoyée à ' . esc_html( $analysis->repondant_email ) . '.';
-    } else {
-      $msg = 'Les 3 relances ont déjà été envoyées pour cette analyse.';
+    if ( $r1 && $r2 && $r3 ) {
+      wp_safe_redirect( add_query_arg( array(
+        'notice'      => rawurlencode( 'Les 3 relances ont déjà été envoyées pour cette analyse.' ),
+        'notice_type' => 'info',
+      ), $base_url ) );
+      exit;
     }
+
+    if ( ! $r1 ) {
+      $rank = 1;
+      $column = 'relance_1_at';
+    } elseif ( ! $r2 ) {
+      $rank = 2;
+      $column = 'relance_2_at';
+    } else {
+      $rank = 3;
+      $column = 'relance_3_at';
+    }
+
+    if ( ! $this->nad_send_relance_email( $analysis, $rank ) ) {
+      wp_safe_redirect( add_query_arg( array(
+        'notice'      => rawurlencode( 'Aucun envoi : la relance n’est pas partie à ' . $analysis->repondant_email . '. Vérifiez l’adresse du répondant et, si le mode recette est actif, la liste des destinataires autorisés — le refus est journalisé.' ),
+        'notice_type' => 'error',
+      ), $base_url ) );
+      exit;
+    }
+
+    $update = array( $column => $now, 'updated_at' => $now );
+    if ( 1 === $rank ) {
+      $update['statut'] = 'a_traiter';
+    }
+    $wpdb->update( $this->need_analysis_table, $update, array( 'id' => $analysis_id ) );
+
+    $msg = ( 3 === $rank )
+      ? 'Relance 3 (dernière) envoyée à ' . esc_html( $analysis->repondant_email ) . '.'
+      : 'Relance ' . (int) $rank . ' envoyée à ' . esc_html( $analysis->repondant_email ) . '.';
 
     wp_safe_redirect( add_query_arg( array( 'notice' => rawurlencode( $msg ), 'notice_type' => 'success' ), $base_url ) );
     exit;
@@ -5724,28 +5749,58 @@ public function handle_purge_plugin_data() {
       wp_safe_redirect( add_query_arg( array( 'notice' => rawurlencode( 'Adresse e-mail introuvable pour cette analyse.' ), 'notice_type' => 'error' ), $base_url ) );
       exit;
     }
-    $now = current_time( 'mysql' );
-    $r1  = ! empty( $analysis->relance_1_at );
-    $r2  = ! empty( $analysis->relance_2_at );
-    $r3  = ! empty( $analysis->relance_3_at );
+    /* ACDC 3.25.228 — L'ÉCRAN ANNONÇAIT UN ENVOI QUI N'AVAIT PAS EU LIEU.
+       « Action réussie — Relance 2 envoyée à … » s'affichait quoi qu'il
+       arrive : la fonction d'envoi ne rendait rien, et l'on écrivait la date
+       de relance en base avant même de savoir si le message était parti. Un
+       destinataire refusé par le mode recette, un jeton absent, une adresse
+       invalide — trois cas silencieux, trois avis de succès, et un compteur qui
+       avançait pour rien.
+       On envoie d'abord, on constate, puis seulement on enregistre et on
+       annonce. Et l'on nomme le rang RÉELLEMENT joué : la version précédente
+       annonçait « Relance 2 » sur le troisième envoi. */
+    $now  = current_time( 'mysql' );
+    $r1   = ! empty( $analysis->relance_1_at );
+    $r2   = ! empty( $analysis->relance_2_at );
+    $r3   = ! empty( $analysis->relance_3_at );
+
     if ( ! $r1 ) {
-      $this->nad_send_relance_email( $analysis, 1 );
-      $wpdb->update( $this->need_analysis_table, array( 'relance_1_at' => $now, 'statut' => 'a_traiter', 'updated_at' => $now ), array( 'id' => $analysis_id ) );
-      $msg = 'Relance 1 envoyée à ' . esc_html( $analysis->repondant_email ) . '.';
+      $rank = 1;
+      $column = 'relance_1_at';
     } elseif ( ! $r2 ) {
-      $this->nad_send_relance_email( $analysis, 2 );
-      $wpdb->update( $this->need_analysis_table, array( 'relance_2_at' => $now, 'updated_at' => $now ), array( 'id' => $analysis_id ) );
-      $msg = 'Relance 2 envoyée à ' . esc_html( $analysis->repondant_email ) . '.';
-    } elseif ( ! $r3 ) {
-      $this->nad_send_relance_email( $analysis, 3 );
-      $wpdb->update( $this->need_analysis_table, array( 'relance_3_at' => $now, 'updated_at' => $now ), array( 'id' => $analysis_id ) );
-      $msg = 'Relance 3 envoyée à ' . esc_html( $analysis->repondant_email ) . '.';
+      $rank = 2;
+      $column = 'relance_2_at';
     } else {
-      // ACDC 3.21.29-hotfix4 — Renvoi manuel illimité : on peut renvoyer même après les 3 relances auto.
-      $this->nad_send_relance_email( $analysis, 3 );
-      $wpdb->update( $this->need_analysis_table, array( 'relance_3_at' => $now, 'updated_at' => $now ), array( 'id' => $analysis_id ) );
-      $msg = 'Relance manuelle envoyée à ' . esc_html( $analysis->repondant_email ) . '.';
+      /* ACDC 3.21.29-hotfix4 — Renvoi manuel illimité : on peut renvoyer même
+         après les trois relances automatiques. */
+      $rank = 3;
+      $column = 'relance_3_at';
     }
+
+    $sent = $this->nad_send_relance_email( $analysis, $rank );
+
+    if ( ! $sent ) {
+      wp_safe_redirect( add_query_arg( array(
+        'notice'      => rawurlencode( 'Aucun envoi : la relance n’est pas partie à ' . $analysis->repondant_email . '. Vérifiez l’adresse du répondant et, si le mode recette est actif, la liste des destinataires autorisés — le refus est journalisé.' ),
+        'notice_type' => 'error',
+      ), $base_url ) );
+      exit;
+    }
+
+    $update = array( $column => $now, 'updated_at' => $now );
+    if ( 1 === $rank ) {
+      $update['statut'] = 'a_traiter';
+    }
+    $wpdb->update( $this->need_analysis_table, $update, array( 'id' => $analysis_id ) );
+
+    if ( $r3 ) {
+      $msg = 'Relance manuelle envoyée à ' . esc_html( $analysis->repondant_email ) . '.';
+    } elseif ( 3 === $rank ) {
+      $msg = 'Relance 3 (dernière) envoyée à ' . esc_html( $analysis->repondant_email ) . '.';
+    } else {
+      $msg = 'Relance ' . (int) $rank . ' envoyée à ' . esc_html( $analysis->repondant_email ) . '.';
+    }
+
     wp_safe_redirect( add_query_arg( array( 'notice' => rawurlencode( $msg ), 'notice_type' => 'success' ), $base_url ) );
     exit;
   }

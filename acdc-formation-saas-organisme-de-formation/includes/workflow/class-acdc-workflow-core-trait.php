@@ -289,8 +289,13 @@ trait ACDC_Workflow_Core_Trait {
       ),
 
       /* ---- Préparation ------------------------------------------------- */
+      /* ACDC 3.25.228 — Inscrire quelqu'un en formation est un ACTE DE GESTION,
+         pas un envoi : cette étape n'a jamais eu d'automatisation et n'en aura
+         pas. Déclarée « auto », le moteur tentait de la jouer, ne trouvait
+         aucun gestionnaire et la peignait en rouge sur un dossier qui allait
+         parfaitement bien. */
       'registration' => array(
-        'phase' => 'preparation', 'mode' => 'auto',
+        'phase' => 'preparation', 'mode' => 'task',
         'label' => 'Inscrire les apprenants nommés dans la convention',
       ),
       'nad_send' => array(

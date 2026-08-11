@@ -350,6 +350,23 @@ trait ACDC_Workflow_Render_Trait {
       <?php
     }
 
+    /* ACDC 3.25.228 — Le bouton de passe manuelle n'apparaissait QU'EN CAS DE
+       RETARD : la recette l'a cherché sans le trouver, précisément parce que
+       le moteur venait de tourner. Or c'est un outil de diagnostic — il sert à
+       savoir si le cron du site fonctionne — et un outil de diagnostic qui ne
+       se montre que pendant la panne ne sert à rien : on ne peut plus établir
+       la référence quand tout va bien. Il est donc toujours là, discret. */
+    ?>
+    <div class="acdc-panel acdc-mb-18">
+      <form method="post" action="<?php echo esc_url( admin_url( 'admin-post.php' ) ); ?>" style="display:flex;align-items:center;gap:12px;flex-wrap:wrap;margin:0;">
+        <?php wp_nonce_field( 'acdc_wf_run_now' ); ?>
+        <input type="hidden" name="action" value="acdc_wf_run_now">
+        <button type="submit" class="acdc-button acdc-button-soft">Lancer une passe maintenant</button>
+        <span class="description">Le moteur tourne seul tous les quarts d'heure. Ce bouton joue la même passe immédiatement — utile pour vérifier que la planification du site fonctionne.</span>
+      </form>
+    </div>
+    <?php
+
     if ( empty( $tasks ) ) {
       echo '<div class="acdc-panel"><p>' . ( empty( $overdue )
         ? 'Rien à faire pour l\'instant.'
