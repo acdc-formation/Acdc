@@ -87,7 +87,7 @@ d'entreprises, prospects, apprenants, sessions, analyses). S'il reste un dossier
 d'une campagne antérieure, **signale-le et arrête-toi** : les actes de comptage
 (« trois lignes, pas quatre ») deviennent illisibles sur des données héritées.
 
-**Version attendue : 3.25.228 ou supérieure** (Extensions → ACDC Formation
+**Version attendue : 3.25.229 ou supérieure** (Extensions → ACDC Formation
 SAAS). Note le numéro exact dans ton premier message.
 
 **Workflow → Configuration**, trois cases à relever **une par une** :
@@ -238,6 +238,13 @@ code à usage unique, signe en tant que commanditaire.
 > lignes de l'archive.
 > **Vérifie** : les frais annexes ne sont pas activés à zéro euro.
 > **Vérifie** : le texte de la confirmation nomme bien le destinataire.
+> **Vérifie le champ « Désignation »** : il ne doit plus être saisissable. À sa
+> place, une mention explique que la désignation est composée automatiquement
+> à partir de la formation, des dates, de la durée, du format et du lieu.
+> Compare cette mention au contenu réel du devis généré : les deux doivent
+> concorder. S'il reste une zone de saisie, dis-le — c'était un champ libre
+> sans aucun effet sur le document, donc une source de contradiction entre
+> pièces.
 
 ### Acte 4 — Convention
 Complète-la, génère-la, envoie-la en signature, signe-la.
@@ -292,8 +299,27 @@ l'écran des analyses.
 > ensuite l'adresse de la fixture.
 
 ### Acte 8 — Convocations
-Les convocations partent par le moteur. Si rien ne part, va à l'acte 21, utilise
-« Lancer une passe maintenant », puis reviens ici.
+Cet acte se joue en **deux temps** : l'envoi automatique, puis l'envoi manuel.
+
+**8.a — L'envoi automatique.** Les convocations partent par le moteur, à J-7 de
+la formation. Si rien ne part, va à l'acte 21, utilise « Lancer une passe
+maintenant », puis reviens ici.
+
+**8.b — L'envoi manuel.** Va dans **Documents → Convocations de début de
+formation**. Chaque ligne porte une **icône d'envoi** dans sa propre colonne.
+Clique-la sur une apprenante, accepte la confirmation, et vérifie le résultat.
+
+> **Vérifie** : la confirmation nomme le destinataire avant d'agir.
+> **Vérifie** : un message de succès s'affiche à l'écran, nommant l'adresse.
+> **Vérifie dans l'archive** : une nouvelle ligne apparaît, la **convocation
+> est jointe en PDF**, et le module source est identifiable.
+> **Vérifie** : la ligne du commanditaire, si elle apparaissait, refuse l'envoi
+> avec un message explicite — un commanditaire n'est pas convoqué.
+> **Vérifie** : une apprenante sans adresse e-mail affiche un tiret au lieu du
+> bouton, plutôt qu'un bouton qui échoue.
+> **Pourquoi cet ajout** : un dossier créé après J-7 ne recevait jamais aucune
+> convocation, et aucun écran ne permettait de rattraper. C'est ce chemin de
+> rattrapage que tu testes ici.
 
 > **Vérifie** : chaque apprenante reçoit sa convocation nominative.
 > **Vérifie sur le document** : le **lieu**, les **horaires demi-journée par

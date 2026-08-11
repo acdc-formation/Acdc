@@ -222,7 +222,15 @@ private function acdc_get_transactional_email_headers( $args = array() ) {
     return $headers;
   }
 
-private function acdc_send_transactional_email( $to, $subject, $template_args = array(), $header_args = array() ) {
+/**
+ * ACDC 3.25.229 — Le point de passage commun accepte des pièces jointes.
+ *
+ * Il n'en acceptait pas, si bien que tout envoi devant joindre un document
+ * devait contourner ce point de passage et appeler wp_mail directement — donc
+ * échapper au garde-fou du mode recette et à l'attribution d'archive. Ajouter
+ * le paramètre ici, c'est refermer la porte plutôt que d'en ouvrir une autre.
+ */
+private function acdc_send_transactional_email( $to, $subject, $template_args = array(), $header_args = array(), $attachments = array() ) {
     $to = sanitize_email( (string) $to );
     if ( '' === $to || ! is_email( $to ) ) {
       return false;
@@ -260,7 +268,7 @@ private function acdc_send_transactional_email( $to, $subject, $template_args = 
 
     $html = $this->acdc_build_transactional_email_html( $template_args );
     $headers = $this->acdc_get_transactional_email_headers( $header_args );
-    return wp_mail( $to, wp_strip_all_tags( (string) $subject ), $html, $headers );
+    return wp_mail( $to, wp_strip_all_tags( (string) $subject ), $html, $headers, array_values( (array) $attachments ) );
   }
 
   /* ACDC 3.23.11 — Récurrences WP cron custom pour la veille IA. */

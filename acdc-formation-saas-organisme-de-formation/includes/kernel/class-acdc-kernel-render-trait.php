@@ -1707,6 +1707,7 @@ trait ACDC_Kernel_Render_Trait {
                 <th>Format</th>
                 <th>État dossier</th>
                 <th><span class="screen-reader-text">Menu</span></th>
+                <th><span class="screen-reader-text">Envoyer</span></th>
                 <th><span class="screen-reader-text">Voir</span></th>
                 <th><span class="screen-reader-text">Modifier</span></th>
               </tr>
@@ -1739,6 +1740,35 @@ trait ACDC_Kernel_Render_Trait {
                       <a href="<?php echo esc_url( $download_url ); ?>">Convocation de début de formation</a>
                     </div>
                   </div>
+                </td>
+                <td>
+                  <?php
+                  /* ACDC 3.25.229 — LA CONVOCATION N'AVAIT AUCUN ENVOI MANUEL.
+                     Elle ne partait que par le moteur, à J-7. Un dossier créé
+                     APRÈS cette échéance n'en recevait donc jamais, et aucun
+                     écran ne permettait de rattraper le coup : ni ici, ni sur la
+                     carte de séance. C'est la remarque du testeur, et elle est
+                     juste — une convocation est le document sur lequel la
+                     personne se fonde pour se déplacer ; ne pas pouvoir
+                     l'envoyer est une impasse, pas une contrainte.
+                     Le bouton confirme avant d'agir : un envoi à un apprenant
+                     ne se déclenche pas par mégarde. */
+                  $convocation_email = isset( $context['email'] ) ? (string) $context['email'] : '';
+                  ?>
+                  <?php if ( '' !== $convocation_email && is_email( $convocation_email ) ) : ?>
+                  <form method="post" action="<?php echo esc_url( admin_url( 'admin-post.php' ) ); ?>" style="margin:0"
+                        onsubmit="return confirm(<?php echo esc_attr( wp_json_encode( 'Envoyer la convocation à ' . $convocation_email . ' ?' ) ); ?>);">
+                    <?php wp_nonce_field( 'acdc_send_training_convocation_' . (int) $entry->id ); ?>
+                    <input type="hidden" name="action" value="acdc_send_training_convocation">
+                    <input type="hidden" name="registration_id" value="<?php echo (int) $entry->id; ?>">
+                    <?php if ( is_admin() ) : ?><input type="hidden" name="page" value="acdc-of-dashboard"><?php endif; ?>
+                    <button type="submit" class="acdc-row-action-icon" title="Envoyer la convocation par e-mail" aria-label="Envoyer la convocation par e-mail">
+                      <?php echo $this->render_inline_icon( 'convocation', 25 ); ?>
+                    </button>
+                  </form>
+                  <?php else : ?>
+                    <span class="description" title="Aucune adresse e-mail sur la fiche apprenant">—</span>
+                  <?php endif; ?>
                 </td>
                 <td><button type="button" class="acdc-row-view-link" data-acdc-modal-open="<?php echo esc_attr( $view_modal_id ); ?>" title="Voir" aria-label="Voir"><?php echo $this->render_inline_icon( 'view', 25 ); ?></button></td>
                 <td><button type="button" class="acdc-row-edit-link" data-acdc-modal-open="<?php echo esc_attr( $edit_modal_id ); ?>" title="Modifier" aria-label="Modifier"><?php echo $this->render_inline_icon( 'edit-pencil', 25 ); ?></button></td>

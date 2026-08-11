@@ -536,6 +536,9 @@ class ACDC_Formation_SAAS_Plugin {
     add_action( 'admin_post_acdc_download_registration_contract_document', array( $this, 'handle_download_registration_contract_document' ) );
     add_action( 'admin_post_acdc_update_registration_contract_document', array( $this, 'handle_update_registration_contract_document' ) );
     add_action( 'admin_post_acdc_download_training_convocation_document', array( $this, 'handle_download_training_convocation_document' ) );
+    /* ACDC 3.25.229 — Envoi manuel de la convocation : rattrapage d'un dossier
+       créé après l'échéance J-7 du moteur. */
+    add_action( 'admin_post_acdc_send_training_convocation', array( $this, 'handle_send_training_convocation' ) );
     add_action( 'admin_post_acdc_update_training_convocation_document', array( $this, 'handle_update_training_convocation_document' ) );
     add_action( 'admin_post_acdc_download_positioning_result_document', array( $this, 'handle_download_positioning_result_document' ) );
     add_action( 'admin_post_acdc_update_positioning_result_document', array( $this, 'handle_update_positioning_result_document' ) );

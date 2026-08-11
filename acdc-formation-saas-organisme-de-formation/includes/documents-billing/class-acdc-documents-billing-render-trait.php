@@ -630,7 +630,24 @@ trait ACDC_Documents_Billing_Render_Trait {
       <div class="acdc-contract-label">Numéro</div><div><input type="text" name="quote[number]" value="<?php echo esc_attr( $row['number'] ?? '' ); ?>"></div>
       <div class="acdc-contract-label">Date d'émission <span class="acdc-required">*</span></div><div><input type="text" name="quote[emission_date]" value="<?php echo esc_attr( $row['emission_date'] ?? '' ); ?>" placeholder="jj/mm/aaaa" required></div>
       <div class="acdc-contract-label">Date d'expiration <span class="acdc-required">*</span></div><div><input type="text" name="quote[expiration_date]" value="<?php echo esc_attr( $row['expiration_date'] ?? '' ); ?>" placeholder="jj/mm/aaaa" required></div>
-      <div class="acdc-contract-label">Désignation</div><div><textarea name="quote[designation]" rows="5"><?php echo esc_textarea( $row['designation'] ?? '' ); ?></textarea></div>
+      <?php
+      /* ACDC 3.25.229 — LE CHAMP « DÉSIGNATION » EST SUPPRIMÉ DU FORMULAIRE.
+         Il était proposé à la saisie et n'avait AUCUN effet : le document
+         reconstruit sa propre désignation à partir du titre de formation, des
+         dates, de la durée, du format et du lieu. Un champ libre censé
+         reproduire une désignation calculée est une source d'écart entre
+         pièces — le testeur l'a dit exactement ainsi, et il a raison : c'est
+         le genre de contradiction que cette recette passe son temps à traquer.
+         Mieux vaut un champ absent qu'un champ menteur.
+         La colonne reste en base : les devis anciens gardent ce qu'ils
+         portaient, et la valeur enregistrée est réémise telle quelle pour ne
+         pas l'effacer au premier enregistrement. */
+      ?>
+      <input type="hidden" name="quote[designation]" value="<?php echo esc_attr( $row['designation'] ?? '' ); ?>">
+      <div class="acdc-contract-label">Désignation</div>
+      <div>
+        <p class="description" style="margin:0;">Composée automatiquement à partir de la formation, des dates, de la durée, du format et du lieu — elle apparaît telle quelle sur le devis.</p>
+      </div>
       <div class="acdc-contract-label">Quantité</div><div><input type="text" name="quote[quantity]" value="<?php echo esc_attr( $row['quantity'] ?? '1,00' ); ?>"></div>
       <div class="acdc-contract-label">Tarif HT (€) <span class="acdc-required">*</span></div><div><input type="text" name="quote[tarif_ht]" value="<?php echo esc_attr( $row['tarif_ht_value'] ?? '' ); ?>" placeholder="ex: 900,00" required></div>
       <div class="acdc-contract-label">Taux de TVA (%)</div><div><input type="text" name="quote[vat_rate]" value="<?php echo esc_attr( $row['vat_rate'] ?? '20,00' ); ?>"></div>

@@ -501,7 +501,126 @@ trait ACDC_Kernel_Actions_Trait {
     }
     echo "</table></body></html>";
     exit;
-  }public function handle_download_completion_certificate_document() {
+  }
+
+  /**
+   * ACDC 3.25.229 — ENVOI MANUEL DE LA CONVOCATION.
+   *
+   * La convocation ne partait que par le moteur, à J-7 de la formation. Un
+   * dossier créé après cette échéance n'en recevait donc jamais aucune, et
+   * aucun écran ne permettait de rattraper : ni l'onglet Convocations, ni la
+   * carte de séance. Le testeur l'a formulé sans détour — « un dossier créé
+   * après J-7 n'en recevra jamais et aucun écran ne permet de rattraper le
+   * coup ». Une convocation est le document sur lequel une personne se fonde
+   * pour se déplacer : ne pas pouvoir l'envoyer est une impasse.
+   *
+   * Cet envoi reprend le MÊME document et le même contenu que l'envoi
+   * automatique : il n'y a qu'une convocation, quel que soit le chemin qui la
+   * déclenche. La seule différence est qu'un humain a cliqué, et le journal le
+   * dit.
+   */
+  public function handle_send_training_convocation() {
+    if ( ! is_user_logged_in() || ! $this->is_admin_manager() ) {
+      wp_die( esc_html( 'Accès refusé.' ) );
+    }
+
+    $registration_id = isset( $_POST['registration_id'] ) ? absint( wp_unslash( $_POST['registration_id'] ) ) : 0;
+    if ( ! $registration_id ) {
+      wp_die( esc_html( 'Dossier introuvable.' ) );
+    }
+    check_admin_referer( 'acdc_send_training_convocation_' . $registration_id );
+
+    $registration = $this->get_training_registration( $registration_id );
+    if ( ! $registration ) {
+      $this->redirect_to_portal( 'training_convocations', 'Dossier introuvable : aucune convocation envoyée.', 'error' );
+    }
+
+    $context = $this->get_training_convocation_context( $registration );
+
+    /* Règle métier : le commanditaire n'a pas lieu d'être convoqué. Ce sont
+       uniquement les apprenants. */
+    if ( ! empty( $context['is_commanditaire'] ) ) {
+      $this->redirect_to_portal( 'training_convocations', 'Le commanditaire n’est pas convoqué : seuls les apprenants le sont.', 'error' );
+    }
+
+    $email = isset( $context['email'] ) ? sanitize_email( (string) $context['email'] ) : '';
+    if ( '' === $email || ! is_email( $email ) ) {
+      $this->redirect_to_portal( 'training_convocations', 'Aucune adresse e-mail sur la fiche apprenant : rien n’a été envoyé.', 'error' );
+    }
+
+    /* Le PDF part en pièce jointe : c'est la convocation elle-même, pas un
+       lien vers un écran auquel l'apprenant n'a pas forcément accès. */
+    $attachments = array();
+    $tmp_pdf     = '';
+    $pages       = $this->build_training_convocation_pdf_pages( $registration, $context );
+    if ( ! empty( $pages ) && method_exists( $this, '_build_simple_pdf_string' ) ) {
+      $pdf = $this->_build_simple_pdf_string( $pages );
+      if ( '' !== (string) $pdf ) {
+        $tmp_pdf = trailingslashit( sys_get_temp_dir() ) . sanitize_file_name( 'convocation-' . $registration_id . '.pdf' );
+        if ( false !== file_put_contents( $tmp_pdf, $pdf ) ) { // phpcs:ignore WordPress.WP.AlternativeFunctions.file_system_operations_file_put_contents
+          $attachments[] = $tmp_pdf;
+        } else {
+          $tmp_pdf = '';
+        }
+      }
+    }
+
+    $formation = (string) ( $context['formation_title'] ?? 'Formation' );
+    $rows      = array(
+      array( 'label' => 'Formation', 'value' => $formation ),
+      array( 'label' => 'Dates',     'value' => $this->format_pdf_date( $context['start_date'] ?? '' ) . ' au ' . $this->format_pdf_date( $context['end_date'] ?? '' ) ),
+      array( 'label' => 'Durée',     'value' => (string) ( $context['duration'] ?? '—' ) ),
+      array( 'label' => 'Format',    'value' => (string) ( $context['format'] ?? '—' ) ),
+    );
+
+    $body  = '<p style="font-size:18px;line-height:1.7;margin:0 0 18px;">Vous êtes convoqué(e) à la formation indiquée ci-dessus. Vous trouverez votre convocation détaillée en pièce jointe : elle précise le lieu, les horaires demi-journée par demi-journée et les modalités d’accès.</p>';
+    $body .= '<p style="font-size:16px;line-height:1.7;margin:0 0 18px;color:#4b5d76;">Merci de vous présenter quelques minutes avant le début de la première demi-journée.</p>';
+
+    $sent = $this->acdc_send_transactional_email(
+      $email,
+      'Convocation — ' . $formation,
+      array(
+        'greeting_name' => (string) ( $context['learner_name'] ?? '' ),
+        'intro_html'    => '',
+        'summary_title' => 'DÉTAILS DE VOTRE CONVOCATION',
+        'summary_rows'  => $rows,
+        'body_html'     => $body,
+        'footer_notice' => 'Cet e-mail est votre convocation officielle. Conservez-le pour vos dossiers.',
+      ),
+      array(
+        'source_module'       => 'documents',
+        'source_action'       => 'convocation_manuelle',
+        'related_entity_type' => 'registration',
+        'related_entity_id'   => $registration_id,
+        'email_category'      => 'convocation',
+        'email_audience'      => 'apprenant',
+      ),
+      $attachments
+    );
+
+    if ( '' !== $tmp_pdf && file_exists( $tmp_pdf ) ) {
+      @unlink( $tmp_pdf ); // phpcs:ignore WordPress.PHP.NoSilencedErrors.Discouraged
+    }
+
+    if ( ! $sent ) {
+      $this->redirect_to_portal(
+        'training_convocations',
+        'La convocation n’est pas partie à ' . $email . '. Si le mode recette est actif, vérifiez la liste des destinataires autorisés — le refus est journalisé.',
+        'error'
+      );
+    }
+
+    if ( method_exists( $this, 'log_action_event' ) ) {
+      $this->log_action_event( 'send', 'training_convocation', $registration_id, 'success', array(
+        'destinataire' => $email,
+        'origine'      => 'envoi manuel',
+      ) );
+    }
+
+    $this->redirect_to_portal( 'training_convocations', 'Convocation envoyée à ' . $email . '.', 'success' );
+  }
+
+  public function handle_download_completion_certificate_document() {
   if ( ! is_user_logged_in() || ! $this->is_admin_manager() ) {
     wp_die( esc_html( 'Accès refusé.' ) );
   }
