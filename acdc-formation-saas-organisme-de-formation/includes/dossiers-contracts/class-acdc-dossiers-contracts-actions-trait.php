@@ -360,8 +360,33 @@ public function handle_save_training_registration() {
         $tr_account_id = (int) $wpdb->insert_id;
         $tr_account = $wpdb->get_row( $wpdb->prepare( "SELECT * FROM {$this->trainer_portal_account_table} WHERE id = %d", $tr_account_id ) );
       }
+      /* ACDC 3.25.231 — UN SEUL E-MAIL D'ACTIVATION PAR FORMATEUR.
+         L'envoi était déclenché par INSCRIPTION : trois apprenantes inscrites
+         au même formateur lui expédiaient trois fois le même « Activation de
+         votre espace formateur », à une minute d'intervalle. Or un accès
+         s'ouvre une fois, pas une fois par stagiaire — et trois liens
+         d'activation successifs invalident les précédents, ce qui rend le
+         premier reçu inutilisable.
+         On n'envoie donc qu'à un compte JAMAIS activé et JAMAIS sollicité :
+         un compte déjà ouvert, ou déjà invité, n'a pas besoin qu'on le
+         réinvite. Le renvoi volontaire reste possible depuis la fiche
+         formateur. */
       if ( $tr_account && method_exists( $this, 'trainer_portal_send_activation_email' ) ) {
-        $this->trainer_portal_send_activation_email( $tr_account, $trainer );
+        $already_invited = ! empty( $tr_account->activation_sent_at )
+          || ( 'never_activated' !== (string) ( $tr_account->status ?? '' ) );
+
+        if ( ! $already_invited ) {
+          $this->trainer_portal_send_activation_email( $tr_account, $trainer );
+          if ( $this->acdc_schema_has_column( $this->trainer_portal_account_table, 'activation_sent_at' ) ) {
+            $wpdb->update(
+              $this->trainer_portal_account_table,
+              array( 'activation_sent_at' => $now_mysql ),
+              array( 'id' => (int) $tr_account->id ),
+              array( '%s' ),
+              array( '%d' )
+            );
+          }
+        }
       }
     }
   }

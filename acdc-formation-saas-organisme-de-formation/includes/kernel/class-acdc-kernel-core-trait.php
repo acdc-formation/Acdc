@@ -2825,6 +2825,10 @@ dbDelta( $sql_companies );
        le contrat passait « signée » sans que l'on sache QUAND. C'est
        précisément ce qui manquait au PDF pour valoir preuve. */
     $this->maybe_add_table_column( $this->trainer_contract_table, 'signature_completed_at', 'DATETIME DEFAULT NULL' );
+    /* ACDC 3.25.231 — Trace de l'invitation d'un formateur : elle empêche
+       d'expédier un e-mail d'activation par inscription au lieu d'un par
+       formateur. */
+    $this->maybe_add_table_column( $this->trainer_portal_account_table, 'activation_sent_at', 'DATETIME DEFAULT NULL' );
 
     /* ACDC 3.24.11 — Bilans compétences formateurs (indicateur 21 Qualiopi). */
     $sql_trainer_evaluations = "CREATE TABLE IF NOT EXISTS {$this->trainer_evaluation_table} (" . "  id             BIGINT UNSIGNED NOT NULL AUTO_INCREMENT," . "  trainer_id     BIGINT UNSIGNED NOT NULL," . "  evaluation_date DATE NOT NULL," . "  eval_type      VARCHAR(50) NOT NULL DEFAULT 'entretien'," . "  skills_evaluated TEXT," . "  level_reached  TINYINT UNSIGNED NOT NULL DEFAULT 0," . "  objectives_set TEXT," . "  comment_text   TEXT," . "  created_at     DATETIME NOT NULL," . "  PRIMARY KEY (id)," . "  KEY trainer_id (trainer_id)," . "  KEY evaluation_date (evaluation_date)" . ") {$charset_collate};";
@@ -6341,7 +6345,7 @@ dbDelta( $sql_companies );
     }
 
     if ( '' === $company ) {
-      return array( '', '' );
+      return array( '', '', '' );
     }
 
     $person  = trim( (string) ( $analysis->repondant_prenom ?? '' ) . ' ' . (string) ( $analysis->repondant_nom ?? '' ) );
@@ -6377,7 +6381,19 @@ dbDelta( $sql_companies );
                  . ' (' . esc_html( $role ) . ')</p>';
     }
 
-    return array( $company . ' — ', $attention, $company );
+    /* ACDC 3.25.231 — DEUX ANALYSES, UN SEUL OBJET.
+       La recette l'a mesuré : une signataire qui est aussi apprenante reçoit
+       deux e-mails dont l'objet est rigoureusement identique, et rien dans sa
+       boîte ne lui dit lequel répond à quoi. L'écran, lui, les sépare par une
+       colonne Profil — mais on ne lit pas ses e-mails dans l'écran.
+       La qualité entre donc dans le préfixe d'objet. C'est le seul endroit qui
+       compte : le corps, lui, était déjà correct. */
+    $prefix = $company;
+    if ( '' !== $person ) {
+      $prefix .= ' (' . $role . ' : ' . $person . ')';
+    }
+
+    return array( $prefix . ' — ', $attention, $company );
   }
 
   /** Envoi initial de l'analyse du besoin (appelé par le cron si délai > 0). */

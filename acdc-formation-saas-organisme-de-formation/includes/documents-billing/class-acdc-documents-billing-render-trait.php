@@ -355,6 +355,24 @@ trait ACDC_Documents_Billing_Render_Trait {
         <input type="hidden" name="quote_id" value="<?php echo esc_attr( (int) $row['id'] ); ?>">
         <button type="submit" class="acdc-button acdc-button-primary" onclick="return confirm('Créer une facture depuis ce devis ?');">🧾 Convertir en facture</button>
       </form>
+      <?php
+      /* ACDC 3.25.231 — La convention se crée normalement toute seule à la
+         signature du devis. Si elle manque — devis signé sous une version
+         antérieure, ou écriture qui a échoué — l'organisme devait tout
+         ressaisir. Un automatisme sans rattrapage est une impasse dès qu'il
+         rate une fois. Le bouton n'apparaît que sur un devis SIGNÉ : avant la
+         signature, il n'y a rien à conventionner. */
+      $q_is_signed = in_array( (string) ( $row['status'] ?? '' ), array( 'signe', 'signee', 'accepte' ), true )
+        || 'signée' === (string) ( $row['signature_status'] ?? '' );
+      ?>
+      <?php if ( $q_is_signed ) : ?>
+      <form method="post" action="<?php echo esc_url( admin_url( 'admin-post.php' ) ); ?>" style="display:inline;margin-left:10px;">
+        <?php wp_nonce_field( 'acdc_create_contract_from_quote_' . (int) $row['id'] ); ?>
+        <input type="hidden" name="action" value="acdc_create_contract_from_quote">
+        <input type="hidden" name="quote_id" value="<?php echo esc_attr( (int) $row['id'] ); ?>">
+        <button type="submit" class="acdc-button acdc-button-soft" onclick="return confirm('Créer la convention en brouillon depuis ce devis signé ?');">📄 Créer la convention</button>
+      </form>
+      <?php endif; ?>
     </div>
     <?php endif; ?>
     <div style="display:flex;justify-content:flex-end;gap:10px;margin-bottom:14px;">

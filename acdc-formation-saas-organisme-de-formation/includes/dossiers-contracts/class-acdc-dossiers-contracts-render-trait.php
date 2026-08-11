@@ -1621,7 +1621,29 @@ trait ACDC_Dossiers_Contracts_Render_Trait {
               <select name="registration_contract[public_funding_name]" id="acdc-rc-opco-select"<?php echo $readonly ? ' disabled' : ''; ?>>
                 <option value="">— Sélectionner un financeur</option>
                 <?php
-                $opco_list = array(
+                /* ACDC 3.25.231 — CETTE LISTE IGNORAIT LE RÉPERTOIRE DES
+                   FINANCEURS. Quinze valeurs écrites en dur, dont les OPCO
+                   nationaux réels — alors que les écrans Prospect et
+                   Proposition, eux, proposent les fiches du répertoire. Deux
+                   conséquences, et la seconde est sérieuse : le financeur
+                   effectivement rattaché au dossier n'était pas proposé, et
+                   l'on offrait à la place des organismes RÉELS qu'un recetteur
+                   pouvait sélectionner par inadvertance sur une pièce
+                   contractuelle.
+                   Le répertoire passe donc en premier. La liste nationale reste
+                   dessous, comme repli pour un organisme qui n'aurait pas
+                   encore créé sa fiche — mais elle ne peut plus être prise pour
+                   le répertoire. */
+                $opco_list = array();
+                $repertoire = method_exists( $this, 'get_funders' ) ? (array) $this->get_funders() : array();
+                foreach ( $repertoire as $funder_row ) {
+                  if ( empty( $funder_row->name ) ) {
+                    continue;
+                  }
+                  $opco_list[ (string) $funder_row->name ] = (string) $funder_row->name . ' — fiche du répertoire';
+                }
+
+                $opco_list += array(
                   'AFDAS'           => 'AFDAS – Culture, Communication, Médias, Loisirs',
                   'Atlas'           => 'ATLAS – Banque, Finance, Conseil',
                   'Constructys'     => 'Constructys – BTP',

@@ -1284,6 +1284,48 @@ trait ACDC_Documents_Billing_Actions_Trait {
    * @param object $quote Devis signé.
    * @return int Identifiant de la convention créée, 0 si aucune.
    */
+  /**
+   * ACDC 3.25.231 — Création de la convention à la main, depuis le devis signé.
+   *
+   * L'automatisme ne suffit pas : s'il n'a pas eu lieu — parce que le devis a
+   * été signé sous une version antérieure, ou parce que l'écriture a échoué —
+   * l'organisme se retrouvait sans convention et sans moyen de la reprendre
+   * autrement qu'en ressaisissant tout. Un automatisme sans rattrapage est une
+   * impasse dès qu'il rate une fois.
+   */
+  public function handle_create_contract_from_quote() {
+    if ( ! current_user_can( 'manage_options' ) ) {
+      wp_die( 'Action non autorisée.' );
+    }
+    $quote_id = isset( $_POST['quote_id'] ) ? absint( wp_unslash( $_POST['quote_id'] ) ) : 0;
+    check_admin_referer( 'acdc_create_contract_from_quote_' . $quote_id );
+
+    $quote = $quote_id ? $this->get_quote( $quote_id ) : null;
+    if ( ! $quote ) {
+      $this->redirect_to_portal( 'quotes', 'Devis introuvable.', 'error' );
+    }
+
+    /* On repart d'une garde neuve : c'est une demande explicite. */
+    delete_option( 'acdc_of_quote_contract_' . $quote_id );
+
+    $contract_id = $this->maybe_create_contract_from_signed_quote( $quote );
+
+    if ( $contract_id <= 0 ) {
+      $this->redirect_to_portal(
+        'quotes',
+        'La convention n’a pas pu être créée depuis ce devis. La raison est journalisée dans le système.',
+        'error'
+      );
+    }
+
+    $this->redirect_to_portal(
+      'registration_contract',
+      'Convention n°' . (int) $contract_id . ' créée en brouillon depuis le devis. Relisez-la avant de l’envoyer en signature.',
+      'success',
+      array( 'action' => 'edit', 'item_id' => (int) $contract_id )
+    );
+  }
+
   private function maybe_create_contract_from_signed_quote( $quote ) {
     global $wpdb;
 
@@ -1359,6 +1401,19 @@ trait ACDC_Documents_Billing_Actions_Trait {
 
     $inserted = $wpdb->insert( $this->registration_contract_table, $data );
     if ( ! $inserted ) {
+      /* ACDC 3.25.231 — UN ÉCHEC SILENCIEUX EST PIRE QU'UN ÉCHEC BRUYANT.
+         La recette a constaté qu'aucune convention n'était créée à la signature
+         du devis, sans qu'aucun écran ni aucun journal n'en dise la raison :
+         la fonction rendait 0 et repartait. On ne pouvait donc pas distinguer
+         « le code n'a pas été appelé » de « l'écriture a échoué », deux pannes
+         qui ne se corrigent pas au même endroit.
+         L'erreur de base de données est désormais journalisée nommément. */
+      if ( method_exists( $this, 'log_error' ) ) {
+        $this->log_error( 'documents-billing', 'Convention non créée depuis le devis signé : échec d’écriture.', array(
+          'quote_id'  => $quote_id,
+          'db_error'  => (string) $wpdb->last_error,
+        ) );
+      }
       /* La garde est levée : un échec d'écriture ne doit pas interdire la
          prochaine tentative. */
       delete_option( $flag_key );

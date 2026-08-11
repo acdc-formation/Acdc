@@ -1648,6 +1648,8 @@ trait ACDC_Dossiers_Contracts_Core_Trait {
 
 
 private function get_contract_pdf_context( $request ) {
+  global $wpdb;
+
   $contract_id = isset( $request['contract_id'] ) ? absint( $request['contract_id'] ) : 0;
   $company_id  = isset( $request['contract_company_id'] ) ? absint( $request['contract_company_id'] ) : 0;
   $formation_id = isset( $request['contract_formation_id'] ) ? absint( $request['contract_formation_id'] ) : 0;
@@ -1963,8 +1965,59 @@ private function build_contract_pdf_pages( $context ) {
   $duration = preg_replace( '/\s*heures?\s*$/iu', '', (string) $duration );
   $format = $normalize( $formation->modality ?? '', $normalize( $session->format ?? '', 'À définir' ) );
   $proposal_location = isset( $context['proposal']->formation_location ) ? trim( (string) $context['proposal']->formation_location ) : '';
-  $location = '' !== ( $session->location ?? '' ) ? $normalize( (string) $session->location, 'À définir' )
-            : ( '' !== $proposal_location ? $proposal_location : 'À définir' );
+  /* ACDC 3.25.231 — « LIEU : À DÉFINIR » SUR UNE CONVENTION SIGNÉE.
+     Le lieu ne se lisait que sur LA séance rattachée, ou sur la proposition.
+     Or une convention se signe le plus souvent AVANT que les séances
+     n'existent — c'est même l'ordre normal du parcours — et l'on imprimait
+     alors « À définir » sur une pièce contractuelle, pendant que le devis, lui,
+     portait l'adresse complète. La donnée existait, personne ne la lisait.
+     On étend donc la cascade : la séance, la proposition, puis TOUTE séance de
+     la formation, puis la fiche formation, puis l'adresse du commanditaire. Le
+     lieu d'une formation en entreprise, c'est l'entreprise — c'est la règle que
+     David a rappelée. On ne renonce qu'après. */
+  $location = '' !== ( $session->location ?? '' ) ? $normalize( (string) $session->location, '' ) : '';
+
+  if ( '' === $location && '' !== $proposal_location ) {
+    $location = $proposal_location;
+  }
+
+  if ( '' === $location && ! empty( $formation->id ) ) {
+    $any_session_location = $wpdb->get_var( $wpdb->prepare(
+      "SELECT location FROM {$this->session_table}
+        WHERE formation_id = %d AND location IS NOT NULL AND location <> ''
+        ORDER BY COALESCE(start_at, CONCAT(start_date,' 00:00:00')) ASC LIMIT 1",
+      (int) $formation->id
+    ) );
+    if ( ! empty( $any_session_location ) ) {
+      $location = $normalize( (string) $any_session_location, '' );
+    }
+  }
+
+  if ( '' === $location && ! empty( $formation ) ) {
+    $formation_place = trim( implode( ' ', array_filter( array(
+      (string) ( $formation->address ?? '' ),
+      (string) ( $formation->postal_code ?? '' ),
+      (string) ( $formation->city ?? '' ),
+    ) ) ) );
+    if ( '' !== $formation_place ) {
+      $location = $formation_place;
+    }
+  }
+
+  if ( '' === $location && ! empty( $company ) ) {
+    $company_place = trim( implode( ' ', array_filter( array(
+      (string) ( $company->address ?? '' ),
+      (string) ( $company->postal_code ?? '' ),
+      (string) ( $company->city ?? '' ),
+    ) ) ) );
+    if ( '' !== $company_place ) {
+      $location = $company_place;
+    }
+  }
+
+  if ( '' === $location ) {
+    $location = 'À définir';
+  }
   $start_date = ! empty( $contract->start_date ) ? (string) $contract->start_date : ( $session->start_date ?? '' );
   $end_date   = ! empty( $contract->end_date )   ? (string) $contract->end_date   : ( $session->end_date   ?? '' );
   $dates = 'Non renseignées';

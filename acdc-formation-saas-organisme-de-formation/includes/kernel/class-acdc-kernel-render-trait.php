@@ -10156,9 +10156,26 @@ trait ACDC_Kernel_Render_Trait {
     $objective_options = array();
     $total_seconds = 0;
 
+    /* ACDC 3.25.231 — « Formations les plus populaires » rattachait une
+       inscription sur trois à une formation vide, alors que les trois portaient
+       la même. La cause est la jointure par `learner.session_id`, la colonne qui
+       ne désigne qu'UNE séance : les apprenants qu'elle ne relie à rien
+       tombaient dans un groupe « — ». On compte les DOSSIERS, qui connaissent
+       leur formation sans passer par une séance. */
+    $formation_counts = array();
+    foreach ( (array) $wpdb->get_results(
+      "SELECT COALESCE(NULLIF(r.formation_title,''), f.title, '—') AS formation_label, COUNT(*) AS total
+         FROM {$this->training_registration_table} r
+         LEFT JOIN {$this->formation_table} f ON f.id = r.formation_id
+        WHERE r.is_draft = 0 AND r.learner_id IS NOT NULL AND r.learner_id > 0
+        GROUP BY formation_label
+        ORDER BY total DESC"
+    ) as $formation_row ) {
+      $formation_counts[ (string) $formation_row->formation_label ] = (int) $formation_row->total;
+    }
+
     foreach ( $learners as $learner ) {
       $formation = ! empty( $learner->formation_title ) ? (string) $learner->formation_title : '—';
-      $formation_counts[ $formation ] = isset( $formation_counts[ $formation ] ) ? $formation_counts[ $formation ] + 1 : 1;
 
       $gender = ! empty( $learner->gender ) ? (string) $learner->gender : '—';
       $genre_counts[ $gender ] = isset( $genre_counts[ $gender ] ) ? $genre_counts[ $gender ] + 1 : 1;

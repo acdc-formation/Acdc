@@ -667,6 +667,9 @@ class ACDC_Formation_SAAS_Plugin {
     add_action( 'admin_post_acdc_convert_quote_to_invoice', array( $this, 'handle_convert_quote_to_invoice' ) );
     add_action( 'admin_post_acdc_send_quote_for_signature', array( $this, 'handle_send_quote_for_signature' ) );
     add_action( 'acdc_sig_request_signed', array( $this, 'handle_quote_signed' ), 20, 2 );
+    /* ACDC 3.25.231 — Rattrapage manuel : créer la convention depuis un devis
+       déjà signé, quand l'automatisme n'a pas eu lieu. */
+    add_action( 'admin_post_acdc_create_contract_from_quote', array( $this, 'handle_create_contract_from_quote' ) );
     // ACDC 3.25.135 — Preuve d'horodatage scellé enregistrée après signature (non intrusif).
     add_action( 'acdc_sig_request_signed', array( $this, 'handle_sig_timestamp_proof' ), 30, 2 );
     add_action( 'admin_post_acdc_save_invoice',             array( $this, 'handle_save_invoice' ) );

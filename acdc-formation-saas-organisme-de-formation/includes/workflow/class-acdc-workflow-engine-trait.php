@@ -917,7 +917,32 @@ trait ACDC_Workflow_Engine_Trait {
     }
 
     $contract = null;
-    if ( $prospect_id > 0 ) {
+
+    /* ACDC 3.25.231 — LE PARCOURS RÉCLAMAIT UN DEVIS DÉJÀ SIGNÉ.
+       Un parcours ouvert par une convention signée porte l'identifiant de cette
+       convention. Ce résolveur ne le lisait jamais : il cherchait la convention
+       par le prospect, ou par le couple entreprise + formation d'un devis. Sur
+       une convention créée à la main, sans prospect source, il ne trouvait donc
+       RIEN — le dossier passait pour non engagé, et le moteur planifiait « créer
+       le devis » et « relancer la signature de la convention » sur un dossier
+       dont le devis et la convention étaient signés depuis une demi-heure.
+       C'est le défaut le plus grave de cette campagne : un utilisateur qui croit
+       cet écran relance un client qui a déjà signé.
+       L'ancre propre du parcours passe donc en premier. Les recherches par
+       déduction ne servent plus qu'à défaut. */
+    if ( ! empty( $run->contract_id ) ) {
+      $contract = $wpdb->get_row( $wpdb->prepare(
+        "SELECT * FROM {$this->registration_contract_table} WHERE id = %d",
+        (int) $run->contract_id
+      ) );
+    }
+    if ( ! $contract && ! empty( $need->dossier_id ) ) {
+      $contract = $wpdb->get_row( $wpdb->prepare(
+        "SELECT * FROM {$this->registration_contract_table} WHERE id = %d",
+        (int) $need->dossier_id
+      ) );
+    }
+    if ( ! $contract && $prospect_id > 0 ) {
       $contract = $wpdb->get_row( $wpdb->prepare(
         "SELECT * FROM {$this->registration_contract_table} WHERE source_prospect_id = %d ORDER BY id DESC LIMIT 1",
         $prospect_id
