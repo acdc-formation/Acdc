@@ -296,8 +296,64 @@ trait ACDC_Workflow_Render_Trait {
         LIMIT 200"
     );
 
+    /* ACDC 3.25.226 — « RIEN À FAIRE » PENDANT QUE DIX ÉTAPES SONT EN RETARD.
+       La recette a buté sur une contradiction interne : l'onglet Suivi affichait
+       « en retard » sur un parcours dont dix étapes étaient échues, et cette
+       file répondait « Rien à faire pour l'instant. » Les deux disaient vrai
+       dans leur périmètre — cette file ne liste que les étapes CONFIÉES À
+       L'HUMAIN — mais l'écran, lui, mentait : ce qui bloquait, ce sont les
+       étapes AUTOMATIQUES que le cron n'avait pas encore jouées.
+       Une file d'attente qui ne montre pas ce qui est en retard n'est pas une
+       file d'attente. On les montre, on dit qui doit les jouer, et on donne le
+       moyen de les jouer tout de suite. */
+    $overdue = $wpdb->get_results( $wpdb->prepare(
+      "SELECT s.*, r.label AS run_label, r.need_id, p.company_name AS prospect_company
+         FROM {$this->workflow_step_table} s
+         INNER JOIN {$this->workflow_run_table} r ON r.id = s.run_id
+         LEFT JOIN {$this->prospect_table} p ON p.id = r.prospect_id
+        WHERE s.mode = 'auto' AND s.status = 'pending' AND r.status = 'active'
+          AND s.scheduled_at IS NOT NULL AND s.scheduled_at <= %s
+        ORDER BY s.scheduled_at ASC
+        LIMIT 200",
+      $this->acdc_wf_mysql( $this->acdc_wf_now() )
+    ) );
+
+    if ( ! empty( $overdue ) ) {
+      ?>
+      <div class="acdc-alert acdc-alert-warning">
+        <strong><?php echo (int) count( $overdue ); ?> étape(s) automatique(s) sont échues et n'ont pas encore été jouées.</strong>
+        Elles ne demandent aucune action de votre part : c'est le moteur qui les exécute, à sa cadence — un quart d'heure au plus.
+        Si elles ne bougent pas d'une passe à l'autre, le cron du site ne tourne pas ; lancez-en une à la main pour le vérifier.
+        <form method="post" action="<?php echo esc_url( admin_url( 'admin-post.php' ) ); ?>" style="margin-top:10px">
+          <?php wp_nonce_field( 'acdc_wf_run_now' ); ?>
+          <input type="hidden" name="action" value="acdc_wf_run_now">
+          <button type="submit" class="acdc-button acdc-button-primary">Lancer une passe maintenant</button>
+        </form>
+      </div>
+      <div class="acdc-panel acdc-mb-18">
+        <h3 style="margin:0 0 10px;">Étapes automatiques en retard</h3>
+        <table class="acdc-table">
+          <thead><tr><th>Étape</th><th>Dossier</th><th>Prévue le</th></tr></thead>
+          <tbody>
+          <?php foreach ( $overdue as $step ) : ?>
+            <tr>
+              <td><strong><?php echo esc_html( $step->label ); ?></strong>
+                <?php if ( '' !== (string) $step->target_label ) : ?><br><span class="description"><?php echo esc_html( $step->target_label ); ?></span><?php endif; ?>
+              </td>
+              <td><?php echo esc_html( $this->acdc_wf_run_display_label( $step ) ); ?></td>
+              <td><?php echo esc_html( wp_date( 'd/m/Y H:i', $this->acdc_wf_ts( $step->scheduled_at ) ) ); ?><br><span style="color:#b32d2e">en retard</span></td>
+            </tr>
+          <?php endforeach; ?>
+          </tbody>
+        </table>
+      </div>
+      <?php
+    }
+
     if ( empty( $tasks ) ) {
-      echo '<div class="acdc-panel"><p>Rien à faire pour l\'instant.</p></div>';
+      echo '<div class="acdc-panel"><p>' . ( empty( $overdue )
+        ? 'Rien à faire pour l\'instant.'
+        : 'Aucune tâche ne vous est confiée : les étapes ci-dessus sont automatiques.' ) . '</p></div>';
       return;
     }
     ?>

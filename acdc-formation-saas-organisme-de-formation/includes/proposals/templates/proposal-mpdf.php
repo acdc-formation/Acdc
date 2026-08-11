@@ -51,7 +51,15 @@ $fl   = '<p style="font-size:8pt;color:#113860;font-weight:bold;text-transform:u
 /* ---- Données ---- */
 $logo_url   = $acdc['logo_url'] ?? '';
 $client_co  = htmlspecialchars( $p->client_company, ENT_QUOTES, 'UTF-8' );
-$form_title_esc = htmlspecialchars( $p->formation_title ?: 'Formation professionnelle', ENT_QUOTES, 'UTF-8' );
+/* ACDC 3.25.226 — Même correction que sur le rendu HTML : la référence de
+   formation accompagne le titre, du premier document au dernier. */
+$form_title_esc = htmlspecialchars(
+  method_exists( $this, 'acdc_formation_labelled' )
+    ? $this->acdc_formation_labelled( (int) ( $p->formation_id ?? 0 ), $p->formation_title ?: 'Formation professionnelle' )
+    : ( $p->formation_title ?: 'Formation professionnelle' ),
+  ENT_QUOTES,
+  'UTF-8'
+);
 $prog_days  = max( 1, min( 10, (int) $p->formation_days ) );
 
 /* Images thématique */

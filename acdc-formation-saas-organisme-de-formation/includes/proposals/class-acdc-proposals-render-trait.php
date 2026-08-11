@@ -649,7 +649,13 @@ trait Acdc_Proposals_Render_Trait {
    * --------------------------------------------------------------- */
   private function proposal_pdf_page_cover_v2( $proposal, $formation ) {
     $w = 595; $h = 842;
-    $title    = $proposal->formation_title ?: 'Formation professionnelle';
+    /* ACDC 3.25.226 — La référence de formation manquait sur la proposition.
+       Elle avait été posée sur la convention, le programme et le catalogue ;
+       la proposition commerciale — le tout premier document que reçoit le
+       prospect — était restée de côté. Une référence sert précisément à ce
+       que le client et l'organisme parlent du même produit d'un bout à
+       l'autre du dossier ; l'omettre au départ, c'est la perdre partout. */
+    $title    = $this->acdc_formation_labelled( (int) ( $proposal->formation_id ?? 0 ), $proposal->formation_title ?: 'Formation professionnelle' );
     $client   = $proposal->client_name ?: '';
     $ctitle   = $proposal->client_title ?: '';
     $company  = $proposal->client_company ?: '';
@@ -1210,7 +1216,13 @@ startxref
   /* ---- Pages PDF ---- */
 
   private function proposal_pdf_page_cover( $proposal ) {
-    $title    = $proposal->formation_title ?: 'Formation professionnelle';
+    /* ACDC 3.25.226 — La référence de formation manquait sur la proposition.
+       Elle avait été posée sur la convention, le programme et le catalogue ;
+       la proposition commerciale — le tout premier document que reçoit le
+       prospect — était restée de côté. Une référence sert précisément à ce
+       que le client et l'organisme parlent du même produit d'un bout à
+       l'autre du dossier ; l'omettre au départ, c'est la perdre partout. */
+    $title    = $this->acdc_formation_labelled( (int) ( $proposal->formation_id ?? 0 ), $proposal->formation_title ?: 'Formation professionnelle' );
     $client   = $proposal->client_name ?: '';
     $ctitle   = $proposal->client_title ?: '';
     $company  = $proposal->client_company ?: '';

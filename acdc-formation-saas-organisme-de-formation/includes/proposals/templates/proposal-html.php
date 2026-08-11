@@ -119,7 +119,16 @@ $logo_block = function( $url, $size = '99px' ) {
 $logo_placeholder = '<div style="width:99px;height:99px;display:flex;align-items:center;justify-content:center;flex-shrink:0;">'
   . $logo_block( $logo_url ) . '</div>';
 
-$formation_title_esc = esc_html( $p->formation_title ?: 'Formation professionnelle' );
+/* ACDC 3.25.226 — La référence de formation manquait sur la proposition
+   commerciale, le premier document que reçoit le prospect. Elle figurait
+   déjà sur la convention, le programme et le catalogue : c'est précisément
+   une référence qui permet de suivre le même produit d'un document à
+   l'autre. */
+$formation_title_esc = esc_html(
+  method_exists( $this, 'acdc_formation_labelled' )
+    ? $this->acdc_formation_labelled( (int) ( $p->formation_id ?? 0 ), $p->formation_title ?: 'Formation professionnelle' )
+    : ( $p->formation_title ?: 'Formation professionnelle' )
+);
 $fl_footer = '<div class="fl">Notre proposition — ' . $formation_title_esc . '</div>';
 
 $pied_page = function( $n ) {

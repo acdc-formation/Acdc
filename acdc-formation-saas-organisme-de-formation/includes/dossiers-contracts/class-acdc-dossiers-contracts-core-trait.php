@@ -2401,7 +2401,7 @@ private function build_contract_pdf_pages( $context ) {
   $add_box( $page2, $cursor, "Article 2 - Nature et caractéristiques de l'action de formation", array( $article2_objectifs, $article2_programme, $article2_modalites ) );
   $add_box( $page2, $cursor, 'Article 3 - Engagement de participation', array( $article3 ) );
   $add_box( $page2, $cursor, 'Article 4 - Effectif formé', array( "Nombre d'apprenants : " . $apprenants_count, 'Apprenant(s) : ' . $apprenants_list ), array( 'min_height' => 64 ) );
-  $add_box( $page2, $cursor, 'Article 5 - Dispositions financières', array( $article5_intro, 'Frais pédagogiques : ' . $price_ht . ' €', 'Taux de TVA : ' . $vat_rate, 'Prix total TTC : ' . $price_ttc . ' €', 'TOTAL GÉNÉRAL : ' . $total_general . ' €', $article5_tail ) );
+  $add_box( $page2, $cursor, 'Article 5 - Dispositions financières', array( $article5_intro, 'Frais pédagogiques : ' . $price_ht . ' €', 'Taux de TVA : ' . $vat_rate . ' %', 'Prix total TTC : ' . $price_ttc . ' €', 'TOTAL GÉNÉRAL : ' . $total_general . ' €', $article5_tail ) );
   $add_footer( $page2 );
   $pages[] = $page2;
 

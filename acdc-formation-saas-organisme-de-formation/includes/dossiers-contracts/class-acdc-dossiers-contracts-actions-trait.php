@@ -1345,6 +1345,17 @@ public function handle_update_registration_contract_document() {
       return;
     }
 
+    /* ACDC 3.25.226 — Une convention signée arme le moteur.
+       La recette a produit un dossier complet — devis signé, convention signée,
+       trois inscriptions, quatre séances — sans qu'aucun parcours ne soit
+       ouvert, donc sans convocation, sans enquête et sans document de fin : le
+       moteur n'a d'autre déclencheur que le recueil des besoins, par lequel ce
+       dossier n'était pas passé. Or la convention engage l'organisme bien plus
+       qu'un recueil. */
+    if ( method_exists( $this, 'acdc_wf_open_run_for_contract' ) ) {
+      $this->acdc_wf_open_run_for_contract( (int) $contract->id );
+    }
+
     // Trouver le PNG de signature manuscrite dans le dossier de la demande
     $upload_dir    = wp_upload_dir();
     $sig_dir       = trailingslashit( $upload_dir['basedir'] ) . 'acdc-signatures/' . $request_id . '/';
@@ -1485,10 +1496,26 @@ public function handle_update_registration_contract_document() {
       } else {
         $doc_phrase = 'du ' . $kind_lc . ' signé';
       }
+      /* ACDC 3.25.226 — « Bonjour, » tout court sur le seul e-mail qui remet un
+         document contractuel, alors que tous les autres nomment leur
+         destinataire. On reprend le nom du signataire, avec la raison sociale
+         quand elle existe : c'est la pièce que l'on archive, elle doit dire à
+         qui elle a été adressée. */
+      $signer_greeting = '';
+      if ( ! empty( $contract->company_id ) && method_exists( $this, 'get_company' ) ) {
+        $signer_company = $this->get_company( (int) $contract->company_id );
+        if ( $signer_company && ! empty( $signer_company->name ) ) {
+          $signer_greeting = (string) $signer_company->name;
+        }
+      }
+      if ( '' === $signer_greeting && ! empty( $request->signer_name ) ) {
+        $signer_greeting = (string) $request->signer_name;
+      }
+
       $signer_subject = '📄 Votre exemplaire — ' . esc_html( $kind ) . ' ' . esc_html( $kind_signed );
       $signer_body    = '<div style="font-family:Arial,sans-serif;color:#24324a;max-width:600px;margin:0 auto;">'
                       . '<h2 style="color:#1f335d;">Votre exemplaire signé</h2>'
-                      . '<p>Bonjour,</p>'
+                      . '<p>Bonjour' . ( '' !== $signer_greeting ? ' ' . esc_html( $signer_greeting ) : '' ) . ',</p>'
                       . '<p>Veuillez trouver en pièce jointe votre exemplaire ' . esc_html( $doc_phrase ) . ' le <strong>' . esc_html( $signed_at ) . '</strong>.</p>'
                       . '<p>Conservez ce document pour vos archives.</p>'
                       . '</div>';

@@ -1305,24 +1305,52 @@ trait ACDC_Documents_Billing_Actions_Trait {
       $title .= ' — ' . (string) $quote->formation_title;
     }
 
+    /* ACDC 3.25.226 — Trois manques relevés en recette sur cette reprise.
+       1. La formation n'était pas sélectionnée quand le devis ne portait que
+          son TITRE : on la retrouve par le titre avant de renoncer.
+       2. Le commanditaire n'était pas nommé : la convention affichait
+          « Entreprise — » sans raison sociale. On reporte le libellé, et l'on
+          rattache l'entreprise par son nom quand l'identifiant manque.
+       3. Les frais annexes sortaient ACTIVÉS À ZÉRO EURO. Une case cochée sans
+          montant n'est pas un frais, c'est une case cochée : on n'active que
+          ce qui porte une somme. */
+    $formation_id = ! empty( $quote->formation_id ) ? (int) $quote->formation_id : 0;
+    if ( $formation_id <= 0 && ! empty( $quote->formation_title ) ) {
+      $formation_id = (int) $wpdb->get_var( $wpdb->prepare(
+        "SELECT id FROM {$this->formation_table} WHERE title = %s ORDER BY id DESC LIMIT 1",
+        (string) $quote->formation_title
+      ) );
+    }
+
+    $company_id = ! empty( $quote->company_id ) ? (int) $quote->company_id : 0;
+    if ( $company_id <= 0 && ! empty( $quote->client_company ) ) {
+      $company_id = (int) $wpdb->get_var( $wpdb->prepare(
+        "SELECT id FROM {$this->company_table} WHERE name = %s ORDER BY id DESC LIMIT 1",
+        (string) $quote->client_company
+      ) );
+    }
+
+    $transport_amount = (float) str_replace( ',', '.', $this->normalize_price_number( $quote->transport_fees_ht ?? 0, 2 ) );
+    $meal_amount      = (float) str_replace( ',', '.', $this->normalize_price_number( $quote->meal_fees_ht ?? 0, 2 ) );
+
     $now  = current_time( 'mysql' );
     $data = array(
       'title'              => sanitize_text_field( $title ),
       'generate_mode'      => 'devis_signe',
       'commanditaire_type' => ! empty( $quote->client_company ) ? 'Entreprise' : sanitize_text_field( (string) ( $quote->commanditaire_type ?? 'Particulier' ) ),
       'source_prospect_id' => ! empty( $quote->source_prospect_id ) ? (int) $quote->source_prospect_id : null,
-      'company_id'         => ! empty( $quote->company_id ) ? (int) $quote->company_id : null,
-      'formation_id'       => ! empty( $quote->formation_id ) ? (int) $quote->formation_id : null,
+      'company_id'         => $company_id > 0 ? $company_id : null,
+      'formation_id'       => $formation_id > 0 ? $formation_id : null,
       'formation_title'    => sanitize_text_field( (string) ( $quote->formation_title ?? '' ) ),
       'start_date'         => ! empty( $quote->start_date ) ? substr( (string) $quote->start_date, 0, 10 ) : null,
       'end_date'           => ! empty( $quote->end_date ) ? substr( (string) $quote->end_date, 0, 10 ) : null,
       'price_ht'           => (string) ( $quote->tarif_ht ?? '' ),
       'vat_rate'           => (string) ( $quote->vat_rate ?? '' ),
       'objectives_text'    => (string) ( $quote->objectives ?? '' ),
-      'transport_fees_enabled'   => ! empty( $quote->transport_fees_enabled ) ? 1 : 0,
-      'transport_fees_amount_ht' => (string) ( $quote->transport_fees_ht ?? '' ),
-      'meal_fees_enabled'        => ! empty( $quote->meal_fees_enabled ) ? 1 : 0,
-      'meal_fees_amount_ht'      => (string) ( $quote->meal_fees_ht ?? '' ),
+      'transport_fees_enabled'   => ( ! empty( $quote->transport_fees_enabled ) && $transport_amount > 0 ) ? 1 : 0,
+      'transport_fees_amount_ht' => $transport_amount > 0 ? (string) $transport_amount : '',
+      'meal_fees_enabled'        => ( ! empty( $quote->meal_fees_enabled ) && $meal_amount > 0 ) ? 1 : 0,
+      'meal_fees_amount_ht'      => $meal_amount > 0 ? (string) $meal_amount : '',
       'payment_terms'      => (string) ( $quote->payment_methods ?? '' ),
       'signature_status'   => '',
       'created_at'         => $now,

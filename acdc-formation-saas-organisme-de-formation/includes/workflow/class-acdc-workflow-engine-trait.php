@@ -92,6 +92,91 @@ trait ACDC_Workflow_Engine_Trait {
   }
 
   /**
+   * ACDC 3.25.226 — UN DOSSIER COMPLET SANS AUCUN PARCOURS.
+   *
+   * La recette a produit le cas limite qu'aucun de nous n'avait vu : prospect,
+   * proposition, devis signé, convention signée, trois inscriptions, quatre
+   * séances — et pas un parcours ouvert, donc pas une convocation, pas une
+   * enquête, pas un document de fin. Le moteur n'avait rien manqué : il n'avait
+   * jamais été armé, parce que son unique déclencheur est le recueil des
+   * besoins, et que ce parcours-là n'est pas passé par le recueil.
+   *
+   * Le choix de David reste intact — un prospect n'engage rien, un recueil oui.
+   * Mais une CONVENTION SIGNÉE engage bien davantage qu'un recueil : c'est le
+   * document par lequel l'organisme s'oblige. Qu'elle n'arme pas le moteur est
+   * une faute de conception, pas une règle.
+   *
+   * On ouvre donc aussi sur convention signée, sans recueil, et seulement si
+   * aucun parcours ne couvre déjà ce dossier — la réconciliation fait le reste.
+   *
+   * @param int $contract_id Convention signée.
+   * @return int Identifiant du parcours, 0 si aucun.
+   */
+  public function acdc_wf_open_run_for_contract( $contract_id ) {
+    global $wpdb;
+
+    if ( ! $this->acdc_wf_is_enabled() ) {
+      return 0;
+    }
+
+    $contract_id = (int) $contract_id;
+    if ( $contract_id <= 0 ) {
+      return 0;
+    }
+
+    $contract = $wpdb->get_row( $wpdb->prepare(
+      "SELECT * FROM {$this->registration_contract_table} WHERE id = %d",
+      $contract_id
+    ) );
+    if ( ! $contract ) {
+      return 0;
+    }
+
+    /* Déjà couvert ? Deux lectures : un parcours pointant sur cette convention,
+       ou un parcours du même prospect. Ouvrir un second parcours sur un dossier
+       déjà piloté doublerait tous les envois. */
+    $existing = $wpdb->get_var( $wpdb->prepare(
+      "SELECT id FROM {$this->workflow_run_table}
+        WHERE status = 'active' AND ( contract_id = %d OR ( prospect_id > 0 AND prospect_id = %d ) )
+        LIMIT 1",
+      $contract_id,
+      (int) $contract->source_prospect_id
+    ) );
+    if ( $existing ) {
+      return (int) $existing;
+    }
+
+    $label = trim( (string) ( $contract->title ?? '' ) );
+    if ( '' === $label ) {
+      $label = 'Convention n°' . $contract_id;
+    }
+
+    $now = $this->acdc_wf_mysql( $this->acdc_wf_now() );
+    $wpdb->insert( $this->workflow_run_table, array(
+      'need_id'      => null,
+      'prospect_id'  => (int) $contract->source_prospect_id,
+      'company_id'   => (int) $contract->company_id,
+      'contract_id'  => $contract_id,
+      'formation_id' => (int) $contract->formation_id,
+      'label'        => $label,
+      'phase'        => 'preparation',
+      'status'       => 'active',
+      'started_at'   => $now,
+      'updated_at'   => $now,
+    ) );
+
+    $run_id = (int) $wpdb->insert_id;
+    if ( $run_id > 0 ) {
+      $row = $wpdb->get_row( $wpdb->prepare( "SELECT * FROM {$this->workflow_run_table} WHERE id = %d", $run_id ) );
+      if ( $row ) {
+        $this->acdc_wf_reconcile_run( $row );
+      }
+    }
+
+    return $run_id;
+  }
+
+  /**
    * Ouverture immédiate à l'enregistrement d'un recueil, sans attendre le cron :
    * David crée le recueil et voit le parcours dans la foulée.
    */
@@ -165,13 +250,32 @@ trait ACDC_Workflow_Engine_Trait {
     $run_id = (int) $run->id;
     $now    = $this->acdc_wf_now();
 
-    $need = $wpdb->get_row( $wpdb->prepare(
+    $need = ! empty( $run->need_id ) ? $wpdb->get_row( $wpdb->prepare(
       "SELECT * FROM {$this->need_table} WHERE id = %d",
       (int) $run->need_id
-    ) );
+    ) ) : null;
+
     if ( ! $need ) {
-      $this->acdc_wf_close_run( $run_id, 'cancelled', 'Recueil des besoins supprimé.' );
-      return;
+      /* ACDC 3.25.226 — Un parcours peut naître d'une CONVENTION SIGNÉE, sans
+         recueil des besoins. Fermer un tel parcours au motif que « le recueil a
+         été supprimé » reviendrait à annuler, à la première réconciliation, le
+         seul dossier qui avait de quoi s'armer. On ne ferme donc que si le
+         parcours n'a plus AUCUNE ancre : ni recueil, ni convention. */
+      if ( empty( $run->contract_id ) ) {
+        $this->acdc_wf_close_run( $run_id, 'cancelled', 'Recueil des besoins supprimé.' );
+        return;
+      }
+      /* Un objet minimal, pour que la résolution des pièces trouve les mêmes
+         clés qu'avec un recueil. Ce qu'il ne sait pas, il le laisse vide — il
+         ne l'invente pas. */
+      $need = (object) array(
+        'id'                 => 0,
+        'source_prospect_id' => (int) $run->prospect_id,
+        'company_id'         => (int) $run->company_id,
+        'formation_id'       => (int) $run->formation_id,
+        'dossier_id'         => (int) $run->contract_id,
+        'theme'              => (string) $run->label,
+      );
     }
 
     $this->acdc_wf_touched_keys = array();
@@ -657,6 +761,18 @@ trait ACDC_Workflow_Engine_Trait {
       if ( ! empty( $spec['offset_days'] ) ) {
         $send_ts = $this->acdc_wf_add_days( $send_ts, (int) $spec['offset_days'] );
       }
+      /* ACDC 3.25.226 — LE PREMIER ENVOI D'ENQUÊTE N'ÉTAIT PAS REPORTÉ.
+         Les RELANCES passaient bien par le report au jour ouvré, corrigé en
+         3.25.207 après qu'une relance fut partie un samedi. L'ENVOI INITIAL,
+         lui, ne l'a jamais été : il se pose à la fin de formation plus le
+         décalage, et rien de plus. Une formation qui se termine le vendredi à
+         17 h avec un décalage de 24 heures place donc l'enquête le SAMEDI —
+         c'est exactement ce que la recette a relevé, trois envois le
+         08/08/2026, entreprise, financeur et formateur.
+         J'avais corrigé la moitié du chemin en croyant l'avoir corrigé en
+         entier : la règle de David — « on décale au jour ouvré suivant » — ne
+         distingue pas un premier envoi d'une relance. */
+      $send_ts = $this->acdc_wf_shift_to_business_day( $send_ts );
       $this->acdc_wf_upsert_step( $run_id, $step_key, array(
         'scheduled_at' => $send_ts,
         'target_type'  => $target[0],

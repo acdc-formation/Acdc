@@ -8972,6 +8972,65 @@ private function maybe_auto_create_questionnaire_actions_from_response( $session
     return $wpdb->get_results( "SELECT s.*, f.title AS formation_title, f.funder_survey_enabled FROM {$this->session_table} s LEFT JOIN {$this->formation_table} f ON f.id = s.formation_id WHERE s.is_draft = 0 AND COALESCE(f.funder_survey_enabled,0) = 1 AND ( s.end_at IS NOT NULL OR s.end_date IS NOT NULL OR s.start_at IS NOT NULL OR s.start_date IS NOT NULL ) AND COALESCE(s.status,'') NOT IN ('Annulée','Annulee','Brouillon') ORDER BY COALESCE(s.end_at, CONCAT(s.end_date,' 17:00:00'), s.start_at, CONCAT(s.start_date,' 17:00:00')) ASC, s.id ASC" );
   }
 
+  /**
+   * ACDC 3.25.226 — UNE ENQUÊTE PAR ACTION DE FORMATION, PAS PAR DEMI-JOURNÉE.
+   *
+   * La recette a reçu DEUX « Enquête formateur » pour un même dossier, dès la
+   * création des séances. La cause n'est pas un double envoi : c'est la
+   * granularité. La déduplication se fait par SÉANCE, et une formation de deux
+   * journées découpées en matin/après-midi compte quatre séances — donc quatre
+   * enquêtes au même formateur, sur la même action, à quelques jours
+   * d'intervalle.
+   *
+   * Or ces trois enquêtes-là — formateur, entreprise, financeur — portent sur
+   * l'ACTION DE FORMATION, pas sur une demi-journée : personne n'évalue quatre
+   * fois la même formation. On ne garde donc qu'une séance par formation, la
+   * dernière, et l'on vérifie qu'aucune enquête n'existe déjà pour l'une
+   * quelconque des séances de cette formation.
+   *
+   * Les enquêtes à chaud et à froid, elles, restent par séance : ce sont les
+   * apprenants qui les remplissent, et le découpage leur est propre.
+   *
+   * @param object[] $sessions Séances candidates, ordonnées par fin croissante.
+   * @return object[] Une séance par formation — la dernière.
+   */
+  private function acdc_survey_one_session_per_formation( $sessions ) {
+    $kept = array();
+    foreach ( (array) $sessions as $session ) {
+      if ( empty( $session->id ) ) {
+        continue;
+      }
+      /* Une séance sans formation reste traitée pour elle-même : on ne peut pas
+         la regrouper avec quoi que ce soit. */
+      $key = ! empty( $session->formation_id ) ? 'f' . (int) $session->formation_id : 's' . (int) $session->id;
+      $kept[ $key ] = $session; // La liste est ordonnée par fin croissante : la dernière écrase.
+    }
+    return array_values( $kept );
+  }
+
+  /** Une enquête existe-t-elle déjà pour UNE QUELCONQUE séance de cette formation ? */
+  private function acdc_survey_exists_for_formation( $source_type, $survey_id, $training_session ) {
+    global $wpdb;
+
+    if ( empty( $this->questionnaire_session_table ) ) {
+      return false;
+    }
+    if ( empty( $training_session->formation_id ) ) {
+      return false;
+    }
+
+    return ! empty( $wpdb->get_var( $wpdb->prepare(
+      "SELECT q.id
+         FROM {$this->questionnaire_session_table} q
+         INNER JOIN {$this->session_table} s ON s.id = q.seance_id
+        WHERE q.source_type = %s AND q.source_id = %d AND s.formation_id = %d
+        LIMIT 1",
+      (string) $source_type,
+      absint( $survey_id ),
+      (int) $training_session->formation_id
+    ) ) );
+  }
+
   private function has_existing_trainer_survey_automated_session( $survey_id, $training_session_id ) {
     global $wpdb;
     if ( empty( $this->questionnaire_session_table ) ) { return false; }
@@ -9221,7 +9280,7 @@ private function maybe_auto_create_questionnaire_actions_from_response( $session
 
   public function ensure_trainer_survey_automation_sessions() {
     $models = method_exists( $this, 'get_trainer_surveys' ) ? $this->get_trainer_surveys( '', true ) : array();
-    $training_sessions = $this->get_trainer_survey_automation_candidate_sessions();
+    $training_sessions = $this->acdc_survey_one_session_per_formation( $this->get_trainer_survey_automation_candidate_sessions() );
     if ( empty( $models ) || empty( $training_sessions ) ) { return 0; }
     $created = 0;
     foreach ( (array) $models as $model ) {
@@ -9233,6 +9292,7 @@ private function maybe_auto_create_questionnaire_actions_from_response( $session
       if ( isset( $survey_settings['is_active'] ) && '0' === (string) $survey_settings['is_active'] ) { continue; }
       foreach ( (array) $training_sessions as $ts ) {
         if ( empty( $ts->id ) || $this->has_existing_trainer_survey_automated_session( (int) $survey->id, (int) $ts->id ) ) { continue; }
+        if ( $this->acdc_survey_exists_for_formation( 'trainer_survey', (int) $survey->id, $ts ) ) { continue; }
         $scheduled_at = $this->compute_trainer_survey_automation_trigger_at( $ts, $survey_settings );
         if ( empty( $scheduled_at ) ) { continue; }
         $created += $this->create_generic_survey_automated_session( 'trainer_survey', $survey, $ts, $survey_settings, $scheduled_at ) > 0 ? 1 : 0;
@@ -9243,7 +9303,7 @@ private function maybe_auto_create_questionnaire_actions_from_response( $session
 
   public function ensure_company_survey_automation_sessions() {
     $models = method_exists( $this, 'get_company_surveys' ) ? $this->get_company_surveys( '', true ) : array();
-    $training_sessions = $this->get_company_survey_automation_candidate_sessions();
+    $training_sessions = $this->acdc_survey_one_session_per_formation( $this->get_company_survey_automation_candidate_sessions() );
     if ( empty( $models ) || empty( $training_sessions ) ) { return 0; }
     $created = 0;
     foreach ( (array) $models as $model ) {
@@ -9255,6 +9315,7 @@ private function maybe_auto_create_questionnaire_actions_from_response( $session
       if ( isset( $survey_settings['is_active'] ) && '0' === (string) $survey_settings['is_active'] ) { continue; }
       foreach ( (array) $training_sessions as $ts ) {
         if ( empty( $ts->id ) || $this->has_existing_company_survey_automated_session( (int) $survey->id, (int) $ts->id ) ) { continue; }
+        if ( $this->acdc_survey_exists_for_formation( 'company_survey', (int) $survey->id, $ts ) ) { continue; }
         $scheduled_at = $this->compute_company_survey_automation_trigger_at( $ts, $survey_settings );
         if ( empty( $scheduled_at ) ) { continue; }
         $created += $this->create_generic_survey_automated_session( 'company_survey', $survey, $ts, $survey_settings, $scheduled_at ) > 0 ? 1 : 0;
@@ -9265,7 +9326,7 @@ private function maybe_auto_create_questionnaire_actions_from_response( $session
 
   public function ensure_funder_survey_automation_sessions() {
     $models = method_exists( $this, 'get_funder_surveys' ) ? $this->get_funder_surveys( '', true ) : array();
-    $training_sessions = $this->get_funder_survey_automation_candidate_sessions();
+    $training_sessions = $this->acdc_survey_one_session_per_formation( $this->get_funder_survey_automation_candidate_sessions() );
     if ( empty( $models ) || empty( $training_sessions ) ) { return 0; }
     $created = 0;
     foreach ( (array) $models as $model ) {
@@ -9277,6 +9338,7 @@ private function maybe_auto_create_questionnaire_actions_from_response( $session
       if ( isset( $survey_settings['is_active'] ) && '0' === (string) $survey_settings['is_active'] ) { continue; }
       foreach ( (array) $training_sessions as $ts ) {
         if ( empty( $ts->id ) || $this->has_existing_funder_survey_automated_session( (int) $survey->id, (int) $ts->id ) ) { continue; }
+        if ( $this->acdc_survey_exists_for_formation( 'funder_survey', (int) $survey->id, $ts ) ) { continue; }
         $scheduled_at = $this->compute_hot_survey_automation_trigger_at( $ts, $survey_settings );
         if ( empty( $scheduled_at ) ) { continue; }
         $created += $this->create_generic_survey_automated_session( 'funder_survey', $survey, $ts, $survey_settings, $scheduled_at ) > 0 ? 1 : 0;

@@ -174,6 +174,61 @@ trait ACDC_Workflow_Actions_Trait {
   }
 
   /**
+   * ACDC 3.25.226 — Lancer une passe du moteur à la main.
+   *
+   * Le moteur est un cron au quart d'heure. Quand rien ne bouge — et la recette
+   * l'a vécu : dix étapes échues, un journal vide, aucun envoi — l'organisme
+   * n'avait AUCUN moyen de savoir si le plan était bloqué ou si le cron du site
+   * ne tournait pas. Or ce sont deux pannes très différentes : l'une se corrige
+   * dans le plugin, l'autre chez l'hébergeur.
+   *
+   * Ce bouton lève le doute en une seconde. Il ne force rien : il exécute
+   * exactement la passe que le cron aurait faite, avec les mêmes gardes — mode
+   * recette compris. Si les étapes partent, le plan allait bien et c'est la
+   * planification système qu'il faut regarder.
+   */
+  public function acdc_wf_handle_run_now() {
+    if ( ! current_user_can( 'manage_options' ) ) {
+      wp_die( 'Action non autorisée.' );
+    }
+    check_admin_referer( 'acdc_wf_run_now' );
+
+    if ( ! $this->acdc_wf_is_enabled() ) {
+      $this->redirect_to_portal( 'workflow', 'Le moteur est en pause : rien n’a été joué. Réactivez-le dans la configuration.', 'error', array( 'view' => 'tasks' ) );
+    }
+
+    global $wpdb;
+    $before = (int) $wpdb->get_var(
+      "SELECT COUNT(*) FROM {$this->workflow_step_table} s
+         INNER JOIN {$this->workflow_run_table} r ON r.id = s.run_id
+        WHERE s.status = 'pending' AND s.mode = 'auto' AND r.status = 'active'"
+    );
+
+    $this->acdc_wf_cron();
+
+    $after = (int) $wpdb->get_var(
+      "SELECT COUNT(*) FROM {$this->workflow_step_table} s
+         INNER JOIN {$this->workflow_run_table} r ON r.id = s.run_id
+        WHERE s.status = 'pending' AND s.mode = 'auto' AND r.status = 'active'"
+    );
+
+    $played = max( 0, $before - $after );
+
+    if ( $played > 0 ) {
+      $message = sprintf(
+        '%d étape(s) jouée(s). Le plan n’était donc pas bloqué : si elles étaient en retard, c’est la planification système (WP-Cron) qu’il faut regarder.',
+        $played
+      );
+      $type = 'success';
+    } else {
+      $message = 'Passe exécutée, aucune étape jouée. Soit rien n’est échu, soit les étapes en attente dépendent d’un préalable — ouvrez le détail du parcours pour voir laquelle et pourquoi.';
+      $type = 'info';
+    }
+
+    $this->redirect_to_portal( 'workflow', $message, $type, array( 'view' => 'tasks' ) );
+  }
+
+  /**
    * « Sans objet » sur une tâche : David écarte une étape que le dossier ne
    * justifie pas. On ne supprime pas la ligne, on la classe — le journal doit
    * garder trace d'une décision humaine.

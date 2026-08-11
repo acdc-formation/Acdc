@@ -11095,13 +11095,13 @@ trait ACDC_Kernel_Render_Trait {
       return number_format( (float) $amount, 2, ',', ' ' ) . ' €';
     };
 
+    /* ACDC 3.25.226 — Cette closure était une COPIE du parseur de prix, avec le
+       même défaut : elle supprimait tous les points et lisait « 1800.00 »
+       comme 180 000. Un total de chiffre d'affaires cent fois trop élevé se
+       remarque moins qu'un tarif faux sur une convention, mais se corrige au
+       même endroit. Une seule lecture des montants dans tout le plugin. */
     $parse_eur = function( $value ) {
-      $value = is_scalar( $value ) ? (string) $value : '0';
-      $value = html_entity_decode( wp_strip_all_tags( $value ), ENT_QUOTES, 'UTF-8' );
-      $value = str_replace( array( '€', ' ' ), '', $value );
-      $value = str_replace( '.', '', preg_replace( '/,(?=.*[,])/', '', $value ) );
-      $value = str_replace( ',', '.', $value );
-      return is_numeric( $value ) ? (float) $value : 0.0;
+      return (float) str_replace( ',', '.', $this->normalize_price_number( $value, 2 ) );
     };
 
     if ( 'potential' === $scope ) {

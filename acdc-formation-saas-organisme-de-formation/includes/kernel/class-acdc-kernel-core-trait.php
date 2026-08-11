@@ -6289,6 +6289,38 @@ dbDelta( $sql_companies );
       }
     }
 
+    /* ACDC 3.25.226 — La recette a infirmé le point 3.25.224 : l'objet des
+       relances ne nommait toujours pas l'entreprise. La cause n'était pas dans
+       la composition du message mais dans sa SOURCE : une analyse issue d'un
+       PROSPECT ne porte pas d'`entreprise_id`, seulement un `source_id`. La
+       fonction rendait donc un préfixe vide et repartait, sans que rien ne le
+       signale. On interroge le prospect avant de renoncer. */
+    if ( '' === $company && ! empty( $analysis->source_id ) && 'prospect' === (string) ( $analysis->source_type ?? '' ) ) {
+      global $wpdb;
+      $prospect = $wpdb->get_row( $wpdb->prepare(
+        "SELECT company_name FROM {$this->prospect_table} WHERE id = %d",
+        (int) $analysis->source_id
+      ) );
+      if ( $prospect && ! empty( $prospect->company_name ) ) {
+        $company = trim( (string) $prospect->company_name );
+      }
+    }
+
+    /* Dernier recours : le dossier d'inscription qui a déclenché l'analyse. */
+    if ( '' === $company && ! empty( $analysis->dossier_id ) ) {
+      global $wpdb;
+      $contract = $wpdb->get_row( $wpdb->prepare(
+        "SELECT company_id FROM {$this->registration_contract_table} WHERE id = %d",
+        (int) $analysis->dossier_id
+      ) );
+      if ( $contract && ! empty( $contract->company_id ) ) {
+        $row = $this->get_company( (int) $contract->company_id );
+        if ( $row && ! empty( $row->name ) ) {
+          $company = trim( (string) $row->name );
+        }
+      }
+    }
+
     if ( '' === $company ) {
       return array( '', '' );
     }
@@ -6304,7 +6336,7 @@ dbDelta( $sql_companies );
                  . ' (' . esc_html( $role ) . ')</p>';
     }
 
-    return array( $company . ' — ', $attention );
+    return array( $company . ' — ', $attention, $company );
   }
 
   /** Envoi initial de l'analyse du besoin (appelé par le cron si délai > 0). */
@@ -6319,6 +6351,9 @@ dbDelta( $sql_companies );
       $fake_contract = $wpdb->get_row( $wpdb->prepare( "SELECT * FROM {$this->registration_contract_table} WHERE id = %d", (int) $analysis->dossier_id ) );
     }
     $identity = $this->nad_email_identity( $analysis );
+    if ( $is_cmd && ! empty( $identity[2] ) ) {
+      $prenom = (string) $identity[2];
+    }
     if ( $is_cmd ) {
       $this->nad_send_email_commanditaire( $email, $prenom, (string) ( $analysis->title ?? '' ), $form_url, $fake_contract, $identity );
     } else {
@@ -6354,7 +6389,17 @@ dbDelta( $sql_companies );
       3 => 'Dernier rappel — votre analyse du besoin',
     );
 
-    list( $prefix, $attention ) = $this->nad_email_identity( $analysis );
+    list( $prefix, $attention, $company_name ) = array_pad( $this->nad_email_identity( $analysis ), 3, '' );
+
+    /* ACDC 3.25.226 — « Bonjour Skill, » : la salutation prenait le premier mot
+       d'un libellé d'entreprise traité comme un prénom. Quand le destinataire
+       EST une entreprise, on la salue par sa raison sociale entière ; la
+       personne, elle, est nommée juste en dessous par la mention « à
+       l'attention de ». */
+    $profil_lc = strtolower( (string) ( $analysis->profil ?? '' ) );
+    if ( '' !== $company_name && in_array( $profil_lc, array( 'entreprise', 'independant' ), true ) ) {
+      $prenom = $company_name;
+    }
 
     $branding = $this->acdc_get_transactional_email_branding();
     $this->acdc_send_transactional_email(
@@ -6507,13 +6552,29 @@ dbDelta( $sql_companies );
     $cmd_token  = $this->nad_generate_token();
 
     // ACDC 3.21.13-hotfix4 — signer_email = email exact du signataire (champ direct sur la demande)
-    $cmd_nom     = ''; $cmd_prenom = ''; $cmd_email = '';
+    $cmd_nom     = ''; $cmd_prenom = ''; $cmd_email = ''; $cmd_company_hint = '';
     if ( $sig_request && ! empty( $sig_request->signer_email ) && is_email( $sig_request->signer_email ) ) {
       $cmd_email = sanitize_email( (string) $sig_request->signer_email );
     }
     if ( $sig_request && ! empty( $sig_request->signer_name ) ) {
-      // signer_name = "Prénom Nom" — tenter de séparer
-      $parts = explode( ' ', trim( (string) $sig_request->signer_name ), 2 );
+      /* ACDC 3.25.226 — RÉGRESSION QUE J'AI INTRODUITE EN 3.25.225.
+         En imposant « Raison sociale — à l'attention de Prénom Nom » comme
+         libellé d'affichage du prospect, j'ai laissé ce libellé se déverser
+         dans un champ qui attend « Prénom Nom ». La découpe sur le premier
+         espace donnait alors prénom « Skill » et nom « Conseil — à l'attention
+         de Bérengère Valeriano », d'où le « Bonjour Skill, » relevé en recette.
+         Une chaîne destinée à l'œil n'est pas une donnée : on la démonte avant
+         de s'en servir. La partie avant le séparateur est la raison sociale,
+         celle qui suit est la personne. */
+      $raw_signer = trim( (string) $sig_request->signer_name );
+      if ( false !== mb_strpos( $raw_signer, 'à l’attention de' ) || false !== mb_strpos( $raw_signer, "à l'attention de" ) ) {
+        $split = preg_split( '/\s*—\s*à l[’\']attention de\s*/u', $raw_signer, 2 );
+        if ( is_array( $split ) && count( $split ) === 2 ) {
+          $cmd_company_hint = trim( (string) $split[0] );
+          $raw_signer       = trim( (string) $split[1] );
+        }
+      }
+      $parts = explode( ' ', $raw_signer, 2 );
       $cmd_prenom = $parts[0] ?? '';
       $cmd_nom    = $parts[1] ?? '';
     }
@@ -8432,15 +8493,59 @@ dbDelta( $sql_companies );
   }
 
 
+  /**
+   * ACDC 3.25.226 — UNE CONVENTION ANNONÇAIT 180 000 € POUR 1 800 €.
+   *
+   * Cette fonction supprimait TOUS les points avant de convertir, en supposant
+   * que le point ne peut être qu'un séparateur de milliers à la française.
+   * C'est vrai pour « 1.800,00 », c'est faux pour « 1800.00 » — la forme sous
+   * laquelle la base stocke un décimal. Le tarif d'une convention passait donc
+   * de 1 800,00 à 180 000,00 : cent fois trop, sur un document contractuel
+   * signé électroniquement et transmis au commanditaire et au financeur. Le
+   * devis, qui n'emprunte pas ce chemin, imprimait le bon montant — deux pièces
+   * du même dossier se contredisaient d'un facteur cent.
+   *
+   * La règle appliquée est celle qu'un lecteur humain applique sans y penser :
+   * le séparateur décimal est le DERNIER rencontré, sauf s'il est seul de son
+   * espèce et suivi d'exactement trois chiffres, auquel cas il sépare les
+   * milliers. « 1800.00 » → 1800,00. « 1.800,00 » → 1800,00. « 1,800.00 » →
+   * 1800,00. « 1.800 » → 1800,00. « 1800.5 » → 1800,50.
+   *
+   * Le cas « 1.800 » reste ambigu par nature ; on tranche vers la lecture
+   * française, qui est celle des saisies de ce plugin — et sous-estimer un
+   * prix de mille fois serait aussi grave que le surestimer.
+   */
   private function normalize_price_number( $value, $decimals = 2 ) {
     $value = is_scalar( $value ) ? (string) $value : '';
     $value = html_entity_decode( wp_strip_all_tags( $value ), ENT_QUOTES, 'UTF-8' );
-    $value = str_replace( array( '€', ' ' ), '', $value );
-    $value = preg_replace( '/[^0-9,.]/u', '', $value ); // strip "HT", "TTC" etc.
-    $value = str_replace( '.', '', preg_replace( '/,(?=.*[,])/', '', $value ) );
-    $value = str_replace( ',', '.', $value );
-    $number = is_numeric( $value ) ? (float) $value : 0.0;
-    return number_format( $number, (int) $decimals, ',', '' );
+    $value = str_replace( array( '€', ' ', "\xc2\xa0" ), '', $value );
+    $value = preg_replace( '/[^0-9,.-]/u', '', $value ); // strip "HT", "TTC" etc.
+
+    $negative = ( 0 === strpos( $value, '-' ) );
+    $value    = str_replace( '-', '', $value );
+
+    $last_comma = strrpos( $value, ',' );
+    $last_dot   = strrpos( $value, '.' );
+
+    if ( false === $last_comma && false === $last_dot ) {
+      $number = is_numeric( $value ) ? (float) $value : 0.0;
+      return number_format( $negative ? -$number : $number, (int) $decimals, ',', '' );
+    }
+
+    $sep_pos  = max( false === $last_comma ? -1 : $last_comma, false === $last_dot ? -1 : $last_dot );
+    $fraction = substr( $value, $sep_pos + 1 );
+    $only_one_kind = ( false === $last_comma || false === $last_dot );
+
+    /* Séparateur unique de son espèce suivi de trois chiffres : des milliers. */
+    if ( $only_one_kind && 3 === strlen( $fraction ) && ctype_digit( $fraction ) && 1 === substr_count( $value, $value[ $sep_pos ] ) ) {
+      $number = (float) preg_replace( '/[^0-9]/', '', $value );
+      return number_format( $negative ? -$number : $number, (int) $decimals, ',', '' );
+    }
+
+    $integer = preg_replace( '/[^0-9]/', '', substr( $value, 0, $sep_pos ) );
+    $number  = (float) ( ( '' === $integer ? '0' : $integer ) . '.' . preg_replace( '/[^0-9]/', '', $fraction ) );
+
+    return number_format( $negative ? -$number : $number, (int) $decimals, ',', '' );
   }  private function get_activity_reports_scope() {
     $scope = isset( $_GET['scope'] ) ? sanitize_key( wp_unslash( $_GET['scope'] ) ) : '';
     return in_array( $scope, array( 'trainers', 'business_managers' ), true ) ? $scope : '';
