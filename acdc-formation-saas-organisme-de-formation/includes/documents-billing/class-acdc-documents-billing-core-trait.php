@@ -1391,6 +1391,51 @@ trait ACDC_Documents_Billing_Core_Trait {
     }
   }
 
+  /**
+   * ACDC 3.25.225 — LES STATISTIQUES FINANCIÈRES NE CONNAISSAIENT QUE LA DÉMO.
+   *
+   * L'écran « Financières » affichait « Aucune donnée ne correspond aux
+   * critères demandés » quel que soit le contenu du site : sa seule source
+   * était `get_mock_invoices_data()`, qui rend un tableau VIDE dès que le mode
+   * démonstration est désactivé — c'est-à-dire dès qu'on travaille pour de
+   * vrai. Un organisme pouvait facturer toute l'année sans qu'une seule ligne
+   * n'apparaisse, et rien ne le lui disait.
+   *
+   * On ne réécrit pas la conversion facture → ligne d'écran : l'onglet
+   * Factures possède déjà la sienne, qui tient compte des frais de
+   * déplacement, des repas, des lignes libres et de la TVA. En écrire une
+   * seconde ici, c'est se garantir deux totaux différents pour la même
+   * facture — la faute que ce plugin a déjà payée plusieurs fois.
+   *
+   * @param string $scope 'action' (actions de formation) ou 'ancillary'.
+   * @return array Lignes au format attendu par l'écran.
+   */
+  private function get_financial_invoice_rows( $scope = 'action' ) {
+    $scope = 'ancillary' === $scope ? 'ancillary' : 'action';
+
+    $invoices = $this->get_invoices( array( 'scope' => $scope, 'limit' => 500 ) );
+    if ( empty( $invoices ) ) {
+      /* Les données de démonstration ne servent plus que de garniture quand le
+         mode démo est armé et qu'aucune facture réelle n'existe. */
+      return $this->get_mock_invoices_data( $scope );
+    }
+
+    $rows = array();
+    foreach ( (array) $invoices as $inv ) {
+      $row = $this->build_invoice_row_from_record( $inv );
+      if ( empty( $row ) ) {
+        continue;
+      }
+      /* L'écran des statistiques attend un libellé lisible et un type ; la
+         ligne de l'onglet Factures porte le code de statut. */
+      $row['type']   = ( 'avoir' === (string) $row['status'] ) ? 'Avoir' : 'Facture';
+      $row['status'] = mb_strtoupper( (string) $row['status_label'] );
+      $rows[] = $row;
+    }
+
+    return $rows;
+  }
+
   private function get_mock_invoices_data( $scope = 'action' ) {
     if ( ! $this->is_documents_billing_demo_enabled() ) {
       return array();

@@ -2317,6 +2317,11 @@ dbDelta( $sql_companies );
     $this->maybe_add_table_column( $this->session_table, 'convocation_reminder_sent_at', 'DATETIME DEFAULT NULL' );
     // ACDC 3.23.0 — Traçabilité envoi convocation commanditaire (entreprise).
     $this->maybe_add_table_column( $this->session_table, 'convocation_company_sent_at', 'DATETIME DEFAULT NULL' );
+    /* ACDC 3.25.225 — L'attestation d'absence est la troisième pièce de fin de
+       formation. Elle a besoin de ses propres colonnes : la confondre avec le
+       certificat reviendrait à écraser l'une par l'autre. */
+    $this->maybe_add_table_column( $this->training_registration_table, 'absence_certificate_document_url', 'TEXT DEFAULT NULL' );
+    $this->maybe_add_table_column( $this->training_registration_table, 'absence_certificate_document_path', 'TEXT DEFAULT NULL' );
     $this->maybe_add_table_column( $this->session_table, 'completion_certificate_sent_at', 'DATETIME DEFAULT NULL' );
     $this->maybe_add_table_column( $this->session_table, 'end_training_certificate_sent_at', 'DATETIME DEFAULT NULL' );
     $this->maybe_add_table_column( $this->session_table, 'positioning_sent_at', 'DATETIME DEFAULT NULL' );
@@ -9158,6 +9163,103 @@ dbDelta( $sql_companies );
     );
   }
   return $rows;
+}
+/**
+ * ACDC 3.25.225 — L'ATTESTATION D'ABSENCE : LA TROISIÈME PIÈCE.
+ *
+ * Elle manquait, et son absence coûtait cher dans les deux sens. Sans elle, un
+ * apprenant qui n'est jamais venu recevait soit un certificat mensonger, soit
+ * rien du tout — et le commanditaire, qui a commandé et payé, n'avait aucune
+ * pièce à joindre à son dossier de financement pour expliquer le trou.
+ *
+ * Elle constate, elle n'accuse pas : elle dit ce que les feuilles d'émargement
+ * portent, à savoir aucune signature, et se garde de toute interprétation sur
+ * la raison. C'est un document adressé au COMMANDITAIRE.
+ */
+private function build_absence_certificate_pdf_pages( $registration, $context = array() ) {
+  $context = is_array( $context ) && ! empty( $context ) ? $context : $this->get_completion_certificate_context( $registration );
+  $profile = $this->get_company_profile_options();
+
+  $logo = ! empty( $profile['logo_url'] ) ? $this->prepare_pdf_jpeg_image( $profile['logo_url'], 180, 54 ) : null;
+  $stamp_source = ! empty( $profile['stamp_only_url'] ) ? $profile['stamp_only_url'] : ( ! empty( $profile['stamp_url'] ) ? $profile['stamp_url'] : '' );
+  $stamp = ! empty( $stamp_source ) ? $this->prepare_pdf_jpeg_image( $stamp_source, 170, 60 ) : null;
+
+  $navy  = '#0C2D52';
+  $gold  = '#C5A253';
+  $ink   = '#1f2937';
+  $muted = '#6b7280';
+
+  $org_name  = ! empty( $profile['enterprise'] ) ? (string) $profile['enterprise'] : 'ACDC-Formation';
+  $org_city  = ! empty( $profile['city'] ) ? (string) $profile['city'] : 'Cogolin';
+  $signatory = trim( (string) ( $profile['first_name'] ?? '' ) . ' ' . (string) ( $profile['last_name'] ?? '' ) );
+  if ( '' === $signatory ) {
+    $signatory = 'La direction';
+  }
+  $signatory_role = ! empty( $profile['signatory_role'] ) ? (string) $profile['signatory_role'] : 'Président';
+
+  $sponsor = '';
+  if ( ! empty( $registration->company_id ) ) {
+    $company = $this->get_company( (int) $registration->company_id );
+    if ( $company && ! empty( $company->name ) ) {
+      $sponsor = (string) $company->name;
+    }
+  }
+  if ( '' === $sponsor ) {
+    $sponsor = ! empty( $registration->company_label ) ? (string) $registration->company_label : '—';
+  }
+
+  $learner_name = (string) ( $context['learner_name'] ?? '—' );
+  $formation    = (string) ( $context['formation_title'] ?? '—' );
+  $planned      = (string) ( $context['duration'] ?? '—' );
+  $period       = $this->format_pdf_date( $context['start_date'] ?? '' ) . ' au ' . $this->format_pdf_date( $context['end_date'] ?? '' );
+
+  $page = array(
+    array( 'type' => 'page_meta', 'width' => 595, 'height' => 842 ),
+    array( 'type' => 'rect', 'x' => 0, 'y' => 0, 'width' => 595, 'height' => 842, 'fill_color' => '#ffffff' ),
+    array( 'type' => 'rect', 'x' => 40, 'y' => 773, 'width' => 515, 'height' => 1.4, 'fill_color' => $gold ),
+  );
+  if ( $logo ) {
+    $page[] = array( 'type' => 'image', 'image_key' => $logo['key'], 'image_data' => $logo['data'], 'image_width' => $logo['width'], 'image_height' => $logo['height'], 'display_width' => $logo['display_width'], 'display_height' => $logo['display_height'], 'x' => 40, 'y' => 782 );
+  } else {
+    $page[] = array( 'text' => $org_name, 'x' => 40, 'y' => 804, 'size' => 16, 'font' => 'Helvetica-Bold', 'color' => $navy );
+  }
+
+  $page[] = array( 'text' => 'ATTESTATION D’ABSENCE', 'x' => 170, 'y' => 726, 'size' => 15, 'font' => 'Helvetica-Bold', 'color' => '#111827' );
+  $page[] = array( 'text' => 'Action de formation professionnelle', 'x' => 196, 'y' => 710, 'size' => 9, 'font' => 'Helvetica', 'color' => $muted );
+  $page[] = array( 'text' => 'Référence : ABS / ' . (int) $registration->id . ' / ' . date_i18n( 'Y' ), 'x' => 380, 'y' => 748, 'size' => 8.5, 'font' => 'Helvetica', 'color' => $muted );
+
+  $y = 660;
+  $line = function( $text, $size = 10, $font = 'Helvetica', $color = null ) use ( &$page, &$y, $ink ) {
+    $page[] = array( 'text' => $text, 'x' => 42, 'y' => $y, 'size' => $size, 'font' => $font, 'color' => $color ?: $ink );
+    $y -= 20;
+  };
+
+  $line( 'Je soussigné(e) ' . $signatory . ', ' . $signatory_role . ' de ' . $org_name . ', atteste que :', 10 );
+  $y -= 6;
+  $line( 'Apprenant concerné : ' . $learner_name, 11, 'Helvetica-Bold' );
+  $line( 'Commanditaire : ' . $sponsor, 10 );
+  $line( 'Action de formation : ' . $formation, 10 );
+  $line( 'Période prévue : ' . $period, 10 );
+  $line( 'Volume prévu : ' . $planned, 10 );
+  $y -= 10;
+  $line( 'n’a signé AUCUNE feuille d’émargement sur la période ci-dessus.', 10.5, 'Helvetica-Bold' );
+  $y -= 4;
+  $line( 'En conséquence, et conformément aux règles applicables aux actions de', 9.6 );
+  $line( 'formation professionnelle, aucun certificat de réalisation ni attestation de', 9.6 );
+  $line( 'fin de formation ne peut être délivré : ces pièces attestent d’heures suivies', 9.6 );
+  $line( 'et d’acquis évalués, que rien ne permet ici de constater.', 9.6 );
+  $y -= 10;
+  $line( 'La présente attestation est délivrée au commanditaire pour servir et valoir', 9.6 );
+  $line( 'ce que de droit, notamment auprès de son financeur.', 9.6 );
+
+  $y -= 30;
+  $page[] = array( 'text' => 'Fait à ' . $org_city . ', le ' . date_i18n( 'd/m/Y' ), 'x' => 42, 'y' => $y, 'size' => 9.6, 'font' => 'Helvetica', 'color' => $ink );
+  $page[] = array( 'text' => $signatory . ' — ' . $signatory_role, 'x' => 340, 'y' => $y, 'size' => 9.6, 'font' => 'Helvetica-Bold', 'color' => $navy );
+  if ( $stamp ) {
+    $page[] = array( 'type' => 'image', 'image_key' => $stamp['key'], 'image_data' => $stamp['data'], 'image_width' => $stamp['width'], 'image_height' => $stamp['height'], 'display_width' => $stamp['display_width'], 'display_height' => $stamp['display_height'], 'x' => 340, 'y' => $y - 78 );
+  }
+
+  return array( $page );
 }private function build_end_training_certificate_pdf_pages( $registration, $context = array() ) {
   $context = is_array( $context ) ? $context : array();
   if ( empty( $context ) ) {

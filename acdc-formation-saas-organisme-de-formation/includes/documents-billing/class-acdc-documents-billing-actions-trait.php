@@ -1187,6 +1187,20 @@ trait ACDC_Documents_Billing_Actions_Trait {
     $signer_name = sanitize_text_field( (string) $quote->apprenant_name );
     $quote_num   = sanitize_text_field( (string) $quote->number );
 
+    /* ACDC 3.25.225 — LE CHAÎNON MANQUANT : DEVIS SIGNÉ → CONVENTION.
+       La recette l'a formulé sans détour : « il n'existe aucun chemin devis
+       signé → convention ». Le devis signé porte pourtant déjà tout ce que la
+       convention réclame — le commanditaire, la formation, les dates, le prix,
+       la TVA, les frais annexes — et l'organisme devait ressaisir l'ensemble à
+       la main, avec le risque d'écart entre ce qui a été signé et ce qui est
+       conventionné. Deux documents contractuels qui se contredisent, c'est le
+       genre de faute qu'un financeur relève.
+       On crée donc la convention à la signature du devis, une seule fois, et
+       en BROUILLON : l'application prépare, l'organisme relit et signe. Elle
+       ne part à personne toute seule — une convention est un engagement, elle
+       ne s'envoie jamais sans décision humaine. */
+    $this->maybe_create_contract_from_signed_quote( $quote );
+
     /* M23 — Devis signé = conversion : faire passer le prospect à « Converti ». */
     if ( ! empty( $quote->source_prospect_id ) && method_exists( $this, 'maybe_advance_prospect_status' ) ) {
       $this->maybe_advance_prospect_status( (int) $quote->source_prospect_id, 'Converti', true );
@@ -1252,6 +1266,87 @@ trait ACDC_Documents_Billing_Actions_Trait {
         @unlink( $tmp_pdf ); // phpcs:ignore WordPress.PHP.NoSilencedErrors.Discouraged
       }
     }
+  }
+
+  /**
+   * ACDC 3.25.225 — Crée la convention de formation à partir d'un devis signé.
+   *
+   * Trois précautions, et aucune n'est décorative :
+   *   1. IDEMPOTENCE — un devis ne produit qu'une convention. Le module de
+   *      signature peut rejouer son événement ; sans garde, chaque rejeu
+   *      créerait un doublon contractuel.
+   *   2. BROUILLON — la convention est préparée, jamais envoyée. Le statut de
+   *      signature reste vide : c'est l'organisme qui décide de l'expédier.
+   *   3. AUCUNE INVENTION — on ne recopie que ce que le devis porte. Un champ
+   *      absent du devis reste vide dans la convention plutôt que d'être
+   *      rempli d'un défaut qui aurait valeur contractuelle.
+   *
+   * @param object $quote Devis signé.
+   * @return int Identifiant de la convention créée, 0 si aucune.
+   */
+  private function maybe_create_contract_from_signed_quote( $quote ) {
+    global $wpdb;
+
+    if ( empty( $quote->id ) ) {
+      return 0;
+    }
+
+    $quote_id = (int) $quote->id;
+    $flag_key = 'acdc_of_quote_contract_' . $quote_id;
+
+    /* Garde d'idempotence : posée AVANT le travail. Perdre une création est
+       rattrapable à la main, en créer deux ne l'est pas. */
+    if ( ! add_option( $flag_key, '1', '', false ) ) {
+      return 0;
+    }
+
+    $title = 'Convention — ' . trim( (string) ( $quote->client_company ?: $quote->apprenant_name ) );
+    if ( ! empty( $quote->formation_title ) ) {
+      $title .= ' — ' . (string) $quote->formation_title;
+    }
+
+    $now  = current_time( 'mysql' );
+    $data = array(
+      'title'              => sanitize_text_field( $title ),
+      'generate_mode'      => 'devis_signe',
+      'commanditaire_type' => ! empty( $quote->client_company ) ? 'Entreprise' : sanitize_text_field( (string) ( $quote->commanditaire_type ?? 'Particulier' ) ),
+      'source_prospect_id' => ! empty( $quote->source_prospect_id ) ? (int) $quote->source_prospect_id : null,
+      'company_id'         => ! empty( $quote->company_id ) ? (int) $quote->company_id : null,
+      'formation_id'       => ! empty( $quote->formation_id ) ? (int) $quote->formation_id : null,
+      'formation_title'    => sanitize_text_field( (string) ( $quote->formation_title ?? '' ) ),
+      'start_date'         => ! empty( $quote->start_date ) ? substr( (string) $quote->start_date, 0, 10 ) : null,
+      'end_date'           => ! empty( $quote->end_date ) ? substr( (string) $quote->end_date, 0, 10 ) : null,
+      'price_ht'           => (string) ( $quote->tarif_ht ?? '' ),
+      'vat_rate'           => (string) ( $quote->vat_rate ?? '' ),
+      'objectives_text'    => (string) ( $quote->objectives ?? '' ),
+      'transport_fees_enabled'   => ! empty( $quote->transport_fees_enabled ) ? 1 : 0,
+      'transport_fees_amount_ht' => (string) ( $quote->transport_fees_ht ?? '' ),
+      'meal_fees_enabled'        => ! empty( $quote->meal_fees_enabled ) ? 1 : 0,
+      'meal_fees_amount_ht'      => (string) ( $quote->meal_fees_ht ?? '' ),
+      'payment_terms'      => (string) ( $quote->payment_methods ?? '' ),
+      'signature_status'   => '',
+      'created_at'         => $now,
+      'updated_at'         => $now,
+    );
+
+    $inserted = $wpdb->insert( $this->registration_contract_table, $data );
+    if ( ! $inserted ) {
+      /* La garde est levée : un échec d'écriture ne doit pas interdire la
+         prochaine tentative. */
+      delete_option( $flag_key );
+      return 0;
+    }
+
+    $contract_id = (int) $wpdb->insert_id;
+
+    if ( method_exists( $this, 'log_action_event' ) ) {
+      $this->log_action_event( 'create', 'registration_contract', $contract_id, 'success', array(
+        'origine'  => 'devis signé n°' . (string) ( $quote->number ?? $quote_id ),
+        'quote_id' => $quote_id,
+      ) );
+    }
+
+    return $contract_id;
   }
 }
 

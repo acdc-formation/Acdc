@@ -557,7 +557,15 @@ trait ACDC_Sessions_Actions_Trait {
         }
       }
 
-      // ACDC 3.23.0 — Convocation commanditaire (entreprise) à J-7 uniquement.
+      /* ACDC 3.25.225 — CE N'EST PAS UNE CONVOCATION, C'EST UNE INFORMATION.
+         « Le commanditaire n'a pas lieu d'avoir de convocation, ce sont
+         uniquement les apprenants. » L'e-mail envoyé à l'entreprise à J-7 ne
+         convoque effectivement personne : il informe l'employeur de qui est
+         convoqué, ce qui reste utile et légitime. C'est son INTITULÉ qui était
+         faux, et un document mal nommé finit par être traité pour ce que son
+         titre annonce — d'où la ligne « Convocation commanditaire » réclamée
+         sur la carte de séance, et l'idée qu'une pièce manquait au dossier.
+         On garde l'envoi, on lui rend son nom. */
       if ( $send_convocation && ! empty( $session->company_id ) ) {
         $conv_company_sent = ! empty( $session->convocation_company_sent_at ) ? (string) $session->convocation_company_sent_at : '';
         if ( '' === $conv_company_sent ) {
@@ -604,21 +612,21 @@ trait ACDC_Sessions_Actions_Trait {
             }
             $this->acdc_send_transactional_email(
               $company_email,
-              'Convocation — ' . $formation_title . ' (' . ucfirst( $date_formatted ) . ')',
+              'Information — vos collaborateurs sont convoqués : ' . $formation_title . ' (' . ucfirst( $date_formatted ) . ')',
               array(
                 'greeting_name' => $company_name ?: 'Madame, Monsieur',
                 'intro_html'    => '',
                 'summary_title' => 'DÉTAILS DE LA FORMATION',
                 'summary_rows'  => $company_summary_rows,
                 'body_html'     => $company_body_html,
-                'footer_notice' => 'Cet e-mail est une notification automatique de convocation. Il est adressé au commanditaire de la formation.',
+                'footer_notice' => 'Cet e-mail est une information adressée au commanditaire de la formation. La convocation elle-même est adressée nominativement à chaque apprenant.',
               ),
               array(
                 'source_module'       => 'sessions',
-                'source_action'       => 'convocation_company_auto',
+                'source_action'       => 'information_company_auto',
                 'related_entity_type' => 'session',
                 'related_entity_id'   => $session_id,
-                'email_category'      => 'convocation_commanditaire',
+                'email_category'      => 'information_commanditaire',
                 'email_audience'      => 'entreprise',
               )
             );
@@ -849,7 +857,35 @@ trait ACDC_Sessions_Actions_Trait {
    * @param int $session_id   ID de la session OF
    * @param int $formation_id ID de la formation
    */
-  private function _auto_send_completion_certificate_for_session( $session_id, $formation_id ) {
+  /**
+   * ACDC 3.25.225 — LES PIÈCES DE FIN NE SORTAIENT POUR PERSONNE.
+   *
+   * Deux routines existaient — certificat de réalisation, attestation de fin —
+   * et toutes deux commençaient par « SELECT ... FROM learners WHERE
+   * session_id = %d ». C'est la colonne qui ne peut désigner qu'UNE séance :
+   * sur une formation de deux journées découpées en quatre demi-journées, elle
+   * n'est renseignée pour presque personne. La liste revenait vide, la fonction
+   * repartait immédiatement, et AUCUN document n'était produit — sans la
+   * moindre trace, puisque le `return` précédait même l'horodatage. D'où le
+   * constat de David : « on doit avoir des documents dans tous les onglets du
+   * menu document », et des onglets désespérément vides.
+   *
+   * Une seule routine remplace les deux. Elle part des DOSSIERS d'inscription,
+   * pas d'une colonne de rattachement, et surtout elle ne décide plus toute
+   * seule : elle demande à la couche de vérité — heures réellement émargées,
+   * évaluation réellement passée — qui a droit à quoi. Trois issues possibles
+   * par apprenant, et une seule est vraie à la fois :
+   *
+   *   — CERTIFICAT DE RÉALISATION dès qu'il y a présence émargée ;
+   *   — ATTESTATION DE FIN DE FORMATION en plus, si les acquis sont validés ;
+   *   — ATTESTATION D'ABSENCE si rien n'a été signé, adressée au
+   *     COMMANDITAIRE : c'est lui qui a commandé et payé, pas l'absent.
+   *
+   * @param int $session_id
+   * @param int $formation_id
+   * @return void
+   */
+  private function acdc_completion_dispatch_for_session( $session_id, $formation_id ) {
     global $wpdb;
 
     $session_id   = absint( $session_id );
@@ -858,308 +894,298 @@ trait ACDC_Sessions_Actions_Trait {
       return;
     }
 
-    // Anti-doublon : vérifier si déjà envoyé pour cette session
-    $already_sent = $wpdb->get_var( $wpdb->prepare(
+    /* Garde d'idempotence sur la séance : posée par la colonne existante, donc
+       compatible avec les dossiers déjà traités par les versions précédentes. */
+    $already = $wpdb->get_var( $wpdb->prepare(
       "SELECT completion_certificate_sent_at FROM {$this->session_table} WHERE id = %d",
       $session_id
     ) );
-    if ( ! empty( $already_sent ) ) {
+    if ( ! empty( $already ) ) {
       return;
     }
 
-    // Vérifier que build_completion_certificate_pdf_pages et _build_simple_pdf_string existent
-    if ( ! method_exists( $this, 'build_completion_certificate_pdf_pages' ) || ! method_exists( $this, '_build_simple_pdf_string' ) ) {
+    if ( ! method_exists( $this, '_build_simple_pdf_string' ) ) {
       return;
     }
 
-    // Vérifier que la formation a les documents de fin activés
-    $formation = $wpdb->get_row( $wpdb->prepare( "SELECT end_documents_enabled FROM {$this->formation_table} WHERE id = %d", $formation_id ) );
+    $formation = $wpdb->get_row( $wpdb->prepare(
+      "SELECT title, end_documents_enabled FROM {$this->formation_table} WHERE id = %d",
+      $formation_id
+    ) );
     if ( ! $formation || empty( $formation->end_documents_enabled ) ) {
       return;
     }
+    $formation_title = ! empty( $formation->title ) ? (string) $formation->title : 'votre formation';
 
-    // Récupérer les apprenants de la session
-    $learners = $wpdb->get_results( $wpdb->prepare(
-      "SELECT id, first_name, last_name, usage_last_name, email FROM {$this->learner_table} WHERE session_id = %d AND email != '' AND email IS NOT NULL",
-      $session_id
+    /* Les dossiers de la formation, apprenant identifié uniquement : la ligne
+       du commanditaire ne reçoit pas de pièce nominative. */
+    $registrations = $wpdb->get_results( $wpdb->prepare(
+      "SELECT * FROM {$this->training_registration_table}
+        WHERE formation_id = %d AND is_draft = 0 AND learner_id IS NOT NULL AND learner_id > 0",
+      $formation_id
     ) );
-    if ( empty( $learners ) ) {
-      return;
-    }
 
-    // ACDC 3.25.115 — ne pas délivrer d'attestation à un apprenant marqué absent à l'émargement.
-    $absent_learner_ids = array();
-    if ( class_exists( 'ACDC_Emargement' ) && method_exists( 'ACDC_Emargement', 'get_instance' ) ) {
-      $emarg_instance = ACDC_Emargement::get_instance();
-      if ( $emarg_instance && isset( $emarg_instance->core ) && ! empty( $emarg_instance->core->table_learners ) ) {
-        $emarg_learner_table = $emarg_instance->core->table_learners;
-        $absent_ids = $wpdb->get_col( $wpdb->prepare(
-          "SELECT learner_id FROM {$emarg_learner_table} WHERE session_id = %d AND is_absent = 1",
-          $session_id
-        ) );
-        foreach ( (array) $absent_ids as $absent_id ) {
-          $absent_id = (int) $absent_id;
-          if ( $absent_id > 0 ) {
-            $absent_learner_ids[ $absent_id ] = true;
+    $portal_page_id = (int) get_option( 'acdc_of_learner_portal_page_id', 0 );
+    $portal_url     = $portal_page_id ? get_permalink( $portal_page_id ) : home_url( '/' );
+    $upload_dir     = wp_upload_dir();
+    $now            = current_time( 'mysql' );
+
+    $produced = array( 'certificat' => 0, 'attestation' => 0, 'absence' => 0 );
+
+    foreach ( (array) $registrations as $registration ) {
+      $state = $this->acdc_completion_state_for_registration( $registration );
+
+      $learner = $this->get_learner( (int) $registration->learner_id );
+      $email   = $learner && ! empty( $learner->email ) ? sanitize_email( (string) $learner->email ) : '';
+      $greeting = $learner ? trim( (string) $learner->first_name ) : '';
+
+      /* --- 1. Le certificat de réalisation : les HEURES. ----------------- */
+      if ( ! empty( $state['certificat'] ) ) {
+        $created = false;
+        $url = $this->acdc_completion_store_document(
+          $registration,
+          'completion_certificate',
+          'certificat-realisation',
+          $this->build_completion_certificate_pdf_pages( $registration, $this->get_completion_certificate_context( $registration ) ),
+          $created
+        );
+        /* La notification ne part QUE si la pièce vient d'être produite. Une
+           formation découpée en quatre demi-journées ferme quatre séances :
+           sans cette condition, l'apprenant recevrait quatre fois le même
+           certificat. */
+        if ( '' !== $url && $created ) {
+          $produced['certificat']++;
+          if ( '' !== $email && is_email( $email ) ) {
+            $this->acdc_completion_notify(
+              $email,
+              $greeting,
+              'Votre certificat de réalisation — ' . $formation_title,
+              '<p style="font-size:18px;line-height:1.7;margin:0 0 18px;">Votre formation <strong>' . esc_html( $formation_title ) . '</strong> est terminée. Votre <strong>certificat de réalisation</strong> atteste des heures que vous avez suivies : <strong>' . esc_html( $state['time']['label'] ) . '</strong>.</p>',
+              $portal_url,
+              $session_id,
+              'completion_certificate_auto'
+            );
           }
         }
       }
-    }
 
-    $portal_page_id = (int) get_option( 'acdc_of_learner_portal_page_id', 0 );
-    $portal_url     = $portal_page_id ? get_permalink( $portal_page_id ) : home_url( '/' );
-    $sent_count     = 0;
-    $upload_dir     = wp_upload_dir();
-
-    foreach ( (array) $learners as $learner ) {
-      $email = sanitize_email( (string) $learner->email );
-      if ( ! $email || ! is_email( $email ) ) {
-        continue;
-      }
-
-      $learner_id = (int) $learner->id;
-
-      // ACDC 3.25.115 — ne pas délivrer d'attestation à un apprenant marqué absent à l'émargement.
-      if ( isset( $absent_learner_ids[ $learner_id ] ) ) {
-        continue;
-      }
-
-      // Trouver la training_registration liée (learner_id + formation_id)
-      $registration = $wpdb->get_row( $wpdb->prepare(
-        "SELECT * FROM {$this->training_registration_table} WHERE learner_id = %d AND formation_id = %d AND is_draft = 0 ORDER BY id DESC LIMIT 1",
-        $learner_id,
-        $formation_id
-      ) );
-
-      if ( ! $registration ) {
-        continue;
-      }
-
-      // Générer le PDF en mémoire si pas encore existant
-      $cert_url  = ! empty( $registration->completion_certificate_document_url )  ? (string) $registration->completion_certificate_document_url  : '';
-      $cert_path = ! empty( $registration->completion_certificate_document_path ) ? (string) $registration->completion_certificate_document_path : '';
-
-      if ( empty( $cert_url ) || empty( $cert_path ) || ! file_exists( $cert_path ) ) {
-        // Générer le PDF en capturant l'output
-        $context     = $this->get_completion_certificate_context( $registration );
-        $pages       = $this->build_completion_certificate_pdf_pages( $registration, $context );
-        $filename    = sanitize_file_name( "certificat-realisation-" . (int) $registration->id . ".pdf" );
-
-        $pdf_content = $this->_build_simple_pdf_string( $pages );
-
-        if ( empty( $pdf_content ) ) {
-          continue;
-        }
-
-        // Sauvegarder le fichier dans wp-uploads
-        $subdir    = $upload_dir['basedir'] . '/acdc-certificates';
-        if ( ! file_exists( $subdir ) ) {
-          wp_mkdir_p( $subdir );
-        }
-        $filepath = $subdir . '/' . $filename;
-        if ( file_put_contents( $filepath, $pdf_content ) === false ) {
-          continue;
-        }
-        $fileurl  = $upload_dir['baseurl'] . '/acdc-certificates/' . $filename;
-
-        // Stocker l'URL et le path en BDD
-        $wpdb->update(
-          $this->training_registration_table,
-          array(
-            'completion_certificate_document_url'  => esc_url_raw( $fileurl ),
-            'completion_certificate_document_path' => sanitize_text_field( $filepath ),
-            'updated_at' => current_time( 'mysql' ),
-          ),
-          array( 'id' => (int) $registration->id ),
-          array( '%s', '%s', '%s' ),
-          array( '%d' )
+      /* --- 2. L'attestation de fin de formation : les ACQUIS. ------------ */
+      if ( ! empty( $state['attestation'] ) ) {
+        $created = false;
+        $url = $this->acdc_completion_store_document(
+          $registration,
+          'end_training_certificate',
+          'attestation-fin-formation',
+          $this->build_end_training_certificate_pdf_pages( $registration, $this->get_end_training_certificate_context( $registration ) ),
+          $created
         );
-
-        $cert_url = $fileurl;
+        if ( '' !== $url && $created ) {
+          $produced['attestation']++;
+          if ( '' !== $email && is_email( $email ) ) {
+            $this->acdc_completion_notify(
+              $email,
+              $greeting,
+              'Votre attestation de fin de formation — ' . $formation_title,
+              '<p style="font-size:18px;line-height:1.7;margin:0 0 18px;">Vos acquis ont été évalués et validés à l\'issue de la formation <strong>' . esc_html( $formation_title ) . '</strong>. Votre <strong>attestation de fin de formation</strong> est disponible dans votre espace.</p>',
+              $portal_url,
+              $session_id,
+              'end_training_certificate_auto'
+            );
+          }
+        }
       }
 
-      // Envoyer l'e-mail de notification avec lien vers le portail apprenant
-      $prenom   = ! empty( $learner->first_name ) ? (string) $learner->first_name : '';
-      $nom      = ! empty( $learner->usage_last_name ) ? (string) $learner->usage_last_name : ( ! empty( $learner->last_name ) ? (string) $learner->last_name : '' );
-      $greeting = trim( $prenom ) ?: trim( $prenom . ' ' . $nom );
-
-      $formation_title = $wpdb->get_var( $wpdb->prepare( "SELECT title FROM {$this->formation_table} WHERE id = %d", $formation_id ) );
-      $formation_title = ! empty( $formation_title ) ? (string) $formation_title : "votre formation";
-
-      $body_html  = "<p style=\"font-size:19px;line-height:1.7;margin:0 0 20px;\">Votre formation <strong>" . esc_html( $formation_title ) . "</strong> est maintenant terminée. Votre attestation de réalisation est disponible dans votre espace apprenant.</p>";
-      $body_html .= "<p style=\"margin:24px 0;text-align:center;\"><a href=\"" . esc_url( $portal_url ) . "\" style=\"display:inline-block;padding:14px 28px;background:#C5A253;color:#0B0706;text-decoration:none;border-radius:8px;font-weight:700;font-size:16px;\">Télécharger mon attestation</a></p>";
-      $body_html .= "<p style=\"font-size:15px;color:#667085;margin:16px 0 0;\">Vous trouverez votre attestation dans la rubrique <strong>Certificats et attestations</strong> de votre espace personnel.</p>";
-
-      $this->acdc_send_transactional_email(
-        $email,
-        "Votre attestation de réalisation — " . $formation_title,
-        array(
-          'greeting_name' => $greeting,
-          'intro_html'    => '',
-          'body_html'     => $body_html,
-          'footer_notice' => "Cet e-mail est envoyé automatiquement à l'issue de votre formation. Vos données sont traitées conformément au RGPD.",
-        ),
-        array(
-          'source_module'       => 'sessions',
-          'source_action'       => 'completion_certificate_auto',
-          'related_entity_type' => 'session',
-          'related_entity_id'   => $session_id,
-          'email_category'      => 'attestation',
-          'email_audience'      => 'apprenant',
-        )
-      );
-
-      $sent_count++;
+      /* --- 3. L'absence : au COMMANDITAIRE, jamais à l'absent. ----------- */
+      if ( ! empty( $state['absence'] ) ) {
+        $created = false;
+        $url = $this->acdc_completion_store_document(
+          $registration,
+          'absence_certificate',
+          'attestation-absence',
+          $this->build_absence_certificate_pdf_pages( $registration ),
+          $created
+        );
+        if ( '' !== $url && $created ) {
+          $produced['absence']++;
+          $this->acdc_completion_notify_sponsor( $registration, $formation_title, $session_id );
+        }
+      }
     }
 
-    // Tracer la date d'envoi sur la session (même si 0 envoi, pour éviter les re-tentatives)
     $wpdb->update(
       $this->session_table,
-      array( 'completion_certificate_sent_at' => current_time( 'mysql' ), 'updated_at' => current_time( 'mysql' ) ),
+      array(
+        'completion_certificate_sent_at'   => $now,
+        'end_training_certificate_sent_at' => $now,
+        'updated_at'                       => $now,
+      ),
       array( 'id' => $session_id ),
-      array( '%s', '%s' ),
+      array( '%s', '%s', '%s' ),
       array( '%d' )
     );
+
+    if ( method_exists( $this, 'log_error' ) ) {
+      $this->log_error( 'sessions', 'Pièces de fin de formation produites.', array(
+        'session_id'  => $session_id,
+        'certificats' => $produced['certificat'],
+        'attestations' => $produced['attestation'],
+        'absences'    => $produced['absence'],
+      ) );
+    }
   }
 
+  /**
+   * Écrit un PDF de fin de formation sur le disque et le rattache au dossier.
+   *
+   * Le dossier de dépôt est protégé : ces pièces nomment des personnes et
+   * attestent de leur parcours ; elles ne doivent pas être lisibles par
+   * quiconque devine une URL.
+   *
+   * @return string URL du document, ou chaîne vide.
+   */
+  private function acdc_completion_store_document( $registration, $column_prefix, $filename_base, $pages, &$created = false ) {
+    global $wpdb;
+
+    $created = false;
+
+    if ( empty( $pages ) || ! is_array( $pages ) ) {
+      return '';
+    }
+
+    $url_column  = $column_prefix . '_document_url';
+    $path_column = $column_prefix . '_document_path';
+
+    /* Le document existe déjà : on ne le refabrique pas. Une pièce probante
+       régénérée à chaque passage changerait de contenu sous les pieds de qui
+       l'a déjà téléchargée. */
+    if ( ! empty( $registration->{$url_column} ) && ! empty( $registration->{$path_column} ) && file_exists( (string) $registration->{$path_column} ) ) {
+      return (string) $registration->{$url_column};
+    }
+
+    $pdf = $this->_build_simple_pdf_string( $pages );
+    if ( '' === (string) $pdf ) {
+      return '';
+    }
+
+    $upload_dir = wp_upload_dir();
+    $dir_path   = trailingslashit( $upload_dir['basedir'] ) . 'acdc-certificates/';
+    if ( method_exists( $this, 'acdc_protect_contracts_dir' ) ) {
+      $this->acdc_protect_contracts_dir( $dir_path );
+    } else {
+      wp_mkdir_p( $dir_path );
+    }
+
+    $filename = sanitize_file_name( $filename_base . '-' . (int) $registration->id . '.pdf' );
+    $filepath = $dir_path . $filename;
+    if ( false === file_put_contents( $filepath, $pdf ) ) { // phpcs:ignore WordPress.WP.AlternativeFunctions.file_system_operations_file_put_contents
+      return '';
+    }
+    $fileurl = trailingslashit( $upload_dir['baseurl'] ) . 'acdc-certificates/' . $filename;
+    $created = true;
+
+    /* La colonne n'existe pas forcément (attestation d'absence, ajoutée en
+       3.25.225) : on ne tente l'écriture que si la table la porte. */
+    if ( $this->acdc_schema_has_column( $this->training_registration_table, $url_column ) ) {
+      $wpdb->update(
+        $this->training_registration_table,
+        array(
+          $url_column  => esc_url_raw( $fileurl ),
+          $path_column => sanitize_text_field( $filepath ),
+          'updated_at' => current_time( 'mysql' ),
+        ),
+        array( 'id' => (int) $registration->id ),
+        array( '%s', '%s', '%s' ),
+        array( '%d' )
+      );
+    }
+
+    return $fileurl;
+  }
+
+  /** Notification d'une pièce de fin à l'apprenant. */
+  private function acdc_completion_notify( $email, $greeting, $subject, $intro_html, $portal_url, $session_id, $action ) {
+    $body  = $intro_html;
+    $body .= '<p style="margin:24px 0;text-align:center;"><a href="' . esc_url( $portal_url ) . '" style="display:inline-block;padding:14px 28px;background:#C5A253;color:#0B0706;text-decoration:none;border-radius:8px;font-weight:700;font-size:16px;">Accéder à mes documents</a></p>';
+    $body .= '<p style="font-size:15px;color:#667085;margin:16px 0 0;">Vous le retrouverez dans la rubrique <strong>Ma bibliothèque</strong> de votre espace personnel.</p>';
+
+    $this->acdc_send_transactional_email(
+      $email,
+      $subject,
+      array(
+        'greeting_name' => $greeting,
+        'intro_html'    => '',
+        'body_html'     => $body,
+        'footer_notice' => 'Cet e-mail est envoyé automatiquement à l’issue de votre formation. Vos données sont traitées conformément au RGPD.',
+      ),
+      array(
+        'source_module'       => 'sessions',
+        'source_action'       => $action,
+        'related_entity_type' => 'session',
+        'related_entity_id'   => (int) $session_id,
+        'email_category'      => 'attestation',
+        'email_audience'      => 'apprenant',
+      )
+    );
+  }
+
+  /** L'attestation d'absence part au commanditaire, pas à l'absent. */
+  private function acdc_completion_notify_sponsor( $registration, $formation_title, $session_id ) {
+    $email = '';
+    $name  = '';
+
+    if ( ! empty( $registration->company_id ) ) {
+      $company = $this->get_company( (int) $registration->company_id );
+      if ( $company ) {
+        $name  = ! empty( $company->name ) ? (string) $company->name : '';
+        $email = ! empty( $company->enterprise_contact_email ) ? sanitize_email( (string) $company->enterprise_contact_email ) : '';
+      }
+    }
+
+    if ( '' === $email || ! is_email( $email ) ) {
+      return;
+    }
+
+    $learner_name = '';
+    if ( ! empty( $registration->learner_id ) ) {
+      $learner = $this->get_learner( (int) $registration->learner_id );
+      if ( $learner ) {
+        $learner_name = trim( (string) $learner->first_name . ' ' . (string) ( ! empty( $learner->usage_last_name ) ? $learner->usage_last_name : $learner->last_name ) );
+      }
+    }
+
+    $body  = '<p style="font-size:18px;line-height:1.7;margin:0 0 18px;">La formation <strong>' . esc_html( $formation_title ) . '</strong> est terminée.</p>';
+    $body .= '<p style="font-size:17px;line-height:1.7;margin:0 0 18px;">Aucun émargement n’a été signé par <strong>' . esc_html( $learner_name ?: 'la personne inscrite' ) . '</strong>. Nous ne pouvons donc délivrer ni certificat de réalisation ni attestation de fin de formation : ce serait attester d’une présence qui n’a pas eu lieu.</p>';
+    $body .= '<p style="font-size:17px;line-height:1.7;margin:0 0 18px;">Vous trouverez dans votre espace l’<strong>attestation d’absence</strong> correspondante, à joindre le cas échéant à votre dossier de financement.</p>';
+
+    $this->acdc_send_transactional_email(
+      $email,
+      'Absence constatée — ' . $formation_title,
+      array(
+        'greeting_name' => $name ?: 'Madame, Monsieur',
+        'intro_html'    => '',
+        'body_html'     => $body,
+        'footer_notice' => 'Cet e-mail est adressé au commanditaire de la formation.',
+      ),
+      array(
+        'source_module'       => 'sessions',
+        'source_action'       => 'absence_certificate_auto',
+        'related_entity_type' => 'session',
+        'related_entity_id'   => (int) $session_id,
+        'email_category'      => 'attestation',
+        'email_audience'      => 'entreprise',
+      )
+    );
+  }
+
+  private function _auto_send_completion_certificate_for_session( $session_id, $formation_id ) {
+    $this->acdc_completion_dispatch_for_session( $session_id, $formation_id );
+  }
 
   private function _auto_send_end_training_certificate_for_session( $session_id, $formation_id ) {
-    global $wpdb;
-    $session_id   = absint( $session_id );
-    $formation_id = absint( $formation_id );
-    if ( ! $session_id || ! $formation_id ) { return; }
-    $already_sent = $wpdb->get_var( $wpdb->prepare( "SELECT end_training_certificate_sent_at FROM {$this->session_table} WHERE id = %d", $session_id ) );
-    if ( ! empty( $already_sent ) ) { return; }
-    if ( ! method_exists( $this, 'build_end_training_certificate_pdf_pages' ) || ! method_exists( $this, '_build_simple_pdf_string' ) ) { return; }
-    $formation = $wpdb->get_row( $wpdb->prepare( "SELECT end_documents_enabled FROM {$this->formation_table} WHERE id = %d", $formation_id ) );
-    if ( ! $formation || empty( $formation->end_documents_enabled ) ) { return; }
-    $learners = $wpdb->get_results( $wpdb->prepare( "SELECT id, first_name, last_name, usage_last_name, email FROM {$this->learner_table} WHERE session_id = %d AND email != '' AND email IS NOT NULL", $session_id ) );
-    if ( empty( $learners ) ) { return; }
-    // ACDC 3.25.115 — ne pas délivrer d'attestation de fin de formation à un apprenant
-    // marqué absent à l'émargement (cohérent avec le certificat de réalisation).
-    $absent_learner_ids = array();
-    if ( class_exists( 'ACDC_Emargement' ) && method_exists( 'ACDC_Emargement', 'get_instance' ) ) {
-      $emarg_instance = ACDC_Emargement::get_instance();
-      if ( $emarg_instance && isset( $emarg_instance->core ) && ! empty( $emarg_instance->core->table_learners ) ) {
-        $emarg_learner_table = $emarg_instance->core->table_learners;
-        $absent_ids = $wpdb->get_col( $wpdb->prepare( "SELECT learner_id FROM {$emarg_learner_table} WHERE session_id = %d AND is_absent = 1", $session_id ) );
-        foreach ( (array) $absent_ids as $aid ) { $absent_learner_ids[ (int) $aid ] = true; }
-      }
-    }
-    $portal_page_id = (int) get_option( 'acdc_of_learner_portal_page_id', 0 );
-    $portal_url     = $portal_page_id ? get_permalink( $portal_page_id ) : home_url( '/' );
-    $upload_dir     = wp_upload_dir();
-    $sent_count     = 0;
-    foreach ( (array) $learners as $learner ) {
-      $email = sanitize_email( (string) $learner->email );
-      if ( ! $email || ! is_email( $email ) ) { continue; }
-      $learner_id   = (int) $learner->id;
-      if ( isset( $absent_learner_ids[ $learner_id ] ) ) { continue; }
-      $registration = $wpdb->get_row( $wpdb->prepare( "SELECT * FROM {$this->training_registration_table} WHERE learner_id = %d AND formation_id = %d AND is_draft = 0 ORDER BY id DESC LIMIT 1", $learner_id, $formation_id ) );
-      if ( ! $registration ) { continue; }
-      $cert_url  = ! empty( $registration->end_training_certificate_document_url )  ? (string) $registration->end_training_certificate_document_url  : '';
-      $cert_path = ! empty( $registration->end_training_certificate_document_path ) ? (string) $registration->end_training_certificate_document_path : '';
-      if ( empty( $cert_url ) || empty( $cert_path ) || ! file_exists( $cert_path ) ) {
-        $context     = $this->get_end_training_certificate_context( $registration );
-        $pages       = $this->build_end_training_certificate_pdf_pages( $registration, $context );
-        $filename    = sanitize_file_name( 'attestation-fin-formation-' . (int) $registration->id . '.pdf' );
-        $pdf_content = $this->_build_simple_pdf_string( $pages );
-        if ( empty( $pdf_content ) ) { continue; }
-        $subdir = $upload_dir['basedir'] . '/acdc-certificates';
-        if ( ! file_exists( $subdir ) ) { wp_mkdir_p( $subdir ); }
-        $filepath = $subdir . '/' . $filename;
-        if ( file_put_contents( $filepath, $pdf_content ) === false ) { continue; }
-        $fileurl = $upload_dir['baseurl'] . '/acdc-certificates/' . $filename;
-        $wpdb->update( $this->training_registration_table, array( 'end_training_certificate_document_url' => esc_url_raw( $fileurl ), 'end_training_certificate_document_path' => sanitize_text_field( $filepath ), 'updated_at' => current_time( 'mysql' ) ), array( 'id' => (int) $registration->id ), array( '%s', '%s', '%s' ), array( '%d' ) );
-        $cert_url = $fileurl;
-      }
-      $prenom  = ! empty( $learner->first_name ) ? (string) $learner->first_name : '';
-      $nom     = ! empty( $learner->usage_last_name ) ? (string) $learner->usage_last_name : ( ! empty( $learner->last_name ) ? (string) $learner->last_name : '' );
-      $greeting = trim( $prenom ) ?: trim( $prenom . ' ' . $nom );
-      $formation_title = $wpdb->get_var( $wpdb->prepare( "SELECT title FROM {$this->formation_table} WHERE id = %d", $formation_id ) );
-      $formation_title = ! empty( $formation_title ) ? (string) $formation_title : 'votre formation';
-      $body_html  = '<p style="font-size:19px;line-height:1.7;margin:0 0 20px;">Votre attestation de fin de formation <strong>' . esc_html( $formation_title ) . '</strong> est disponible dans votre espace apprenant.</p>';
-      $body_html .= '<p style="margin:24px 0;text-align:center;"><a href="' . esc_url( $portal_url ) . '" style="display:inline-block;padding:14px 28px;background:#C5A253;color:#0B0706;text-decoration:none;border-radius:8px;font-weight:700;font-size:16px;">Accéder à mon espace</a></p>';
-      $body_html .= '<p style="font-size:15px;color:#667085;margin:16px 0 0;">Vous trouverez votre attestation dans la rubrique <strong>Certificats et attestations</strong> de votre espace personnel.</p>';
-      $this->acdc_send_transactional_email( $email, 'Votre attestation de fin de formation — ' . $formation_title, array( 'greeting_name' => $greeting, 'intro_html' => '', 'body_html' => $body_html, 'footer_notice' => "Cet e-mail est envoyé automatiquement à l'issue de votre formation. Vos données sont traitées conformément au RGPD." ), array( 'source_module' => 'sessions', 'source_action' => 'end_training_certificate_auto', 'related_entity_type' => 'session', 'related_entity_id' => $session_id, 'email_category' => 'attestation', 'email_audience' => 'apprenant' ) );
-      $sent_count++;
-    }
-    $wpdb->update( $this->session_table, array( 'end_training_certificate_sent_at' => current_time( 'mysql' ), 'updated_at' => current_time( 'mysql' ) ), array( 'id' => $session_id ), array( '%s', '%s' ), array( '%d' ) );
+    /* Même routine : elle traite les trois pièces en une passe et se garde
+       elle-même contre le double envoi. */
+    $this->acdc_completion_dispatch_for_session( $session_id, $formation_id );
   }
-
-  /**
-   * ACDC 3.21.64 — Cron quotidien : envoi du test de positionnement 48h avant la séance.
-   *
-   * Conditions de déclenchement pour chaque session :
-   * - Formation avec positioning_test_enabled = 1
-   * - Quiz de type 'positioning' actif lié à la formation
-   * - Date de début dans 0 à 2 jours (days_until <= 2)
-   * - positioning_sent_at vide (anti-doublon)
-   * - Des apprenants avec e-mail dans la session
-   */
-  public function process_positioning_test_cron() {
-    global $wpdb;
-
-    if ( empty( $this->session_table ) || empty( $this->formation_table ) || empty( $this->learner_table ) ) {
-      return;
-    }
-    if ( ! method_exists( $this, 'get_qz_table' ) || ! method_exists( $this, 'create_qz_async_dispatch' ) ) {
-      return;
-    }
-
-    // ACDC 3.25.115 — base calendaire homogène (même fuseau/heure que $start_ts) plutôt que
-    // de comparer current_time('timestamp') (heure locale WP) à strtotime() (fuseau serveur).
-    $today_ts = strtotime( current_time( 'Y-m-d' ) . ' 08:00:00' );
-
-    $sessions = $wpdb->get_results(
-      "SELECT s.*, f.title AS formation_title, f.positioning_test_enabled
-       FROM {$this->session_table} s
-       LEFT JOIN {$this->formation_table} f ON f.id = s.formation_id
-       WHERE s.is_draft = 0
-         AND COALESCE(f.positioning_test_enabled, 0) = 1
-         AND COALESCE(s.status, '') NOT IN ('Annulée','Annulee','Terminée','Terminee')
-         AND ( s.start_date IS NOT NULL OR s.start_at IS NOT NULL )
-         AND ( s.positioning_sent_at IS NULL OR s.positioning_sent_at = '' )
-       ORDER BY COALESCE(s.start_date, DATE(s.start_at)) ASC, s.id ASC"
-    );
-
-    if ( empty( $sessions ) ) {
-      return;
-    }
-
-    foreach ( (array) $sessions as $session ) {
-      $start_date = ! empty( $session->start_date )
-        ? (string) $session->start_date
-        : ( ! empty( $session->start_at ) ? substr( (string) $session->start_at, 0, 10 ) : '' );
-
-      if ( ! $start_date ) {
-        continue;
-      }
-
-      $start_ts   = strtotime( $start_date . ' 08:00:00' );
-      // ACDC 3.25.115 — écart en jours calendaires (même base 08:00:00 que $today_ts).
-      $days_until = (int) floor( ( $start_ts - $today_ts ) / DAY_IN_SECONDS );
-
-      // Fenêtre : 0 à 2 jours avant le début (inclut aujourd'hui et dans 48h)
-      if ( $days_until < 0 || $days_until > 2 ) {
-        continue;
-      }
-
-      $session_id   = (int) $session->id;
-      $formation_id = (int) $session->formation_id;
-
-      $this->_auto_dispatch_positioning_for_session( $session_id, $formation_id );
-    }
-  }
-
-
-  /**
-   * ACDC 3.21.64 — Dispatche le quiz de positionnement aux apprenants d'une session.
-   * Anti-doublon : vérifie positioning_sent_at + participants déjà existants.
-   *
-   * @param int $session_id
-   * @param int $formation_id
-   */
   private function _auto_dispatch_positioning_for_session( $session_id, $formation_id ) {
     global $wpdb;
 

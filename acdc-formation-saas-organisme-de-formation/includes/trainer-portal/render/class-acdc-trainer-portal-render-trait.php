@@ -1752,8 +1752,36 @@ trait ACDC_Trainer_Portal_Render_Trait {
     <h2 style="margin:0 0 6px;color:#1E4777;font-size:22px;">Mes contrats</h2>
     <p style="color:#5a6577;font-size:14px;margin:0 0 20px;">Retrouvez ici tous vos contrats de sous-traitance et leur statut de signature.</p>
     <?php if ( empty( $contracts ) ) : ?>
-    <div style="background:#f8fafc;border:1px solid #e6ebf2;border-radius:10px;padding:28px;text-align:center;color:#5a6577;">
-      <p style="margin:0;font-size:14px;">Aucun contrat enregistré pour le moment.</p>
+    <?php
+    /* ACDC 3.25.225 — « Mes contrats » restait vide sans dire pourquoi, alors
+       que le formateur animait quatre demi-journées et avait reçu son contrat
+       en PDF. Un écran vide ne distingue pas « rien n'existe » de « quelque
+       chose existe mais je ne le vois pas » — et c'est cette confusion qui a
+       fait conclure à une panne. On dit donc ce qui est : aucun contrat de
+       sous-traitance n'est enregistré à votre nom, et voici les missions que
+       l'organisme vous a bel et bien confiées.
+       On ne fabrique surtout pas de contrat à partir des séances : une
+       mission planifiée n'est pas un engagement contractuel signé. */
+    $missions = $this->trainer_portal_get_upcoming_sessions_list( (int) $trainer->id, 20 );
+    ?>
+    <div style="background:#f8fafc;border:1px solid #e6ebf2;border-radius:10px;padding:24px;color:#5a6577;">
+      <p style="margin:0 0 6px;font-size:14px;color:#1E4777;"><strong>Aucun contrat de sous-traitance n'est enregistré à votre nom.</strong></p>
+      <p style="margin:0;font-size:13px;">Un contrat apparaît ici dès que l'organisme en établit un depuis votre fiche formateur. Recevoir un contrat par e-mail ne suffit pas : c'est l'enregistrement dans l'application qui alimente cet écran.</p>
+      <?php if ( ! empty( $missions ) ) : ?>
+        <p style="margin:18px 0 8px;font-size:13px;color:#1E4777;"><strong>Vos missions planifiées</strong> — elles ne valent pas contrat, mais elles montrent ce qui vous est confié :</p>
+        <ul style="margin:0;padding-left:18px;font-size:13px;line-height:1.7;">
+        <?php foreach ( (array) $missions as $mission ) :
+          $mission_date = '';
+          if ( ! empty( $mission->start_at ) ) {
+            $mission_date = mysql2date( 'd/m/Y H\hi', (string) $mission->start_at );
+          } elseif ( ! empty( $mission->start_date ) ) {
+            $mission_date = mysql2date( 'd/m/Y', (string) $mission->start_date );
+          }
+          ?>
+          <li><?php echo esc_html( trim( (string) ( $mission->formation_title ?? $mission->title ?? 'Séance' ) ) ); ?><?php echo '' !== $mission_date ? ' — ' . esc_html( $mission_date ) : ''; ?></li>
+        <?php endforeach; ?>
+        </ul>
+      <?php endif; ?>
     </div>
     <?php else : ?>
     <style>

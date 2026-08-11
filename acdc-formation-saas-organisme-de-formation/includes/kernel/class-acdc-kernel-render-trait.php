@@ -10116,6 +10116,73 @@ trait ACDC_Kernel_Render_Trait {
     $formation_counts = array_slice( $formation_counts, 0, 5, true );
     ksort( $objective_options );
 
+    /* ACDC 3.25.225 — DEUX INDICATEURS DIFFÉRENTS PORTAIENT LE MÊME NOM.
+       « Heures de formation dispensées » annonçait 28 h sur un dossier de deux
+       journées : la boucle ci-dessus additionne la durée de la formation UNE
+       FOIS PAR APPRENANT rattaché. Ce n'était donc ni des heures dispensées
+       (14 h : la formation a été donnée une seule fois) ni un total juste
+       d'heures-stagiaires (42 h : trois apprenantes × 14 h) — c'était le
+       produit d'une jointure, deux apprenantes ayant par hasard la colonne
+       `session_id` renseignée.
+       Les deux chiffres existent, ils ne mesurent pas la même chose, et un
+       organisme de formation doit savoir déclarer l'un et l'autre :
+         — HEURES DISPENSÉES : ce que le formateur a animé. On additionne les
+           créneaux du planning, une fois par formation.
+         — HEURES-STAGIAIRES : ce que les apprenants ont consommé. Heures de
+           la formation multipliées par le nombre d'inscrits.
+       Ils sont désormais nommés, calculés séparément, et affichés côte à côte
+       pour qu'on ne puisse plus les confondre. */
+    $formation_ids = array();
+    foreach ( (array) $wpdb->get_results(
+      "SELECT DISTINCT formation_id FROM {$this->training_registration_table} WHERE is_draft = 0 AND formation_id IS NOT NULL AND formation_id > 0"
+    ) as $row_formation ) {
+      $formation_ids[] = (int) $row_formation->formation_id;
+    }
+
+    $delivered_minutes = 0;
+    $trainee_minutes   = 0;
+
+    foreach ( $formation_ids as $formation_id ) {
+      $session_ids = $wpdb->get_col( $wpdb->prepare(
+        "SELECT id FROM {$this->session_table} WHERE formation_id = %d AND COALESCE(is_draft,0) = 0",
+        $formation_id
+      ) );
+      $planned = $this->acdc_completion_planned_time( $session_ids );
+      if ( $planned['minutes'] <= 0 ) {
+        continue;
+      }
+
+      /* Les inscrits de la formation : on ne compte QUE les dossiers portant
+         un apprenant identifié — la ligne du commanditaire n'a suivi aucune
+         heure. */
+      $headcount = (int) $wpdb->get_var( $wpdb->prepare(
+        "SELECT COUNT(DISTINCT learner_id) FROM {$this->training_registration_table}
+          WHERE is_draft = 0 AND formation_id = %d AND learner_id IS NOT NULL AND learner_id > 0",
+        $formation_id
+      ) );
+
+      $delivered_minutes += (int) $planned['minutes'];
+      $trainee_minutes   += (int) $planned['minutes'] * max( 0, $headcount );
+    }
+
+    /* « Apprenants formés » comptait toutes les fiches du répertoire, y compris
+       celles qui ne sont inscrites à rien. On compte les personnes réellement
+       inscrites à une action. */
+    $trained_learners = (int) $wpdb->get_var(
+      "SELECT COUNT(DISTINCT learner_id) FROM {$this->training_registration_table}
+        WHERE is_draft = 0 AND learner_id IS NOT NULL AND learner_id > 0"
+    );
+
+    $format_hours = function( $minutes ) {
+      $minutes = max( 0, (int) $minutes );
+      $h = (int) floor( $minutes / 60 );
+      $m = $minutes % 60;
+      return $m > 0 ? sprintf( '%d h %02d', $h, $m ) : $h . ' h';
+    };
+
+    $delivered_label = $format_hours( $delivered_minutes );
+    $trainee_label   = $format_hours( $trainee_minutes );
+
     $hours = floor( $total_seconds / HOUR_IN_SECONDS );
     $minutes = floor( ( $total_seconds % HOUR_IN_SECONDS ) / MINUTE_IN_SECONDS );
     $seconds = $total_seconds % MINUTE_IN_SECONDS;
@@ -10127,20 +10194,26 @@ trait ACDC_Kernel_Render_Trait {
     <div class="acdc-panel acdc-mb-18"><div class="acdc-inline-wrap" style="justify-content:space-between;align-items:center;gap:16px;"><input type="search" placeholder="Rechercher" style="max-width:420px;"><div class="acdc-inline-wrap" style="gap:10px;"><button type="button" class="acdc-icon-button"><?php echo $this->render_inline_icon( 'settings', 16 ); ?></button><button type="button" class="acdc-icon-button"><?php echo $this->render_inline_icon( 'filter', 16 ); ?></button><button type="button" class="acdc-icon-button"><?php echo $this->render_inline_icon( 'chevron-down', 16 ); ?></button></div></div></div>
 
     <style>
-      .acdc-ped-top{display:grid;grid-template-columns:1.1fr 1.1fr 1.5fr;gap:18px;margin-bottom:18px}.acdc-ped-card{position:relative;min-height:100px;padding:16px}.acdc-ped-card h3{margin:0 0 10px;font-size:15px;color:#1E4777}.acdc-ped-range{position:absolute;top:10px;right:12px}.acdc-ped-icon-line{display:flex;align-items:center;gap:14px;margin-top:10px}.acdc-ped-icon-box{width:40px;height:40px;border-radius:10px;background:#C5A253;color:#0B0706;display:flex;align-items:center;justify-content:center}.acdc-ped-main-value{font-size:22px;font-weight:700;color:#667085}.acdc-ped-list{margin:0;padding-left:18px;font-size:13px;line-height:1.55}.acdc-ped-ring{position:absolute;right:18px;top:38px;width:60px;height:60px;border-radius:50%;background:conic-gradient(#ef6b57 0 50%,#f0c038 50% 100%)}.acdc-ped-ring:after{content:'';position:absolute;inset:8px;border-radius:50%;background:#fff}.acdc-ped-total{position:absolute;top:10px;right:12px;font-size:12px;color:#3C3C3C}.acdc-ped-filter-box{padding:0;overflow:hidden;margin-bottom:18px}.acdc-ped-filter-head{display:flex;justify-content:flex-end;background:#DCE4EC;padding:10px 12px;color:#64748b;font-size:12px;text-transform:uppercase;letter-spacing:.03em}.acdc-ped-filter-grid{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:14px;padding:16px}.acdc-ped-filter-grid label{display:block;font-size:12px;color:#1E4777;text-transform:uppercase;margin-bottom:6px}.acdc-ped-help-dot{position:absolute;right:10px;bottom:10px;width:20px;height:20px;border-radius:50%;background:#E9C77C;color:#0B0706;font-size:12px;display:flex;align-items:center;justify-content:center}@media (max-width:1200px){.acdc-ped-top,.acdc-ped-filter-grid{grid-template-columns:1fr 1fr}}@media (max-width:782px){.acdc-ped-top,.acdc-ped-filter-grid{grid-template-columns:1fr}}</style>
+      .acdc-ped-top{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:18px;margin-bottom:18px}.acdc-ped-card{position:relative;min-height:100px;padding:16px}.acdc-ped-card h3{margin:0 0 10px;font-size:15px;color:#1E4777}.acdc-ped-range{position:absolute;top:10px;right:12px}.acdc-ped-icon-line{display:flex;align-items:center;gap:14px;margin-top:10px}.acdc-ped-icon-box{width:40px;height:40px;border-radius:10px;background:#C5A253;color:#0B0706;display:flex;align-items:center;justify-content:center}.acdc-ped-main-value{font-size:22px;font-weight:700;color:#667085}.acdc-ped-list{margin:0;padding-left:18px;font-size:13px;line-height:1.55}.acdc-ped-ring{position:absolute;right:18px;top:38px;width:60px;height:60px;border-radius:50%;background:conic-gradient(#ef6b57 0 50%,#f0c038 50% 100%)}.acdc-ped-ring:after{content:'';position:absolute;inset:8px;border-radius:50%;background:#fff}.acdc-ped-total{position:absolute;top:10px;right:12px;font-size:12px;color:#3C3C3C}.acdc-ped-filter-box{padding:0;overflow:hidden;margin-bottom:18px}.acdc-ped-filter-head{display:flex;justify-content:flex-end;background:#DCE4EC;padding:10px 12px;color:#64748b;font-size:12px;text-transform:uppercase;letter-spacing:.03em}.acdc-ped-filter-grid{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:14px;padding:16px}.acdc-ped-filter-grid label{display:block;font-size:12px;color:#1E4777;text-transform:uppercase;margin-bottom:6px}.acdc-ped-help-dot{position:absolute;right:10px;bottom:10px;width:20px;height:20px;border-radius:50%;background:#E9C77C;color:#0B0706;font-size:12px;display:flex;align-items:center;justify-content:center}@media (max-width:1200px){.acdc-ped-top,.acdc-ped-filter-grid{grid-template-columns:1fr 1fr}}@media (max-width:782px){.acdc-ped-top,.acdc-ped-filter-grid{grid-template-columns:1fr}}</style>
 
     <div class="acdc-ped-top">
       <div class="acdc-panel acdc-ped-card">
         <h3>Apprenants formés (actions de formation)</h3>
-        <div class="acdc-ped-range"><select><option>Depuis le début</option></select></div>
-        <div class="acdc-ped-icon-line"><span class="acdc-ped-icon-box"><?php echo $this->render_inline_icon( 'learners', 18 ); ?></span><div class="acdc-ped-main-value"><?php echo (int) $total_learners; ?></div></div>
+        <div class="acdc-ped-icon-line"><span class="acdc-ped-icon-box"><?php echo $this->render_inline_icon( 'learners', 18 ); ?></span><div class="acdc-ped-main-value"><?php echo (int) $trained_learners; ?></div></div>
+        <p style="margin:8px 0 0;font-size:12px;color:#3C3C3C;">Personnes inscrites à au moins une action, et non le nombre de fiches du répertoire.</p>
         <span class="acdc-ped-help-dot">?</span>
       </div>
       <div class="acdc-panel acdc-ped-card">
         <h3>Heures de formation dispensées</h3>
-        <div class="acdc-ped-range"><select><option>Depuis le début</option></select></div>
-        <div class="acdc-ped-icon-line"><span class="acdc-ped-icon-box"><?php echo $this->render_inline_icon( 'calendar', 18 ); ?></span><div class="acdc-ped-main-value"><?php echo esc_html( $duration_label ); ?></div></div>
-        <span class="acdc-ped-help-dot">?</span>
+        <div class="acdc-ped-icon-line"><span class="acdc-ped-icon-box"><?php echo $this->render_inline_icon( 'calendar', 18 ); ?></span><div class="acdc-ped-main-value"><?php echo esc_html( $delivered_label ); ?></div></div>
+        <p style="margin:8px 0 0;font-size:12px;color:#3C3C3C;">Ce que le formateur a animé, une fois par formation.</p>
+        <span class="acdc-ped-help-dot" title="Somme des créneaux planifiés, comptés une seule fois par formation.">?</span>
+      </div>
+      <div class="acdc-panel acdc-ped-card">
+        <h3>Heures-stagiaires</h3>
+        <div class="acdc-ped-icon-line"><span class="acdc-ped-icon-box"><?php echo $this->render_inline_icon( 'learners', 18 ); ?></span><div class="acdc-ped-main-value"><?php echo esc_html( $trainee_label ); ?></div></div>
+        <p style="margin:8px 0 0;font-size:12px;color:#3C3C3C;">Heures dispensées multipliées par le nombre d'inscrits.</p>
+        <span class="acdc-ped-help-dot" title="Indicateur de volume : 3 apprenants sur 14 h font 42 heures-stagiaires.">?</span>
       </div>
       <div class="acdc-panel acdc-ped-card">
         <h3>Formations les plus populaires</h3><div class="acdc-ped-total"><?php echo '(' . (int) array_sum( $formation_counts ) . ' total)'; ?></div>
@@ -10643,6 +10716,78 @@ trait ACDC_Kernel_Render_Trait {
          ORDER BY qp.responded_at DESC, qp.id DESC"
       );
 
+      /* ACDC 3.25.225 — DEUX MOTEURS DE TEST, UN SEUL LU.
+         Cet écran n'interrogeait que le module Questionnaires. Or les tests de
+         positionnement et les évaluations des acquis passés par les apprenants
+         depuis leur extranet vivent dans le module Quiz, dans d'autres tables.
+         L'écran restait donc désespérément vide sur un dossier où trois
+         apprenantes avaient bel et bien répondu — et un indicateur Qualiopi
+         qui affiche zéro alors que les preuves existent est pire qu'absent :
+         il fait croire que rien n'a été fait.
+         On lit les deux, en les ramenant à la même forme. */
+      $quiz_entries = $wpdb->get_results(
+        "SELECT qp.id AS participant_id, qp.learner_id AS apprenant_id, qp.completed_at AS responded_at,
+                qp.total_score_percentage, qp.is_passed,
+                qq.title AS quiz_title, qq.quiz_purpose, qs.formation_id,
+                l.first_name, l.last_name, l.usage_last_name,
+                f.title AS formation_title, f.duration AS formation_duration
+           FROM {$wpdb->prefix}acdc_of_qz_participants qp
+           INNER JOIN {$wpdb->prefix}acdc_of_qz_sessions qs ON qs.id = qp.session_id
+           INNER JOIN {$wpdb->prefix}acdc_of_qz_quizzes qq ON qq.id = qs.quiz_id
+           LEFT JOIN {$this->learner_table} l ON l.id = qp.learner_id
+           LEFT JOIN {$this->formation_table} f ON f.id = qs.formation_id
+          WHERE qq.quiz_purpose IN ('positioning','assessment')
+            AND qp.completed_at IS NOT NULL
+          ORDER BY qp.completed_at DESC, qp.id DESC"
+      );
+
+      foreach ( (array) $quiz_entries as $quiz_entry ) {
+        $percentage = ( null !== $quiz_entry->total_score_percentage )
+          ? max( 0, min( 100, round( (float) $quiz_entry->total_score_percentage, 1 ) ) )
+          : null;
+        $is_positioning = ( 'positioning' === (string) $quiz_entry->quiz_purpose );
+
+        if ( null !== $percentage ) {
+          if ( $is_positioning ) {
+            $positioning_percentages[] = $percentage;
+          } else {
+            $evaluation_percentages[] = $percentage;
+          }
+          $pair_key = absint( $quiz_entry->apprenant_id ) . ':' . absint( $quiz_entry->formation_id );
+          if ( ! isset( $pair_scores[ $pair_key ] ) ) {
+            $pair_scores[ $pair_key ] = array();
+          }
+          $pair_scores[ $pair_key ][ $is_positioning ? 'positioning_test' : 'evaluation' ] = $percentage;
+        }
+
+        $quiz_name = trim( implode( ' ', array_filter( array(
+          $quiz_entry->first_name,
+          ! empty( $quiz_entry->usage_last_name ) ? $quiz_entry->usage_last_name : $quiz_entry->last_name,
+        ) ) ) );
+
+        $quiz_result = '—';
+        if ( null !== $quiz_entry->is_passed ) {
+          $quiz_result = ( 1 === (int) $quiz_entry->is_passed ) ? 'Acquis' : 'Non-acquis';
+        } elseif ( null !== $percentage ) {
+          $quiz_result = $percentage >= 70 ? 'Acquis' : ( $percentage > 0 ? 'En progression' : 'Non-acquis' );
+        }
+
+        $rows[] = array(
+          'id' => (int) $quiz_entry->participant_id,
+          'apprenant' => $quiz_name ?: '—',
+          'test' => $is_positioning ? 'Test de positionnement' : 'Évaluation des acquis',
+          'source' => (string) $quiz_entry->quiz_title,
+          'formation' => ! empty( $quiz_entry->formation_title ) ? (string) $quiz_entry->formation_title : '—',
+          'dates' => '—',
+          'duree' => $format_duration( ! empty( $quiz_entry->formation_duration ) ? $quiz_entry->formation_duration : '' ),
+          'format' => '—',
+          'added' => ! empty( $quiz_entry->responded_at ) ? mysql2date( 'j F Y', $quiz_entry->responded_at ) : '—',
+          'result' => $quiz_result,
+          'score' => null !== $percentage ? number_format_i18n( $percentage, 1 ) . ' %' : '—',
+          'percentage' => null !== $percentage ? number_format_i18n( $percentage, 1 ) . '%' : '—',
+        );
+      }
+
       foreach ( (array) $progress_entries as $entry ) {
         $source_key = (string) $entry->source_type . ':' . (int) $entry->source_id;
         if ( ! isset( $source_cache[ $source_key ] ) ) {
@@ -10887,9 +11032,64 @@ trait ACDC_Kernel_Render_Trait {
   }  private function render_front_statistics_financial_scope( $scope ) {
     global $wpdb;
 
+    /* ACDC 3.25.225 — LE CHIFFRE D'AFFAIRES POTENTIEL PARTAIT DU MAUVAIS BOUT.
+       Cette requête joignait les apprenants aux séances par `learner.session_id`,
+       la colonne qui ne peut désigner qu'UNE séance : sur une formation
+       découpée en plusieurs journées, la plupart des apprenants n'ont pas cette
+       colonne renseignée, leur formation restait donc inconnue et leur tarif
+       valait zéro. L'écran annonçait « 0,00 € » sur un site qui a des dossiers.
+       Le potentiel se lit là où il est écrit : sur le DOSSIER d'inscription,
+       qui porte son propre prix négocié et connaît sa formation sans passer par
+       une séance. Le prix de la fiche formation ne sert plus que de repli. */
     $learners = $wpdb->get_results(
-      "SELECT l.*, s.start_date, s.end_date, s.status AS session_status,\n              f.title AS formation_title, f.duration AS formation_duration, f.price AS formation_price,\n              g.name AS group_name, g.trainer_name AS group_trainer_name\n       FROM {$this->learner_table} l\n       LEFT JOIN {$this->session_table} s ON s.id = l.session_id\n       LEFT JOIN {$this->formation_table} f ON f.id = s.formation_id\n       LEFT JOIN {$this->group_table} g ON g.session_id = s.id\n       ORDER BY l.id DESC"
+      "SELECT r.id, r.learner_id, r.learner_label, r.company_label, r.group_label,
+              r.price_ht AS registration_price, r.formation_id,
+              l.first_name, l.last_name, l.usage_last_name, l.status,
+              c.name AS company_name,
+              f.title AS formation_title, f.duration AS formation_duration, f.price AS formation_price
+         FROM {$this->training_registration_table} r
+         LEFT JOIN {$this->learner_table} l ON l.id = r.learner_id
+         LEFT JOIN {$this->company_table} c ON c.id = r.company_id
+         LEFT JOIN {$this->formation_table} f ON f.id = r.formation_id
+        WHERE r.is_draft = 0
+        ORDER BY r.id DESC"
     );
+
+    /* Prix retenu, période et séances : une passe, pour que le total du haut et
+       les lignes du tableau ne puissent pas diverger. */
+    foreach ( (array) $learners as $entry ) {
+      $price = (float) str_replace( ',', '.', $this->normalize_price_number( $entry->registration_price ) );
+      if ( $price <= 0 ) {
+        $price = (float) str_replace( ',', '.', $this->normalize_price_number( $entry->formation_price ) );
+      }
+      $entry->formation_price = $price;
+
+      $sessions = array();
+      if ( ! empty( $entry->formation_id ) ) {
+        $sessions = (array) $wpdb->get_results( $wpdb->prepare(
+          "SELECT id, start_date, end_date, start_at, end_at, schedule_json
+             FROM {$this->session_table}
+            WHERE formation_id = %d AND COALESCE(is_draft,0) = 0
+            ORDER BY COALESCE(start_at, CONCAT(start_date,' 00:00:00')) ASC",
+          (int) $entry->formation_id
+        ) );
+      }
+
+      $entry->session_count = count( $sessions );
+      $entry->start_date    = '';
+      $entry->end_date      = '';
+      if ( ! empty( $sessions ) ) {
+        $first = $sessions[0];
+        $last  = $sessions[ count( $sessions ) - 1 ];
+        $entry->start_date = ! empty( $first->start_date ) ? $first->start_date : ( ! empty( $first->start_at ) ? substr( (string) $first->start_at, 0, 10 ) : '' );
+        $entry->end_date   = ! empty( $last->end_date ) ? $last->end_date : ( ! empty( $last->end_at ) ? substr( (string) $last->end_at, 0, 10 ) : $entry->start_date );
+      }
+
+      $planned = $this->acdc_completion_planned_time( wp_list_pluck( $sessions, 'id' ) );
+      $entry->planned_label = (string) $planned['label'];
+      $entry->group_name = (string) ( $entry->group_label ?? '' );
+      $entry->group_trainer_name = '';
+    }
 
     $format_eur = function( $amount ) {
       return number_format( (float) $amount, 2, ',', ' ' ) . ' €';
@@ -10938,29 +11138,44 @@ trait ACDC_Kernel_Render_Trait {
       <div class="acdc-panel"><div class="acdc-table-wrap"><table class="acdc-table acdc-fin-table"><thead><tr><th>ID</th><th>Apprenant</th><th>Commanditaire</th><th>Formation</th><th>Tarif (€ HT)</th><th>Dates de formation</th><th>Séances de formation</th><th>Groupe</th><th>Progression</th><th>Formateur attitré</th><th>État dossier</th><th>Accès extranet</th><th></th></tr></thead><tbody>
       <?php if ( ! empty( $rows ) ) : foreach ( $rows as $entry ) :
         $name = trim( implode( ' ', array_filter( array( $entry->first_name, ! empty( $entry->usage_last_name ) ? $entry->usage_last_name : $entry->last_name ) ) ) );
-        $commanditaire_type = ! empty( $entry->company_name ) ? 'Entreprise' : 'Particulier';
-        $commanditaire_meta = ! empty( $entry->company_name ) ? $entry->company_name : '';
+        if ( '' === $name ) {
+          $name = ! empty( $entry->learner_label ) ? (string) $entry->learner_label : '—';
+        }
+        /* Raison sociale d'abord : le commanditaire est l'entreprise, pas la
+           personne qui a signé pour elle. */
+        $commanditaire_meta = ! empty( $entry->company_name ) ? (string) $entry->company_name : (string) ( $entry->company_label ?? '' );
+        $commanditaire_type = '' !== $commanditaire_meta ? 'Entreprise' : 'Particulier';
         $formation = ! empty( $entry->formation_title ) ? $entry->formation_title : '—';
         $dates = '—';
         if ( ! empty( $entry->start_date ) ) {
           $dates = 'Début : ' . mysql2date( 'd/m/Y', $entry->start_date );
           if ( ! empty( $entry->end_date ) ) { $dates .= '<br><small>Fin : ' . mysql2date( 'd/m/Y', $entry->end_date ) . '</small>'; }
         }
-        $seances_label = ! empty( $entry->session_id ) ? '4 séances de formation' : '—';
-        $dur = ! empty( $entry->formation_duration ) ? preg_replace( '/^([0-9]{1,2}):([0-9]{2})$/', '$1h$2', (string) $entry->formation_duration ) : '—';
-        $progress = '—' !== $dur ? $dur . ' / ' . $dur : '—';
+        /* « 4 séances de formation » était écrit en dur sur chaque ligne, quel
+           que soit le dossier. On compte les séances réelles. */
+        $seances_label = $entry->session_count > 0
+          ? sprintf( '%d séance%s de formation', (int) $entry->session_count, $entry->session_count > 1 ? 's' : '' )
+          : '—';
+        $dur = ! empty( $entry->planned_label ) ? (string) $entry->planned_label : ( ! empty( $entry->formation_duration ) ? preg_replace( '/^([0-9]{1,2}):([0-9]{2})$/', '$1h$2', (string) $entry->formation_duration ) : '—' );
+        $progress = $dur;
         $trainer = ! empty( $entry->group_trainer_name ) ? $entry->group_trainer_name : '—';
         $status = ! empty( $entry->status ) ? $entry->status : '—';
         if ( false !== strpos( strtolower( $status ), 'termin' ) ) { $status = 'Formation terminée - …'; }
         $access = '<span style="color:#ef4444;display:inline-flex;align-items:center;">' . $this->render_inline_icon( 'close', 16 ) . '</span>';
-        $view_url = add_query_arg( array( 'action' => 'view', 'item_id' => (int) $entry->id ), $this->portal_page_url( array( 'tab' => 'learners' ) ) );
+        /* La ligne décrit un DOSSIER : le lien mène à l'apprenant quand il est
+           identifié, au dossier sinon. Il pointait auparavant sur une fiche
+           apprenant portant l'identifiant du dossier — donc sur quelqu'un
+           d'autre. */
+        $view_url = ! empty( $entry->learner_id )
+          ? add_query_arg( array( 'action' => 'view', 'item_id' => (int) $entry->learner_id ), $this->portal_page_url( array( 'tab' => 'learners' ) ) )
+          : add_query_arg( array( 'action' => 'view', 'item_id' => (int) $entry->id ), $this->portal_page_url( array( 'tab' => 'training_registrations' ) ) );
       ?><tr><td><?php echo (int) $entry->id; ?></td><td><?php echo esc_html( $name ?: '—' ); ?></td><td><?php echo esc_html( $commanditaire_type ); ?><?php if ( '' !== $commanditaire_meta ) : ?><br><small><?php echo esc_html( $commanditaire_meta ); ?></small><?php endif; ?></td><td><?php echo esc_html( $formation ); ?></td><td><?php echo esc_html( $format_eur( isset( $entry->formation_price ) ? (float) $entry->formation_price : 0.0 ) ); ?></td><td><?php echo wp_kses_post( $dates ); ?></td><td><?php echo esc_html( $seances_label ); ?> <?php echo $this->render_inline_icon( 'chevron-right', 14 ); ?></td><td><?php echo esc_html( ! empty( $entry->group_name ) ? $entry->group_name : '—' ); ?></td><td><?php echo esc_html( $progress ); ?></td><td><?php echo esc_html( $trainer ); ?></td><td><?php echo esc_html( $status ); ?></td><td><?php echo $access; ?></td><td class="acdc-eye-col"><a class="acdc-icon-link" href="<?php echo esc_url( $view_url ); ?>"><?php echo $this->render_inline_icon( 'eye', 25 ); ?></a></td></tr><?php endforeach; else : ?><tr><td colspan="13">Aucune donnée ne correspond aux critères demandés.</td></tr><?php endif; ?>
       </tbody></table></div></div>
       <?php
       return;
     }
 
-    $rows = $this->get_mock_invoices_data( $scope );
+    $rows = $this->get_financial_invoice_rows( $scope );
     $total = 0.0;
     foreach ( $rows as $row ) {
       $total += $parse_eur( isset( $row['tarif_ht_value'] ) ? $row['tarif_ht_value'] : $row['tarif_ht'] );

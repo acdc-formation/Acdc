@@ -695,7 +695,22 @@
       $name = trim( trim( (string) $prospect->first_name ) . ' ' . trim( (string) $prospect->last_name ) );
       return '' !== $name ? $name : '—';
     }
+    /* ACDC 3.25.225 — DÈS QU'IL Y A UNE ENTREPRISE, L'ENTREPRISE NOMME.
+       Cette fonction rendait le nom de la SIGNATAIRE pour un prospect
+       entreprise. C'est la règle que David a énoncée deux fois, et le défaut
+       qu'il a relevé lui-même : « souvent pour l'entreprise on prend le
+       signataire comme référence alors qu'il faut prendre obligatoirement le
+       nom de l'entreprise ». Concrètement, une signataire qui est aussi
+       apprenante rendait deux dossiers rigoureusement identiques à l'écran —
+       impossible de savoir lequel était lequel.
+       On ne perd pas le contact pour autant : la convention du courrier
+       professionnel le place après, « à l'attention de ». */
     $contact = trim( trim( (string) $prospect->signer_first_name ) . ' ' . trim( (string) $prospect->signer_last_name ) );
+    $company = trim( (string) ( $prospect->company_name ?? '' ) );
+
+    if ( '' !== $company ) {
+      return '' !== $contact ? $company . ' — à l’attention de ' . $contact : $company;
+    }
     if ( '' !== $contact ) {
       return $contact;
     }

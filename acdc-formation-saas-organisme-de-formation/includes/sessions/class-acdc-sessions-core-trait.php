@@ -420,13 +420,18 @@ trait ACDC_Sessions_Core_Trait {
     // ACDC 3.23.1 — Traçabilité des convocations automatiques (preuve Qualiopi).
     $conv_appr = ! empty( $session->convocation_sent_at )          ? mysql2date( 'd/m/Y \à H\hi', $session->convocation_sent_at )          : 'Non envoyée';
     $conv_rapp = ! empty( $session->convocation_reminder_sent_at ) ? mysql2date( 'd/m/Y \à H\hi', $session->convocation_reminder_sent_at ) : 'Non envoyé';
-    $conv_cmd  = ! empty( $session->convocation_company_sent_at )  ? mysql2date( 'd/m/Y \à H\hi', $session->convocation_company_sent_at )  : 'Non envoyée';
+    /* ACDC 3.25.225 — LA CONVOCATION DU COMMANDITAIRE N'EXISTE PAS.
+       « Le commanditaire n'a pas lieu d'avoir de convocation, ce sont
+       uniquement les apprenants. » La carte de séance annonçait pourtant une
+       ligne « Convocation commanditaire — Non envoyée », c'est-à-dire une
+       pièce manquante à un dossier qui n'en attend aucune. Un écran de suivi
+       Qualiopi qui signale un manque imaginaire pousse à envoyer un document
+       qui n'a pas lieu d'être. */
     $sections[] = array(
       'title' => 'Convocations automatiques',
       'items' => array(
         'Convocation apprenants (J-7)' => $conv_appr,
         'Rappel apprenants (J-1)'      => $conv_rapp,
-        'Convocation commanditaire'    => $conv_cmd,
       ),
     );
     return $sections;
