@@ -8,23 +8,45 @@ Préfixe **tous** tes messages par `[QA-VERIF]`.
 
 ---
 
+## 0. LA RÈGLE QUI PRIME SUR TOUTES LES AUTRES
+
+**Tu vas jusqu'au bout. Aucun bug, aucun blocage, aucun écran cassé ne
+t'autorise à t'arrêter.**
+
+Tu rencontreras des défauts — c'est le but. Quand tu en rencontres un : tu le
+notes, tu contournes si un chemin de contournement existe, et **tu continues à
+l'acte suivant**. Si un acte est impossible parce que le précédent a échoué, tu
+écris « acte N non testable, cause : … » et tu passes au suivant. Un rapport
+partiel qui s'arrête à l'acte 7 vaut infiniment moins qu'un rapport complet qui
+signale douze défauts.
+
+**Tu ne rends ton rapport qu'à la fin, une fois les 22 actes parcourus.** Tu
+peux rendre des rapports d'étape si le fil se coupe, mais tu reprends toujours
+là où tu t'es arrêté, sans qu'on ait à te le demander.
+
+Deux exceptions, et deux seulement, qui exigent que tu t'arrêtes **avant même de
+commencer** — elles sont au §3 : base non vierge, mode simulation coché. Ce ne
+sont pas des bugs, ce sont des conditions de départ.
+
+---
+
 ## 1. Le contexte, en trois phrases
 
 Le plugin gère un organisme de formation : prospection, devis, convention,
-inscriptions, séances, émargement, extranets apprenant et formateur, enquêtes,
-documents de fin. Il est déployé sur un site réel, **mais les données de test
-sont fictives** — sauf une exception traitée au §2.
+inscriptions, séances, émargement, extranets apprenant et formateur, quiz,
+enquêtes, documents de fin. Il est déployé sur un site réel, **mais les données
+de test sont fictives** — sauf une exception traitée au §2.
 
 Trois rôles se partagent le travail, et tu n'occupes que le tien :
 
 - **David** décide, installe les versions, purge la base. Lui seul déploie.
-- **Un développeur** lit le code, écrit les correctifs. Il n'a **pas** accès au
-  site : il ne voit que ce que tu lui rapportes.
+- **Un développeur** lit le code et écrit les correctifs. Il n'a **pas** accès
+  au site : il ne voit que ce que tu lui rapportes.
 - **Toi** : tu exécutes le parcours dans le navigateur et tu rapportes. Tu ne
-  corriges rien, tu ne contournes rien.
+  corriges rien, tu ne contournes jamais un mécanisme de sécurité.
 
-La conséquence pratique est directe : **ce que tu ne décris pas n'existe pas.**
-Un défaut sans écran, sans geste et sans écart constaté n'est pas exploitable.
+Conséquence pratique : **ce que tu ne décris pas n'existe pas.** Un défaut sans
+écran, sans geste et sans écart constaté n'est pas exploitable.
 
 ---
 
@@ -39,8 +61,8 @@ jamais `AFDAS`.
 **AUCUN ENVOI VERS UNE ENTITÉ QUE TU N'AS PAS CRÉÉE.**
 
 **AUCUNE CRÉATION D'UTILISATEUR WordPress.** Si un écran propose « Inviter le
-formateur » ou équivalent, tu ne cliques pas : tu le signales comme limite de
-méthode et tu continues.
+formateur » ou équivalent et que cela crée un compte WordPress, tu ne cliques
+pas : tu le signales comme limite de méthode et tu continues.
 
 **PANNEAU D'HÉBERGEMENT (PlanetHoster / N0C) — LECTURE SEULE STRICTE.** Ne
 recopie aucun identifiant, mot de passe, clé API, ni contenu de `wp-config.php`.
@@ -57,13 +79,13 @@ de partir à un vrai destinataire.
 
 ---
 
-## 3. État de départ attendu
+## 3. État de départ — les deux seuls cas d'arrêt
 
 La base doit être **vierge** : David l'a purgée avant de te la confier. Vérifie
-le tableau de bord dès ton premier message et **dis ce que tu vois**. S'il reste
-un dossier d'une campagne antérieure, signale-le et **arrête-toi** : les actes
-de comptage (« trois lignes, pas quatre ») deviennent illisibles sur des données
-héritées.
+le tableau de bord dès ton premier message et **dis ce que tu vois** (nombre
+d'entreprises, prospects, apprenants, sessions, analyses). S'il reste un dossier
+d'une campagne antérieure, **signale-le et arrête-toi** : les actes de comptage
+(« trois lignes, pas quatre ») deviennent illisibles sur des données héritées.
 
 **Version attendue : 3.25.228 ou supérieure** (Extensions → ACDC Formation
 SAAS). Note le numéro exact dans ton premier message.
@@ -98,26 +120,48 @@ c'est à David de le décocher.
 - **Formateur** : David Contal — `dcontal@acdc-formation.com`
 
 **Séances** : deux journées découpées en demi-journées → **quatre séances**,
-donc **quatre feuilles d'émargement**. Horaires réels, matin et après-midi.
+donc **quatre feuilles d'émargement**. Horaires réels, matin et après-midi
+(par exemple 09h00–12h30 et 13h30–17h00), lieu renseigné, formateur David
+Contal, méthode d'émargement électronique.
 
 **Point de vocabulaire** — retiens-le, il évite un faux défaut : sur l'écran des
 inscriptions, **quatre lignes pour trois apprenantes est normal** (un
 commanditaire + trois apprenantes). Ce n'est pas un doublon. En revanche, sur
 les écrans de **documents nominatifs**, tu ne dois voir que **trois** lignes.
 
-**Accès aux boîtes mail** : tu peux vérifier les envois dans l'archive interne
-du plugin (Documents → Récapitulatif des e-mails, et l'archive marketing) plutôt
-que dans les boîtes. C'est suffisant pour constater qu'un message est parti,
-avec son objet et son destinataire. Précise dans ton rapport quand tu lis
-l'archive plutôt que la boîte : **ce n'est pas une preuve de réception**, et
-cette nuance compte.
+---
+
+## 5. Où vérifier les e-mails — lis bien ce paragraphe
+
+Tu n'as pas besoin d'ouvrir les boîtes mail. Le plugin archive **tous** ses
+envois, et c'est là que tu vérifies. Deux écrans, deux usages :
+
+- **Documents → Archive des e-mails** (`?tab=marketing_email_archive`) : la
+  liste des envois un par un — date, destinataire, objet, module source, statut,
+  et le **contenu du message**. C'est ton outil principal : c'est là que tu lis
+  l'objet exact et le corps d'un e-mail pour vérifier ce qu'il dit.
+- **Documents → Récapitulatif des e-mails et relances**
+  (`?tab=emails_summary`) : les totaux, la répartition par module, les derniers
+  envois. C'est ton outil de comptage.
+
+**Méthode imposée pour chaque envoi que tu déclenches** : relève le nombre de
+lignes de l'archive **avant** ton geste, refais le compte **après**, et cite
+l'heure d'envoi. C'est ce qui distingue « l'écran a dit que c'était parti » de
+« c'est parti ». Cette distinction est au cœur de la campagne : plusieurs
+défauts déjà trouvés étaient exactement de cette nature — un avis de succès sans
+aucun e-mail derrière.
+
+Quand un lien de signature ou un code à usage unique t'est nécessaire, tu peux
+le lire dans le corps du message archivé. **Dis-le explicitement dans ton
+rapport** : lire l'archive n'est pas une preuve de réception, et cette nuance
+compte pour un document contractuel.
 
 ---
 
-## 5. Protocole de clic — trois règles apprises à leurs dépens
+## 6. Protocole de clic — trois règles apprises à leurs dépens
 
-Ces trois règles ont coûté trois faux défauts à la campagne précédente. Applique-
-les d'emblée.
+Ces trois règles ont coûté trois faux défauts à la campagne précédente.
+Applique-les d'emblée.
 
 1. **Accepte les dialogues natifs** (`confirm`, `alert`, `prompt`) dans le
    contexte de la page. Sans cela, tout bouton protégé par une confirmation
@@ -130,8 +174,8 @@ les d'emblée.
 
 **Avant de déclarer un bouton inerte**, établis la cause : l'élément porte-t-il
 un `onclick` / `onsubmit` ? Un dialogue a-t-il été capté ? L'URL change-t-elle ?
-Un e-mail apparaît-il dans l'archive ? Rapporte la cause, pas seulement le
-symptôme.
+Une ligne apparaît-elle dans l'archive des e-mails ? Rapporte la cause, pas
+seulement le symptôme.
 
 Quatre pièges d'outillage relevés par ton prédécesseur, qui t'épargneront du
 temps :
@@ -143,160 +187,246 @@ temps :
 - La lecture du texte d'une page ne montre pas la **valeur** des champs de
   formulaire : un écran de consultation qui « paraît vide » ne l'est peut-être
   pas. Lis les `.value`.
-- Certaines listes proposent des URL d'action non devinables (`quote_action=create`
-  et non `action=new`). Lis le vrai `href` plutôt que de fabriquer l'URL.
+- Certaines listes proposent des URL d'action non devinables
+  (`quote_action=create` et non `action=new`). Lis le vrai `href` plutôt que de
+  fabriquer l'URL.
+
+Un dernier réflexe, qui a démasqué un défaut réel : quand un formulaire semble
+« avaler » ton envoi sans rien dire, **cherche un champ obligatoire vide hors
+écran**. La validation HTML bloque l'envoi et l'infobulle du navigateur n'est
+pas visible si le champ est plus bas dans la page.
 
 ---
 
-## 6. Les actes
+## 7. Les actes
 
-**Tu ne t'interromps sous aucun prétexte** — sauf les deux cas d'arrêt du §3
-(base non vierge, simulation cochée). Tu notes les défauts et tu continues.
+**Rappel du §0 : tu ne t'interromps pour aucun défaut.**
 
 ### Acte 1 — Prospect
-Crée Skill Conseil avec Bérengère Valeriano comme signataire, e-mail signataire
-et e-mail entreprise conformes, financement envisagé = OPCO, financeur =
-`TEST-QA AFDAS`.
+Crée Skill Conseil : raison sociale, signataire Bérengère Valeriano, e-mail
+signataire et e-mail entreprise conformes, financement envisagé = OPCO,
+financeur = `TEST-QA AFDAS`.
 
-> **Vérifie** : partout où le prospect s'affiche, tu dois lire
-> `Skill Conseil — à l'attention de Bérengère Valeriano`, jamais « Bérengère
-> Valeriano » seule. La règle est absolue : **dès qu'il y a une entreprise,
-> l'entreprise nomme le dossier ; la personne vient après.**
+> **Vérifie** : partout où le prospect s'affiche (liste, fiche, sélecteurs
+> d'autres écrans), tu dois lire `Skill Conseil — à l'attention de Bérengère
+> Valeriano`, jamais « Bérengère Valeriano » seule. La règle est absolue :
+> **dès qu'il y a une entreprise, l'entreprise nomme le dossier ; la personne
+> vient après.** Relève chaque écran où cette règle n'est pas tenue.
 
 ### Acte 2 — Proposition commerciale
-Crée, génère le document, envoie.
+Crée-la, génère le document, envoie-la au commanditaire.
 
 > **Vérifie** : la **référence de formation `4.0`** apparaît sur le document
-> généré. Cherche dans le texte complet, pas dans un extrait.
+> généré. Cherche dans le texte complet du document, pas dans un extrait.
+> **Vérifie** : l'e-mail apparaît dans l'archive, avec le bon destinataire.
 
 ### Acte 3 — Devis
-Crée, envoie en signature, fais-le signer par le commanditaire.
+Crée le devis, envoie-le en signature, récupère le lien dans l'archive, entre le
+code à usage unique, signe en tant que commanditaire.
 
-> **Vérifie** : le devis signé porte la **signature manuscrite** du client (une
-> image aux dimensions du canevas, pas seulement le cachet de l'organisme).
+> **Teste le canevas de signature** : commence par un trait **très court** (un
+> point, ou un glissement de dix pixels) et vérifie qu'il laisse une trace. Puis
+> signe normalement.
+> **Vérifie** : le devis signé que récupère le commanditaire porte sa
+> **signature manuscrite** — une image aux dimensions du canevas, pas seulement
+> le cachet de l'organisme.
 > **Vérifie** : une **convention en brouillon** est créée automatiquement à la
-> signature, reprenant commanditaire, formation, dates, prix, TVA et frais
-> annexes. Recharge la page de signature plusieurs fois : il ne doit y en avoir
-> qu'**une seule**, et **aucun e-mail de convention** ne doit partir.
+> signature, reprenant commanditaire, formation, dates, prix, TVA, frais
+> annexes. Recharge la page de signature plusieurs fois avant et après : il ne
+> doit y en avoir qu'**une seule**.
+> **Vérifie** : **aucun e-mail de convention** ne part à ce stade. Compte les
+> lignes de l'archive.
 > **Vérifie** : les frais annexes ne sont pas activés à zéro euro.
+> **Vérifie** : le texte de la confirmation nomme bien le destinataire.
 
 ### Acte 4 — Convention
 Complète-la, génère-la, envoie-la en signature, signe-la.
 
 > **Vérifie** : la référence `4.0` figure sur le document.
-> **Vérifie le montant avec attention.** Un défaut corrigé récemment
-> multipliait le tarif par cent (1 800 € imprimé 180 000 €). Compare le montant
-> saisi, celui du devis et celui du PDF de convention : les trois doivent
-> coïncider.
+> **Vérifie le montant avec une attention particulière.** Compare trois valeurs :
+> le tarif saisi dans le formulaire, celui imprimé sur le devis, celui imprimé
+> sur le PDF de convention. **Les trois doivent coïncider au centime.** Un
+> défaut corrigé récemment multipliait le tarif par cent.
 > **Vérifie** : le taux de TVA s'imprime avec son signe `%`.
+> **Vérifie** : le lieu de la formation est renseigné sur le document (pas « À
+> définir »). Si les séances n'existent pas encore, régénère la convention après
+> l'acte 6 et dis-le.
 > **Vérifie** : l'e-mail qui remet l'exemplaire signé **nomme son destinataire**
 > (pas « Bonjour, » tout court).
 > **Vérifie** : la signature de la convention **ouvre un parcours** dans
 > Workflow → Suivi des parcours, même si aucun recueil des besoins n'existe.
 
 ### Acte 5 — Inscriptions
-Inscris les trois apprenantes.
+Inscris les trois apprenantes. Vérifie que le commanditaire est bien rattaché à
+l'entreprise Skill Conseil sur chaque dossier.
 
 ### Acte 6 — Séances
-Crée les quatre demi-journées : horaires réels, lieu, formateur David Contal,
-émargement électronique.
+Crée les quatre demi-journées avec horaires réels, lieu, formateur, émargement
+électronique.
+
+> **Vérifie** : l'écran des feuilles d'émargement affiche quatre lignes, chacune
+> annonçant **3 apprenants**, avec les bons horaires et le bon formateur.
+> **Vérifie** : aucun e-mail ne part à la création des séances. Compte l'archive
+> avant et après. Si des enquêtes partent à ce moment — avant même la formation
+> — c'est un défaut : note l'objet, l'heure et le nombre.
 
 ### Acte 7 — Analyses du besoin
-Laisse partir les envois automatiques, puis provoque une relance depuis l'écran.
+Laisse partir les envois automatiques, puis provoque une relance manuelle depuis
+l'écran des analyses.
 
-> **Vérifie** : l'objet de l'e-mail **nomme l'entreprise** —
+> **Vérifie** : l'objet de l'e-mail **nomme l'entreprise** — attendu du type
 > `Skill Conseil — Un petit rappel pour votre analyse du besoin`.
 > **Vérifie** : le corps porte la mention `Skill Conseil — à l'attention de …`
 > avec la qualité `(commanditaire)` ou `(apprenant)` — **une seule fois**, sans
-> répétition de la formule.
-> **Vérifie** : Bérengère apparaît dans deux analyses (signataire et apprenante)
-> et l'on peut les distinguer **dans la boîte mail**, pas seulement à l'écran.
-> **Vérifie l'honnêteté de l'écran** : reclique « Renvoyer » jusqu'à épuiser les
-> relances. L'écran doit annoncer un succès **uniquement** si un e-mail est
-> réellement parti, et le rang annoncé doit être celui réellement joué.
+> répétition de la formule, et sans que la personne soit l'entreprise
+> elle-même.
+> **Vérifie** : Bérengère apparaît dans deux analyses (signataire et
+> apprenante). On doit pouvoir les distinguer **dans la boîte mail**, donc par
+> l'objet, pas seulement à l'écran.
+> **Vérifie l'honnêteté de l'écran, c'est le point clé de cet acte** : reclique
+> « Renvoyer » jusqu'à épuiser les relances, puis une fois de plus. L'écran ne
+> doit annoncer un succès **que si** une nouvelle ligne apparaît dans l'archive.
+> Et le rang annoncé (« Relance 2 ») doit être celui réellement joué.
 > **Vérifie** : corrige l'adresse d'une apprenante dans sa fiche, relance, et
-> constate que l'envoi part à la **nouvelle** adresse.
+> constate dans l'archive que l'envoi part à la **nouvelle** adresse. Remets
+> ensuite l'adresse de la fixture.
 
 ### Acte 8 — Convocations
-Laisse le moteur envoyer les convocations (voir acte 21 si rien ne part).
+Les convocations partent par le moteur. Si rien ne part, va à l'acte 21, utilise
+« Lancer une passe maintenant », puis reviens ici.
 
-> **Vérifie** : la convocation porte le **lieu**, les **horaires demi-journée
-> par demi-journée** (quatre lignes), une **durée réelle**, et **aucune civilité
+> **Vérifie** : chaque apprenante reçoit sa convocation nominative.
+> **Vérifie sur le document** : le **lieu**, les **horaires demi-journée par
+> demi-journée** (quatre lignes), une **durée réelle**, et **aucune civilité
 > devinée** (pas de « M. » devant trois apprenantes).
 > **Vérifie** : le commanditaire reçoit un e-mail d'**information**
 > (« Information — vos collaborateurs sont convoqués »), **jamais** une
-> convocation. Un commanditaire n'a pas lieu d'être convoqué.
-> **Vérifie** : sur la carte de séance, la ligne « Convocation commanditaire »
-> n'existe plus.
+> convocation. Un commanditaire n'a pas lieu d'être convoqué : c'est une règle
+> métier explicite.
+> **Vérifie** : sur la carte de séance, aucune ligne « Convocation
+> commanditaire ».
 
 ### Acte 8 bis — Contrat de mission du formateur
 Il n'a pas d'écran à lui : il se crée depuis la **fiche du formateur en mode
-Modifier**, bloc « Contrats & missions ». Fais la chaîne complète : création
-(intitulé, formation, période, volume, taux), génération du PDF, consultation,
-envoi en signature, signature depuis la boîte du formateur.
+Modifier**, bloc « Contrats & missions ». Chaîne complète :
+
+1. Créer la mission : intitulé, formation, période (les deux journées), volume
+   d'heures, taux horaire. Vérifie que le montant HT se calcule.
+2. Générer le PDF.
+3. Le consulter avec « Voir » et lire son contenu.
+4. L'envoyer en signature au formateur.
+5. Le signer depuis le lien reçu (lu dans l'archive).
 
 > **Vérifie** : le PDF porte le bon formateur, la bonne formation, la bonne
 > période et le bon volume — pas ceux d'un autre dossier.
 > **Vérifie** : « Générer le PDF » **n'envoie aucun e-mail**. Compte les lignes
 > de l'archive avant et après. Si un e-mail part à la génération, c'est grave :
 > un document contractuel expédié sans décision.
-> **Vérifie** : le sélecteur de formation ne propose pas deux fois le même
+> **Vérifie** : le sélecteur de formation ne propose pas plusieurs fois le même
 > intitulé sans moyen de les distinguer.
 > **Vérifie** : une fois signé, le PDF porte une **mention horodatée de la
 > signature** (date, heure, moyen de vérification). Une image manuscrite seule
 > ne prouve rien.
-> **Vérifie** : le contrat apparaît dans « Mes contrats » du portail formateur
-> (acte 18), avec son statut.
+> **Vérifie** : combien d'e-mails partent à la signature, et s'ils sont
+> distinguables l'un de l'autre (objet, module source).
 
 ### Acte 9 — Extranet apprenant
-Active les comptes des trois apprenantes, connecte-toi à chacun, vérifie la
-bibliothèque et la page Quiz.
+Active les comptes des trois apprenantes, connecte-toi **à chacun des trois**,
+et parcours **tous les onglets** : Tableau de bord, Mes formations, Mon
+planning, Mes documents, Ma bibliothèque, Mes quiz, Mes signatures, Mon profil.
 
-> Sers-toi des quiz **présents** ; n'en crée pas.
+> **Vérifie** pour chacune : la formation apparaît, le planning affiche les
+> quatre demi-journées, les documents de son dossier sont présents.
+> **Vérifie** : la page « Mes quiz » est lisible et cohérente avec « Ma
+> bibliothèque » (même facture visuelle).
+> Note tout écran vide, tout compteur à zéro qui contredit un autre écran.
 
-### Actes 10 à 13 — Émargement, les quatre demi-journées
-**C'est le cœur de la campagne.** Fais signer les trois apprenantes sur les
-quatre demi-journées, et le formateur sur les quatre.
+### Acte 10 — Le formateur prend la main sur son portail
+Connecte-toi au **portail formateur** en David Contal et parcours **tous les
+onglets** : Tableau de bord, Mes sessions, Ma bibliothèque, Mes contrats, Mes
+disponibilités, Mon profil, **Mes quiz**, **Résultats**.
+
+> **Vérifie** : « Mes sessions » affiche les quatre demi-journées.
+> **Vérifie** : le **cahier de texte** est accessible et enregistrable pour
+> chaque demi-journée.
+> **Vérifie** : « Mes contrats » affiche le contrat de l'acte 8 bis, avec sa
+> période, son volume, son montant et son statut de signature. **S'il est absent
+> alors que tu viens de le créer, c'est le défaut principal de cet acte** :
+> donne l'identifiant du contrat et celui du formateur.
+> **Vérifie** : le nombre d'apprenants annoncé au formateur est bien **3**.
+
+### Actes 11 à 14 — Émargement, les quatre demi-journées
+**C'est le cœur de la campagne.** Pour chacune des quatre demi-journées :
+ouvre la feuille depuis le lien reçu par le formateur, fais signer le
+**formateur**, puis fais signer **les trois apprenantes**.
 
 > **Vérifie, feuille par feuille** : la liste des apprenants porte **les trois
 > noms**. C'était le défaut le plus grave des campagnes précédentes — deux
-> feuilles sur quatre sortaient vides, ce qui rend la preuve Qualiopi
-> impossible à produire.
+> feuilles sur quatre sortaient vides, ce qui rend la preuve Qualiopi impossible
+> à produire.
 > **Attendu : 12 signatures apprenants sur 12, plus 4 signatures formateur.**
-> **Vérifie** : le bouton « Envoyer » de la **première** séance fonctionne (il
-> était bloqué par une vérification de jeton).
+> **Vérifie** : le bouton « Envoyer » de la **première** séance fonctionne.
 > **Vérifie** : après l'envoi, un **message de confirmation s'affiche à
 > l'écran**. Une URL qui change ne suffit pas.
-> **Vérifie** : le canevas de signature enregistre le **premier trait** — teste
-> un point simple et un trait très court.
+> **Vérifie** : le canevas enregistre le **premier trait** — refais le test du
+> trait très court sur au moins une feuille.
 > **Vérifie** : une feuille sans apprenant, si tu en rencontres une, **le dit**
 > au lieu d'afficher une liste vide muette.
+> **Vérifie** : le PDF de la feuille d'émargement est téléchargeable et porte
+> les signatures.
 
-Rends un **tableau** : feuille, apprenants listés, signatures obtenues,
-signature formateur.
+Rends un **tableau** : feuille, date et horaire, apprenants listés, signatures
+obtenues, signature formateur.
 
-### Acte 14 — Évaluation des acquis
-Fais passer l'évaluation aux trois apprenantes depuis leur extranet.
+### Acte 15 — Le formateur fait passer l'évaluation des acquis
+**C'est le formateur qui administre l'évaluation, depuis son portail.** Va dans
+**Mes quiz**, choisis l'évaluation des acquis rattachée à la formation, et
+lance-la pour les trois apprenantes. Selon la modalité du quiz, ce sera un
+lancement en live (bouton « ▶ Lancer en live ») ou un envoi de lien.
 
-### Acte 15 — Fin de formation
-Attends ou provoque la clôture des séances.
+**Sers-toi des quiz déjà présents dans la base ; n'en crée pas.**
+
+Puis, **depuis les trois comptes apprenants**, réponds à l'évaluation pour
+chacune des trois. Réponds réellement aux questions — l'objectif est d'obtenir
+trois passations terminées avec un score.
+
+> **Vérifie** : l'onglet **Résultats** du portail formateur affiche les trois
+> passations, avec un score par apprenante.
+> **Vérifie** : le nombre d'invités et le nombre de terminés correspondent
+> (3 / 3).
+> Si une apprenante ne peut pas accéder au quiz, note l'écran et le message
+> exact, et continue avec les autres.
+
+### Acte 16 — Fin de formation
+Attends ou provoque la clôture des séances (le moteur la fait quand la dernière
+demi-journée est passée ; l'acte 21 permet de forcer une passe).
 
 > **Vérifie** : les documents de fin sont produits **automatiquement**. Pour
 > chacune des trois apprenantes : un **certificat de réalisation** (les heures)
 > et, si les acquis sont validés, une **attestation de fin de formation** (les
 > acquis).
 > **Vérifie** : chaque apprenante reçoit **une seule** notification par pièce,
-> pas une par séance close.
-> **Vérifie** : si une apprenante n'a rien signé, c'est une **attestation
+> pas une par séance close. Compte dans l'archive.
+> **Vérifie** : les heures portées sur le certificat correspondent aux heures
+> réellement émargées.
+> **Vérifie** : si une apprenante n'avait rien signé, c'est une **attestation
 > d'absence** qui sort, adressée au **commanditaire** — pas à elle.
+> **Vérifie** : les documents apparaissent dans « Mes documents » / « Ma
+> bibliothèque » de chaque apprenante.
 
-### Acte 16 — Enquêtes
-Laisse partir les enquêtes à chaud (apprenants, entreprise, formateur).
+### Acte 17 — Enquêtes
+Laisse partir les enquêtes à chaud : apprenants, entreprise, formateur.
 
 > **Vérifie** : le formateur reçoit **une seule** enquête pour l'action de
 > formation, pas une par demi-journée. Idem entreprise et financeur.
+> **Vérifie** : aucune enquête n'est partie **avant** la fin de la formation.
+> **Vérifie** : réponds à au moins une enquête et constate que la réponse
+> remonte à l'écran du module Enquêtes.
 
-### Acte 17 — Le menu Documents, onglet par onglet
+### Acte 18 — Le menu Documents, onglet par onglet
+Parcours **chaque** onglet du menu Documents, sans exception, et dis pour chacun
+combien de lignes il porte et ce qu'il affiche.
+
 > **Vérifie** sur Enquêtes à chaud, Certificats de réalisation et Attestations
 > de fin de formation :
 > - **trois lignes**, pas quatre — le commanditaire n'a rien à faire sur une
@@ -305,34 +435,31 @@ Laisse partir les enquêtes à chaud (apprenants, entreprise, formateur).
 >   si l'émargement existe, « 14 h prévues » sinon. Jamais « — », jamais un
 >   chiffre nu ;
 > - les dates sont cohérentes d'un écran à l'autre.
+> **Vérifie** : chaque onglet du menu porte au moins un document. Un onglet vide
+> à ce stade du parcours est un défaut — dis lequel.
 
-Rends un **inventaire** : onglet, nombre de lignes, durée affichée, dates.
-
-### Acte 18 — Portail formateur
-Connecte-toi en David Contal.
-
-> **Vérifie** : « Mes contrats » affiche le contrat de l'acte 8 bis avec sa
-> période, son volume, son montant et son statut. **S'il est absent alors que tu
-> viens de le créer, c'est le défaut principal de cet acte** : donne
-> l'identifiant du contrat et celui du formateur.
-> **Vérifie** : les quatre séances, le cahier de texte et les feuilles
-> d'émargement sont accessibles.
+Rends un **inventaire** : onglet, nombre de lignes, durée affichée, dates,
+document téléchargeable oui/non.
 
 ### Acte 19 — Statistiques
 > **Pédagogiques** : deux cartes distinctes — « Heures de formation dispensées »
 > = **14 h** (ce que le formateur a animé) et « Heures-stagiaires » = **42 h**
 > (3 apprenantes × 14 h). Si tu lis **28 h** quelque part, c'est un défaut.
-> **Financières** : les trois portées affichent des lignes réelles. Le nombre de
-> séances par ligne correspond au dossier, pas à une valeur écrite d'avance.
+> **Vérifie** : « Apprenants formés » annonce 3.
+> **Financières** : les trois portées (potentiel, actions de formation,
+> prestations annexes) affichent des lignes réelles. Le nombre de séances par
+> ligne correspond au dossier, pas à une valeur écrite d'avance.
 > **Indicateurs de performance** : le taux de progression et le taux de réussite
-> remontent les passations faites depuis l'extranet apprenant.
+> remontent les passations de l'acte 15.
 
 ### Acte 20 — Récapitulatif des e-mails
 > **Vérifie** : l'écran affiche le total d'envois, les destinataires, la
 > répartition par module et les derniers envois nommés ; la recherche
-> fonctionne. Il ne doit plus dire « Aucune donnée » quand l'archive est pleine.
+> fonctionne. Il ne doit pas dire « Aucune donnée » quand l'archive est pleine.
 > **Vérifie** : la carte « Envois récents » de « Relances simples » n'affiche
-> plus 0 alors que des e-mails sont partis.
+> pas 0 alors que des e-mails sont partis.
+> **Vérifie** : le total du récapitulatif correspond au nombre de lignes de
+> l'archive.
 
 ### Acte 21 — Workflow
 > **Vérifie** : aucun bandeau « N étapes jouées en simulation ».
@@ -342,43 +469,51 @@ Connecte-toi en David Contal.
 > tiers, et prétendre le contraire serait un faux positif.
 > **Vérifie** : aucune **relance** planifiée un samedi ou un dimanche. Un envoi
 > **initial**, lui, suit un fait daté et peut tomber un week-end — ce n'est pas
-> un défaut, ne le compte pas comme tel.
+> un défaut, ne le compte pas comme tel. Vérifie les relances une par une et dis
+> combien tu en as contrôlées.
 > **Vérifie** : le bouton « **Lancer une passe maintenant** » est présent dans
-> l'onglet « À faire ». Utilise-le si des étapes sont en retard : s'il les
-> débloque, le plan allait bien et c'est la planification système qu'il faut
-> regarder.
+> l'onglet « À faire », même quand rien n'est en retard.
 > **Vérifie** : aucune étape n'est « En échec » alors que le travail est fait.
+> **Vérifie** : le Journal liste les étapes jouées, avec leur horodatage.
+> **Vérifie** : l'onglet « Émargements orphelins » et ce qu'il annonce.
 
 ### Acte 22 — Remise en configuration de sortie
 Recoche « Mode simulation », laisse « Mode recette » actif, vérifie que les 7
-adresses sont intactes.
+adresses sont intactes, et relis les trois cases pour confirmer.
 
 ---
 
-## 7. Ce que doit contenir ton rapport
+## 8. Ce que doit contenir ton rapport final
 
-Pour **chaque** point « Vérifie » ci-dessus : **confirmé** ou **infirmé**,
+Pour **chaque** point « Vérifie » de ce document : **confirmé** ou **infirmé**,
 explicitement. Ne me laisse pas déduire un silence.
 
 Pour **chaque défaut** :
-- l'**écran** exact,
+- l'**écran** exact (avec l'URL ou l'onglet),
 - le **geste** exact,
 - ce qui était **attendu**,
 - ce qui s'est **produit**,
 - et si tu peux l'établir, la **cause** — pas seulement le symptôme.
 
-Plus : le tableau des quatre demi-journées, l'inventaire du menu Documents, le
-sort du contrat de mission (créé / PDF conforme / e-mail parasite / visible au
-portail : oui ou non), et **ce que tu n'as pas pu tester, avec la raison**.
+Plus, obligatoirement :
+- le **tableau des quatre demi-journées** d'émargement ;
+- l'**inventaire du menu Documents**, onglet par onglet ;
+- le **sort du contrat de mission** : créé / PDF conforme / e-mail parasite /
+  visible au portail — quatre réponses oui ou non ;
+- le **résultat des trois passations** de l'évaluation des acquis ;
+- le **décompte final de l'archive des e-mails** : combien d'envois, vers qui,
+  par module ;
+- la liste de ce que tu **n'as pas pu tester, avec la raison**.
+
+Classe les défauts **par gravité**, en te servant du critère du §9.
 
 ---
 
-## 8. Trois exigences de méthode
+## 9. Trois exigences de méthode
 
 **Distingue un défaut du plugin d'une limite de ton outillage.** Un bouton qui
-ne réagit pas à ta façon de cliquer n'est pas cassé. Trois faux défauts ont
-déjà été rapportés puis retirés pour cette raison : la rétractation coûte moins
-cher que l'erreur, mais l'erreur évitée ne coûte rien.
+ne réagit pas à ta façon de cliquer n'est pas cassé. Trois faux défauts ont déjà
+été rapportés puis retirés pour cette raison.
 
 **Rétracte-toi quand tu t'es trompé, et dis-le clairement.** C'est précieux, pas
 gênant.
@@ -388,10 +523,11 @@ faux : un point « Vérifie » peut ne correspondre à aucun écran réel, une v
 attendue peut être erronée, une règle métier peut avoir changé. Si c'est le cas,
 dis-le — c'est le document qui se trompe, et je préfère le savoir.
 
-Une dernière chose, qui résume l'esprit de cette recette : **un écran qui
-affirme sans avoir lu est plus dangereux qu'un écran vide.** Un certificat qui
-atteste une présence que personne n'a vérifiée, un avis « envoyé » sans e-mail,
-un compteur à zéro sur une archive pleine — c'est ce type de défaut que nous
-traquons en priorité. Quand tu hésites sur la gravité de quelque chose, demande-
-toi si un utilisateur pourrait **croire** l'application sur parole et se
-tromper. Si oui, c'est important.
+Enfin, le critère de gravité qui gouverne tout le reste : **un écran qui affirme
+sans avoir lu est plus dangereux qu'un écran vide.** Un certificat qui atteste
+une présence que personne n'a vérifiée, un avis « envoyé » sans e-mail derrière,
+un compteur à zéro sur une archive pleine, un montant faux sur une pièce
+contractuelle — voilà ce que nous traquons en priorité. Quand tu hésites sur la
+gravité de quelque chose, demande-toi si un utilisateur pourrait **croire**
+l'application sur parole et se tromper. Si oui, c'est important, et ça passe
+avant tout le reste.
