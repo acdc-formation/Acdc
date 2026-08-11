@@ -688,6 +688,76 @@ trait ACDC_Workflow_Core_Trait {
   }
 
   /**
+   * ACDC 3.25.223 — LA SIMULATION CONSOMMAIT LE PARCOURS POUR DE BON.
+   *
+   * Une étape jouée en simulation est marquée « Simulée » et compte comme
+   * derrière nous : c'est ce qui permet au plan de se dérouler jusqu'au bout
+   * pendant qu'on l'observe. Mais le moteur ne la rejouait JAMAIS ensuite. Un
+   * dossier ouvert pendant une phase de simulation était donc privé de ses
+   * envois définitivement : la case décochée le lendemain n'y changeait rien,
+   * et personne ne le voyait — l'écran affichait un parcours parfaitement
+   * déroulé, dont pas un e-mail n'était parti.
+   *
+   * On ne corrige pas cela en supprimant l'état « Simulée » : sans lui, on ne
+   * verrait jamais la suite d'un parcours en observation. On le rend
+   * RATTRAPABLE, et surtout VISIBLE : tant qu'il reste des étapes simulées sur
+   * des parcours actifs alors que la simulation est levée, l'écran le dit.
+   *
+   * @return int Nombre d'étapes simulées sur des parcours encore actifs.
+   */
+  private function acdc_wf_simulated_backlog_count() {
+    global $wpdb;
+
+    return (int) $wpdb->get_var(
+      "SELECT COUNT(*) FROM {$this->workflow_step_table} s
+         INNER JOIN {$this->workflow_run_table} r ON r.id = s.run_id
+        WHERE s.status = 'simulated' AND r.status = 'active'"
+    );
+  }
+
+  /**
+   * Remet les étapes simulées dans le plan, sans rien décider à leur place.
+   *
+   * Elles repartent en « planifiée », date d'exécution effacée. Le moteur les
+   * reprend alors comme des étapes ordinaires — ce qui veut dire aussi que la
+   * réconciliation les EFFACERA si le dossier ne les justifie plus. C'est
+   * exactement ce qu'on veut : on ne rejoue pas un plan mémorisé, on redonne à
+   * chaque étape sa chance d'être recalculée à partir des données réelles.
+   *
+   * Les étapes dont l'heure est passée sont replanifiées à maintenant : leur
+   * moment métier est derrière nous, mais un envoi en retard vaut mieux qu'un
+   * envoi jamais parti — c'est à l'organisme d'écarter ce qui n'a plus de sens,
+   * pas au moteur de le taire.
+   *
+   * @return int Nombre d'étapes remises au plan.
+   */
+  private function acdc_wf_replay_simulated_steps() {
+    global $wpdb;
+
+    $now = $this->acdc_wf_mysql( $this->acdc_wf_now() );
+
+    $updated = $wpdb->query( $wpdb->prepare(
+      "UPDATE {$this->workflow_step_table} s
+         INNER JOIN {$this->workflow_run_table} r ON r.id = s.run_id
+            SET s.status       = 'pending',
+                s.executed_at  = NULL,
+                s.attempts     = 0,
+                s.scheduled_at = CASE
+                  WHEN s.scheduled_at IS NULL OR s.scheduled_at < %s THEN %s
+                  ELSE s.scheduled_at
+                END,
+                s.result_note  = 'Remise au plan : cette étape avait été jouée en simulation, sans aucun envoi.',
+                s.updated_at   = %s
+          WHERE s.status = 'simulated' AND r.status = 'active'",
+      $now,
+      $now,
+      $now
+    ) );
+
+    return max( 0, (int) $updated );
+  }
+
+  /**
    * ACDC 3.25.194 — UN SEUL CHEF D'ORCHESTRE.
    *
    * Quatre modules possèdent leur propre ordonnanceur, avec des règles qui ne

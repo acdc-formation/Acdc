@@ -242,8 +242,16 @@ trait ACDC_Workflow_Handlers_Trait {
           'email' => (string) $learner['email'],
         );
       }
+      /* ACDC 3.25.223 — Le contexte du parcours n'est pas la seule source.
+         Quand il ne connaît personne, on interroge le dossier de séance —
+         inscriptions directes, groupes, conventions couvrant la date — avant
+         de renoncer. Renoncer était le comportement le plus coûteux : le
+         formateur n'était pas prévenu du tout, et la demi-journée passait. */
       if ( empty( $learners ) ) {
-        return array( 'success' => false, 'error' => 'Aucun apprenant inscrit : la feuille d’émargement serait vide.' );
+        $learners = $core->resolve_session_learners( $session_id );
+      }
+      if ( empty( $learners ) ) {
+        return array( 'success' => false, 'error' => 'Aucun apprenant rattaché à cette séance : la feuille d’émargement serait vide.' );
       }
 
       $seance_meta = array();

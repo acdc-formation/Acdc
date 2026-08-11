@@ -125,6 +125,55 @@ trait ACDC_Workflow_Actions_Trait {
   }
 
   /**
+   * ACDC 3.25.223 — Rattrapage des étapes jouées en simulation.
+   *
+   * La recette a mis le doigt sur une perte silencieuse : un dossier ouvert
+   * pendant que la simulation était armée voyait tout son parcours se dérouler
+   * à l'écran sans qu'un seul e-mail ne parte, et rien ne le rattrapait ensuite.
+   * Ce bouton existe pour cela, et il n'est proposé que lorsque la simulation
+   * est levée — rattraper pendant qu'elle tourne ne ferait que resimuler.
+   */
+  public function acdc_wf_handle_replay_simulated() {
+    if ( ! current_user_can( 'manage_options' ) ) {
+      wp_die( 'Action non autorisée.' );
+    }
+    check_admin_referer( 'acdc_wf_replay_simulated' );
+
+    $settings = $this->acdc_wf_settings();
+    if ( ! empty( $settings['simulation'] ) ) {
+      $this->redirect_to_portal(
+        'workflow',
+        'Rattrapage refusé : le mode simulation est toujours actif — les étapes seraient simplement resimulées. Levez la simulation d’abord.',
+        'error',
+        array( 'view' => 'runs' )
+      );
+    }
+
+    $count = $this->acdc_wf_replay_simulated_steps();
+
+    if ( $count <= 0 ) {
+      $this->redirect_to_portal( 'workflow', 'Aucune étape simulée à rattraper.', 'info', array( 'view' => 'runs' ) );
+    }
+
+    $this->log_error( 'workflow', 'Rattrapage des étapes simulées.', array(
+      'count'   => (int) $count,
+      'user_id' => get_current_user_id(),
+    ) );
+
+    /* On réconcilie tout de suite : le balayage effacera les étapes que le
+       dossier ne justifie plus, et l'exécution prendra les autres. Sans cet
+       appel, David resterait devant un écran inchangé jusqu'au prochain cron. */
+    $this->acdc_wf_cron();
+
+    $this->redirect_to_portal(
+      'workflow',
+      sprintf( '%d étape(s) remise(s) au plan. Celles que le dossier ne justifie plus seront écartées à la réconciliation ; les autres partiront à leur tour.', (int) $count ),
+      'success',
+      array( 'view' => 'runs' )
+    );
+  }
+
+  /**
    * « Sans objet » sur une tâche : David écarte une étape que le dossier ne
    * justifie pas. On ne supprime pas la ligne, on la classe — le journal doit
    * garder trace d'une décision humaine.

@@ -26,7 +26,7 @@ foreach ( $emarg_manifest as $file => $class ) {
 class ACDC_Emargement {
 
     /** Version du schéma d'émargement. À incrémenter à chaque changement de structure. */
-    const DB_VERSION   = '3.25.116';
+    const DB_VERSION   = '3.25.223';
     const OPTION_DB_VER = 'acdc_emarg_db_version';
 
     private static $instance = null;
@@ -98,13 +98,24 @@ class ACDC_Emargement {
         // Émargement par séance : index optionnel (défaut 0 = séance primaire/legacy).
         $seance_index = isset( $_POST['seance_index'] ) ? max( 0, (int) $_POST['seance_index'] ) : 0;
 
-        // Nonce rétro-compatible : l'index 0 conserve EXACTEMENT le jeton existant
-        // (formulaires mono-séance déjà en production) ; les créneaux >= 1 utilisent
-        // un jeton suffixé par l'index.
-        if ( $seance_index > 0 ) {
-            check_admin_referer( 'acdc_emarg_send_trainer_' . $session_id . '_' . $seance_index );
-        } else {
-            check_admin_referer( 'acdc_emarg_send_trainer_' . $session_id );
+        /* ACDC 3.25.223 — LE BOUTON « ENVOYER » DE LA PREMIÈRE SÉANCE NE POUVAIT
+           PAS FONCTIONNER. Deux conventions de jeton cohabitent : les écrans
+           mono-séance émettent « ..._<session> », l'affichage multi-créneaux
+           émet « ..._<session>_<index> » — y compris pour l'index 0. Le
+           gestionnaire, lui, n'acceptait le jeton suffixé qu'à partir de
+           l'index 1 : sur une formation de deux jours découpés en quatre
+           demi-journées, le bouton du premier créneau butait sur une
+           vérification de jeton, et rien ne partait.
+           On accepte donc les deux graphies pour l'index 0, plutôt que de
+           réécrire les formulaires d'un côté ou de l'autre : un seul point de
+           lecture, et aucun écran existant ne casse. */
+        $nonce = isset( $_POST['_wpnonce'] ) ? sanitize_text_field( wp_unslash( $_POST['_wpnonce'] ) ) : '';
+        $valid = (bool) wp_verify_nonce( $nonce, 'acdc_emarg_send_trainer_' . $session_id . '_' . $seance_index );
+        if ( ! $valid && 0 === $seance_index ) {
+            $valid = (bool) wp_verify_nonce( $nonce, 'acdc_emarg_send_trainer_' . $session_id );
+        }
+        if ( ! $valid ) {
+            wp_nonce_ays( 'acdc_emarg_send_trainer_' . $session_id );
         }
 
         global $wpdb;
@@ -118,8 +129,6 @@ class ACDC_Emargement {
             // Charger les données de la session
             $session_table  = $wpdb->prefix . 'acdc_of_sessions';
             $trainer_table  = $wpdb->prefix . 'acdc_of_trainers';
-            $learner_table  = $wpdb->prefix . 'acdc_of_learners';
-            $group_table    = $wpdb->prefix . 'acdc_of_groups';
 
             $session = $wpdb->get_row( $wpdb->prepare( "SELECT * FROM {$session_table} WHERE id = %d", $session_id ) );
             if ( ! $session ) {
@@ -140,32 +149,13 @@ class ACDC_Emargement {
                 }
             }
 
-            // Apprenants
-            $learners_raw = $wpdb->get_results( $wpdb->prepare(
-                "SELECT id, first_name, usage_last_name, last_name, email FROM {$learner_table} WHERE session_id = %d",
-                $session_id
-            ) );
-            $learners = array();
-            foreach ( $learners_raw as $lr ) {
-                $name = trim( $lr->first_name . ' ' . ( ! empty( $lr->usage_last_name ) ? $lr->usage_last_name : $lr->last_name ) );
-                $learners[] = array( 'id' => $lr->id, 'name' => $name, 'email' => $lr->email ?? '' );
-            }
-            // Apprenants via groupe
-            $group = $wpdb->get_row( $wpdb->prepare( "SELECT * FROM {$group_table} WHERE session_id = %d", $session_id ) );
-            if ( $group && ! empty( $group->learner_ids ) ) {
-                foreach ( explode( ',', $group->learner_ids ) as $lid ) {
-                    $lid = absint( $lid );
-                    if ( ! $lid ) { continue; }
-                    // Éviter doublons
-                    $already = array_filter( $learners, function( $l ) use ( $lid ) { return (int) $l['id'] === $lid; } );
-                    if ( ! empty( $already ) ) { continue; }
-                    $lr = $wpdb->get_row( $wpdb->prepare( "SELECT id, first_name, usage_last_name, last_name, email FROM {$learner_table} WHERE id = %d", $lid ) );
-                    if ( $lr ) {
-                        $name = trim( $lr->first_name . ' ' . ( ! empty( $lr->usage_last_name ) ? $lr->usage_last_name : $lr->last_name ) );
-                        $learners[] = array( 'id' => $lr->id, 'name' => $name, 'email' => $lr->email ?? '' );
-                    }
-                }
-            }
+            /* ACDC 3.25.223 — Une seule lecture de « qui vient à cette séance ».
+               Cet écran avait la sienne : rattachement direct, plus UN groupe,
+               et rien d'autre. La carte de séance, elle, comptait aussi les
+               conventions d'inscription — d'où une carte annonçant trois
+               apprenants et une feuille d'émargement n'en portant aucun. Deux
+               écrans, deux vérités : c'est la panne, pas son symptôme. */
+            $learners = $this->core->resolve_session_learners( $session_id );
 
             // Métadonnées de la séance ciblée depuis schedule_json (si multi-créneaux).
             // Pour l'index 0 d'une session mono-créneau, $seance_meta reste vide →

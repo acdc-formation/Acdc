@@ -44,6 +44,14 @@ class ACDC_Emarg_Email {
      * Email au formateur — déclencher la séance
      * -------------------------------------------------------------------- */
     public function send_trainer_email( $emarg_session ) {
+        /* ACDC 3.25.223 — Dernier instant utile avant que la séance ne s'ouvre :
+           on remet la feuille en accord avec le dossier. Un apprenant inscrit
+           après la création de la feuille était jusqu'ici invisible du QR code
+           que le formateur allait afficher devant lui. */
+        if ( ! empty( $emarg_session->id ) ) {
+            $this->core->sync_learners( (int) $emarg_session->id );
+        }
+
         $sign_url = $this->core->get_public_url( 'formateur', $emarg_session->trainer_token );
         $from     = $this->get_from();
 

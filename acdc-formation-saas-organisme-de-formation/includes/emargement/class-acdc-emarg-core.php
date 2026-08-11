@@ -106,6 +106,37 @@ class ACDC_Emarg_Core {
         $this->maybe_add_column( $this->table_sessions, 'seance_start_at', 'DATETIME NULL AFTER seance_label' );
         $this->maybe_add_column( $this->table_sessions, 'seance_end_at', 'DATETIME NULL AFTER seance_start_at' );
         $this->maybe_add_column( $this->table_learners, 'seance_index', 'INT NOT NULL DEFAULT 0 AFTER session_id' );
+
+        $this->repair_empty_sheets();
+    }
+
+    /**
+     * ACDC 3.25.223 — Réparation des feuilles restées vides.
+     *
+     * Corriger la construction de la liste ne répare pas les feuilles déjà
+     * ouvertes sans personne dessus : elles resteraient vides jusqu'à ce que
+     * quelqu'un les rouvre. On les remplit donc ici, une fois.
+     *
+     * On ne touche QUE les feuilles à zéro ligne. Une feuille qui porte déjà
+     * des noms porte peut-être des signatures : y ajouter des absents après
+     * coup réécrirait une pièce probante. Une feuille vide, elle, ne prouve
+     * rien — il n'y a rien à abîmer.
+     */
+    private function repair_empty_sheets() {
+        global $wpdb;
+
+        $empty_ids = $wpdb->get_col(
+            "SELECT s.id
+               FROM {$this->table_sessions} s
+               LEFT JOIN {$this->table_learners} l ON l.emarg_session_id = s.id
+              WHERE l.id IS NULL
+              ORDER BY s.id DESC
+              LIMIT 200"
+        );
+
+        foreach ( (array) $empty_ids as $id ) {
+            $this->sync_learners( (int) $id );
+        }
     }
 
     /**
@@ -176,7 +207,23 @@ class ACDC_Emarg_Core {
             $session_id,
             $seance_index
         ) );
-        if ( $existing ) { return (int) $existing->id; }
+        if ( $existing ) {
+            // ACDC 3.25.223 — La feuille existe : on ne la recrée pas, mais on
+            // RATTRAPE sa liste. Jusqu'ici cette ligne rendait simplement l'id
+            // et repartait : la liste des apprenants restait figée sur l'état du
+            // dossier au moment exact où la feuille avait été ouverte. Inscrire
+            // un apprenant après coup ne l'ajoutait donc à aucune feuille déjà
+            // créée — et deux demi-journées sur quatre sortaient vides.
+            $this->sync_learners( (int) $existing->id, $learners );
+            return (int) $existing->id;
+        }
+
+        // Créer une feuille sans personne dessus, c'est fabriquer par avance une
+        // preuve Qualiopi vide. Si l'appelant n'a pas su dire qui vient, on le
+        // demande au dossier avant d'écrire quoi que ce soit.
+        if ( empty( $learners ) ) {
+            $learners = $this->resolve_session_learners( $session_id );
+        }
 
         $now     = current_time( 'mysql' );
         $expires = gmdate( 'Y-m-d H:i:s', current_time( 'timestamp' ) + self::TOKEN_TTL_HOURS * 3600 );
@@ -277,6 +324,235 @@ class ACDC_Emarg_Core {
             $label .= ' — ' . date_i18n( 'd/m/Y', strtotime( $start ) );
         }
         return array( 'label' => $label, 'start_at' => $start ?: null, 'end_at' => $end ?: null );
+    }
+
+    /* -----------------------------------------------------------------------
+     * La liste d'émargement se RE-DÉRIVE, elle ne se mémorise pas
+     *
+     * ACDC 3.25.223 — La recette a produit un dossier impossible : quatre
+     * demi-journées, quatre convocations formateur, quatre signatures formateur,
+     * et pourtant cinq signatures d'apprenants sur douze attendues, parce que
+     * DEUX feuilles sur quatre ne portaient aucun nom. L'agent a d'abord cru à
+     * un problème d'identité sur une apprenante, puis l'a lui-même écarté :
+     * elle signe normalement sur la quatrième feuille.
+     *
+     * La cause n'est pas aléatoire, elle est chronologique. La liste des
+     * apprenants était recopiée dans la feuille au moment de sa création, et
+     * plus jamais relue. Une feuille ouverte avant que les inscriptions ne
+     * soient rattachées restait vide POUR TOUJOURS : le seul chemin qui aurait
+     * pu la remplir commençait par « si la feuille existe déjà, ne fais rien ».
+     * Trois chemins la créent (la carte de séance, le workflow, l'ouverture
+     * manuelle), chacun avec sa propre façon de trouver les apprenants — d'où
+     * l'impression de tirage au sort.
+     *
+     * On applique donc ici la règle qui gouverne déjà le moteur de workflow :
+     * on ne mémorise pas une décision, on la recalcule à partir des données
+     * métier. Avec une réserve absolue — on n'ENLÈVE jamais une ligne. Une
+     * signature déjà déposée est une pièce probante ; elle ne disparaît pas
+     * parce qu'un rattachement a bougé.
+     * -------------------------------------------------------------------- */
+
+    /**
+     * Les apprenants d'une séance, tels que le dossier les connaît aujourd'hui.
+     *
+     * Trois rattachements, cumulés : le lien direct porté par la fiche
+     * apprenant, les groupes de la séance, et les conventions d'inscription qui
+     * couvrent le jour de la séance. C'est la même lecture que celle des
+     * documents de séance — deux écrans qui répondent différemment à « qui vient
+     * ce jour-là », c'est déjà un défaut en soi.
+     *
+     * @param int $session_id
+     * @return array [ ['id' => int, 'name' => string, 'email' => string], ... ]
+     */
+    public function resolve_session_learners( $session_id ) {
+        global $wpdb;
+
+        $session_id = absint( $session_id );
+        if ( ! $session_id ) { return array(); }
+
+        $session_table  = $wpdb->prefix . 'acdc_of_sessions';
+        $learner_table  = $wpdb->prefix . 'acdc_of_learners';
+        $group_table    = $wpdb->prefix . 'acdc_of_groups';
+        $contract_table = $wpdb->prefix . 'acdc_of_registration_contracts';
+
+        $session = $wpdb->get_row( $wpdb->prepare(
+            "SELECT * FROM {$session_table} WHERE id = %d",
+            $session_id
+        ) );
+        if ( ! $session ) { return array(); }
+
+        $ids = array();
+
+        /* 1. Rattachement direct. */
+        $direct = $wpdb->get_col( $wpdb->prepare(
+            "SELECT id FROM {$learner_table} WHERE session_id = %d",
+            $session_id
+        ) );
+        foreach ( (array) $direct as $id ) {
+            $ids[ (int) $id ] = true;
+        }
+
+        /* 2. Groupes de la séance — au pluriel : une séance peut en porter
+              plusieurs, et n'en lire qu'un seul était l'un des chemins par
+              lesquels des apprenants disparaissaient. */
+        $group_lists = $wpdb->get_col( $wpdb->prepare(
+            "SELECT learner_ids FROM {$group_table} WHERE session_id = %d",
+            $session_id
+        ) );
+        foreach ( (array) $group_lists as $list ) {
+            foreach ( array_filter( array_map( 'absint', explode( ',', (string) $list ) ) ) as $id ) {
+                $ids[ $id ] = true;
+            }
+        }
+
+        /* 3. Conventions couvrant le jour de la séance. Une convention sans
+              dates couvre toute la formation : mieux vaut la retenir que rendre
+              une salle vide. */
+        $formation_id = isset( $session->formation_id ) ? (int) $session->formation_id : 0;
+        if ( $formation_id > 0 ) {
+            $day = '';
+            if ( ! empty( $session->start_date ) ) {
+                $day = substr( (string) $session->start_date, 0, 10 );
+            } elseif ( ! empty( $session->start_at ) ) {
+                $day = substr( (string) $session->start_at, 0, 10 );
+            }
+            if ( '' !== $day ) {
+                $contract_lists = $wpdb->get_col( $wpdb->prepare(
+                    "SELECT learner_ids FROM {$contract_table}
+                      WHERE formation_id = %d
+                        AND learner_ids IS NOT NULL AND learner_ids <> ''
+                        AND ( start_date IS NULL OR start_date = '0000-00-00' OR start_date <= %s )
+                        AND ( end_date   IS NULL OR end_date   = '0000-00-00' OR end_date   >= %s )",
+                    $formation_id,
+                    $day,
+                    $day
+                ) );
+                foreach ( (array) $contract_lists as $list ) {
+                    foreach ( array_filter( array_map( 'absint', explode( ',', (string) $list ) ) ) as $id ) {
+                        $ids[ $id ] = true;
+                    }
+                }
+            }
+        }
+
+        $ids = array_keys( $ids );
+        if ( empty( $ids ) ) { return array(); }
+
+        $placeholders = implode( ',', array_fill( 0, count( $ids ), '%d' ) );
+        $rows = $wpdb->get_results( $wpdb->prepare(
+            "SELECT id, first_name, last_name, usage_last_name, email
+               FROM {$learner_table}
+              WHERE id IN ({$placeholders})
+              ORDER BY last_name ASC, first_name ASC, id ASC",
+            $ids
+        ) );
+
+        $learners = array();
+        foreach ( (array) $rows as $row ) {
+            $last = ! empty( $row->usage_last_name ) ? $row->usage_last_name : $row->last_name;
+            $learners[] = array(
+                'id'    => (int) $row->id,
+                'name'  => trim( (string) $row->first_name . ' ' . (string) $last ),
+                'email' => (string) ( $row->email ?? '' ),
+            );
+        }
+
+        return $learners;
+    }
+
+    /**
+     * Remet la feuille en accord avec le dossier : on AJOUTE ce qui manque.
+     *
+     * On n'enlève rien et l'on ne touche à aucune ligne existante : une feuille
+     * partiellement signée doit pouvoir se compléter sans que la moindre
+     * signature déjà déposée ne bouge.
+     *
+     * @param int   $emarg_session_id
+     * @param array $learners Liste déjà résolue par l'appelant, si elle existe.
+     * @return int Nombre de lignes ajoutées.
+     */
+    public function sync_learners( $emarg_session_id, $learners = array() ) {
+        global $wpdb;
+
+        $emarg_session_id = absint( $emarg_session_id );
+        if ( ! $emarg_session_id ) { return 0; }
+
+        $sheet = $wpdb->get_row( $wpdb->prepare(
+            "SELECT * FROM {$this->table_sessions} WHERE id = %d",
+            $emarg_session_id
+        ) );
+        if ( ! $sheet ) { return 0; }
+
+        $session_id   = (int) $sheet->session_id;
+        $seance_index = (int) $sheet->seance_index;
+
+        /* On repart TOUJOURS du dossier, et l'on complète avec ce que
+           l'appelant croyait savoir. Deux sources valent mieux qu'une quand
+           l'enjeu est qu'un apprenant présent puisse signer. */
+        $resolved = $this->resolve_session_learners( $session_id );
+        foreach ( (array) $learners as $extra ) {
+            if ( ! empty( $extra['name'] ) || ! empty( $extra['id'] ) ) {
+                $resolved[] = array(
+                    'id'    => ! empty( $extra['id'] ) ? absint( $extra['id'] ) : 0,
+                    'name'  => (string) ( $extra['name'] ?? '' ),
+                    'email' => (string) ( $extra['email'] ?? '' ),
+                );
+            }
+        }
+        if ( empty( $resolved ) ) { return 0; }
+
+        $current = $wpdb->get_results( $wpdb->prepare(
+            "SELECT id, learner_id, learner_name FROM {$this->table_learners} WHERE emarg_session_id = %d",
+            $emarg_session_id
+        ) );
+
+        $known_ids   = array();
+        $known_names = array();
+        foreach ( (array) $current as $row ) {
+            if ( ! empty( $row->learner_id ) ) {
+                $known_ids[ (int) $row->learner_id ] = true;
+            }
+            $known_names[ $this->normalize_learner_name( $row->learner_name ) ] = true;
+        }
+
+        $now   = current_time( 'mysql' );
+        $added = 0;
+
+        foreach ( $resolved as $learner ) {
+            $lid  = ! empty( $learner['id'] ) ? absint( $learner['id'] ) : 0;
+            $name = trim( (string) ( $learner['name'] ?? '' ) );
+            $key  = $this->normalize_learner_name( $name );
+
+            if ( $lid > 0 && isset( $known_ids[ $lid ] ) ) { continue; }
+            if ( '' !== $key && isset( $known_names[ $key ] ) ) { continue; }
+            if ( $lid <= 0 && '' === $key ) { continue; }
+
+            $wpdb->insert( $this->table_learners, array(
+                'emarg_session_id' => $emarg_session_id,
+                'session_id'       => $session_id,
+                'seance_index'     => $seance_index,
+                'learner_id'       => $lid ?: null,
+                'learner_name'     => sanitize_text_field( $name ),
+                'learner_email'    => sanitize_email( (string) ( $learner['email'] ?? '' ) ),
+                'sign_token'       => $this->generate_token(),
+                'status'           => 'pending',
+                'created_at'       => $now,
+                'updated_at'       => $now,
+            ) );
+
+            if ( $lid > 0 ) { $known_ids[ $lid ] = true; }
+            if ( '' !== $key ) { $known_names[ $key ] = true; }
+            $added++;
+        }
+
+        return $added;
+    }
+
+    /** Deux graphies d'un même nom ne doivent pas produire deux lignes. */
+    private function normalize_learner_name( $name ) {
+        $name = strtolower( remove_accents( (string) $name ) );
+        $name = preg_replace( '/[^a-z0-9]+/', ' ', $name );
+        return trim( (string) $name );
     }
 
     /* -----------------------------------------------------------------------

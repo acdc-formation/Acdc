@@ -261,19 +261,44 @@ canvas{display:block;width:100%;height:160px;border:2px dashed #c9a84c;border-ra
 <body>
 <script src="<?php echo esc_url( ACDC_OF_SAAS_URL . 'assets/js/vendor/qrcode-generator.min.js' ); ?>"></script>
 <script>
+/* ACDC 3.25.223 — Le premier trait d'une signature ne doit jamais se perdre.
+   Deux défauts, tous deux invisibles à l'œil et fatals à la preuve :
+   1. rien n'était dessiné au POSÉ du stylo. Un point, un trait très court, ou
+      un geste où le navigateur n'envoie pas d'événement de déplacement
+      intermédiaire ne laissaient aucune trace, et `hasSig` restait faux : la
+      personne voyait sa signature refusée alors qu'elle venait de signer.
+   2. la largeur du canevas était figée à la lecture du script, avant que la
+      mise en page ne soit stabilisée ; mesurée à zéro, elle retombait sur 600
+      et le trait atterrissait à côté du doigt. On remesure donc au chargement,
+      en préservant ce qui est déjà dessiné. */
 function initCanvas(canvasId) {
   var c=document.getElementById(canvasId),ctx=c.getContext('2d');
-  c.width=c.offsetWidth||600;c.height=160;
-  ctx.strokeStyle='#1a2744';ctx.lineWidth=2.5;ctx.lineCap=ctx.lineJoin='round';
+  function style(){ctx.strokeStyle='#1a2744';ctx.fillStyle='#1a2744';ctx.lineWidth=2.5;ctx.lineCap=ctx.lineJoin='round';}
+  c.width=c.offsetWidth||600;c.height=160;style();
   var drawing=false,hasSig=false;
-  function getPos(e){var r=c.getBoundingClientRect(),src=e.touches?e.touches[0]:e;return{x:(src.clientX-r.left)*(c.width/r.width),y:(src.clientY-r.top)*(c.height/r.height)};}
-  c.addEventListener('mousedown',function(e){drawing=true;ctx.beginPath();var p=getPos(e);ctx.moveTo(p.x,p.y);});
-  c.addEventListener('mousemove',function(e){if(!drawing)return;var p=getPos(e);ctx.lineTo(p.x,p.y);ctx.stroke();hasSig=true;});
-  c.addEventListener('mouseup',function(){drawing=false;});
-  c.addEventListener('touchstart',function(e){e.preventDefault();drawing=true;ctx.beginPath();var p=getPos(e);ctx.moveTo(p.x,p.y);},{passive:false});
-  c.addEventListener('touchmove',function(e){e.preventDefault();if(!drawing)return;var p=getPos(e);ctx.lineTo(p.x,p.y);ctx.stroke();hasSig=true;},{passive:false});
-  c.addEventListener('touchend',function(){drawing=false;});
-  window.addEventListener('resize',function(){var d=c.toDataURL();c.width=c.offsetWidth||600;ctx.strokeStyle='#1a2744';ctx.lineWidth=2.5;ctx.lineCap=ctx.lineJoin='round';if(hasSig){var i=new Image();i.onload=function(){ctx.drawImage(i,0,0,c.width,160);};i.src=d;}});
+  function getPos(e){var r=c.getBoundingClientRect(),src=(e.touches&&e.touches[0])?e.touches[0]:e;
+    var w=r.width||c.width,h=r.height||c.height;
+    return{x:(src.clientX-r.left)*(c.width/w),y:(src.clientY-r.top)*(c.height/h)};}
+  function start(e){drawing=true;var p=getPos(e);ctx.beginPath();ctx.moveTo(p.x,p.y);
+    /* Le point du posé : il vaut signature à lui seul. */
+    ctx.beginPath();ctx.arc(p.x,p.y,1.25,0,6.284);ctx.fill();
+    ctx.beginPath();ctx.moveTo(p.x,p.y);hasSig=true;}
+  function move(e){if(!drawing)return;var p=getPos(e);ctx.lineTo(p.x,p.y);ctx.stroke();hasSig=true;}
+  function stop(){drawing=false;}
+  c.addEventListener('mousedown',start);
+  c.addEventListener('mousemove',move);
+  c.addEventListener('mouseup',stop);
+  /* Sortir du cadre stylo baissé arrêtait le trait mais laissait l'état
+     « en train de dessiner » : au retour, une droite traversait la signature. */
+  c.addEventListener('mouseleave',stop);
+  c.addEventListener('touchstart',function(e){e.preventDefault();start(e);},{passive:false});
+  c.addEventListener('touchmove',function(e){e.preventDefault();move(e);},{passive:false});
+  c.addEventListener('touchend',stop);
+  c.addEventListener('touchcancel',stop);
+  window.addEventListener('load',function(){var w=c.offsetWidth||c.width;if(w===c.width)return;
+    var d=hasSig?c.toDataURL():'';c.width=w;style();
+    if(d){var i=new Image();i.onload=function(){ctx.drawImage(i,0,0,c.width,160);};i.src=d;}});
+  window.addEventListener('resize',function(){var d=c.toDataURL();c.width=c.offsetWidth||600;style();if(hasSig){var i=new Image();i.onload=function(){ctx.drawImage(i,0,0,c.width,160);};i.src=d;}});
   return {getDataURL:function(){
     var tmp=document.createElement('canvas');tmp.width=c.width;tmp.height=160;
     var tctx=tmp.getContext('2d');tctx.fillStyle='#ffffff';tctx.fillRect(0,0,tmp.width,160);tctx.drawImage(c,0,0);
@@ -383,6 +408,13 @@ function initCanvas(canvasId) {
         $session = $wpdb->get_row( $wpdb->prepare( "SELECT * FROM {$session_table} WHERE id = %d", $emarg->session_id ) );
         $session_label = $session ? ( $session->title ?: 'Séance #' . $session->id ) : 'Séance';
 
+        /* ACDC 3.25.223 — On relit le dossier AVANT d'afficher la liste. C'est
+           l'écran que le formateur a sous les yeux pendant la séance : s'il y
+           manque un nom, l'apprenant présent repart sans avoir pu signer, et la
+           preuve est perdue pour de bon — une feuille d'émargement ne se
+           rattrape pas le lendemain. */
+        $this->core->sync_learners( (int) $emarg->id );
+
         $learners = $this->core->get_learners_for_emarg( $emarg->id );
 
         if ( isset( $_GET['just_signed'] ) ) {
@@ -411,6 +443,13 @@ function initCanvas(canvasId) {
             </div>
 
             <div class="emarg-section-title">Liste des apprenants</div>
+            <?php if ( empty( $learners ) ) : ?>
+            <div class="emarg-alert emarg-alert-error">
+                <strong>Aucun apprenant sur cette feuille.</strong><br>
+                Personne n'est rattaché à cette séance dans le dossier : ni inscription directe, ni groupe, ni convention couvrant cette date.
+                Rattachez les apprenants à la séance depuis l'administration, puis rechargez cette page — la liste se reconstruira toute seule.
+            </div>
+            <?php endif; ?>
             <ul class="learner-list">
                 <?php foreach ( $learners as $lr ) :
                     $is_signed = 'signe' === $lr->status;

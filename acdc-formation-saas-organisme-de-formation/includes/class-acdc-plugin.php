@@ -300,6 +300,7 @@ class ACDC_Formation_SAAS_Plugin {
     add_action( 'admin_post_acdc_wf_save_settings', array( $this, 'acdc_wf_handle_save_settings' ) );
     add_action( 'admin_post_acdc_wf_dismiss_task', array( $this, 'acdc_wf_handle_dismiss_task' ) );
     add_action( 'admin_post_acdc_wf_purge_orphan_emargements', array( $this, 'acdc_wf_handle_purge_orphan_emargements' ) );
+    add_action( 'admin_post_acdc_wf_replay_simulated', array( $this, 'acdc_wf_handle_replay_simulated' ) );
     add_action( 'wp_ajax_acdc_save_global_column_width', array( $this, 'ajax_save_global_column_width' ) );
     add_action( 'wp_ajax_acdc_save_global_column_widths', array( $this, 'ajax_save_global_column_widths' ) );
     /* ACDC 3.20.67 — Verrouillage des largeurs par tableau métier. */

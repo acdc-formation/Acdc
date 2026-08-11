@@ -87,6 +87,30 @@ trait ACDC_Workflow_Render_Trait {
     } else {
       echo '<div class="acdc-alert acdc-alert-success"><strong>Workflow actif.</strong> Les envois partent réellement, à tous les destinataires.</div>';
     }
+
+    /* ACDC 3.25.223 — Ce que la simulation a consommé ne doit pas rester muet.
+       Simulation levée, mais des étapes portent encore « Simulée — aucun
+       envoi » sur des parcours actifs : ces dossiers ont un plan déroulé et
+       zéro e-mail parti. Le moteur ne les rejouera pas de lui-même — ce serait
+       décider à la place de l'organisme — mais il ne peut pas non plus laisser
+       croire que tout est fait. */
+    if ( empty( $settings['simulation'] ) && ! empty( $settings['enabled'] ) ) {
+      $backlog = $this->acdc_wf_simulated_backlog_count();
+      if ( $backlog > 0 ) {
+        ?>
+        <div class="acdc-alert acdc-alert-warning">
+          <strong><?php echo (int) $backlog; ?> étape(s) jouée(s) en simulation, donc jamais envoyée(s).</strong>
+          Elles appartiennent à des parcours encore actifs et le moteur ne les reprendra pas tout seul : pour lui, elles sont derrière nous.
+          <form method="post" action="<?php echo esc_url( admin_url( 'admin-post.php' ) ); ?>" style="margin-top:10px">
+            <?php wp_nonce_field( 'acdc_wf_replay_simulated' ); ?>
+            <input type="hidden" name="action" value="acdc_wf_replay_simulated">
+            <button type="submit" class="acdc-button acdc-button-primary">Remettre ces étapes au plan</button>
+            <span class="description" style="margin-left:10px">Les étapes que le dossier ne justifie plus seront écartées à la réconciliation. Celles dont l'heure est passée partiront dès la prochaine passe.</span>
+          </form>
+        </div>
+        <?php
+      }
+    }
     ?>
     <nav class="acdc-subtabs">
       <?php foreach ( $views as $key => $label ) : ?>
