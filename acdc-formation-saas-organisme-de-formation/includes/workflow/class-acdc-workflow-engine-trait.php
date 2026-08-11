@@ -917,7 +917,21 @@ trait ACDC_Workflow_Engine_Trait {
     $bounded    = $contract && ! empty( $contract->start_date ) && ! empty( $contract->end_date );
 
     if ( $company_id > 0 ) {
-      $sql     .= $bounded ? ' AND ( company_id = %d OR company_id IS NULL )' : ' AND company_id = %d';
+      /* ACDC 3.25.222 — UNE SÉANCE SANS ENTREPRISE PORTE 0, PAS NULL.
+         La recette a monté un dossier complet — quatre séances valides, bonne
+         formation, bon formateur, bonnes dates — et le moteur n'en a vu
+         aucune : il réclamait « Rattacher une séance au dossier » pendant que
+         les quatre étaient sous ses yeux. Ni convocation ni émargement ne
+         pouvaient donc être planifiés.
+         La cause tient à une valeur : les séances créées depuis l'écran
+         « Créer une séance » n'ont pas d'entreprise, et le formulaire y écrit
+         ZÉRO là où cette condition n'acceptait que NULL. Zéro n'est ni
+         l'identifiant du client, ni NULL : la séance tombait entre les deux et
+         disparaissait du dossier.
+         On traite désormais 0 et NULL pour ce qu'ils sont l'un comme l'autre —
+         l'absence de rattachement — au lieu de faire dépendre un dossier entier
+         de la façon dont un formulaire note « rien ». */
+      $sql     .= $bounded ? ' AND ( company_id = %d OR company_id IS NULL OR company_id = 0 )' : ' AND company_id = %d';
       $values[] = $company_id;
     }
     if ( $bounded ) {
@@ -955,7 +969,10 @@ trait ACDC_Workflow_Engine_Trait {
                AND COALESCE(status,'') NOT IN ('Annulée','Annulee')";
     $values = array( $formation_id );
     if ( $company_id > 0 ) {
-      $sql     .= ' AND company_id = %d';
+      /* Le repli hérite de la même lecture : ici la borne de dates a déjà été
+         retirée, une séance non rattachée doit donc pouvoir revenir au dossier
+         plutôt que de le laisser vide. */
+      $sql     .= ' AND ( company_id = %d OR company_id IS NULL OR company_id = 0 )';
       $values[] = $company_id;
     }
     $sql .= ' ORDER BY COALESCE(start_date, DATE(start_at)) ASC, COALESCE(start_at, "") ASC, id ASC LIMIT 200';
