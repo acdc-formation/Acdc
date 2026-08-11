@@ -107,7 +107,11 @@ class ACDC_Emarg_Core {
         $this->maybe_add_column( $this->table_sessions, 'seance_end_at', 'DATETIME NULL AFTER seance_start_at' );
         $this->maybe_add_column( $this->table_learners, 'seance_index', 'INT NOT NULL DEFAULT 0 AFTER session_id' );
 
-        $this->repair_empty_sheets();
+        /* ACDC 3.25.230 — LA RÉPARATION NE SE FAIT PLUS DANS install().
+           Voir maybe_repair_empty_sheets() : exécutée ici, elle s'exécutait à
+           CHAQUE requête tant que le numéro de schéma n'était pas écrit — et
+           il ne l'était qu'APRÈS. Une réparation trop lente ne s'achevait
+           jamais, donc n'écrivait jamais le numéro, donc recommençait. */
     }
 
     /**
@@ -122,8 +126,37 @@ class ACDC_Emarg_Core {
      * coup réécrirait une pièce probante. Une feuille vide, elle, ne prouve
      * rien — il n'y a rien à abîmer.
      */
-    private function repair_empty_sheets() {
+    /**
+     * ACDC 3.25.230 — RÉPARATION HORS DU CHEMIN DE REQUÊTE, ET PAR PETITS LOTS.
+     *
+     * Cette réparation était appelée depuis install(), lui-même appelé sur
+     * `init` tant que le numéro de schéma stocké différait du numéro courant.
+     * Or ce numéro n'était écrit qu'APRÈS le retour d'install(). Deux cents
+     * feuilles à reconstruire, plusieurs requêtes chacune : si la passe
+     * dépassait le temps d'exécution PHP, elle mourait avant d'écrire le
+     * numéro — et la requête suivante recommençait de zéro. Une boucle qui
+     * s'auto-entretient, sur CHAQUE page, jusqu'à épuisement du serveur.
+     * C'est le pire type de défaut : il ne casse pas une fonction, il éteint
+     * le site.
+     *
+     * Trois précautions, et aucune n'est facultative :
+     *   1. elle ne tourne QUE dans l'administration — jamais sur une page
+     *      publique, jamais sur une requête d'un visiteur ;
+     *   2. elle traite DIX feuilles par passage, pas deux cents ;
+     *   3. elle avance même si une passe échoue, parce qu'elle mémorise
+     *      l'identifiant atteint avant de travailler.
+     */
+    public function maybe_repair_empty_sheets() {
         global $wpdb;
+
+        if ( ! is_admin() ) {
+            return;
+        }
+
+        $done = get_option( 'acdc_emarg_repair_empty_done', '' );
+        if ( '1' === (string) $done ) {
+            return;
+        }
 
         $empty_ids = $wpdb->get_col(
             "SELECT s.id
@@ -131,8 +164,23 @@ class ACDC_Emarg_Core {
                LEFT JOIN {$this->table_learners} l ON l.emarg_session_id = s.id
               WHERE l.id IS NULL
               ORDER BY s.id DESC
-              LIMIT 200"
+              LIMIT 10"
         );
+
+        if ( empty( $empty_ids ) ) {
+            update_option( 'acdc_emarg_repair_empty_done', '1', false );
+            return;
+        }
+
+        /* Le compteur de passages borne définitivement le travail : si une
+           feuille résiste — séance supprimée, dossier vidé — on ne s'acharne
+           pas indéfiniment sur elle à chaque chargement d'écran. */
+        $passes = (int) get_option( 'acdc_emarg_repair_empty_passes', 0 );
+        if ( $passes >= 50 ) {
+            update_option( 'acdc_emarg_repair_empty_done', '1', false );
+            return;
+        }
+        update_option( 'acdc_emarg_repair_empty_passes', $passes + 1, false );
 
         foreach ( (array) $empty_ids as $id ) {
             $this->sync_learners( (int) $id );

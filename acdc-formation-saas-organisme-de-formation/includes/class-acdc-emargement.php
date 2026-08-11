@@ -60,6 +60,11 @@ class ACDC_Emargement {
         // le schéma stocké diffère de la version courante, et non à chaque requête.
         add_action( 'init', array( $this, 'maybe_install' ), 5 );
 
+        /* ACDC 3.25.230 — La réparation des feuilles vides vit hors du chemin
+           de requête publique : elle ne s'exécute que dans l'administration,
+           par lots de dix. */
+        add_action( 'admin_init', array( $this->core, 'maybe_repair_empty_sheets' ) );
+
         // Exclusion cache LiteSpeed au plus tôt (avant template_redirect)
         // pour éviter qu'une page avec nonce soit servie depuis le cache
         add_action( 'init', array( $this->pub, 'maybe_set_nocache' ), 1 );
@@ -242,8 +247,18 @@ class ACDC_Emargement {
         if ( get_option( self::OPTION_DB_VER, '' ) === self::DB_VERSION ) {
             return;
         }
-        $this->core->install();
+
+        /* ACDC 3.25.230 — LE NUMÉRO DE SCHÉMA S'ÉCRIT AVANT LE TRAVAIL.
+           Il s'écrivait après : si install() n'allait pas au bout — dépassement
+           du temps d'exécution, requête lente, verrou — le numéro n'était jamais
+           écrit, et la requête SUIVANTE recommençait tout. Sur `init`, donc sur
+           chaque page, y compris publiques : une boucle qui s'auto-entretient et
+           finit par éteindre le site.
+           C'est la règle déjà appliquée aux migrations du workflow, et elle vaut
+           ici mot pour mot : perdre une migration est rattrapable à la main,
+           la rejouer en boucle ne l'est pas. */
         update_option( self::OPTION_DB_VER, self::DB_VERSION );
+        $this->core->install();
     }
 
     public static function install() {
