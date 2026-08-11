@@ -1572,13 +1572,24 @@ trait ACDC_Workflow_Engine_Trait {
       $delegate = $this->acdc_wf_step_delegate( (string) $step->step_key );
 
       if ( '' !== $delegate ) {
+        /* ACDC 3.25.221 — CORRECTION D'UNE RÉGRESSION QUE J'AI INTRODUITE.
+           La 3.25.219 marquait ces étapes « Faite ». Je remplaçais un faux
+           négatif — « En échec » sur une étape qui avait réussi — par un faux
+           POSITIF : le parcours déclarait faites cinq enquêtes dont aucune
+           n'était partie, l'écran du module affichant 0 envoi et l'archive
+           aucun e-mail. Pour un journal d'audit, l'erreur inverse est pire :
+           un dossier alarmiste se vérifie, un dossier faussement rassurant ne
+           se vérifie jamais.
+           Le moteur n'a pas les moyens de constater l'envoi d'un module tiers.
+           Il ne prétend donc plus le savoir : l'étape reste EN ATTENTE du
+           module, ni réussie ni échouée, et le dit. Elle ne sera pas rejouée —
+           ce n'est pas au moteur d'exécuter — mais elle reste visible tant que
+           personne n'a confirmé, ce qui est exactement l'état de la réalité. */
         $wpdb->update(
           $this->workflow_step_table,
           array(
-            'status'      => 'done',
-            'executed_at' => $now,
-            'result_note' => 'Étape portée par le ' . $delegate . ' : le moteur ordonne, le module exécute.',
-            'settled_by'  => 'engine',
+            'status'      => 'waiting',
+            'result_note' => 'En attente du ' . $delegate . ' : le moteur ordonne, le module exécute. L’envoi n’est pas confirmé par le moteur — vérifiez l’écran du module.',
             'attempts'    => (int) $step->attempts + 1,
             'updated_at'  => $now,
           ),
