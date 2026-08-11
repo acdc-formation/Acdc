@@ -136,6 +136,31 @@ provoque une relance depuis l'écran.
 > d'**information** (« Information — vos collaborateurs sont convoqués »), pas
 > une convocation.
 
+**Acte 8 bis — Contrat de mission du formateur.** Il n'a pas d'écran à lui : il
+se crée depuis la **fiche du formateur** (Formateurs → David Contal), dans le
+bloc des contrats de sous-traitance. Fais la chaîne complète :
+
+1. **Crée** le contrat de mission : libellé, référence de formation, période
+   (les deux journées), volume d'heures, montant HT.
+2. **Génère le PDF** — le bouton enregistre le document et redirige avec un
+   avis ; il ne renvoie pas le fichier directement, c'est voulu.
+3. **Consulte-le** avec « Voir » et vérifie son contenu.
+4. **Envoie-le en signature** au formateur, puis **signe-le** depuis la boîte
+   `dcontal@acdc-formation.com`.
+
+> **À vérifier** : le PDF porte le bon formateur, la bonne formation, la bonne
+> période et le bon volume d'heures — et non ceux d'un autre dossier.
+> **À vérifier** : « Générer le PDF » **n'envoie aucun e-mail au formateur**.
+> L'envoi est une action distincte et explicite. Si un e-mail part à la
+> génération, c'est un défaut grave : un document contractuel expédié sans
+> décision.
+> **À vérifier** : une fois le contrat créé, il **apparaît dans « Mes contrats »
+> du portail formateur** (acte 18), avec le bon statut de signature. C'est le
+> point qui n'a jamais pu être établi lors de la campagne précédente : on ne
+> savait pas si l'écran était vide parce qu'aucun contrat n'existait, ou parce
+> que le rattachement était cassé. Cette fois, tu crées le contrat toi-même :
+> l'écran ne peut plus avoir d'excuse.
+
 **Acte 9 — Extranet apprenant.** Active les comptes des trois apprenantes,
 connecte-toi à chacun, vérifie la bibliothèque et les quiz.
 > Sers-toi des quiz **présents** ; n'en crée pas.
@@ -187,9 +212,18 @@ entreprise, formateur).
 >   écran à l'autre.
 
 **Acte 18 — Portail formateur.** Connecte-toi en David Contal.
-> **À vérifier (3.25.225)** : « Mes contrats », s'il est vide, **explique
-> pourquoi** et liste les missions planifiées — sans les faire passer pour des
-> contrats.
+> **À vérifier** : « Mes contrats » affiche le contrat de mission créé à
+> l'acte 8 bis, avec sa période, son volume d'heures, son montant et son statut
+> de signature (« Signé » si tu es allé au bout). **S'il est absent alors que tu
+> viens de le créer, c'est le défaut le plus important de cet acte** : dis-le
+> nettement, et donne l'identifiant du contrat et celui du formateur pour que la
+> piste soit traçable.
+> **À vérifier (3.25.225)** : si — et seulement si — aucun contrat n'existe,
+> l'écran **explique pourquoi** et liste les missions planifiées, sans jamais
+> les faire passer pour des contrats. Une mission au planning n'est pas un
+> engagement signé.
+> **À vérifier** : les quatre séances, le cahier de texte et les feuilles
+> d'émargement du formateur sont accessibles depuis ce portail.
 
 **Acte 19 — Statistiques.**
 > **À vérifier (3.25.225)** :
@@ -230,6 +264,8 @@ laisse « Mode recette » actif, vérifie que les 7 adresses sont intactes.
   signatures obtenues, signature formateur.
 - Un **inventaire du menu Documents** : onglet par onglet, nombre de lignes,
   durée affichée, dates.
+- Le **sort du contrat de mission** : créé oui/non, PDF conforme oui/non, e-mail
+  parasite à la génération oui/non, visible dans le portail formateur oui/non.
 - Pour chaque défaut : **l'écran, le geste exact, ce qui était attendu, ce qui
   s'est produit**, et — si tu peux l'établir — **la cause**, pas seulement le
   symptôme.
