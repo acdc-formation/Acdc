@@ -2213,6 +2213,26 @@ startxref
             }
           }
         }
+        /* ACDC 3.25.234 — LE BUDGET ANNONCÉ AU RECUEIL SERT ENFIN À QUELQUE
+           CHOSE. Il était saisi, affiché, imprimé — et il fallait retaper le
+           montant à la main sur la proposition. On le reprend donc comme valeur
+           de départ, mais EN DERNIER : le tarif catalogue de la formation, quand
+           il existe, reste prioritaire. C'est le tarif de l'organisme qui fait
+           foi ; le budget du client n'est qu'un point de départ de discussion,
+           et l'écraser avec lui reviendrait à laisser le prospect fixer les
+           prix.
+           La valeur reste modifiable, et le champ dit d'où elle vient. */
+        if ( empty( $v['formation_total'] ) && ! empty( $v['need_id'] ) ) {
+          $budget_need = $this->get_need( (int) $v['need_id'] );
+          if ( $budget_need && ! empty( $budget_need->budget ) ) {
+            $budget_amount = (float) str_replace( ',', '.', $this->normalize_price_number( $budget_need->budget, 2 ) );
+            if ( $budget_amount > 0 ) {
+              $v['formation_total']         = $budget_amount;
+              $v['formation_price_per_day'] = round( $budget_amount / max( 1, (int) $v['formation_days'] ), 2 );
+              $v['budget_origin']           = trim( (string) $budget_need->budget );
+            }
+          }
+        }
         if ( '' === (string) $v['thematique'] && ! empty( $pp->desired_thematique ) ) { $v['thematique'] = (string) $pp->desired_thematique; }
         if ( '' === (string) $v['title'] && ! empty( $pp->desired_training ) ) { $v['title'] = (string) $pp->desired_training; }
         if ( '' === (string) $v['formation_title'] && ! empty( $pp->desired_training ) ) { $v['formation_title'] = (string) $pp->desired_training; }
@@ -2351,6 +2371,9 @@ startxref
               <p style="margin:0;">
                 <label style="font-size:12px;font-weight:600;color:#0f2c52;display:block;margin-bottom:5px;">Tarif jour (&#8364; HT) *</label>
                 <input type="number" name="proposal[formation_price_per_day]" id="acdc-full-price" min="0" step="10" value="<?php echo esc_attr( $v['formation_price_per_day'] ); ?>" oninput="acdcFullCalcTotal()" style="width:100%;height:40px;border-radius:10px;border:1px solid #dfe5ee;padding:0 12px;font-size:13px;">
+                <?php if ( ! empty( $v['budget_origin'] ) ) : ?>
+                <p class="description" style="margin:6px 0 0;font-size:11px;">Repris du budget annoncé au recueil des besoins : <strong><?php echo esc_html( $v['budget_origin'] ); ?></strong>. Modifiable.</p>
+                <?php endif; ?>
               </p>
             </div>
             <input type="hidden" name="proposal[formation_total]" id="acdc-full-total-hidden" value="<?php echo esc_attr( $v['formation_total'] ); ?>">

@@ -340,6 +340,22 @@ trait Acdc_Proposals_Core_Trait {
       }
     }
     $data['formation_funding'] = $funding_label;
+
+    /* ACDC 3.25.234 — Le budget annoncé au recueil devient la valeur de départ
+       du montant. Les deux chemins de création d'une proposition — la fenêtre
+       rapide et le formulaire complet — doivent proposer la même chose, sans
+       quoi le montant dépendrait du bouton emprunté. Le tarif catalogue, quand
+       une formation est retenue, reprend la main juste après : c'est le tarif
+       de l'organisme qui fait foi. */
+    if ( ! empty( $need->budget ) && method_exists( $this, 'normalize_price_number' ) ) {
+      $budget_amount = (float) str_replace( ',', '.', $this->normalize_price_number( $need->budget, 2 ) );
+      if ( $budget_amount > 0 ) {
+        $data['formation_total']        = $budget_amount;
+        $data['formation_price_per_day'] = round( $budget_amount / max( 1, (int) $data['formation_days'] ), 2 );
+        $data['budget_origin']          = trim( (string) $need->budget );
+      }
+    }
+
     $data['formation_title']          = ! empty( $need->theme ) ? (string) $need->theme : '';
     $data['formation_public']         = ! empty( $need->target_audience ) ? strip_tags( (string) $need->target_audience ) : '';
     if ( ! empty( $need->company_id ) ) {
