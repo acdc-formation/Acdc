@@ -244,12 +244,23 @@ trait ACDC_Workflow_Render_Trait {
       $start_ts = $this->acdc_wf_ts( $run->formation_start_at ?? '' );
       $end_ts   = $this->acdc_wf_ts( $run->formation_end_at ?? '' );
       ?>
+      <?php
+      /* ACDC 3.25.234 — La même information s'écrivait deux fois : la ligne des
+         dates, puis la ligne de provenance qui redit « Début : non déterminé.
+         Fin : non déterminée. » quand justement il n'y a rien à expliquer. Une
+         provenance ne se lit que lorsqu'il y a une date dont on veut connaître
+         l'origine. */
+      $dates_source = trim( (string) ( $run->dates_source ?? '' ) );
+      $has_dates    = ( $start_ts > 0 || $end_ts > 0 );
+      ?>
       <p class="description">
         <strong>Dates de formation retenues</strong> —
         début : <?php echo $start_ts > 0 ? esc_html( wp_date( 'd/m/Y H:i', $start_ts ) ) : 'non déterminé'; ?> ·
         fin : <?php echo $end_ts > 0 ? esc_html( wp_date( 'd/m/Y H:i', $end_ts ) ) : 'non déterminée'; ?>
-        <?php if ( '' !== (string) ( $run->dates_source ?? '' ) ) : ?>
-          <br><?php echo esc_html( (string) $run->dates_source ); ?>
+        <?php if ( $has_dates && '' !== $dates_source ) : ?>
+          <br><?php echo esc_html( $dates_source ); ?>
+        <?php elseif ( ! $has_dates ) : ?>
+          <br>Aucune séance n'est encore rattachée au dossier : les convocations, les rappels d'émargement et les enquêtes se planifieront dès que les dates seront connues.
         <?php endif; ?>
       </p>
       <table class="acdc-table">
@@ -274,6 +285,34 @@ trait ACDC_Workflow_Render_Trait {
         <?php endforeach; ?>
         </tbody>
       </table>
+      <?php
+      /* ACDC 3.25.234 — UN PARCOURS D'UNE SEULE LIGNE NE RESSEMBLE PAS À UN
+         PARCOURS. Le moteur ne planifie que ce que le dossier justifie : au
+         lendemain d'un recueil, il n'y a effectivement qu'une étape à faire.
+         Mais l'écran laissait croire que le parcours se résumait à cela, alors
+         qu'une trentaine d'étapes suivront. On annonce donc la suite, sans la
+         planifier : ce sont deux choses différentes, et les confondre serait
+         retomber dans l'écran qui affirme au lieu de lire. */
+      $phase_order = array( 'commercial', 'preparation', 'animation', 'evaluation' );
+      $reached     = array();
+      foreach ( $steps as $step ) {
+        $reached[ (string) $step->phase ] = true;
+      }
+      $upcoming = array();
+      foreach ( $phase_order as $phase_key ) {
+        if ( ! isset( $reached[ $phase_key ] ) && isset( $phases[ $phase_key ] ) ) {
+          $upcoming[] = $phases[ $phase_key ];
+        }
+      }
+      ?>
+      <?php if ( ! empty( $upcoming ) ) : ?>
+      <p class="description" style="margin-top:12px;">
+        <strong>La suite du parcours n'est pas encore planifiée</strong> — phases à venir :
+        <?php echo esc_html( implode( ', ', $upcoming ) ); ?>.
+        Le moteur ajoute chaque étape au moment où le dossier la justifie : la proposition ouvre le devis,
+        le devis signé ouvre la convention, et les séances déclenchent convocations, émargements et enquêtes.
+      </p>
+      <?php endif; ?>
       <p><a class="acdc-button acdc-button-soft" href="<?php echo esc_url( $this->acdc_wf_tab_url( 'runs' ) ); ?>">&#8592; Retour au suivi</a></p>
     </div>
     <?php
