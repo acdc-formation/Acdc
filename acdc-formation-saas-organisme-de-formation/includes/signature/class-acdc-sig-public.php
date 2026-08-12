@@ -414,7 +414,7 @@ class ACDC_Sig_Public {
                par leurs milieux — c'est ce qui fait la fluidité d'une signature.
                Une signature est une pièce probante : elle doit ressembler à
                celle de la personne, sinon elle se conteste. */
-            var drawing=false,hasSig=false,dpr=1,lastX=0,lastY=0;
+            var drawing=false,hasSig=false,dpr=1,lastX=0,lastY=0,midX=0,midY=0;
             function resize(){
               var d=hasSig?c.toDataURL():'',cw=w.offsetWidth||600,ch=160;
               dpr=Math.min(3,Math.max(1,window.devicePixelRatio||1));
@@ -427,16 +427,24 @@ class ACDC_Sig_Public {
             resize();window.addEventListener('resize',function(){setTimeout(resize,100);});
             function pos(e){var r=c.getBoundingClientRect(),src=(e.touches&&e.touches[0])?e.touches[0]:e;
               return{x:(src.clientX-r.left),y:(src.clientY-r.top)};}
-            function sd(e){e.preventDefault();drawing=true;var p=pos(e);lastX=p.x;lastY=p.y;
+            function sd(e){e.preventDefault();drawing=true;var p=pos(e);lastX=midX=p.x;lastY=midY=p.y;
               /* Le point du posé vaut trait : un point ou un geste très court
                  doit laisser une trace. */
               ctx.beginPath();ctx.arc(p.x,p.y,ctx.lineWidth/2,0,6.2832);ctx.fillStyle='#1a2744';ctx.fill();
               hasSig=true;hint.style.display='none';upd();}
+            /* ACDC 3.25.238 — Le tracé va d'un MILIEU au MILIEU suivant, en
+               prenant le point brut comme point de contrôle. C'est ce qui rend
+               la courbe continue ET lisse : chaque segment reprend exactement
+               là où le précédent s'est arrêté. La 3.25.236 s'arrêtait au milieu
+               puis repartait du point brut suivant, laissant la seconde moitié
+               de chaque segment non dessinée — un trait pointillé à 50 %. */
             function md(e){if(!drawing)return;e.preventDefault();var p=pos(e);
               var mx=(lastX+p.x)/2,my=(lastY+p.y)/2;
-              ctx.beginPath();ctx.moveTo(lastX,lastY);ctx.quadraticCurveTo(lastX,lastY,mx,my);ctx.stroke();
-              lastX=p.x;lastY=p.y;hasSig=true;upd();}
-            function ed(){drawing=false;}
+              ctx.beginPath();ctx.moveTo(midX,midY);ctx.quadraticCurveTo(lastX,lastY,mx,my);ctx.stroke();
+              midX=mx;midY=my;lastX=p.x;lastY=p.y;hasSig=true;upd();}
+            /* Le relevé du stylo ferme le dernier demi-segment : sans lui, la
+               signature s'arrêterait au dernier milieu et perdrait sa fin. */
+            function ed(){if(drawing){ctx.beginPath();ctx.moveTo(midX,midY);ctx.lineTo(lastX,lastY);ctx.stroke();}drawing=false;}
             c.addEventListener('mousedown',sd);c.addEventListener('mousemove',md);c.addEventListener('mouseup',ed);c.addEventListener('mouseleave',ed);
             c.addEventListener('touchstart',sd,{passive:false});c.addEventListener('touchmove',md,{passive:false});c.addEventListener('touchend',ed);
             clr.addEventListener('click',function(){ctx.save();ctx.setTransform(1,0,0,1,0,0);ctx.clearRect(0,0,c.width,c.height);ctx.restore();hasSig=false;hint.style.display='';inp.value='';upd();});
@@ -452,7 +460,7 @@ class ACDC_Sig_Public {
             var accordHas=false;
             if(accordCanvas){
               var ac=accordCanvas,actx=ac.getContext('2d'),aw=document.getElementById('sig-accord-wrap');
-              var ahint=document.getElementById('sig-accord-hint'),adraw=false,alx=0,aly=0;
+              var ahint=document.getElementById('sig-accord-hint'),adraw=false,alx=0,aly=0,amx=0,amy=0;
               function aresize(){
                 var d=accordHas?ac.toDataURL():'',cw=aw.offsetWidth||600,ch=120;
                 ac.width=Math.round(cw*dpr);ac.height=Math.round(ch*dpr);
@@ -464,14 +472,14 @@ class ACDC_Sig_Public {
               aresize();window.addEventListener('resize',function(){setTimeout(aresize,100);});
               function apos(e){var r=ac.getBoundingClientRect(),src=(e.touches&&e.touches[0])?e.touches[0]:e;
                 return{x:(src.clientX-r.left),y:(src.clientY-r.top)};}
-              function asd(e){e.preventDefault();adraw=true;var p=apos(e);alx=p.x;aly=p.y;
+              function asd(e){e.preventDefault();adraw=true;var p=apos(e);alx=amx=p.x;aly=amy=p.y;
                 actx.beginPath();actx.arc(p.x,p.y,actx.lineWidth/2,0,6.2832);actx.fill();
                 accordHas=true;ahint.style.display='none';upd();}
               function amd(e){if(!adraw)return;e.preventDefault();var p=apos(e);
                 var mx=(alx+p.x)/2,my=(aly+p.y)/2;
-                actx.beginPath();actx.moveTo(alx,aly);actx.quadraticCurveTo(alx,aly,mx,my);actx.stroke();
-                alx=p.x;aly=p.y;accordHas=true;upd();}
-              function aed(){adraw=false;}
+                actx.beginPath();actx.moveTo(amx,amy);actx.quadraticCurveTo(alx,aly,mx,my);actx.stroke();
+                amx=mx;amy=my;alx=p.x;aly=p.y;accordHas=true;upd();}
+              function aed(){if(adraw){actx.beginPath();actx.moveTo(amx,amy);actx.lineTo(alx,aly);actx.stroke();}adraw=false;}
               ac.addEventListener('mousedown',asd);ac.addEventListener('mousemove',amd);
               ac.addEventListener('mouseup',aed);ac.addEventListener('mouseleave',aed);
               ac.addEventListener('touchstart',asd,{passive:false});ac.addEventListener('touchmove',amd,{passive:false});

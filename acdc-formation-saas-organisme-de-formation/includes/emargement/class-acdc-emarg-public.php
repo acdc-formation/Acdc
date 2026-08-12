@@ -285,18 +285,23 @@ function initCanvas(canvasId) {
     ctx.setTransform(dpr,0,0,dpr,0,0);style();
   }
   sizeTo(c.offsetWidth||600);
-  var drawing=false,hasSig=false,lastX=0,lastY=0;
+  var drawing=false,hasSig=false,lastX=0,lastY=0,midX=0,midY=0;
   function getPos(e){var r=c.getBoundingClientRect(),src=(e.touches&&e.touches[0])?e.touches[0]:e;
     return{x:(src.clientX-r.left),y:(src.clientY-r.top)};}
-  function start(e){drawing=true;var p=getPos(e);lastX=p.x;lastY=p.y;
+  function start(e){drawing=true;var p=getPos(e);lastX=midX=p.x;lastY=midY=p.y;
     /* Le point du posé : il vaut signature à lui seul. */
     ctx.beginPath();ctx.arc(p.x,p.y,ctx.lineWidth/2,0,6.284);ctx.fill();
     hasSig=true;}
+  /* ACDC 3.25.238 — D'un MILIEU au MILIEU suivant, le point brut servant de
+     point de contrôle : c'est ce qui donne une courbe à la fois continue et
+     lisse. La 3.25.236 s'arrêtait au milieu puis repartait du point brut
+     suivant, laissant la moitié de chaque segment non tracée. */
   function move(e){if(!drawing)return;var p=getPos(e);
     var mx=(lastX+p.x)/2,my=(lastY+p.y)/2;
-    ctx.beginPath();ctx.moveTo(lastX,lastY);ctx.quadraticCurveTo(lastX,lastY,mx,my);ctx.stroke();
-    lastX=p.x;lastY=p.y;hasSig=true;}
-  function stop(){drawing=false;}
+    ctx.beginPath();ctx.moveTo(midX,midY);ctx.quadraticCurveTo(lastX,lastY,mx,my);ctx.stroke();
+    midX=mx;midY=my;lastX=p.x;lastY=p.y;hasSig=true;}
+  /* Le relevé du stylo ferme le dernier demi-segment. */
+  function stop(){if(drawing){ctx.beginPath();ctx.moveTo(midX,midY);ctx.lineTo(lastX,lastY);ctx.stroke();}drawing=false;}
   c.addEventListener('mousedown',start);
   c.addEventListener('mousemove',move);
   c.addEventListener('mouseup',stop);
