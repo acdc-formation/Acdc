@@ -766,6 +766,8 @@ public function handle_save_registration_contract() {
       $pdf_result = $this->generate_registration_contract_pdf_file( $contract_id );
       if ( ! empty( $pdf_result['path'] ) ) {
         $messages[] = 'PDF de la convention / du contrat régénéré.';
+      } elseif ( ! empty( $pdf_result['error'] ) ) {
+        $messages[] = (string) $pdf_result['error'];
       }
     }
   }
@@ -774,6 +776,8 @@ public function handle_save_registration_contract() {
       $pdf_result = $this->generate_registration_contract_pdf_file( $contract_id );
       if ( ! empty( $pdf_result['path'] ) ) {
         $messages[] = 'PDF de la convention / du contrat généré.';
+      } elseif ( ! empty( $pdf_result['error'] ) ) {
+        $messages[] = (string) $pdf_result['error'];
       }
     }
     if ( in_array( $generate_mode, array( 'generate_blank_email', 'generate_blank_esign' ), true ) ) {
@@ -892,7 +896,9 @@ public function handle_send_contract_for_signature() {
   if ( method_exists( $this, 'generate_registration_contract_pdf_file' ) ) {
     $pdf_result = $this->generate_registration_contract_pdf_file( $contract_id );
     if ( empty( $pdf_result['path'] ) ) {
-      $msg = 'Impossible de générer le PDF avant signature.';
+      $msg = ! empty( $pdf_result['error'] )
+        ? (string) $pdf_result['error']
+        : 'Impossible de générer le PDF avant signature.';
       $is_admin_page = is_admin();
       $target = $is_admin_page
         ? admin_url( 'admin.php?page=acdc-of-registration-contract&action=view&item_id=' . $contract_id . '&notice=' . rawurlencode( $msg ) . '&notice_type=error' )

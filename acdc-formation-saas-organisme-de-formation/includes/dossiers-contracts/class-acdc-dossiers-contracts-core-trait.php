@@ -521,7 +521,45 @@ trait ACDC_Dossiers_Contracts_Core_Trait {
   }
 
 
+  /**
+   * ACDC 3.25.237 — UN DÉFAUT DE PDF NE DOIT PLUS TUER LA PAGE.
+   *
+   * Toutes les sorties d'échec de la fabrication rendent déjà un triplet vide,
+   * et les appelants savent le lire. Une seule chose leur échappait : l'erreur
+   * fatale. Un simple `global $wpdb;` oublié suffisait à faire mourir
+   * `admin-post.php` en plein enregistrement — la convention était bien écrite
+   * en base, mais l'utilisateur voyait un écran blanc et ne pouvait pas savoir
+   * si son travail avait été sauvegardé.
+   *
+   * On enveloppe donc la fabrication : l'erreur est journalisée, remontée en
+   * clair dans le message de retour, et la page vit. Ce n'est pas masquer le
+   * défaut — c'est le dire au lieu de disparaître.
+   */
   private function generate_registration_contract_pdf_file( $contract_id, $handwritten_sig_path = '' ) {
+    try {
+      return $this->build_registration_contract_pdf_file( $contract_id, $handwritten_sig_path );
+    } catch ( Throwable $e ) {
+      $message = sprintf(
+        'ACDC — génération du PDF de convention #%d impossible : %s (%s ligne %d)',
+        absint( $contract_id ),
+        $e->getMessage(),
+        $e->getFile(),
+        $e->getLine()
+      );
+      error_log( $message );
+      return array(
+        'url'      => '',
+        'path'     => '',
+        'filename' => '',
+        'error'    => sprintf(
+          'Le PDF de la convention n’a pas pu être généré (%s). La convention, elle, est bien enregistrée.',
+          $e->getMessage()
+        ),
+      );
+    }
+  }
+
+  private function build_registration_contract_pdf_file( $contract_id, $handwritten_sig_path = '' ) {
     $contract_id = absint( $contract_id );
     if ( ! $contract_id ) {
       return array( 'url' => '', 'path' => '', 'filename' => '' );
@@ -1901,6 +1939,16 @@ private function get_contract_pdf_context( $request ) {
 
 
 private function build_contract_pdf_pages( $context ) {
+  /* ACDC 3.25.237 — `global $wpdb;` OUBLIÉ, ET LA CONVENTION MOURAIT.
+     La cascade de recherche du lieu ajoutée en 3.25.231 interroge la base,
+     mais cette méthode n'avait jamais eu besoin de $wpdb : la variable n'était
+     donc pas importée, et valait null. Le chemin ne s'emprunte que lorsque ni
+     la séance ni la proposition ne portent de lieu — c'est-à-dire exactement le
+     cas normal d'une convention signée avant que les séances n'existent, celui
+     que la 3.25.231 prétendait servir. D'où une erreur fatale à la génération
+     du PDF de convention, et un site en écran blanc. */
+  global $wpdb;
+
   $contract  = isset( $context['contract'] ) ? $context['contract'] : null;
   $company   = isset( $context['company'] ) ? $context['company'] : null;
   $formation = isset( $context['formation'] ) ? $context['formation'] : null;
