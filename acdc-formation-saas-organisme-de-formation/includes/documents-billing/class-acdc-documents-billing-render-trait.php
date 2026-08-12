@@ -468,9 +468,64 @@ trait ACDC_Documents_Billing_Render_Trait {
           $row['apprenant']           = (string) $prefill_proposal->client_name;
           $row['apprenant_email']     = (string) ( $prefill_proposal->client_email ?? '' );
           $row['client_company']      = (string) $prefill_proposal->client_company;
-          $row['address']             = (string) ( $prefill_proposal->client_address ?? '' );
-          $row['postal_code']         = (string) ( $prefill_proposal->client_postal_code ?? '' );
-          $row['city']                = (string) ( $prefill_proposal->client_city ?? '' );
+
+          /* ACDC 3.25.243 — LIRE UNE SEULE SOURCE, ET RENONCER.
+             La proposition porte bien un code postal et une ville, mais ils ne
+             sont remplis à sa création que depuis la fiche société : quand
+             celle-ci ne les a pas, le devis s'ouvrait avec des champs vides
+             alors que la fiche prospect, elle, les connaissait. Même chose pour
+             le SIRET, et le complément d'adresse n'existe que sur la société.
+             On interroge donc les trois sources dans l'ordre où elles font
+             autorité — la proposition, qui est la pièce commerciale la plus
+             récente ; la société ; le prospect — et l'on s'arrête à la première
+             qui répond. Un champ ne reste vide que si l'information n'existe
+             nulle part. C'est la même correction que la cascade du logo des
+             PDF et celle du lieu de la convention : le défaut n'était pas
+             l'absence de donnée, mais l'absence de deuxième regard. */
+          $addr_company  = ! empty( $prefill_proposal->company_id ) && method_exists( $this, 'get_company' )
+            ? $this->get_company( (int) $prefill_proposal->company_id )
+            : null;
+          /* Le prospect se rattache de deux façons : par la colonne native, ou
+             par le recueil des besoins dont la proposition est issue. Les
+             propositions anciennes n'ont que la seconde ; ne lire que la
+             première reviendrait à perdre le prospect pour elles. */
+          $addr_prospect_id = ! empty( $prefill_proposal->source_prospect_id )
+            ? (int) $prefill_proposal->source_prospect_id
+            : (int) ( $prefill_proposal->need_source_prospect_id ?? 0 );
+          $addr_prospect = ( $addr_prospect_id > 0 && method_exists( $this, 'get_prospect' ) )
+            ? $this->get_prospect( $addr_prospect_id )
+            : null;
+          $first_filled = static function ( ...$values ) {
+            foreach ( $values as $value ) {
+              $value = is_scalar( $value ) ? trim( (string) $value ) : '';
+              if ( '' !== $value ) { return $value; }
+            }
+            return '';
+          };
+
+          $row['address'] = $first_filled(
+            $prefill_proposal->client_address ?? '',
+            $addr_company->address ?? '',
+            $addr_prospect->address ?? ''
+          );
+          /* Le complément n'existe que sur la fiche société : pour un
+             commanditaire particulier, il restera vide faute de source. */
+          $row['address_complement'] = $first_filled( $addr_company->address_extra ?? '' );
+          $row['postal_code'] = $first_filled(
+            $prefill_proposal->client_postal_code ?? '',
+            $addr_company->postal_code ?? '',
+            $addr_prospect->postal_code ?? ''
+          );
+          $row['city'] = $first_filled(
+            $prefill_proposal->client_city ?? '',
+            $addr_company->city ?? '',
+            $addr_prospect->city ?? ''
+          );
+          $row['client_siret'] = $first_filled(
+            $prefill_proposal->client_siret ?? '',
+            $addr_company->siret ?? '',
+            $addr_prospect->siret ?? ''
+          );
           $row['formation_title']     = (string) $prefill_proposal->formation_title;
           $row['formation_full']      = (string) $prefill_proposal->formation_title;
           $row['formation']           = (string) $prefill_proposal->formation_title;
