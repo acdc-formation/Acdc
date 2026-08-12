@@ -2829,6 +2829,11 @@ dbDelta( $sql_companies );
        d'expédier un e-mail d'activation par inscription au lieu d'un par
        formateur. */
     $this->maybe_add_table_column( $this->trainer_portal_account_table, 'activation_sent_at', 'DATETIME DEFAULT NULL' );
+    /* ACDC 3.25.236 — La mention manuscrite « Bon pour accord » recopiée par le
+       signataire du devis. Elle a une valeur juridique propre, distincte de la
+       signature : c'est l'écrit qui vaut acceptation de l'offre. */
+    $this->maybe_add_table_column( $this->quote_table, 'accord_mention', "VARCHAR(190) NOT NULL DEFAULT ''" );
+    $this->maybe_add_table_column( $this->quote_table, 'accord_signature_path', 'TEXT DEFAULT NULL' );
 
     /* ACDC 3.24.11 — Bilans compétences formateurs (indicateur 21 Qualiopi). */
     $sql_trainer_evaluations = "CREATE TABLE IF NOT EXISTS {$this->trainer_evaluation_table} (" . "  id             BIGINT UNSIGNED NOT NULL AUTO_INCREMENT," . "  trainer_id     BIGINT UNSIGNED NOT NULL," . "  evaluation_date DATE NOT NULL," . "  eval_type      VARCHAR(50) NOT NULL DEFAULT 'entretien'," . "  skills_evaluated TEXT," . "  level_reached  TINYINT UNSIGNED NOT NULL DEFAULT 0," . "  objectives_set TEXT," . "  comment_text   TEXT," . "  created_at     DATETIME NOT NULL," . "  PRIMARY KEY (id)," . "  KEY trainer_id (trainer_id)," . "  KEY evaluation_date (evaluation_date)" . ") {$charset_collate};";

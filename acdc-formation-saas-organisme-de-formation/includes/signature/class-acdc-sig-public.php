@@ -351,6 +351,37 @@ class ACDC_Sig_Public {
                         <button type="button" class="sig-clear" id="sig-clear-btn">↺ Effacer</button>
                     </div>
 
+                    <?php
+                    /* ACDC 3.25.236 — LA MENTION « BON POUR ACCORD » SUR LE DEVIS.
+                       Une signature manuscrite prouve qui a signé ; la mention
+                       recopiée prouve ce que l'on a accepté. Sur un devis, c'est
+                       elle qui vaut acceptation de l'offre, et l'usage veut
+                       qu'elle soit écrite de la main du signataire. Elle
+                       n'existait nulle part : le devis portait un cadre
+                       « Bon pour accord » vide de toute mention.
+                       Deux façons de la produire, parce que les deux ont cours :
+                       au clavier, ou à la main sur un second canevas. */
+                    $is_quote = ( 'devis' === (string) $request->doc_type );
+                    ?>
+                    <?php if ( $is_quote ) : ?>
+                    <div class="sig-step">
+                        <p class="sig-step-title"><span class="sig-step-num">2</span>La mention « Bon pour accord »</p>
+                        <p style="font-size:12px;color:#666;margin:0 0 8px">Recopiez la mention ci-dessous. Elle sera imprimée sur le devis, à côté de votre signature.</p>
+                        <p style="font-size:13px;font-weight:700;color:#1a2744;margin:0 0 8px">« Bon pour accord »</p>
+                        <input type="text" name="accord_mention" id="sig-accord-input" maxlength="180"
+                               placeholder="Recopiez ici : Bon pour accord"
+                               style="width:100%;height:42px;border:1px solid #d6dbe4;border-radius:8px;padding:0 12px;font-size:14px;box-sizing:border-box;">
+                        <p style="font-size:12px;color:#666;margin:12px 0 4px">Ou écrivez-la à la main :</p>
+                        <div class="sig-canvas-wrap" id="sig-accord-wrap">
+                            <canvas id="sig-accord-canvas" height="120"></canvas>
+                            <div class="sig-hint" id="sig-accord-hint">Écrivez « Bon pour accord » ici</div>
+                        </div>
+                        <button type="button" class="sig-clear" id="sig-accord-clear">↺ Effacer la mention manuscrite</button>
+                        <input type="hidden" name="accord_signature" id="sig-accord-data">
+                        <p id="sig-accord-error" style="display:none;color:#b32d2e;font-size:12px;margin:8px 0 0;">Recopiez la mention au clavier, ou écrivez-la à la main.</p>
+                    </div>
+                    <?php endif; ?>
+
                     <div class="sig-legal"><?php echo esc_html( $legal ); ?></div>
 
                     <div class="sig-confirm">
@@ -371,23 +402,105 @@ class ACDC_Sig_Public {
             var hint=document.getElementById('sig-hint'),inp=document.getElementById('sig-data-input');
             var btn=document.getElementById('sig-submit-btn'),ck=document.getElementById('sig-consent');
             var clr=document.getElementById('sig-clear-btn');
-            var drawing=false,hasSig=false;
-            function resize(){var d=c.toDataURL(),cw=w.offsetWidth;c.width=cw;c.height=160;ctx.strokeStyle='#1a2744';ctx.lineWidth=2.5;ctx.lineCap=ctx.lineJoin='round';if(hasSig){var i=new Image();i.onload=function(){ctx.drawImage(i,0,0,cw,160);};i.src=d;}}
+            /* ACDC 3.25.236 — UNE SIGNATURE PIXELLISÉE N'EST PAS UN DÉTAIL.
+               Le canevas fixait sa mémoire graphique à la largeur CSS, sans tenir
+               compte de la densité de l'écran : sur un écran moderne — deux à
+               trois pixels physiques pour un pixel CSS — le tracé était dessiné
+               en basse définition puis agrandi. D'où l'escalier visible à
+               l'écran, et pire encore dans le PDF, où l'image est réétirée.
+               Le tracé lui-même n'aidait pas : des segments droits reliant les
+               points bruts du pointeur donnent une ligne brisée, jamais une
+               écriture. On relie désormais les points par des courbes passant
+               par leurs milieux — c'est ce qui fait la fluidité d'une signature.
+               Une signature est une pièce probante : elle doit ressembler à
+               celle de la personne, sinon elle se conteste. */
+            var drawing=false,hasSig=false,dpr=1,lastX=0,lastY=0;
+            function resize(){
+              var d=hasSig?c.toDataURL():'',cw=w.offsetWidth||600,ch=160;
+              dpr=Math.min(3,Math.max(1,window.devicePixelRatio||1));
+              c.width=Math.round(cw*dpr);c.height=Math.round(ch*dpr);
+              c.style.width=cw+'px';c.style.height=ch+'px';
+              ctx.setTransform(dpr,0,0,dpr,0,0);
+              ctx.strokeStyle='#1a2744';ctx.lineWidth=2.2;ctx.lineCap=ctx.lineJoin='round';
+              if(d){var i=new Image();i.onload=function(){ctx.drawImage(i,0,0,cw,ch);};i.src=d;}
+            }
             resize();window.addEventListener('resize',function(){setTimeout(resize,100);});
-            function pos(e){var r=c.getBoundingClientRect(),sx=c.width/r.width,sy=c.height/r.height;if(e.touches)return{x:(e.touches[0].clientX-r.left)*sx,y:(e.touches[0].clientY-r.top)*sy};return{x:(e.clientX-r.left)*sx,y:(e.clientY-r.top)*sy};}
-            function sd(e){e.preventDefault();drawing=true;var p=pos(e);ctx.beginPath();ctx.moveTo(p.x,p.y);hint.style.display='none';}
-            function md(e){if(!drawing)return;e.preventDefault();var p=pos(e);ctx.lineTo(p.x,p.y);ctx.stroke();hasSig=true;upd();}
+            function pos(e){var r=c.getBoundingClientRect(),src=(e.touches&&e.touches[0])?e.touches[0]:e;
+              return{x:(src.clientX-r.left),y:(src.clientY-r.top)};}
+            function sd(e){e.preventDefault();drawing=true;var p=pos(e);lastX=p.x;lastY=p.y;
+              /* Le point du posé vaut trait : un point ou un geste très court
+                 doit laisser une trace. */
+              ctx.beginPath();ctx.arc(p.x,p.y,ctx.lineWidth/2,0,6.2832);ctx.fillStyle='#1a2744';ctx.fill();
+              hasSig=true;hint.style.display='none';upd();}
+            function md(e){if(!drawing)return;e.preventDefault();var p=pos(e);
+              var mx=(lastX+p.x)/2,my=(lastY+p.y)/2;
+              ctx.beginPath();ctx.moveTo(lastX,lastY);ctx.quadraticCurveTo(lastX,lastY,mx,my);ctx.stroke();
+              lastX=p.x;lastY=p.y;hasSig=true;upd();}
             function ed(){drawing=false;}
             c.addEventListener('mousedown',sd);c.addEventListener('mousemove',md);c.addEventListener('mouseup',ed);c.addEventListener('mouseleave',ed);
             c.addEventListener('touchstart',sd,{passive:false});c.addEventListener('touchmove',md,{passive:false});c.addEventListener('touchend',ed);
-            clr.addEventListener('click',function(){ctx.clearRect(0,0,c.width,c.height);hasSig=false;hint.style.display='';inp.value='';upd();});
+            clr.addEventListener('click',function(){ctx.save();ctx.setTransform(1,0,0,1,0,0);ctx.clearRect(0,0,c.width,c.height);ctx.restore();hasSig=false;hint.style.display='';inp.value='';upd();});
             ck.addEventListener('change',upd);
-            function upd(){btn.disabled=!(hasSig&&ck.checked);}
+            /* ACDC 3.25.236 — Le second canevas, pour la mention manuscrite du
+               devis. Il partage la logique du premier : même densité d'écran,
+               mêmes courbes. Écrire « Bon pour accord » demande de la finesse —
+               c'est du texte, pas un paraphe. */
+            var accordCanvas=document.getElementById('sig-accord-canvas');
+            var accordInput=document.getElementById('sig-accord-input');
+            var accordData=document.getElementById('sig-accord-data');
+            var accordErr=document.getElementById('sig-accord-error');
+            var accordHas=false;
+            if(accordCanvas){
+              var ac=accordCanvas,actx=ac.getContext('2d'),aw=document.getElementById('sig-accord-wrap');
+              var ahint=document.getElementById('sig-accord-hint'),adraw=false,alx=0,aly=0;
+              function aresize(){
+                var d=accordHas?ac.toDataURL():'',cw=aw.offsetWidth||600,ch=120;
+                ac.width=Math.round(cw*dpr);ac.height=Math.round(ch*dpr);
+                ac.style.width=cw+'px';ac.style.height=ch+'px';
+                actx.setTransform(dpr,0,0,dpr,0,0);
+                actx.strokeStyle='#1a2744';actx.fillStyle='#1a2744';actx.lineWidth=2;actx.lineCap=actx.lineJoin='round';
+                if(d){var i=new Image();i.onload=function(){actx.drawImage(i,0,0,cw,ch);};i.src=d;}
+              }
+              aresize();window.addEventListener('resize',function(){setTimeout(aresize,100);});
+              function apos(e){var r=ac.getBoundingClientRect(),src=(e.touches&&e.touches[0])?e.touches[0]:e;
+                return{x:(src.clientX-r.left),y:(src.clientY-r.top)};}
+              function asd(e){e.preventDefault();adraw=true;var p=apos(e);alx=p.x;aly=p.y;
+                actx.beginPath();actx.arc(p.x,p.y,actx.lineWidth/2,0,6.2832);actx.fill();
+                accordHas=true;ahint.style.display='none';upd();}
+              function amd(e){if(!adraw)return;e.preventDefault();var p=apos(e);
+                var mx=(alx+p.x)/2,my=(aly+p.y)/2;
+                actx.beginPath();actx.moveTo(alx,aly);actx.quadraticCurveTo(alx,aly,mx,my);actx.stroke();
+                alx=p.x;aly=p.y;accordHas=true;upd();}
+              function aed(){adraw=false;}
+              ac.addEventListener('mousedown',asd);ac.addEventListener('mousemove',amd);
+              ac.addEventListener('mouseup',aed);ac.addEventListener('mouseleave',aed);
+              ac.addEventListener('touchstart',asd,{passive:false});ac.addEventListener('touchmove',amd,{passive:false});
+              ac.addEventListener('touchend',aed);ac.addEventListener('touchcancel',aed);
+              document.getElementById('sig-accord-clear').addEventListener('click',function(){
+                actx.save();actx.setTransform(1,0,0,1,0,0);actx.clearRect(0,0,ac.width,ac.height);actx.restore();
+                accordHas=false;ahint.style.display='';accordData.value='';upd();});
+              if(accordInput){accordInput.addEventListener('input',upd);}
+            }
+
+            function accordOk(){
+              if(!accordCanvas){return true;}
+              var typed=accordInput&&accordInput.value?accordInput.value.trim():'';
+              return ( typed.length>2 || accordHas );
+            }
+            function upd(){
+              btn.disabled=!(hasSig&&ck.checked&&accordOk());
+              if(accordErr){accordErr.style.display=(hasSig&&ck.checked&&!accordOk())?'block':'none';}
+            }
             document.getElementById('sig-form').addEventListener('submit',function(){
               // Fond blanc avant capture pour éviter le fond noir dans le certificat PDF
               var tmp=document.createElement('canvas');tmp.width=c.width;tmp.height=c.height;
               var tctx=tmp.getContext('2d');tctx.fillStyle='#ffffff';tctx.fillRect(0,0,tmp.width,tmp.height);
               tctx.drawImage(c,0,0);inp.value=tmp.toDataURL('image/png');
+              if(accordCanvas&&accordHas){
+                var atmp=document.createElement('canvas');atmp.width=accordCanvas.width;atmp.height=accordCanvas.height;
+                var atctx=atmp.getContext('2d');atctx.fillStyle='#ffffff';atctx.fillRect(0,0,atmp.width,atmp.height);
+                atctx.drawImage(accordCanvas,0,0);accordData.value=atmp.toDataURL('image/png');
+              }
             });
         })();
         </script>
@@ -478,6 +591,13 @@ class ACDC_Sig_Public {
         }
 
         $sig_img_path  = $this->pdf->save_signature_image( $sig_data, $request->id );
+
+        /* ACDC 3.25.236 — La mention « Bon pour accord » du devis est scellée
+           AVANT la régénération du document : c'est elle qui doit s'y imprimer.
+           Elle est enregistrée sur le devis, jamais sur la demande de signature
+           — la demande disparaît, le devis reste, et c'est le devis qui fait
+           preuve de l'acceptation. */
+        $this->maybe_store_accord_mention( $request );
 
         $pdf_result      = $this->pdf->generate_audit_pdf( $request, $sig_img_path );
         $signed_doc_url  = $pdf_result['url']  ?? '';
@@ -798,5 +918,54 @@ class ACDC_Sig_Public {
              . '<p style="font-size:40px;margin:0 0 12px">' . $c[2] . '</p>'
              . '<p style="font-size:16px;color:#222;margin:0">' . esc_html( $text ) . '</p>'
              . '</div>';
+    }
+
+    /**
+     * ACDC 3.25.236 — Enregistre la mention d'acceptation recopiée sur un devis.
+     *
+     * Une signature manuscrite prouve QUI a signé ; la mention « Bon pour
+     * accord » prouve CE QUE l'on a accepté. Sur un devis, c'est elle qui vaut
+     * acceptation de l'offre, et l'usage veut qu'elle soit de la main du
+     * signataire. Elle n'existait nulle part : le document portait un cadre
+     * intitulé « Bon pour accord » et rien dedans.
+     *
+     * Les deux formes sont acceptées et conservées telles quelles — la saisie
+     * au clavier et le tracé manuscrit. On ne normalise pas le texte : ce que
+     * la personne a écrit est ce qui doit s'imprimer.
+     */
+    private function maybe_store_accord_mention( $request ) {
+        if ( ! $request || 'devis' !== (string) $request->doc_type ) {
+            return;
+        }
+
+        $notes    = json_decode( (string) ( $request->notes ?? '' ), true );
+        $quote_id = ( is_array( $notes ) && ! empty( $notes['quote_id'] ) ) ? (int) $notes['quote_id'] : 0;
+        if ( $quote_id <= 0 ) {
+            return;
+        }
+
+        global $wpdb;
+        $quote_table = $wpdb->prefix . 'acdc_of_quotes';
+
+        $mention = isset( $_POST['accord_mention'] ) ? sanitize_text_field( wp_unslash( $_POST['accord_mention'] ) ) : '';
+        $data    = array();
+
+        if ( '' !== $mention ) {
+            $data['accord_mention'] = $mention;
+        }
+
+        $accord_image = isset( $_POST['accord_signature'] ) ? wp_unslash( $_POST['accord_signature'] ) : '';
+        if ( '' !== $accord_image && 0 === strpos( $accord_image, 'data:image/' ) && strlen( $accord_image ) <= ACDC_Sig_Core::MAX_SIG_DATA_BYTES ) {
+            $path = $this->pdf->save_signature_image( $accord_image, (int) $request->id . '-accord' );
+            if ( $path ) {
+                $data['accord_signature_path'] = $path;
+            }
+        }
+
+        if ( empty( $data ) ) {
+            return;
+        }
+
+        $wpdb->update( $quote_table, $data, array( 'id' => $quote_id ) );
     }
 }

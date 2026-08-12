@@ -272,18 +272,30 @@ canvas{display:block;width:100%;height:160px;border:2px dashed #c9a84c;border-ra
       et le trait atterrissait à côté du doigt. On remesure donc au chargement,
       en préservant ce qui est déjà dessiné. */
 function initCanvas(canvasId) {
+  /* ACDC 3.25.236 — Même correction que sur le portail de signature : la
+     mémoire graphique suit la densité de l'écran, et le tracé passe par des
+     courbes au lieu de segments droits. Un émargement est une preuve Qualiopi ;
+     une signature en escalier se conteste aussi bien qu'une signature absente. */
   var c=document.getElementById(canvasId),ctx=c.getContext('2d');
-  function style(){ctx.strokeStyle='#1a2744';ctx.fillStyle='#1a2744';ctx.lineWidth=2.5;ctx.lineCap=ctx.lineJoin='round';}
-  c.width=c.offsetWidth||600;c.height=160;style();
-  var drawing=false,hasSig=false;
+  var dpr=Math.min(3,Math.max(1,window.devicePixelRatio||1));
+  function style(){ctx.strokeStyle='#1a2744';ctx.fillStyle='#1a2744';ctx.lineWidth=2.2;ctx.lineCap=ctx.lineJoin='round';}
+  function sizeTo(cssW){
+    c.width=Math.round(cssW*dpr);c.height=Math.round(160*dpr);
+    c.style.width=cssW+'px';c.style.height='160px';
+    ctx.setTransform(dpr,0,0,dpr,0,0);style();
+  }
+  sizeTo(c.offsetWidth||600);
+  var drawing=false,hasSig=false,lastX=0,lastY=0;
   function getPos(e){var r=c.getBoundingClientRect(),src=(e.touches&&e.touches[0])?e.touches[0]:e;
-    var w=r.width||c.width,h=r.height||c.height;
-    return{x:(src.clientX-r.left)*(c.width/w),y:(src.clientY-r.top)*(c.height/h)};}
-  function start(e){drawing=true;var p=getPos(e);ctx.beginPath();ctx.moveTo(p.x,p.y);
+    return{x:(src.clientX-r.left),y:(src.clientY-r.top)};}
+  function start(e){drawing=true;var p=getPos(e);lastX=p.x;lastY=p.y;
     /* Le point du posé : il vaut signature à lui seul. */
-    ctx.beginPath();ctx.arc(p.x,p.y,1.25,0,6.284);ctx.fill();
-    ctx.beginPath();ctx.moveTo(p.x,p.y);hasSig=true;}
-  function move(e){if(!drawing)return;var p=getPos(e);ctx.lineTo(p.x,p.y);ctx.stroke();hasSig=true;}
+    ctx.beginPath();ctx.arc(p.x,p.y,ctx.lineWidth/2,0,6.284);ctx.fill();
+    hasSig=true;}
+  function move(e){if(!drawing)return;var p=getPos(e);
+    var mx=(lastX+p.x)/2,my=(lastY+p.y)/2;
+    ctx.beginPath();ctx.moveTo(lastX,lastY);ctx.quadraticCurveTo(lastX,lastY,mx,my);ctx.stroke();
+    lastX=p.x;lastY=p.y;hasSig=true;}
   function stop(){drawing=false;}
   c.addEventListener('mousedown',start);
   c.addEventListener('mousemove',move);
@@ -295,15 +307,17 @@ function initCanvas(canvasId) {
   c.addEventListener('touchmove',function(e){e.preventDefault();move(e);},{passive:false});
   c.addEventListener('touchend',stop);
   c.addEventListener('touchcancel',stop);
-  window.addEventListener('load',function(){var w=c.offsetWidth||c.width;if(w===c.width)return;
-    var d=hasSig?c.toDataURL():'';c.width=w;style();
-    if(d){var i=new Image();i.onload=function(){ctx.drawImage(i,0,0,c.width,160);};i.src=d;}});
-  window.addEventListener('resize',function(){var d=c.toDataURL();c.width=c.offsetWidth||600;style();if(hasSig){var i=new Image();i.onload=function(){ctx.drawImage(i,0,0,c.width,160);};i.src=d;}});
+  window.addEventListener('load',function(){var w=c.offsetWidth||0;if(!w||Math.round(w*dpr)===c.width)return;
+    var d=hasSig?c.toDataURL():'';sizeTo(w);
+    if(d){var i=new Image();i.onload=function(){ctx.drawImage(i,0,0,w,160);};i.src=d;}});
+  window.addEventListener('resize',function(){var d=hasSig?c.toDataURL():'',w=c.offsetWidth||600;sizeTo(w);if(d){var i=new Image();i.onload=function(){ctx.drawImage(i,0,0,w,160);};i.src=d;}});
   return {getDataURL:function(){
-    var tmp=document.createElement('canvas');tmp.width=c.width;tmp.height=160;
-    var tctx=tmp.getContext('2d');tctx.fillStyle='#ffffff';tctx.fillRect(0,0,tmp.width,160);tctx.drawImage(c,0,0);
+    /* On exporte la pleine définition du canevas, pas sa taille CSS : c'est
+       cette image qui atterrit dans le PDF, où elle est réétirée. */
+    var tmp=document.createElement('canvas');tmp.width=c.width;tmp.height=c.height;
+    var tctx=tmp.getContext('2d');tctx.fillStyle='#ffffff';tctx.fillRect(0,0,tmp.width,tmp.height);tctx.drawImage(c,0,0);
     return tmp.toDataURL('image/png');
-  },hasSig:function(){return hasSig;},clear:function(){ctx.clearRect(0,0,c.width,160);hasSig=false;}};
+  },hasSig:function(){return hasSig;},clear:function(){ctx.save();ctx.setTransform(1,0,0,1,0,0);ctx.clearRect(0,0,c.width,c.height);ctx.restore();style();hasSig=false;}};
 }
 </script>
 <div class="emarg-wrap">

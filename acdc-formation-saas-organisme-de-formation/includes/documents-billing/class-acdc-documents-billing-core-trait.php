@@ -255,6 +255,12 @@ trait ACDC_Documents_Billing_Core_Trait {
       'client_company'      => (string) $q->client_company,
       'client_siret'        => isset( $q->client_siret ) ? (string) $q->client_siret : '',
       'client_signature_uri' => ( ! empty( $q->client_signature_path ) && file_exists( (string) $q->client_signature_path ) ) ? $this->quote_file_to_data_uri( (string) $q->client_signature_path ) : '',
+      /* ACDC 3.25.236 — La mention d'acceptation recopiée par le signataire.
+         Le cadre « Bon pour accord » du devis existait, vide : il portait un
+         titre et aucune mention. C'est pourtant l'écrit qui vaut acceptation
+         de l'offre. */
+      'accord_mention'       => (string) ( $q->accord_mention ?? '' ),
+      'accord_signature_uri' => ( ! empty( $q->accord_signature_path ) && file_exists( (string) $q->accord_signature_path ) ) ? $this->quote_file_to_data_uri( (string) $q->accord_signature_path ) : '',
       /* ACDC 3.25.210 — La date accompagne la signature dans TOUS les rendus.
          Elle n'était posée qu'à la main, dans le seul envoi qui suit la
          signature ; partout ailleurs le devis montrait un paraphe sans date. */
@@ -1115,6 +1121,18 @@ trait ACDC_Documents_Billing_Core_Trait {
 
     <div style="position:absolute;right:21mm;bottom:22mm;width:calc(50% - 26mm);">
       <div style="font-size:7pt;font-weight:700;text-transform:uppercase;letter-spacing:.05em;color:#C5A253;margin-bottom:1mm;">Bon pour accord — Lu et approuvé</div>
+      <?php
+      /* ACDC 3.25.236 — La mention recopiée par le signataire s'imprime ici,
+         au-dessus de sa signature. Le cadre existait, vide de toute mention :
+         il annonçait « Bon pour accord » sans que personne ne l'ait écrit. */
+      ?>
+      <?php if ( ! empty( $row['accord_signature_uri'] ) ) : ?>
+      <div style="text-align:center;margin-bottom:3mm;">
+        <img src="<?php echo $row['accord_signature_uri']; ?>" alt="Mention manuscrite" style="max-width:100%;height:14mm;object-fit:contain;" />
+      </div>
+      <?php elseif ( ! empty( $row['accord_mention'] ) ) : ?>
+      <div style="text-align:center;font-size:10pt;font-style:italic;color:#1a2744;margin-bottom:3mm;">« <?php echo $this->quote_html( $row['accord_mention'] ); ?> »</div>
+      <?php endif; ?>
       <div style="font-size:7pt;font-weight:700;text-transform:uppercase;letter-spacing:.05em;color:#C5A253;margin-bottom:5mm;">Signature</div>
       <?php if ( ! empty( $row['client_signature_uri'] ) ) : ?>
       <div style="display:flex;flex-direction:column;justify-content:center;align-items:center;min-height:56mm;">
@@ -1340,10 +1358,15 @@ trait ACDC_Documents_Billing_Core_Trait {
       <td width="50%" valign="top">
         <div class="sig-title">Bon pour accord — Lu et approuvé</div>
         <div class="sig-cell" style="min-height:120px;text-align:center;">
+          <?php if ( ! empty( $row['accord_signature_uri'] ) ) : ?>
+            <img src="<?php echo $row['accord_signature_uri']; ?>" height="34" style="display:block;margin:0 auto 2mm;" /><br />
+          <?php elseif ( ! empty( $row['accord_mention'] ) ) : ?>
+            <div style="font-size:10pt;font-style:italic;color:#1a2744;margin-bottom:2mm;">« <?php echo $this->quote_html( $row['accord_mention'] ); ?> »</div>
+          <?php endif; ?>
           <?php if ( ! empty( $row['client_signature_uri'] ) ) : ?>
             <img src="<?php echo $row['client_signature_uri']; ?>" height="90" /><br />
             <span style="font-size:7pt;color:#4b5563;"><?php echo $this->quote_html( $client_contact ?: $client_name ); ?><?php if ( ! empty( $row['client_signed_date'] ) ) : ?> — le <?php echo $this->quote_html( $row['client_signed_date'] ); ?><?php endif; ?></span>
-          <?php else : ?>&nbsp;<?php endif; ?>
+          <?php elseif ( empty( $row['accord_signature_uri'] ) && empty( $row['accord_mention'] ) ) : ?>&nbsp;<?php endif; ?>
         </div>
       </td>
     </tr>
