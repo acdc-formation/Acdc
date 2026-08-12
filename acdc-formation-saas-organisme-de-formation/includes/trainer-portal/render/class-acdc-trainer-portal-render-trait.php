@@ -1801,7 +1801,12 @@ trait ACDC_Trainer_Portal_Render_Trait {
     <?php foreach ( $contracts as $c ) :
       $is_signed   = 'signée' === (string) $c->signature_status;
       $is_sent     = 'envoyée' === (string) $c->signature_status;
-      $pdf_url     = $is_signed && ! empty( $c->signed_document_url ) ? (string) $c->signed_document_url : (string) $c->contract_pdf_url;
+      /* ACDC 3.25.248 — On ne pointe plus l'adresse du fichier : le dossier des
+         contrats est interdit d'accès direct, ce lien rendait 403. Le contrat
+         passe par la route du portail, qui vérifie que ce contrat appartient
+         bien au formateur connecté. */
+      $has_pdf     = ( $is_signed && ! empty( $c->signed_document_url ) ) || ! empty( $c->contract_pdf_url );
+      $pdf_url     = $has_pdf ? $this->acdc_trainer_own_contract_url( (int) $c->id, (bool) ( $is_signed && ! empty( $c->signed_document_url ) ) ) : '';
       $badge_col   = $is_signed ? '#1a7d3b' : ( $is_sent ? '#a06b00' : '#5a6577' );
       $badge_bg    = $is_signed ? '#e7f4ec'  : ( $is_sent ? '#fff3d6'  : '#f0f4fa' );
       $badge_lbl   = $is_signed ? '✅ Signé'  : ( $is_sent ? '⏳ Signature en attente' : '⬜ Non signé' );

@@ -344,6 +344,9 @@ class ACDC_Formation_SAAS_Plugin {
     add_action( 'admin_post_acdc_trainer_upload_own_document', array( $this, 'handle_trainer_upload_own_document' ) );
     add_action( 'admin_post_acdc_trainer_delete_own_document', array( $this, 'handle_trainer_delete_own_document' ) );
     add_action( 'admin_post_acdc_trainer_download_own_document', array( $this, 'handle_trainer_download_own_document' ) );
+    /* ACDC 3.25.248 — Le formateur télécharge son propre contrat : le dossier des
+       contrats est interdit d'accès direct, il fallait une porte contrôlée. */
+    add_action( 'admin_post_acdc_trainer_download_own_contract', array( $this, 'handle_trainer_download_own_contract' ) );
     /* ACDC 3.20.89 — Profil formateur (édition par le formateur lui-même). */
     add_action( 'admin_post_acdc_trainer_update_own_profile', array( $this, 'handle_trainer_update_own_profile' ) );
     /* ACDC 3.20.90 — Calendrier annuel des disponibilités. */

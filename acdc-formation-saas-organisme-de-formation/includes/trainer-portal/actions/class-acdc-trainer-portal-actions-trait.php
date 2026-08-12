@@ -351,6 +351,90 @@ trait ACDC_Trainer_Portal_Actions_Trait {
    * Téléchargement par le formateur de SES propres documents.
    * Vérification stricte : trainer_id du doc === trainer_id du compte connecté.
    */
+  /**
+   * ACDC 3.25.248 — LE FORMATEUR TÉLÉCHARGE SON PROPRE CONTRAT.
+   *
+   * « Télécharger mon exemplaire signé » pointait vers l'adresse directe du
+   * fichier dans /uploads/acdc-of-contracts/. Ce dossier est volontairement
+   * interdit d'accès direct depuis la 3.25.148 — un contrat porte le nom,
+   * l'e-mail et le SIRET du formateur, et son nom de fichier était devinable.
+   * Le serveur répondait donc 403 : il faisait exactement ce qu'on lui avait
+   * demandé.
+   *
+   * Une route gardée existait déjà, mais elle exige `manage_options` : un
+   * formateur connecté à SON extranet n'est pas administrateur WordPress. La
+   * corriger seule aurait remplacé le 403 par un « accès refusé » — aussi
+   * inutile.
+   *
+   * Il fallait donc une porte côté formateur, sur le modèle éprouvé du
+   * téléchargement de ses documents : session du portail, jeton, et surtout
+   * VÉRIFICATION D'APPARTENANCE. Sans elle, un formateur authentifié pourrait
+   * lire le contrat d'un autre en changeant un numéro dans l'adresse — ce qui
+   * serait pire que le 403 qu'on corrige. Le refus est journalisé : une
+   * tentative d'accès croisé doit laisser une trace.
+   *
+   * On n'affaiblit pas la protection du dossier : on ouvre une porte contrôlée.
+   */
+  public function handle_trainer_download_own_contract() {
+    $account     = $this->trainer_portal_require_auth();
+    $contract_id = isset( $_GET['contract_id'] ) ? absint( wp_unslash( $_GET['contract_id'] ) ) : 0;
+    $signed      = isset( $_GET['signed'] ) && '1' === (string) $_GET['signed'];
+    if ( ! $contract_id ) {
+      wp_die( esc_html( 'Contrat introuvable.' ) );
+    }
+    check_admin_referer( 'acdc_trainer_download_own_contract_' . $contract_id );
+
+    global $wpdb;
+    $contract = $wpdb->get_row( $wpdb->prepare(
+      "SELECT id, trainer_id, contract_pdf_url, signed_document_url FROM {$this->trainer_contract_table} WHERE id = %d",
+      $contract_id
+    ) );
+    if ( ! $contract ) {
+      wp_die( esc_html( 'Contrat introuvable.' ) );
+    }
+    if ( (int) $contract->trainer_id !== (int) $account->trainer_id ) {
+      $this->trainer_portal_log_event( (int) $account->id, 'contract_download_forbidden', array( 'contract_id' => (int) $contract_id ), (int) $account->trainer_id );
+      wp_die( esc_html( 'Accès refusé : vous ne pouvez télécharger que vos propres contrats.' ) );
+    }
+
+    /* Le chemin est résolu par la même fonction que la route administrateur :
+       elle vérifie que le fichier se trouve bien SOUS le dossier de ce contrat,
+       ce qui interdit toute remontée d'arborescence. */
+    $real_path = method_exists( $this, 'acdc_trainer_contract_file_path' )
+      ? $this->acdc_trainer_contract_file_path( $contract, $signed )
+      : '';
+    /* Un exemplaire signé demandé mais absent : on sert l'original plutôt que
+       de renvoyer « introuvable » sur un contrat qui existe. */
+    if ( '' === $real_path && $signed && method_exists( $this, 'acdc_trainer_contract_file_path' ) ) {
+      $real_path = $this->acdc_trainer_contract_file_path( $contract, false );
+    }
+    if ( '' === $real_path || ! file_exists( $real_path ) ) {
+      wp_die( esc_html( 'Fichier introuvable sur le serveur.' ) );
+    }
+
+    $this->trainer_portal_log_event( (int) $account->id, 'contract_downloaded', array( 'contract_id' => (int) $contract_id, 'signed' => $signed ? 1 : 0 ), (int) $account->trainer_id );
+
+    while ( ob_get_level() ) { ob_end_clean(); }
+    nocache_headers();
+    header( 'Content-Type: application/pdf' );
+    header( 'Content-Disposition: inline; filename="' . basename( $real_path ) . '"' );
+    header( 'Content-Length: ' . filesize( $real_path ) );
+    readfile( $real_path ); // phpcs:ignore WordPress.WP.AlternativeFunctions.file_system_operations_readfile
+    exit;
+  }
+
+  /** URL de téléchargement d'un contrat par son formateur, jeton compris. */
+  private function acdc_trainer_own_contract_url( $contract_id, $signed = false ) {
+    $args = array( 'action' => 'acdc_trainer_download_own_contract', 'contract_id' => (int) $contract_id );
+    if ( $signed ) {
+      $args['signed'] = 1;
+    }
+    return wp_nonce_url(
+      add_query_arg( $args, admin_url( 'admin-post.php' ) ),
+      'acdc_trainer_download_own_contract_' . (int) $contract_id
+    );
+  }
+
   public function handle_trainer_download_own_document() {
     $account     = $this->trainer_portal_require_auth();
     $document_id = isset( $_GET['document_id'] ) ? absint( wp_unslash( $_GET['document_id'] ) ) : 0;
