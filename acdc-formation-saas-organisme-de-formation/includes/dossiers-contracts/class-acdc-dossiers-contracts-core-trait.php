@@ -31,6 +31,15 @@ trait ACDC_Dossiers_Contracts_Core_Trait {
       'cancellation_terms' => "Toute annulation ou report doit être notifié par écrit. En cas d'annulation par le commanditaire à moins de 10 jours ouvrés du début de la formation, une indemnité de dédit pourra être facturée conformément à l'article L.6354-1 du Code du travail. En cas d'annulation ou de report du fait de l'organisme, les sommes déjà versées sont intégralement remboursées.",
       'possible_disputes' => "En cas de différend relatif à l'interprétation ou à l'exécution de la présente convention, les parties s'efforceront de trouver une solution amiable. À défaut d'accord, le litige sera porté devant les tribunaux compétents du ressort du siège social de l'organisme de formation.",
       'withdrawal_delay_days' => '14',
+      /* ACDC 3.25.242 — Les horaires TYPE d'une journée de formation. Ils
+         étaient écrits en dur dans le code qui fabrique les séances : le jour
+         où l'organisme travaille de 08h30 à 12h00, il fallait me le demander.
+         Ce ne sont que des valeurs de départ — chaque journée d'une convention
+         reste modifiable une par une. */
+      'default_am_start' => '09:00',
+      'default_am_end'   => '12:30',
+      'default_pm_start' => '13:30',
+      'default_pm_end'   => '17:00',
       'preview_label' => 'Convention de formation',
       'additional_sections' => array(
         array(
@@ -55,6 +64,170 @@ trait ACDC_Dossiers_Contracts_Core_Trait {
         ),
       ),
     );
+  }
+
+
+  /**
+   * ACDC 3.25.242 — Nettoie le déroulé des séances saisi sur la convention.
+   *
+   * Rend un tableau indexé par date « AAAA-MM-JJ », chacune portant son format
+   * et ses quatre horaires. Trois garde-fous, parce que cette donnée finit sur
+   * une pièce contractuelle et dans des feuilles d'émargement :
+   *   — seules les journées RÉELLEMENT retenues sont conservées ; une date
+   *     retirée du formulaire ne laisse pas son horaire derrière elle ;
+   *   — un horaire illisible retombe sur l'horaire type plutôt que d'écrire une
+   *     heure vide, qui produirait une séance sans début ;
+   *   — une fin antérieure au début est refusée : elle donnerait une demi-journée
+   *     de durée négative, et l'assiduité s'en trouverait faussée.
+   *
+   * @param string $raw   JSON transmis par le formulaire.
+   * @param array  $dates Journées retenues (AAAA-MM-JJ).
+   * @return array<string,array<string,string>>
+   */
+  private function acdc_sanitize_seances_schedule( $raw, $dates ) {
+    $params   = $this->get_contract_params_options();
+    $fallback = array(
+      'format'   => 'Présentiel',
+      'am_start' => (string) ( $params['default_am_start'] ?? '09:00' ),
+      'am_end'   => (string) ( $params['default_am_end']   ?? '12:30' ),
+      'pm_start' => (string) ( $params['default_pm_start'] ?? '13:30' ),
+      'pm_end'   => (string) ( $params['default_pm_end']   ?? '17:00' ),
+    );
+
+    $decoded = is_string( $raw ) ? json_decode( $raw, true ) : $raw;
+    if ( ! is_array( $decoded ) ) {
+      $decoded = array();
+    }
+
+    $time = static function ( $value, $default ) {
+      $value = is_scalar( $value ) ? trim( (string) $value ) : '';
+      return preg_match( '/^([01][0-9]|2[0-3]):[0-5][0-9]$/', $value ) ? $value : $default;
+    };
+
+    $out = array();
+    foreach ( (array) $dates as $date ) {
+      $date = trim( (string) $date );
+      if ( ! preg_match( '/^\d{4}-\d{2}-\d{2}$/', $date ) ) {
+        continue;
+      }
+      $day = isset( $decoded[ $date ] ) && is_array( $decoded[ $date ] ) ? $decoded[ $date ] : array();
+
+      $format = isset( $day['format'] ) && 'Distanciel' === (string) $day['format'] ? 'Distanciel' : 'Présentiel';
+      $am_s   = $time( $day['am_start'] ?? '', $fallback['am_start'] );
+      $am_e   = $time( $day['am_end']   ?? '', $fallback['am_end'] );
+      $pm_s   = $time( $day['pm_start'] ?? '', $fallback['pm_start'] );
+      $pm_e   = $time( $day['pm_end']   ?? '', $fallback['pm_end'] );
+
+      if ( $am_e <= $am_s ) { $am_s = $fallback['am_start']; $am_e = $fallback['am_end']; }
+      if ( $pm_e <= $pm_s ) { $pm_s = $fallback['pm_start']; $pm_e = $fallback['pm_end']; }
+
+      $out[ $date ] = array(
+        'format'   => $format,
+        'am_start' => $am_s,
+        'am_end'   => $am_e,
+        'pm_start' => $pm_s,
+        'pm_end'   => $pm_e,
+      );
+    }
+
+    return $out;
+  }
+
+  /**
+   * ACDC 3.25.242 — Le déroulé d'une journée, quelle que soit son ancienneté.
+   *
+   * Une convention créée avant cette version n'a pas de déroulé enregistré :
+   * elle retombe sur les horaires type, ce qui reproduit exactement l'ancien
+   * comportement. Aucune convention existante ne change de sens.
+   */
+  private function acdc_seance_day_settings( $contract, $date ) {
+    $params   = $this->get_contract_params_options();
+    $fallback = array(
+      'format'   => 'Présentiel',
+      'am_start' => (string) ( $params['default_am_start'] ?? '09:00' ),
+      'am_end'   => (string) ( $params['default_am_end']   ?? '12:30' ),
+      'pm_start' => (string) ( $params['default_pm_start'] ?? '13:30' ),
+      'pm_end'   => (string) ( $params['default_pm_end']   ?? '17:00' ),
+    );
+    if ( ! $contract || empty( $contract->seances_schedule_json ) ) {
+      return $fallback;
+    }
+    $decoded = json_decode( (string) $contract->seances_schedule_json, true );
+    if ( ! is_array( $decoded ) || empty( $decoded[ $date ] ) || ! is_array( $decoded[ $date ] ) ) {
+      return $fallback;
+    }
+    return wp_parse_args( $decoded[ $date ], $fallback );
+  }
+
+
+  /**
+   * ACDC 3.25.242 — CE QUI A ÉTÉ SIGNÉ, ET CE QUI EST AUJOURD'HUI.
+   *
+   * David garde l'écran Séances : une séance peut donc être déplacée après la
+   * signature. Sur financement OPCO, ce qui est convenu ne change pas sans
+   * avenant ; en autofinancement il est libre. L'écran ne tranche donc pas à sa
+   * place — il refuse seulement de laisser croire que tout concorde.
+   *
+   * On compare l'instantané figé à la signature avec les séances réelles. Rien
+   * n'est signalé tant que la convention n'est pas signée : avant, modifier est
+   * la marche normale du travail.
+   *
+   * @return array<int,string> Les écarts, en clair. Vide si tout concorde.
+   */
+  private function acdc_contract_schedule_drift( $contract ) {
+    if ( ! $contract || empty( $contract->signed_schedule_json ) ) {
+      return array();
+    }
+    $signed = json_decode( (string) $contract->signed_schedule_json, true );
+    if ( ! is_array( $signed ) || empty( $signed ) ) {
+      return array();
+    }
+
+    global $wpdb;
+    $formation_id = (int) ( $contract->formation_id ?? 0 );
+    if ( $formation_id <= 0 ) {
+      return array();
+    }
+
+    $drift = array();
+    foreach ( $signed as $date => $cfg ) {
+      if ( ! preg_match( '/^\d{4}-\d{2}-\d{2}$/', (string) $date ) || ! is_array( $cfg ) ) {
+        continue;
+      }
+      $row = $wpdb->get_row( $wpdb->prepare(
+        "SELECT start_at, end_at, session_format FROM {$this->session_table}
+          WHERE formation_id = %d AND start_date = %s LIMIT 1",
+        $formation_id,
+        $date
+      ) );
+
+      $day_label = $this->format_pdf_date( (string) $date );
+
+      if ( ! $row ) {
+        $drift[] = sprintf( 'Séance du %s : signée, mais elle n’existe plus dans les séances.', $day_label );
+        continue;
+      }
+
+      $now_start = $row->start_at ? mysql2date( 'H:i', $row->start_at ) : '';
+      $now_end   = $row->end_at   ? mysql2date( 'H:i', $row->end_at )   : '';
+      $sig_start = (string) ( $cfg['am_start'] ?? '' );
+      $sig_end   = (string) ( $cfg['pm_end'] ?? '' );
+
+      if ( '' !== $sig_start && '' !== $now_start && $sig_start !== $now_start ) {
+        $drift[] = sprintf( 'Séance du %s : signée à %s, elle commence désormais à %s.', $day_label, $sig_start, $now_start );
+      }
+      if ( '' !== $sig_end && '' !== $now_end && $sig_end !== $now_end ) {
+        $drift[] = sprintf( 'Séance du %s : signée jusqu’à %s, elle finit désormais à %s.', $day_label, $sig_end, $now_end );
+      }
+
+      $sig_format = (string) ( $cfg['format'] ?? '' );
+      $now_format = (string) ( $row->session_format ?? '' );
+      if ( '' !== $sig_format && '' !== $now_format && $sig_format !== $now_format ) {
+        $drift[] = sprintf( 'Séance du %s : signée en %s, elle est désormais en %s.', $day_label, $sig_format, $now_format );
+      }
+    }
+
+    return $drift;
   }
 
 
@@ -2080,7 +2253,17 @@ private function build_contract_pdf_pages( $context ) {
     sort( $parts );
     foreach ( $parts as $i => $d ) {
       if ( preg_match( '/^\d{4}-\d{2}-\d{2}$/', $d ) ) {
-        $seances_list[] = 'Séance ' . ( $i + 1 ) . ' : ' . $this->format_pdf_date( $d );
+        /* ACDC 3.25.242 — La convention dit désormais le DÉROULÉ, pas seulement
+           la date. Une convention qui annonce « Séance 1 : 13 août 2026 » sans
+           heures ni modalité laisse à l'auditeur — et au financeur — le soin de
+           deviner ce qui a été convenu. On imprime donc les horaires réellement
+           saisis et le format de la journée. */
+        $cfg  = $this->acdc_seance_day_settings( $contract, $d );
+        $line = 'Séance ' . ( $i + 1 ) . ' : ' . $this->format_pdf_date( $d )
+              . ' — ' . $cfg['am_start'] . '–' . $cfg['am_end']
+              . ' et ' . $cfg['pm_start'] . '–' . $cfg['pm_end']
+              . ' (' . $cfg['format'] . ')';
+        $seances_list[] = $line;
       }
     }
     if ( ! empty( $seances_list ) ) {

@@ -201,10 +201,15 @@ public function handle_save_training_registration() {
          On pose donc la journée type de l'organisme, en deux demi-journées.
          C'est une valeur de départ, modifiable séance par séance : proposer une
          journée éditable vaut mieux qu'exiger une saisie que rien ne réclame. */
-      $day_morning_start   = '09:00:00';
-      $day_morning_end     = '12:30:00';
-      $day_afternoon_start = '13:30:00';
-      $day_afternoon_end   = '17:00:00';
+      /* ACDC 3.25.242 — Ces quatre horaires ne sont PLUS la vérité : ils ne
+         servent que si la convention ne dit rien (celles créées avant cette
+         version). Le déroulé saisi journée par journée les remplace, et il est
+         relu à l'intérieur de la boucle ci-dessous. */
+      $ct_params           = $this->get_contract_params_options();
+      $day_morning_start   = (string) ( $ct_params['default_am_start'] ?? '09:00' ) . ':00';
+      $day_morning_end     = (string) ( $ct_params['default_am_end']   ?? '12:30' ) . ':00';
+      $day_afternoon_start = (string) ( $ct_params['default_pm_start'] ?? '13:30' ) . ':00';
+      $day_afternoon_end   = (string) ( $ct_params['default_pm_end']   ?? '17:00' ) . ':00';
 
       /* Groupe ou individuelle : la question se tranche en comptant les
          apprenants nommés dans la convention, pas en laissant la case vide.
@@ -218,7 +223,39 @@ public function handle_save_training_registration() {
         }
       }
       $session_type = $session_learner_count > 1 ? 'Groupe' : 'Individuelle';
+
+      /* ACDC 3.25.242 — CE QUE LA CONVENTION DIT L'EMPORTE SUR CE QUE JE DEVINE.
+         Le type de séance restait déduit du nombre d'apprenants, la méthode
+         d'émargement était écrite en dur, et le lien distanciel n'était jamais
+         posé — une journée à distance naissait donc sans accès. Ces trois
+         réglages se saisissent désormais sur la convention ; la déduction ne
+         sert plus que de repli pour les conventions antérieures. */
+      $contract_for_seances = $autofill_contract_id ? $this->get_registration_contract( $autofill_contract_id ) : null;
+      if ( $contract_for_seances && ! empty( $contract_for_seances->session_type ) ) {
+        $session_type = (string) $contract_for_seances->session_type;
+      }
+      $ct_attendance = ( $contract_for_seances && ! empty( $contract_for_seances->attendance_method ) )
+        ? (string) $contract_for_seances->attendance_method
+        : 'Électronique';
+      $ct_remote_link = ( $contract_for_seances && ! empty( $contract_for_seances->remote_link ) )
+        ? (string) $contract_for_seances->remote_link
+        : '';
+
       foreach ( $seances_arr as $idx => $sdate ) {
+        /* Le déroulé de CETTE journée : format et quatre horaires. Une
+           convention antérieure à cette version retombe sur les horaires type,
+           ce qui reproduit exactement l'ancien comportement. */
+        $day_cfg  = $this->acdc_seance_day_settings( $contract_for_seances, $sdate );
+        $d_am_s   = $day_cfg['am_start'] . ':00';
+        $d_am_e   = $day_cfg['am_end']   . ':00';
+        $d_pm_s   = $day_cfg['pm_start'] . ':00';
+        $d_pm_e   = $day_cfg['pm_end']   . ':00';
+        $d_remote = ( 'Distanciel' === $day_cfg['format'] );
+        /* Une journée à distance n'a pas lieu à l'adresse de la convention :
+           on laisse `location` vide, ce que les écrans savent déjà lire comme
+           « Distanciel », et on pose le lien. */
+        $d_location = $d_remote ? '' : $session_location;
+        $d_format   = $d_remote ? 'Distanciel' : ( '' !== (string) $session_format ? (string) $session_format : 'Présentiel' );
         // Anti-doublon : pas deux séances même formation + même date
         $exists = $wpdb->get_var( $wpdb->prepare(
           "SELECT id FROM {$this->session_table} WHERE formation_id = %d AND start_date = %s LIMIT 1",
@@ -235,24 +272,22 @@ public function handle_save_training_registration() {
           'title'          => $session_title,
           'start_date'     => $sdate,
           'end_date'       => $sdate,
-          'start_at'       => $sdate . ' ' . $day_morning_start,
-          'end_at'         => $sdate . ' ' . $day_afternoon_end,
+          'start_at'       => $sdate . ' ' . $d_am_s,
+          'end_at'         => $sdate . ' ' . $d_pm_e,
           /* Les deux demi-journées sont écrites explicitement : c'est ce que lit
              le moteur pour poser un rappel d'émargement 30 minutes avant chaque
              séance, matin et après-midi. */
           'schedule_json'  => wp_json_encode( array(
-            array( 'start_date' => $sdate, 'start_at' => $sdate . ' ' . $day_morning_start,   'end_at' => $sdate . ' ' . $day_morning_end,   'half' => 'am' ),
-            array( 'start_date' => $sdate, 'start_at' => $sdate . ' ' . $day_afternoon_start, 'end_at' => $sdate . ' ' . $day_afternoon_end, 'half' => 'pm' ),
+            array( 'start_date' => $sdate, 'start_at' => $sdate . ' ' . $d_am_s, 'end_at' => $sdate . ' ' . $d_am_e, 'half' => 'am' ),
+            array( 'start_date' => $sdate, 'start_at' => $sdate . ' ' . $d_pm_s, 'end_at' => $sdate . ' ' . $d_pm_e, 'half' => 'pm' ),
           ) ),
           'status'         => 'Planifiée',
           'trainer_id'     => $trainer_id ?: null,
-          'location'       => $session_location,
-          'session_format' => $session_format,
+          'location'       => $d_location,
+          'remote_link'    => $d_remote ? $ct_remote_link : '',
+          'session_format' => $d_format,
           'session_type'      => $session_type,
-          /* L'émargement du plugin EST électronique : feuille ouverte par le
-             formateur, QR code, signature des apprenants. Laisser la case vide
-             décrivait mal ce que l'outil fait déjà. */
-          'attendance_method' => 'Électronique',
+          'attendance_method' => $ct_attendance,
           'is_draft'       => 0,
           'created_at'     => $now_s,
           'updated_at'     => $now_s,
@@ -561,6 +596,16 @@ public function handle_save_registration_contract() {
     'start_date'     => $start_date ? $start_date : null,
     'end_date'       => $end_date   ? $end_date   : null,
     'seances_dates'  => $seances_dates_clean ?: null,
+    /* ACDC 3.25.242 — Le déroulé décidé sur la convention. Il est filtré sur les
+       journées réellement retenues : une date retirée ne doit pas laisser son
+       horaire derrière elle. */
+    'seances_schedule_json' => wp_json_encode( $this->acdc_sanitize_seances_schedule(
+      isset( $input['seances_schedule_json'] ) ? wp_unslash( $input['seances_schedule_json'] ) : '',
+      $seances_arr
+    ) ),
+    'session_type'      => isset( $input['session_type'] ) && in_array( (string) $input['session_type'], array( 'Groupe', 'Individuelle' ), true ) ? (string) $input['session_type'] : '',
+    'attendance_method' => isset( $input['attendance_method'] ) && 'Manuelle' === (string) $input['attendance_method'] ? 'Manuelle' : 'Électronique',
+    'remote_link'       => isset( $input['remote_link'] ) ? esc_url_raw( wp_unslash( $input['remote_link'] ) ) : '',
     'legal_reference' => isset( $input['legal_reference'] ) ? sanitize_textarea_field( $input['legal_reference'] ) : '',
     'objectives_text' => isset( $input['objectives_text'] ) ? sanitize_textarea_field( $input['objectives_text'] ) : '',
     'accessibility_handicap' => isset( $input['accessibility_handicap'] ) ? wp_kses_post( $input['accessibility_handicap'] ) : '',
@@ -1416,6 +1461,13 @@ public function handle_update_registration_contract_document() {
       array(
         'signature_status'       => 'completed',
         'signature_completed_at' => current_time( 'mysql' ),
+        /* ACDC 3.25.242 — L'INSTANTANÉ DE CE QUI A ÉTÉ SIGNÉ.
+           Le PDF signé est la pièce probante et n'est jamais réécrit, mais un
+           PDF ne se compare pas. On fige donc, en clair, le déroulé au moment
+           de la signature : c'est lui qui permettra de dire plus tard qu'une
+           séance a été déplacée après l'engagement. Sans avenant, un OPCO
+           refuse le financement d'une journée qui n'est plus celle convenue. */
+        'signed_schedule_json'   => (string) ( $contract->seances_schedule_json ?? '' ),
         'signed_document_url'    => $result['url'],
         'signed_document_path'   => $result['path'],
         'document_url'           => $result['url'],

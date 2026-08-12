@@ -57,6 +57,12 @@ trait ACDC_Dossiers_Contracts_Render_Trait {
           'cancellation_terms' => array( 'label' => 'Annulation/Report, Dédommagement, Réparation ou Dédit', 'type' => 'textarea' ),
           'possible_disputes' => array( 'label' => 'Différends éventuels', 'type' => 'textarea' ),
           'withdrawal_delay_days' => array( 'label' => 'Délai de rétractation (jours)', 'type' => 'number' ),
+          /* ACDC 3.25.242 — Les horaires type d'une journée. Ils étaient écrits
+             en dur dans le code qui fabrique les séances ; ils se règlent ici. */
+          'default_am_start' => array( 'label' => 'Horaire type — matin, début', 'type' => 'time' ),
+          'default_am_end'   => array( 'label' => 'Horaire type — matin, fin', 'type' => 'time' ),
+          'default_pm_start' => array( 'label' => 'Horaire type — après-midi, début', 'type' => 'time' ),
+          'default_pm_end'   => array( 'label' => 'Horaire type — après-midi, fin', 'type' => 'time' ),
         );
         foreach ( $fields as $key => $field ) : ?>
           <div class="acdc-contract-grid">
@@ -64,6 +70,9 @@ trait ACDC_Dossiers_Contracts_Render_Trait {
             <div>
               <?php if ( 'textarea' === $field['type'] ) : ?>
                 <textarea name="contract_params[<?php echo esc_attr( $key ); ?>]" rows="4"><?php echo esc_textarea( $params[ $key ] ); ?></textarea>
+              <?php elseif ( 'time' === $field['type'] ) : ?>
+                <input type="time" name="contract_params[<?php echo esc_attr( $key ); ?>]" value="<?php echo esc_attr( $params[ $key ] ); ?>" style="width:140px;">
+                <p class="acdc-help">Valeur proposée à la création d’une convention. Chaque journée reste modifiable une par une.</p>
               <?php elseif ( 'number' === $field['type'] ) : ?>
                 <input type="number" name="contract_params[<?php echo esc_attr( $key ); ?>]" value="<?php echo esc_attr( $params[ $key ] ); ?>">
                 <p class="acdc-help">Ne s’applique que pour les contrats de formation (commanditaire Particulier).</p>
@@ -1489,10 +1498,28 @@ trait ACDC_Dossiers_Contracts_Render_Trait {
             }
             $seances_json = wp_json_encode( $seances_arr );
             ?>
+            <?php
+            /* ACDC 3.25.242 — Le déroulé déjà enregistré, s'il existe, et les
+               horaires type qui servent de point de départ à toute journée
+               nouvelle. */
+            $sched_saved = array();
+            if ( ! empty( $contract->seances_schedule_json ) ) {
+              $decoded_sched = json_decode( (string) $contract->seances_schedule_json, true );
+              if ( is_array( $decoded_sched ) ) { $sched_saved = $decoded_sched; }
+            }
+            $sched_defaults = array(
+              'format'   => 'Présentiel',
+              'am_start' => (string) ( $params['default_am_start'] ?? '09:00' ),
+              'am_end'   => (string) ( $params['default_am_end']   ?? '12:30' ),
+              'pm_start' => (string) ( $params['default_pm_start'] ?? '13:30' ),
+              'pm_end'   => (string) ( $params['default_pm_end']   ?? '17:00' ),
+            );
+            ?>
             <div class="acdc-contract-label">Dates des séances <span class="acdc-required">*</span></div>
             <div>
               <input type="hidden" name="registration_contract[seances_dates]" id="acdc-contract-seances-hidden" value="<?php echo esc_attr( implode( ',', $seances_arr ) ); ?>">
-              <span id="acdc-contract-seances-chips" style="display:flex;flex-wrap:wrap;gap:6px;margin-bottom:8px;min-height:0;"></span>
+              <input type="hidden" name="registration_contract[seances_schedule_json]" id="acdc-contract-seances-schedule" value="<?php echo esc_attr( wp_json_encode( $sched_saved ) ); ?>">
+              <span id="acdc-contract-seances-chips" style="display:flex;flex-direction:column;gap:8px;margin-bottom:8px;min-height:0;"></span>
               <?php if ( ! $readonly ) : ?>
               <span style="display:flex;gap:6px;align-items:center;">
                 <input type="date" id="acdc-contract-seance-picker"
@@ -1505,6 +1532,58 @@ trait ACDC_Dossiers_Contracts_Render_Trait {
               <?php endif; ?>
               <p class="acdc-help" style="margin-top:6px;">
                 La date de début et de fin de la convention seront calculées automatiquement à partir de ces séances.
+              </p>
+            </div>
+          </div>
+          <?php
+          /* ACDC 3.25.242 — Ce qui vaut pour toute la convention : un seul
+             formateur, donc un seul type de séance, une seule méthode
+             d'émargement, un seul lien de visioconférence. David l'a tranché.
+             Le lien n'a rien à construire en aval : la convocation apprenant,
+             l'e-mail au formateur, celui du commanditaire et les deux extranets
+             savent déjà l'afficher dès qu'une séance le porte. Il manquait
+             seulement quelqu'un pour le renseigner. */
+          $ct_type   = (string) ( $contract->session_type ?? '' );
+          $ct_emarg  = (string) ( $contract->attendance_method ?? '' );
+          $ct_link   = (string) ( $contract->remote_link ?? '' );
+          $has_remote = false;
+          foreach ( (array) $sched_saved as $one_day ) {
+            if ( isset( $one_day['format'] ) && 'Distanciel' === $one_day['format'] ) { $has_remote = true; break; }
+          }
+          ?>
+          <div class="acdc-contract-grid">
+            <div class="acdc-contract-label">Type de séance</div>
+            <div>
+              <select name="registration_contract[session_type]"<?php echo $readonly ? ' disabled' : ''; ?>>
+                <?php foreach ( array( '' => '— Déduire du nombre d’apprenants —', 'Groupe' => 'Groupe', 'Individuelle' => 'Individuelle' ) as $tv => $tl ) : ?>
+                  <option value="<?php echo esc_attr( $tv ); ?>"<?php selected( $ct_type, $tv ); ?>><?php echo esc_html( $tl ); ?></option>
+                <?php endforeach; ?>
+              </select>
+              <p class="acdc-help">Laissé vide, le type reste déduit du nombre d’apprenants — plus d’un donne « Groupe ».</p>
+            </div>
+          </div>
+          <div class="acdc-contract-grid">
+            <div class="acdc-contract-label">Méthode d’émargement</div>
+            <div>
+              <select name="registration_contract[attendance_method]"<?php echo $readonly ? ' disabled' : ''; ?>>
+                <?php foreach ( array( 'Électronique' => 'Électronique', 'Manuelle' => 'Manuelle' ) as $av => $al ) : ?>
+                  <option value="<?php echo esc_attr( $av ); ?>"<?php selected( '' !== $ct_emarg ? $ct_emarg : 'Électronique', $av ); ?>><?php echo esc_html( $al ); ?></option>
+                <?php endforeach; ?>
+              </select>
+              <p class="acdc-help">Électronique : feuille ouverte par le formateur, QR code, signature des apprenants.</p>
+            </div>
+          </div>
+          <div class="acdc-contract-grid">
+            <div class="acdc-contract-label">Lien de visioconférence</div>
+            <div>
+              <input type="url" name="registration_contract[remote_link]" value="<?php echo esc_attr( $ct_link ); ?>"
+                     placeholder="https://teams.microsoft.com/… ou meet.google.com/… ou zoom.us/…"<?php echo $readonly ? ' readonly' : ''; ?>>
+              <p class="acdc-help">
+                Repris sur chaque journée déclarée en distanciel. Il figurera dans la convocation des apprenants,
+                dans l’e-mail au formateur et dans les deux extranets.
+                <?php if ( $has_remote && '' === trim( $ct_link ) ) : ?>
+                  <br><strong style="color:#c2610c;">Une journée est en distanciel et aucun lien n’est renseigné : les apprenants n’auront pas d’accès.</strong>
+                <?php endif; ?>
               </p>
             </div>
           </div>
@@ -1534,21 +1613,80 @@ trait ACDC_Dossiers_Contracts_Render_Trait {
           if(!chipsEl || !hiddenEl){return;}
           var months = ['jan.','fév.','mars','avr.','mai','juin','juil.','août','sept.','oct.','nov.','déc.'];
           function fmtDate(iso){var p=iso.split('-');return p.length===3?p[2]+' '+months[parseInt(p[1],10)-1]+' '+p[0]:iso;}
+          /* ACDC 3.25.242 — Chaque journée n'est plus une pastille inerte : elle
+             porte son format et ses quatre horaires. La convention cesse ainsi
+             de supposer un déroulé qu'elle imposait en dur au moment de créer
+             les séances. Les valeurs de départ viennent des horaires type
+             réglés dans les paramètres de convention. */
+          var schedEl = document.getElementById('acdc-contract-seances-schedule');
+          var defaults = <?php echo wp_json_encode( $sched_defaults ); ?>;
+          var sched = {};
+          try { sched = JSON.parse(schedEl && schedEl.value ? schedEl.value : '{}') || {}; } catch(e){ sched = {}; }
+          function dayOf(d){
+            if(!sched[d]){ sched[d] = {format:defaults.format, am_start:defaults.am_start, am_end:defaults.am_end, pm_start:defaults.pm_start, pm_end:defaults.pm_end}; }
+            return sched[d];
+          }
+          function syncHidden(){
+            var out={};
+            dates.forEach(function(d){ out[d]=dayOf(d); });   /* on ne garde que les journées encore présentes */
+            sched=out;
+            if(schedEl){ schedEl.value=JSON.stringify(out); }
+            hiddenEl.value=dates.join(',');
+          }
+          function timeField(d,key,label){
+            var wrap=document.createElement('label');
+            wrap.style.cssText='display:flex;flex-direction:column;gap:2px;font-size:11px;color:#4b5d76;font-weight:600;';
+            var span=document.createElement('span'); span.textContent=label; wrap.appendChild(span);
+            var inp=document.createElement('input'); inp.type='time'; inp.value=dayOf(d)[key]||'';
+            inp.style.cssText='height:34px;border:1.5px solid #dce4ec;border-radius:8px;padding:0 8px;font-size:13px;color:#0f2c52;';
+            <?php if($readonly):?>inp.readOnly=true;<?php endif;?>
+            inp.addEventListener('change',function(){ dayOf(d)[key]=inp.value; syncHidden(); });
+            wrap.appendChild(inp); return wrap;
+          }
           function render(){
             chipsEl.innerHTML='';
             dates.forEach(function(d,i){
-              var chip=document.createElement('span');
-              chip.style.cssText='display:inline-flex;align-items:center;gap:5px;background:#eef2ff;border:1px solid #c7d2fe;border-radius:20px;padding:3px 10px 3px 12px;font-size:12px;font-weight:600;color:#1e3a8a;white-space:nowrap;';
-              chip.innerHTML='<span>Séance '+(i+1)+' — '+fmtDate(d)+'</span>';
+              var card=document.createElement('div');
+              card.style.cssText='border:1px solid #dce4ec;border-radius:10px;padding:10px 12px;background:#fbfdff;';
+              var head=document.createElement('div');
+              head.style.cssText='display:flex;align-items:center;justify-content:space-between;gap:8px;margin-bottom:8px;';
+              var ttl=document.createElement('span');
+              ttl.style.cssText='font-size:13px;font-weight:700;color:#1e3a8a;';
+              ttl.textContent='Séance '+(i+1)+' — '+fmtDate(d);
+              head.appendChild(ttl);
               <?php if(!$readonly):?>
               var rm=document.createElement('button');rm.type='button';rm.innerHTML='×';
-              rm.style.cssText='background:none;border:none;font-size:15px;cursor:pointer;color:#6366f1;padding:0 0 1px;';
+              rm.title='Retirer cette journée';
+              rm.style.cssText='background:none;border:none;font-size:18px;line-height:1;cursor:pointer;color:#6366f1;padding:0 2px;';
               rm.addEventListener('click',function(){dates.splice(i,1);render();});
-              chip.appendChild(rm);
+              head.appendChild(rm);
               <?php endif;?>
-              chipsEl.appendChild(chip);
+              card.appendChild(head);
+
+              var row=document.createElement('div');
+              row.style.cssText='display:flex;flex-wrap:wrap;gap:10px;align-items:flex-end;';
+
+              var fWrap=document.createElement('label');
+              fWrap.style.cssText='display:flex;flex-direction:column;gap:2px;font-size:11px;color:#4b5d76;font-weight:600;';
+              var fLab=document.createElement('span'); fLab.textContent='Format'; fWrap.appendChild(fLab);
+              var sel=document.createElement('select');
+              sel.style.cssText='height:34px;border:1.5px solid #dce4ec;border-radius:8px;padding:0 8px;font-size:13px;color:#0f2c52;';
+              ['Présentiel','Distanciel'].forEach(function(v){
+                var op=document.createElement('option'); op.value=v; op.textContent=v;
+                if(dayOf(d).format===v){op.selected=true;} sel.appendChild(op);
+              });
+              <?php if($readonly):?>sel.disabled=true;<?php endif;?>
+              sel.addEventListener('change',function(){ dayOf(d).format=sel.value; syncHidden(); });
+              fWrap.appendChild(sel); row.appendChild(fWrap);
+
+              row.appendChild(timeField(d,'am_start','Matin — début'));
+              row.appendChild(timeField(d,'am_end','Matin — fin'));
+              row.appendChild(timeField(d,'pm_start','Après-midi — début'));
+              row.appendChild(timeField(d,'pm_end','Après-midi — fin'));
+              card.appendChild(row);
+              chipsEl.appendChild(card);
             });
-            hiddenEl.value=dates.join(',');
+            syncHidden();
           }
           if(addBtn&&picker){
             addBtn.addEventListener('click',function(){var v=picker.value;if(!v)return;if(dates.indexOf(v)===-1){dates.push(v);dates.sort();}render();picker.value='';picker.focus();});
@@ -2329,6 +2467,25 @@ trait ACDC_Dossiers_Contracts_Render_Trait {
               <div class="acdc-contract-detail-label">Frais de transport</div><div><?php echo ! empty( $registration->transport_fees_enabled ) || ! empty( $entry->transport_fees_enabled ) ? 'Oui' : 'Non'; ?></div>
               <div class="acdc-contract-detail-label">Frais de restauration et / ou hébergement</div><div><?php echo ! empty( $registration->meal_fees_enabled ) || ! empty( $entry->meal_fees_enabled ) ? 'Oui' : 'Non'; ?></div>
             </div>
+            <?php
+            /* ACDC 3.25.242 — L'écart entre ce qui a été signé et ce qui est.
+               Rien ne s'affiche tant que tout concorde : un bandeau permanent
+               finirait par ne plus être lu. */
+            $sched_drift = $this->acdc_contract_schedule_drift( $entry );
+            if ( ! empty( $sched_drift ) ) : ?>
+              <div class="acdc-notice acdc-notice-warning" style="margin-top:14px;">
+                <strong>Le déroulé a changé depuis la signature.</strong>
+                <ul style="margin:8px 0 0 18px;padding:0;">
+                  <?php foreach ( $sched_drift as $one_drift ) : ?>
+                    <li><?php echo esc_html( $one_drift ); ?></li>
+                  <?php endforeach; ?>
+                </ul>
+                <p style="margin:8px 0 0;">
+                  Le document signé fait foi et n’a pas été réécrit. Si la formation est financée
+                  par un OPCO, un avenant est nécessaire pour couvrir cet écart.
+                </p>
+              </div>
+            <?php endif; ?>
           </div>
         </div>
       </div>

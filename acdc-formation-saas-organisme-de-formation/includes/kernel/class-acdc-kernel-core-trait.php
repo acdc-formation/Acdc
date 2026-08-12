@@ -2835,6 +2835,24 @@ dbDelta( $sql_companies );
     $this->maybe_add_table_column( $this->quote_table, 'accord_mention', "VARCHAR(190) NOT NULL DEFAULT ''" );
     $this->maybe_add_table_column( $this->quote_table, 'accord_signature_path', 'TEXT DEFAULT NULL' );
 
+    /* ACDC 3.25.242 — LE DÉROULÉ DES SÉANCES, DÉCIDÉ SUR LA CONVENTION.
+       Jusqu'ici la convention connaissait les DATES et rien d'autre : à la
+       création des séances, les horaires étaient écrits en dur (09h00–12h30 /
+       13h30–17h00), le format recopié de la modalité du catalogue, le type
+       déduit du nombre d'apprenants, et le lien distanciel jamais renseigné.
+       La convention supposait au lieu de dire — sur une pièce que signe un
+       commanditaire et que lit un financeur.
+         seances_schedule_json : par journée, le format et les quatre horaires.
+         session_type / attendance_method / remote_link : valables pour toute la
+           convention, comme David l'a tranché (un seul formateur, un seul lien).
+         signed_schedule_json : l'instantané figé au moment de la signature, qui
+           permet de dire plus tard ce qui a divergé. */
+    $this->maybe_add_table_column( $this->registration_contract_table, 'seances_schedule_json', 'LONGTEXT DEFAULT NULL' );
+    $this->maybe_add_table_column( $this->registration_contract_table, 'session_type', "VARCHAR(50) NOT NULL DEFAULT ''" );
+    $this->maybe_add_table_column( $this->registration_contract_table, 'attendance_method', "VARCHAR(50) NOT NULL DEFAULT ''" );
+    $this->maybe_add_table_column( $this->registration_contract_table, 'remote_link', 'TEXT DEFAULT NULL' );
+    $this->maybe_add_table_column( $this->registration_contract_table, 'signed_schedule_json', 'LONGTEXT DEFAULT NULL' );
+
     /* ACDC 3.24.11 — Bilans compétences formateurs (indicateur 21 Qualiopi). */
     $sql_trainer_evaluations = "CREATE TABLE IF NOT EXISTS {$this->trainer_evaluation_table} (" . "  id             BIGINT UNSIGNED NOT NULL AUTO_INCREMENT," . "  trainer_id     BIGINT UNSIGNED NOT NULL," . "  evaluation_date DATE NOT NULL," . "  eval_type      VARCHAR(50) NOT NULL DEFAULT 'entretien'," . "  skills_evaluated TEXT," . "  level_reached  TINYINT UNSIGNED NOT NULL DEFAULT 0," . "  objectives_set TEXT," . "  comment_text   TEXT," . "  created_at     DATETIME NOT NULL," . "  PRIMARY KEY (id)," . "  KEY trainer_id (trainer_id)," . "  KEY evaluation_date (evaluation_date)" . ") {$charset_collate};";
     dbDelta( $sql_trainer_evaluations );
