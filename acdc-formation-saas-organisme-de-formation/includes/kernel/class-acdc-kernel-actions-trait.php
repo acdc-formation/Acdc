@@ -2339,9 +2339,64 @@ trait ACDC_Kernel_Actions_Trait {
     /* Protection de la racine acdc-of-contracts/ : couvre aussi les dossiers déjà
        créés avant ce correctif (serveurs Apache), en une seule passe. */
     $root = trailingslashit( dirname( untrailingslashit( $dir_path ) ) );
+
+    /* ACDC 3.25.240 — CETTE FONCTION A INTERDIT TOUTE LA MÉDIATHÈQUE.
+       Elle protège un dossier ET son parent, ce qui est juste quand on lui
+       passe « acdc-of-contracts/42/ » : le parent est « acdc-of-contracts/ ».
+       En 3.25.225 je lui ai passé « uploads/acdc-certificates/ », dont le
+       parent est « wp-content/uploads/ ». Un « deny from all » s'est donc écrit
+       à la racine des téléversements, et le serveur a rendu 403 sur TOUT ce qui
+       s'y trouve : les images du site, les logos des e-mails, les pages HTML des
+       propositions commerciales envoyées aux prospects.
+       Une fonction qui écrit chez son parent doit vérifier de qui elle est
+       l'enfant. Elle ne remonte donc plus jamais au-dessus de son propre
+       dossier racine. */
+    $uploads  = wp_upload_dir();
+    $base_dir = ! empty( $uploads['basedir'] ) ? trailingslashit( (string) $uploads['basedir'] ) : '';
+    if ( '' !== $base_dir && ( $root === $base_dir || strlen( $root ) <= strlen( $base_dir ) ) ) {
+      return;
+    }
+
     $ht_root = $root . '.htaccess';
     if ( is_dir( $root ) && ! file_exists( $ht_root ) ) {
       file_put_contents( $ht_root, "deny from all\n" ); // phpcs:ignore WordPress.WP.AlternativeFunctions.file_system_operations_file_put_contents
+    }
+  }
+
+  /**
+   * ACDC 3.25.240 — RÉPARE LA MÉDIATHÈQUE INTERDITE PAR LA 3.25.225.
+   *
+   * Le fichier fautif existe déjà sur les sites qui ont généré une attestation :
+   * réinstaller le plugin ne le retire pas, puisque toutes les écritures sont
+   * gardées par `! file_exists()`. Il faut donc le supprimer explicitement.
+   *
+   * On ne supprime QUE si le contenu est exactement celui que le plugin écrit.
+   * Un `.htaccess` que l'hébergeur ou David aurait posé lui-même à la racine des
+   * téléversements ne nous appartient pas : on n'y touche pas, et on le dit dans
+   * le journal plutôt que de décider à sa place.
+   */
+  private function acdc_repair_uploads_htaccess() {
+    $uploads = wp_upload_dir();
+    if ( empty( $uploads['basedir'] ) ) {
+      return;
+    }
+    $base = trailingslashit( (string) $uploads['basedir'] );
+
+    /* La racine des téléversements, et le dossier des attestations : leurs
+       fichiers sont diffusés par URL, les interdire revient à les perdre. */
+    $targets = array( $base . '.htaccess', $base . 'acdc-certificates/.htaccess' );
+
+    foreach ( $targets as $path ) {
+      if ( ! file_exists( $path ) ) {
+        continue;
+      }
+      $contents = trim( (string) @file_get_contents( $path ) ); // phpcs:ignore WordPress.WP.AlternativeFunctions.file_system_operations_file_get_contents
+      if ( 'deny from all' === strtolower( $contents ) ) {
+        @unlink( $path );
+        error_log( '[ACDC 3.25.240] Interdiction levée sur ' . $path . ' — elle bloquait toute la médiathèque.' );
+      } else {
+        error_log( '[ACDC 3.25.240] ' . $path . ' conservé : son contenu n’est pas celui du plugin.' );
+      }
     }
   }
 

@@ -2865,6 +2865,14 @@ dbDelta( $sql_companies );
     }
     $this->maybe_add_table_column( $this->registration_contract_table, 'nad_delay_days', 'SMALLINT UNSIGNED DEFAULT NULL' );
 
+    /* ACDC 3.25.240 — Lève l'interdiction posée par erreur sur la racine des
+       téléversements en 3.25.225. Sans ce passage, réinstaller le plugin ne
+       répare rien : le fichier existe déjà, et toutes nos écritures sont
+       gardées par `! file_exists()`. */
+    if ( method_exists( $this, 'acdc_repair_uploads_htaccess' ) ) {
+      $this->acdc_repair_uploads_htaccess();
+    }
+
     update_option( 'acdc_of_saas_version', ACDC_OF_SAAS_VERSION );
     update_option( 'acdc_of_db_version', '3.0.0', false );
     update_option( 'acdc_of_data_protection_level', '3', false );

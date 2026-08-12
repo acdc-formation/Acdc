@@ -1069,13 +1069,21 @@ trait ACDC_Sessions_Actions_Trait {
 
     $upload_dir = wp_upload_dir();
     $dir_path   = trailingslashit( $upload_dir['basedir'] ) . 'acdc-certificates/';
-    if ( method_exists( $this, 'acdc_protect_contracts_dir' ) ) {
-      $this->acdc_protect_contracts_dir( $dir_path );
-    } else {
-      wp_mkdir_p( $dir_path );
-    }
+    /* ACDC 3.25.240 — NE PLUS INTERDIRE CE DOSSIER.
+       En 3.25.225 je l'ai confié au protecteur des contrats, qui pose un
+       « deny from all » sur le dossier ET sur son parent. Le parent étant ici
+       la racine des téléversements, c'est toute la médiathèque du site qui est
+       devenue inaccessible ; et l'attestation elle-même, dont on distribue
+       pourtant l'adresse par e-mail, répondait 403.
+       Le besoin réel n'était pas d'interdire l'accès : c'était d'empêcher qu'on
+       devine l'adresse d'une attestation en énumérant les identifiants. On
+       applique donc le procédé déjà retenu pour les contrats formateurs — un
+       condensat dérivé des clés du site : déterministe, donc une régénération
+       retrouve le même fichier, mais impossible à deviner de l'extérieur. */
+    wp_mkdir_p( $dir_path );
 
-    $filename = sanitize_file_name( $filename_base . '-' . (int) $registration->id . '.pdf' );
+    $token    = substr( wp_hash( 'acdc-certificate-' . $filename_base . '-' . (int) $registration->id ), 0, 20 );
+    $filename = sanitize_file_name( $filename_base . '-' . (int) $registration->id . '-' . $token . '.pdf' );
     $filepath = $dir_path . $filename;
     if ( false === file_put_contents( $filepath, $pdf ) ) { // phpcs:ignore WordPress.WP.AlternativeFunctions.file_system_operations_file_put_contents
       return '';
