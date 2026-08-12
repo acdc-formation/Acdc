@@ -240,6 +240,17 @@ public function handle_save_training_registration() {
       $ct_remote_link = ( $contract_for_seances && ! empty( $contract_for_seances->remote_link ) )
         ? (string) $contract_for_seances->remote_link
         : '';
+      /* ACDC 3.25.245 — Le lieu vient de la convention, qui le porte désormais
+         en propre. La dérivation depuis la fiche formation ou l'adresse de
+         l'entreprise n'est plus qu'un repli pour les conventions antérieures :
+         deux écrans qui déduisent chacun de leur côté finissent par se
+         contredire, et c'est la convention qui fait foi. */
+      if ( $contract_for_seances && '' !== trim( (string) ( $contract_for_seances->formation_address ?? '' ) ) ) {
+        $session_location = trim( preg_replace( '/\s+/u', ' ', trim(
+          (string) $contract_for_seances->formation_address . ' '
+          . trim( (string) ( $contract_for_seances->formation_postal_code ?? '' ) . ' ' . (string) ( $contract_for_seances->formation_city ?? '' ) )
+        ) ) );
+      }
 
       foreach ( $seances_arr as $idx => $sdate ) {
         /* Le déroulé de CETTE journée : format et quatre horaires. Une
@@ -603,6 +614,10 @@ public function handle_save_registration_contract() {
       isset( $input['seances_schedule_json'] ) ? wp_unslash( $input['seances_schedule_json'] ) : '',
       $seances_arr
     ) ),
+    /* ACDC 3.25.245 — Le lieu saisi sur la convention. */
+    'formation_address'     => isset( $input['formation_address'] ) ? sanitize_text_field( wp_unslash( $input['formation_address'] ) ) : '',
+    'formation_postal_code' => isset( $input['formation_postal_code'] ) ? sanitize_text_field( wp_unslash( $input['formation_postal_code'] ) ) : '',
+    'formation_city'        => isset( $input['formation_city'] ) ? sanitize_text_field( wp_unslash( $input['formation_city'] ) ) : '',
     'session_type'      => isset( $input['session_type'] ) && in_array( (string) $input['session_type'], array( 'Groupe', 'Individuelle' ), true ) ? (string) $input['session_type'] : '',
     'attendance_method' => isset( $input['attendance_method'] ) && 'Manuelle' === (string) $input['attendance_method'] ? 'Manuelle' : 'Électronique',
     'remote_link'       => isset( $input['remote_link'] ) ? esc_url_raw( wp_unslash( $input['remote_link'] ) ) : '',

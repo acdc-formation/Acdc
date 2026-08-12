@@ -2853,6 +2853,17 @@ dbDelta( $sql_companies );
     $this->maybe_add_table_column( $this->registration_contract_table, 'remote_link', 'TEXT DEFAULT NULL' );
     $this->maybe_add_table_column( $this->registration_contract_table, 'signed_schedule_json', 'LONGTEXT DEFAULT NULL' );
 
+    /* ACDC 3.25.245 — LE LIEU DE LA CONVENTION, ENFIN ÉCRIT QUELQUE PART.
+       La convention n'avait aucun champ de lieu : elle le devinait à
+       l'impression par une cascade de cinq sources, et imprimait « À définir »
+       quand aucune ne répondait — pendant que le devis, lui, portait l'adresse
+       complète. Une convention est pourtant la pièce qui ENGAGE sur le lieu :
+       qu'il soit deviné plutôt que saisi et relu ne tient pas devant un
+       auditeur. Le lieu se saisit désormais, et se corrige avant signature. */
+    $this->maybe_add_table_column( $this->registration_contract_table, 'formation_address', 'TEXT DEFAULT NULL' );
+    $this->maybe_add_table_column( $this->registration_contract_table, 'formation_postal_code', "VARCHAR(20) NOT NULL DEFAULT ''" );
+    $this->maybe_add_table_column( $this->registration_contract_table, 'formation_city', "VARCHAR(120) NOT NULL DEFAULT ''" );
+
     /* ACDC 3.24.11 — Bilans compétences formateurs (indicateur 21 Qualiopi). */
     $sql_trainer_evaluations = "CREATE TABLE IF NOT EXISTS {$this->trainer_evaluation_table} (" . "  id             BIGINT UNSIGNED NOT NULL AUTO_INCREMENT," . "  trainer_id     BIGINT UNSIGNED NOT NULL," . "  evaluation_date DATE NOT NULL," . "  eval_type      VARCHAR(50) NOT NULL DEFAULT 'entretien'," . "  skills_evaluated TEXT," . "  level_reached  TINYINT UNSIGNED NOT NULL DEFAULT 0," . "  objectives_set TEXT," . "  comment_text   TEXT," . "  created_at     DATETIME NOT NULL," . "  PRIMARY KEY (id)," . "  KEY trainer_id (trainer_id)," . "  KEY evaluation_date (evaluation_date)" . ") {$charset_collate};";
     dbDelta( $sql_trainer_evaluations );

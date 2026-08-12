@@ -8,6 +8,7 @@ lancent sans WordPress, en quelques secondes.
     php tests/test-deroule-seances.php # déroulé des séances sur la convention
     php tests/test-cascade-adresse.php # ordre des sources du préremplissage devis
     php tests/test-decoupe-adresse.php # découpage rue / CP / ville du lieu de formation
+    php tests/test-lieu-convention.php # priorité des sources du lieu de la convention
     php tests/test-protection-dossiers.php # aucune protection ne remonte à la racine des uploads
     node tests/test-signature-trace.js # continuité du tracé des signatures
     php tests/scan-global-wpdb.php acdc-formation-saas-organisme-de-formation

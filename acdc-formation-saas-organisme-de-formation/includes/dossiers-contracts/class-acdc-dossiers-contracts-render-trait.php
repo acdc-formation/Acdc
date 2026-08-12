@@ -1551,6 +1551,36 @@ trait ACDC_Dossiers_Contracts_Render_Trait {
             if ( isset( $one_day['format'] ) && 'Distanciel' === $one_day['format'] ) { $has_remote = true; break; }
           }
           ?>
+          <?php
+          /* ACDC 3.25.245 — Le lieu de la convention. Pré-rempli par la cascade
+             (devis signé, proposition, séance, fiche formation, puis adresse du
+             commanditaire) et modifiable : c'est le fait de le VOIR avant de
+             signer qui rend le dernier recours acceptable. */
+          $ct_proposal_id = $get_proposal_id;
+          /* À la création, la convention n'existe pas encore : on donne à la
+             cascade le peu que le formulaire connaît déjà — le prospect retenu
+             et la formation choisie — plutôt que rien. */
+          $ct_ctx = is_object( $contract ) ? $contract : (object) array();
+          if ( empty( $ct_ctx->source_prospect_id ) && $selected_source_prospect_id ) {
+            $ct_ctx->source_prospect_id = (int) $selected_source_prospect_id;
+          }
+          $ct_loc = $this->acdc_resolve_contract_location( $ct_ctx, $ct_proposal_id );
+          ?>
+          <div class="acdc-contract-grid">
+            <div class="acdc-contract-label">Lieu de la formation</div>
+            <div>
+              <input type="text" name="registration_contract[formation_address]" value="<?php echo esc_attr( $ct_loc['address'] ); ?>" placeholder="Adresse"<?php echo $readonly ? ' readonly' : ''; ?>>
+              <div style="display:flex;gap:10px;margin-top:8px;">
+                <input type="text" name="registration_contract[formation_postal_code]" value="<?php echo esc_attr( $ct_loc['postal_code'] ); ?>" placeholder="Code postal" style="max-width:160px;"<?php echo $readonly ? ' readonly' : ''; ?>>
+                <input type="text" name="registration_contract[formation_city]" value="<?php echo esc_attr( $ct_loc['city'] ); ?>" placeholder="Ville"<?php echo $readonly ? ' readonly' : ''; ?>>
+              </div>
+              <p class="acdc-help">
+                C’est ce lieu qui figure à l’article 1 de la convention et qui est repris sur les séances
+                déclarées en présentiel. Proposé d’après le devis, la proposition ou l’adresse du client —
+                <strong>corrigez-le si la formation se tient ailleurs.</strong>
+              </p>
+            </div>
+          </div>
           <div class="acdc-contract-grid">
             <div class="acdc-contract-label">Type de séance</div>
             <div>

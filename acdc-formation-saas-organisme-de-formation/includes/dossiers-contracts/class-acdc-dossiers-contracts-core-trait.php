@@ -84,6 +84,149 @@ trait ACDC_Dossiers_Contracts_Core_Trait {
    * @param array  $dates Journées retenues (AAAA-MM-JJ).
    * @return array<string,array<string,string>>
    */
+  /**
+   * ACDC 3.25.245 — LE LIEU DE FORMATION D'UNE CONVENTION.
+   *
+   * Rend l'adresse en trois parties. Le lieu SAISI sur la convention l'emporte
+   * toujours : à partir du moment où quelqu'un l'a écrit et relu, plus rien ne
+   * doit le contredire. Ce n'est qu'à défaut que l'on propose une valeur, dans
+   * l'ordre des sources qui font foi :
+   *
+   *   1. le DEVIS signé rattaché — c'est le document que le client vient
+   *      d'accepter, et il porte l'adresse en trois champs déjà séparés ;
+   *   2. la proposition commerciale, dont le lieu est une seule ligne à
+   *      découper ;
+   *   3. une séance déjà planifiée pour cette formation ;
+   *   4. la fiche formation ;
+   *   5. l'adresse du commanditaire — société d'abord, prospect ensuite, car
+   *      certaines fiches société n'ont pas d'adresse alors que le prospect en
+   *      a une.
+   *
+   * Le cinquième point est un PARI, et David l'a accepté en connaissance de
+   * cause : une formation ne se tient pas forcément chez le client. Il n'est
+   * tenable que parce que le lieu est désormais affiché dans le formulaire et
+   * corrigeable avant signature — jusqu'ici, le mauvais lieu s'imprimait sans
+   * que personne puisse le voir.
+   *
+   * @return array{address:string,postal_code:string,city:string}
+   */
+  private function acdc_resolve_contract_location( $contract, $proposal_id = 0 ) {
+    $empty = array( 'address' => '', 'postal_code' => '', 'city' => '' );
+
+    /* 0. Ce qui a été saisi sur la convention. */
+    if ( $contract && '' !== trim( (string) ( $contract->formation_address ?? '' ) ) ) {
+      return array(
+        'address'     => trim( (string) $contract->formation_address ),
+        'postal_code' => trim( (string) ( $contract->formation_postal_code ?? '' ) ),
+        'city'        => trim( (string) ( $contract->formation_city ?? '' ) ),
+      );
+    }
+
+    global $wpdb;
+    $proposal_id = (int) $proposal_id;
+    $prospect_id = (int) ( $contract->source_prospect_id ?? 0 );
+
+    /* 1. Le devis rattaché à la proposition — le signé d'abord. */
+    if ( $proposal_id > 0 ) {
+      $quote_table = $wpdb->prefix . 'acdc_of_quotes';
+      $quote = $wpdb->get_row( $wpdb->prepare(
+        "SELECT formation_address, formation_postal_code, formation_city
+           FROM {$quote_table}
+          WHERE proposal_id = %d AND formation_address <> ''
+          ORDER BY ( signature_status = 'signée' ) DESC, id DESC
+          LIMIT 1",
+        $proposal_id
+      ) );
+      if ( $quote && '' !== trim( (string) $quote->formation_address ) ) {
+        return array(
+          'address'     => trim( (string) $quote->formation_address ),
+          'postal_code' => trim( (string) $quote->formation_postal_code ),
+          'city'        => trim( (string) $quote->formation_city ),
+        );
+      }
+    }
+
+    /* 2. La proposition — une seule ligne, que l'on sépare. */
+    $proposal_table = $wpdb->prefix . 'acdc_of_proposals';
+    $proposal_loc   = '';
+    if ( $proposal_id > 0 ) {
+      $proposal_loc = (string) $wpdb->get_var( $wpdb->prepare(
+        "SELECT formation_location FROM {$proposal_table} WHERE id = %d LIMIT 1",
+        $proposal_id
+      ) );
+    }
+    if ( '' === trim( $proposal_loc ) && $prospect_id > 0 ) {
+      $proposal_loc = (string) $wpdb->get_var( $wpdb->prepare(
+        "SELECT formation_location FROM {$proposal_table}
+          WHERE source_prospect_id = %d AND formation_location IS NOT NULL AND formation_location <> ''
+          ORDER BY id DESC LIMIT 1",
+        $prospect_id
+      ) );
+    }
+    if ( '' !== trim( (string) $proposal_loc ) && method_exists( $this, 'acdc_split_french_address' ) ) {
+      return $this->acdc_split_french_address( $proposal_loc );
+    }
+
+    /* 3. Une séance déjà planifiée pour cette formation. */
+    $formation_id = (int) ( $contract->formation_id ?? 0 );
+    if ( $formation_id > 0 ) {
+      $session_loc = (string) $wpdb->get_var( $wpdb->prepare(
+        "SELECT location FROM {$this->session_table}
+          WHERE formation_id = %d AND location IS NOT NULL AND location <> ''
+          ORDER BY COALESCE(start_at, CONCAT(start_date,' 00:00:00')) ASC LIMIT 1",
+        $formation_id
+      ) );
+      if ( '' !== trim( $session_loc ) && method_exists( $this, 'acdc_split_french_address' ) ) {
+        return $this->acdc_split_french_address( $session_loc );
+      }
+    }
+
+    /* 4. La fiche formation. */
+    if ( $formation_id > 0 && method_exists( $this, 'get_formation' ) ) {
+      $formation = $this->get_formation( $formation_id );
+      if ( $formation && '' !== trim( (string) ( $formation->address ?? '' ) ) ) {
+        return array(
+          'address'     => trim( (string) $formation->address ),
+          'postal_code' => trim( (string) ( $formation->postal_code ?? '' ) ),
+          'city'        => trim( (string) ( $formation->city ?? '' ) ),
+        );
+      }
+    }
+
+    /* 5. Le commanditaire — le pari assumé. */
+    $company_id = (int) ( $contract->company_id ?? 0 );
+    if ( $company_id > 0 && method_exists( $this, 'get_company' ) ) {
+      $company = $this->get_company( $company_id );
+      if ( $company && '' !== trim( (string) ( $company->address ?? '' ) ) ) {
+        return array(
+          'address'     => trim( (string) $company->address ),
+          'postal_code' => trim( (string) ( $company->postal_code ?? '' ) ),
+          'city'        => trim( (string) ( $company->city ?? '' ) ),
+        );
+      }
+    }
+    if ( $prospect_id > 0 && method_exists( $this, 'get_prospect' ) ) {
+      $prospect = $this->get_prospect( $prospect_id );
+      if ( $prospect && '' !== trim( (string) ( $prospect->address ?? '' ) ) ) {
+        return array(
+          'address'     => trim( (string) $prospect->address ),
+          'postal_code' => trim( (string) ( $prospect->postal_code ?? '' ) ),
+          'city'        => trim( (string) ( $prospect->city ?? '' ) ),
+        );
+      }
+    }
+
+    return $empty;
+  }
+
+  /** Le lieu d'une convention, recomposé en une ligne. */
+  private function acdc_contract_location_line( $contract, $proposal_id = 0 ) {
+    $parts = $this->acdc_resolve_contract_location( $contract, $proposal_id );
+    $line  = trim( $parts['address'] . ' ' . trim( $parts['postal_code'] . ' ' . $parts['city'] ) );
+    return trim( preg_replace( '/\s+/u', ' ', $line ) );
+  }
+
+
   private function acdc_sanitize_seances_schedule( $raw, $dates ) {
     $params   = $this->get_contract_params_options();
     $fallback = array(
@@ -2199,7 +2342,23 @@ private function build_contract_pdf_pages( $context ) {
      la formation, puis la fiche formation, puis l'adresse du commanditaire. Le
      lieu d'une formation en entreprise, c'est l'entreprise — c'est la règle que
      David a rappelée. On ne renonce qu'après. */
-  $location = '' !== ( $session->location ?? '' ) ? $normalize( (string) $session->location, '' ) : '';
+  /* ACDC 3.25.245 — LE LIEU SAISI SUR LA CONVENTION PASSE AVANT TOUT.
+     Jusqu'ici l'article 1 ne faisait que deviner, et imprimait « À définir »
+     quand aucune des cinq sources ne répondait — sur la pièce qui engage
+     précisément sur le lieu. La convention porte maintenant son propre champ :
+     dès qu'il est renseigné, plus rien ne le contredit. La cascade qui suit ne
+     sert plus qu'aux conventions antérieures à cette version. */
+  $location = '';
+  if ( '' !== trim( (string) ( $contract->formation_address ?? '' ) ) ) {
+    $location = trim( preg_replace( '/\s+/u', ' ', trim(
+      (string) $contract->formation_address . ' '
+      . trim( (string) ( $contract->formation_postal_code ?? '' ) . ' ' . (string) ( $contract->formation_city ?? '' ) )
+    ) ) );
+  }
+
+  if ( '' === $location ) {
+    $location = '' !== ( $session->location ?? '' ) ? $normalize( (string) $session->location, '' ) : '';
+  }
 
   if ( '' === $location && '' !== $proposal_location ) {
     $location = $proposal_location;
