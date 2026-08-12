@@ -6692,17 +6692,29 @@ trait ACDC_Kernel_Render_Trait {
 
     <div class="acdc-panel acdc-mb-18">
       <div class="acdc-needs-section-title">2. Besoin</div>
-      <?php if ( ! empty( $need->expressed_need ) ) : ?><div class="acdc-nv-block"><span class="acdc-nv-label">Besoin exprimé</span><div class="acdc-nv-text"><?php echo nl2br( esc_html( $need->expressed_need ) ); ?></div></div><?php endif; ?>
-      <?php if ( ! empty( $need->reframed_need ) ) : ?><div class="acdc-nv-block"><span class="acdc-nv-label">Besoin reformulé</span><div class="acdc-nv-text"><?php echo nl2br( esc_html( $need->reframed_need ) ); ?></div></div><?php endif; ?>
-      <?php if ( ! empty( $need->context_text ) ) : ?><div class="acdc-nv-block"><span class="acdc-nv-label">Contexte</span><div class="acdc-nv-text"><?php echo nl2br( esc_html( $need->context_text ) ); ?></div></div><?php endif; ?>
-      <?php if ( ! empty( $need->current_situation ) ) : ?><div class="acdc-nv-block"><span class="acdc-nv-label">Situation actuelle</span><div class="acdc-nv-text"><?php echo nl2br( esc_html( $need->current_situation ) ); ?></div></div><?php endif; ?>
-      <?php if ( empty( $need->expressed_need ) && empty( $need->reframed_need ) && empty( $need->context_text ) && empty( $need->current_situation ) ) : ?><p style="color:#9ca3af;">Aucun besoin renseigné.</p><?php endif; ?>
+      <?php
+      /* ACDC 3.25.233 — UN CHAMP VIDE DOIT SE VOIR, PAS DISPARAÎTRE.
+         Ces blocs s'effaçaient quand ils n'étaient pas remplis : impossible de
+         distinguer « la question n'a pas eu de réponse » de « la question
+         n'existe pas ». Sur un recueil des besoins, l'absence de réponse EST
+         une information — c'est elle qui dit ce qu'il reste à demander au
+         prospect avant de bâtir la proposition. */
+      $nv_text = function( $label_text, $value ) {
+        echo '<div class="acdc-nv-block"><span class="acdc-nv-label">' . esc_html( $label_text ) . '</span><div class="acdc-nv-text">';
+        echo '' !== trim( (string) $value ) ? nl2br( esc_html( $value ) ) : '<span style="color:#9ca3af;">Non renseigné</span>';
+        echo '</div></div>';
+      };
+      $nv_text( 'Besoin exprimé', $need->expressed_need );
+      $nv_text( 'Besoin reformulé', $need->reframed_need );
+      $nv_text( 'Contexte', $need->context_text );
+      $nv_text( 'Situation actuelle', $need->current_situation );
+      ?>
     </div>
 
     <div class="acdc-panel acdc-mb-18">
       <div class="acdc-needs-section-title">3. Public concerné</div>
       <div class="acdc-nv-grid">
-        <?php if ( ! empty( $need->target_audience ) ) : ?><div style="grid-column:span 2;"><span class="acdc-nv-label">Description du public</span><div class="acdc-nv-text"><?php echo nl2br( esc_html( $need->target_audience ) ); ?></div></div><?php endif; ?>
+        <div style="grid-column:span 2;"><span class="acdc-nv-label">Description du public</span><div class="acdc-nv-text"><?php echo '' !== trim( (string) $need->target_audience ) ? nl2br( esc_html( $need->target_audience ) ) : '<span style="color:#9ca3af;">Non renseigné</span>'; ?></div></div>
         <div><span class="acdc-nv-label">Niveau</span><span class="acdc-nv-value"><?php echo $label( $need->audience_level ); ?></span></div>
         <div><span class="acdc-nv-label">Effectif à former</span><span class="acdc-nv-value"><?php echo $label( $need->learners_count ); ?></span></div>
         <?php if ( ! empty( $need->formation_planning ) ) : ?><div><span class="acdc-nv-label">Formés en même temps ?</span><span class="acdc-nv-value"><?php echo esc_html( $need->formation_planning ); ?></span></div><?php endif; ?>
@@ -6712,24 +6724,41 @@ trait ACDC_Kernel_Render_Trait {
 
     <div class="acdc-panel acdc-mb-18">
       <div class="acdc-needs-section-title">4. Objectifs &amp; contraintes</div>
-      <?php if ( ! empty( $need->expected_objectives ) ) : ?><div class="acdc-nv-block"><span class="acdc-nv-label">Objectifs opérationnels attendus</span><div class="acdc-nv-text"><?php echo nl2br( esc_html( $need->expected_objectives ) ); ?></div></div><?php endif; ?>
-      <?php if ( ! empty( $need->constraints_text ) ) : ?><div class="acdc-nv-block"><span class="acdc-nv-label">Contraintes</span><div class="acdc-nv-text"><?php echo nl2br( esc_html( $need->constraints_text ) ); ?></div></div><?php endif; ?>
+      <?php
+      $nv_text( 'Objectifs opérationnels attendus', $need->expected_objectives );
+      $nv_text( 'Contraintes', $need->constraints_text );
+      ?>
       <div class="acdc-nv-grid" style="margin-top:12px;">
         <div><span class="acdc-nv-label">Urgence</span><span class="acdc-nv-value"><?php echo $label( $need->urgency ); ?></span></div>
         <div><span class="acdc-nv-label">Échéance souhaitée</span><span class="acdc-nv-value"><?php echo $label( ! empty( $need->desired_deadline ) ? mysql2date( 'd/m/Y', $need->desired_deadline ) : '' ); ?></span></div>
         <div><span class="acdc-nv-label">Budget indiqué</span><span class="acdc-nv-value"><?php echo $label( $need->budget ); ?></span></div>
         <div><span class="acdc-nv-label">Format souhaité</span><span class="acdc-nv-value"><?php echo $label( $need->desired_format ); ?></span></div>
         <div><span class="acdc-nv-label">Financement envisagé</span><span class="acdc-nv-value"><?php echo $label( $need->planned_funding ); ?></span></div>
+        <?php
+        /* ACDC 3.25.233 — LE FINANCEUR ÉTAIT SAISI ET JAMAIS RESTITUÉ.
+           L'écran affichait « Financement envisagé : OPCO » — le MODE — sans
+           jamais nommer l'organisme choisi, alors qu'il est enregistré sur le
+           recueil. Or c'est précisément le nom qui sert : « OPCO » ne permet
+           d'appeler personne, ni de monter un dossier de prise en charge. */
+        $need_funder_name = '';
+        if ( ! empty( $need->funder_id ) ) {
+          $need_funder = $this->get_funder( (int) $need->funder_id );
+          if ( $need_funder && ! empty( $need_funder->name ) ) {
+            $need_funder_name = (string) $need_funder->name;
+          }
+        }
+        ?>
+        <div><span class="acdc-nv-label">OPCO / Financeur</span><span class="acdc-nv-value"><?php echo $label( $need_funder_name ); ?></span></div>
       </div>
     </div>
 
     <div class="acdc-panel">
       <div class="acdc-needs-section-title">5. Suivi &amp; notes internes</div>
-      <?php if ( ! empty( $need->next_action ) ) : ?><div class="acdc-nv-block"><span class="acdc-nv-label">Prochaine action</span><div class="acdc-nv-text"><?php echo nl2br( esc_html( $need->next_action ) ); ?></div></div><?php endif; ?>
+      <?php $nv_text( 'Prochaine action', $need->next_action ); ?>
       <div class="acdc-nv-grid">
         <div><span class="acdc-nv-label">Date prochaine action</span><span class="acdc-nv-value"><?php echo $label( ! empty( $need->next_action_date ) ? mysql2date( 'd/m/Y', $need->next_action_date ) : '' ); ?></span></div>
       </div>
-      <?php if ( ! empty( $need->internal_summary ) ) : ?><div class="acdc-nv-block" style="margin-top:12px;"><span class="acdc-nv-label">Résumé interne</span><div class="acdc-nv-text"><?php echo nl2br( esc_html( $need->internal_summary ) ); ?></div></div><?php endif; ?>
+      <div class="acdc-nv-block" style="margin-top:12px;"><span class="acdc-nv-label">Résumé interne</span><div class="acdc-nv-text"><?php echo '' !== trim( (string) $need->internal_summary ) ? nl2br( esc_html( $need->internal_summary ) ) : '<span style="color:#9ca3af;">Non renseigné</span>'; ?></div></div>
       <?php
     if ( ! empty( $need->id ) ) {
       $this->render_proposals_list_for_need( (int) $need->id );

@@ -4068,6 +4068,26 @@ private function acdc_build_need_pdf_pages( $need, $source_prospect_id = 0, $cli
   $logo_url = $this->acdc_resolve_pdf_logo_url();
   $signature_url = ! empty( $profile['signature_url'] ) ? (string) $profile['signature_url'] : ( ! empty( $profile['stamp_url'] ) ? (string) $profile['stamp_url'] : $default_signature_url );
   $logo = $this->prepare_pdf_jpeg_image( $logo_url, 71, 71 );
+
+  /* ACDC 3.25.233 — Le PDF nommait le MODE de financement et jamais
+     l'organisme. « OPCO » ne permet d'appeler personne ni de monter un dossier
+     de prise en charge : c'est le nom qui sert. */
+  $need_funder_name = '';
+  if ( ! empty( $need->funder_id ) ) {
+    $need_funder = $this->get_funder( (int) $need->funder_id );
+    if ( $need_funder && ! empty( $need_funder->name ) ) {
+      $need_funder_name = (string) $need_funder->name;
+    }
+  }
+
+  /* Le mode et l'organisme tiennent sur la même ligne : la boîte du haut est
+     calibrée pour sept lignes, et une huitième déborderait sous son cadre. */
+  $need_funding_label = trim( (string) $need->planned_funding );
+  if ( '' !== $need_funder_name ) {
+    $need_funding_label = '' !== $need_funding_label
+      ? $need_funding_label . ' - ' . $need_funder_name
+      : $need_funder_name;
+  }
   /* Cachet+signature : asset dédié, pas la signature seule du profil */
   $cachet_sig_url = ! empty( $pdf_assets['cachet_signature_url'] )
     ? (string) $pdf_assets['cachet_signature_url']
@@ -4293,7 +4313,7 @@ private function acdc_build_need_pdf_pages( $need, $source_prospect_id = 0, $cli
       array( 'label' => 'Niveau :', 'value' => $need->audience_level ),
       array( 'label' => 'Effectif :', 'value' => $need->learners_count ),
       array( 'label' => 'Format souhaité :', 'value' => $need->desired_format ),
-      array( 'label' => 'Financement :', 'value' => $need->planned_funding ),
+      array( 'label' => 'Financement :', 'value' => $need_funding_label ),
       array( 'label' => 'Urgence :', 'value' => $need->urgency ),
       array( 'label' => 'Échéance souhaitée :', 'value' => $fmt_date( $need->desired_deadline ) ),
     )
