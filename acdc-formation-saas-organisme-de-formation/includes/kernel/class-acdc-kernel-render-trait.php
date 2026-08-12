@@ -6572,12 +6572,6 @@ trait ACDC_Kernel_Render_Trait {
                       ? ( is_admin() ? $this->admin_prospect_followup_url( array( 'action' => 'view', 'item_id' => $need_pid, 'open_rdv' => 1, 'open_from_prospect_list' => 1 ) ) : $this->portal_page_url( array( 'tab' => 'prospect_followup', 'action' => 'view', 'item_id' => $need_pid, 'open_rdv' => 1, 'open_from_prospect_list' => 1 ) ) )
                       : '';
                     $n_proposal_url = is_admin() ? admin_url( 'admin.php?page=acdc-of-needs&action=edit&item_id=' . (int) $entry->id . $prospect_qs ) : $this->portal_page_url( array_filter( array( 'tab' => 'needs', 'action' => 'edit', 'item_id' => (int) $entry->id, 'prospect_id' => $need_pid ) ) );
-                    $n_convention_url = $need_pid
-                      ? ( is_admin() ? admin_url( 'admin.php?page=acdc-of-registration-contract&action=new&prospect_id=' . $need_pid ) : $this->portal_page_url( array( 'tab' => 'registration_contract', 'action' => 'new', 'prospect_id' => $need_pid ) ) )
-                      : '';
-                    $n_devis_url = $need_pid
-                      ? ( is_admin() ? $this->admin_tab_url( 'quotes', array( 'prospect_id' => $need_pid ) ) : $this->portal_page_url( array( 'tab' => 'quotes', 'prospect_id' => $need_pid ) ) )
-                      : '';
                   ?>
                   <div class="acdc-groups-actions-inline" data-acdc-prospect-actions>
                     <div class="acdc-prospect-action-menu">
@@ -6595,9 +6589,10 @@ trait ACDC_Kernel_Render_Trait {
                       <div class="acdc-prospect-action-dropdown" data-acdc-prospect-menu hidden>
                         <?php if ( $n_edit_prospect_url ) : ?><a class="acdc-prospect-action-item" href="<?php echo esc_url( $n_edit_prospect_url ); ?>">Modifier le prospect</a><?php endif; ?>
                         <?php if ( $n_rdv_url ) : ?><a class="acdc-prospect-action-item" href="<?php echo esc_url( $n_rdv_url ); ?>">Ajouter un rendez-vous</a><?php endif; ?>
+                        <?php /* ACDC 3.25.241 — Devis et convention retirés : un recueil des besoins
+                                 recueille un besoin, il ne fixe ni dates ni tarif. La proposition
+                                 commerciale est la suite, et c'est elle qui portera ces données. */ ?>
                         <a class="acdc-prospect-action-item" href="<?php echo esc_url( $n_proposal_url ); ?>">Proposition commerciale</a>
-                        <?php if ( $n_convention_url ) : ?><a class="acdc-prospect-action-item" href="<?php echo esc_url( $n_convention_url ); ?>">Convention / contrat</a><?php endif; ?>
-                        <?php if ( $n_devis_url ) : ?><a class="acdc-prospect-action-item" href="<?php echo esc_url( $n_devis_url ); ?>">Devis</a><?php endif; ?>
                       </div>
                     </div>
                     <a href="<?php echo esc_url( $view_url ); ?>" class="acdc-row-action-icon acdc-row-view-link" data-acdc-iconized="1" title="Voir" aria-label="Voir ce recueil"><?php echo $this->render_inline_icon( 'view', 25 ); ?><span class="acdc-action-hub-sr screen-reader-text">Voir</span></a>

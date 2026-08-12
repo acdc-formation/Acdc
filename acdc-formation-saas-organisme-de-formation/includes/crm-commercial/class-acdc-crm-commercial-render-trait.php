@@ -407,9 +407,14 @@
                 'Répliquer'            => add_query_arg( array( 'action' => 'new', 'duplicate_id' => $entry->id, 'profile' => $entry->profile_type ), $base ),
                 'Ajouter un rendez-vous' => add_query_arg( array( 'action' => 'view', 'item_id' => $entry->id, 'open_rdv' => 1, 'open_from_prospect_list' => 1 ), $follow_base ),
                 'Recueil des besoins' => is_admin() ? admin_url( 'admin.php?page=acdc-of-needs&action=new&prospect_id=' . (int) $entry->id ) : $this->portal_page_url( array( 'tab' => 'needs', 'action' => 'new', 'prospect_id' => (int) $entry->id ) ),
-                'Devis'                => is_admin() ? $this->admin_tab_url( 'quotes', array( 'prospect_id' => (int) $entry->id ) ) : $this->portal_page_url( array( 'tab' => 'quotes', 'prospect_id' => (int) $entry->id ) ),
-                'Convention / contrat'=> is_admin() ? admin_url( 'admin.php?page=acdc-of-registration-contract&action=new&prospect_id=' . (int) $entry->id ) : $this->portal_page_url( array( 'tab' => 'registration_contract', 'action' => 'new', 'prospect_id' => (int) $entry->id ) ),
-                'Inscrire en formation'=> is_admin() ? admin_url( 'admin.php?page=acdc-of-register-training&action=new&prospect_id=' . (int) $entry->id ) : $this->portal_page_url( array( 'tab' => 'register_training', 'action' => 'new', 'prospect_id' => (int) $entry->id ) ),
+                /* ACDC 3.25.241 — DEVIS, CONVENTION ET INSCRIPTION RETIRÉS D'ICI.
+                   Une fiche prospect ne porte ni dates, ni durée, ni effectif,
+                   ni tarif : ces trois écrans s'ouvraient donc à moitié vides et
+                   il fallait tout ressaisir à la main — avec le risque que la
+                   ressaisie diverge de ce qui serait annoncé plus tard.
+                   Ces données naissent à la proposition commerciale. Le seul
+                   enchaînement qui mène quelque part depuis un prospect est le
+                   recueil des besoins, qui reste juste au-dessus. */
               );
               ?>
               <tr>
@@ -900,10 +905,7 @@
             var menuItems=[
               ['Répliquer', editBase !== '#' ? setTab(editBase, 'prospects', { action:'new', duplicate_id:itemId }) : '#'],
               ['Ajouter un rendez-vous', followBase !== '#' ? setTab(followBase, 'prospect_followup', { action:'view', item_id:itemId, open_rdv:'1' }) : '#'],
-              ['Recueil des besoins', editBase !== '#' ? setTab(editBase, 'needs', { action:'new', prospect_id:itemId }) : '#'],
-              ['Devis', editBase !== '#' ? setTab(editBase, 'quotes', { prospect_id:itemId }) : '#'],
-              ['Convention / contrat', editBase !== '#' ? setTab(editBase, 'registration_contract', { action:'new', prospect_id:itemId }) : '#'],
-              ['Inscrire en formation', editBase !== '#' ? setTab(editBase, 'register_training', { action:'new', prospect_id:itemId }) : '#']
+              ['Recueil des besoins', editBase !== '#' ? setTab(editBase, 'needs', { action:'new', prospect_id:itemId }) : '#']
             ];
             var legacyInlineLabels = ['attribuer à', 'statut dossier', 'relancer'];
             menuItems.forEach(function(item){
@@ -1626,8 +1628,6 @@
                     $edit_url        = is_admin() ? admin_url( 'admin.php?page=acdc-of-prospects&action=edit&item_id=' . $prospect_id ) : $this->portal_page_url( array( 'tab' => 'prospects', 'action' => 'edit', 'item_id' => $prospect_id ) );
                     $rdv_url         = is_admin() ? $this->admin_prospect_followup_url( array( 'action' => 'view', 'item_id' => $prospect_id, 'open_rdv' => 1, 'open_from_prospect_list' => 1 ) ) : $this->portal_page_url( array( 'tab' => 'prospect_followup', 'action' => 'view', 'item_id' => $prospect_id, 'open_rdv' => 1, 'open_from_prospect_list' => 1 ) );
                     $recueil_url     = is_admin() ? admin_url( 'admin.php?page=acdc-of-needs&action=new&prospect_id=' . $prospect_id ) : $this->portal_page_url( array( 'tab' => 'needs', 'action' => 'new', 'prospect_id' => $prospect_id ) );
-                    $devis_url       = is_admin() ? $this->admin_tab_url( 'quotes', array( 'prospect_id' => $prospect_id ) ) : $this->portal_page_url( array( 'tab' => 'quotes', 'prospect_id' => $prospect_id ) );
-                    $convention_url  = is_admin() ? admin_url( 'admin.php?page=acdc-of-registration-contract&action=new&prospect_id=' . $prospect_id ) : $this->portal_page_url( array( 'tab' => 'registration_contract', 'action' => 'new', 'prospect_id' => $prospect_id ) );
                     $inscription_url = is_admin() ? admin_url( 'admin.php?page=acdc-of-register-training&action=new&prospect_id=' . $prospect_id ) : $this->portal_page_url( array( 'tab' => 'register_training', 'action' => 'new', 'prospect_id' => $prospect_id ) );
                   ?>
                   <?php
@@ -1649,9 +1649,10 @@
                         <a class="acdc-prospect-action-item" href="<?php echo esc_url( $edit_url ); ?>">Modifier le prospect</a>
                         <a class="acdc-prospect-action-item" href="<?php echo esc_url( $rdv_url ); ?>">Ajouter un rendez-vous</a>
                         <a class="acdc-prospect-action-item" href="<?php echo esc_url( $recueil_url ); ?>">Recueil des besoins</a>
+                        <?php /* ACDC 3.25.241 — Devis et convention retirés : ils réclament des
+                                 dates, une durée, un effectif et un tarif qu'un suivi commercial ne
+                                 porte pas. La proposition commerciale est la suite. */ ?>
                         <a class="acdc-prospect-action-item" href="<?php echo esc_url( $proposal_url ); ?>">Proposition commerciale</a>
-                        <a class="acdc-prospect-action-item" href="<?php echo esc_url( $devis_url ); ?>">Devis</a>
-                        <a class="acdc-prospect-action-item" href="<?php echo esc_url( $convention_url ); ?>">Convention / contrat</a>
                       </div>
                     </div>
                     <a class="acdc-row-action-icon <?php echo $row_has_alert ? 'is-alert' : ''; ?>" href="<?php echo esc_url( $followup_url ); ?>" data-acdc-iconized="1" aria-label="Voir le suivi commercial" title="Voir le suivi commercial">
@@ -2146,19 +2147,13 @@
             return [
               ['Répliquer', replaceAction(editBase, 'new')],
               ['Ajouter un rendez-vous', appendParam(followBase, 'open_rdv', '1')],
-              ['Recueil des besoins', adminBase + '?page=acdc-of-needs&action=new&prospect_id=' + encodeURIComponent(itemId)],
-              ['Devis', adminBase + '?page=acdc-of-quotes&prospect_id=' + encodeURIComponent(itemId)],
-              ['Convention / contrat', adminBase + '?page=acdc-of-registration-contract&action=new&prospect_id=' + encodeURIComponent(itemId)],
-              ['Inscrire en formation', adminBase + '?page=acdc-of-register-training&action=new&prospect_id=' + encodeURIComponent(itemId)]
+              ['Recueil des besoins', adminBase + '?page=acdc-of-needs&action=new&prospect_id=' + encodeURIComponent(itemId)]
             ];
           }
           return [
             ['Répliquer', setFrontTabUrl(editBase, 'prospects', { action:'new', duplicate_id:itemId })],
             ['Ajouter un rendez-vous', setFrontTabUrl(followBase, 'prospect_followup', { action:'view', item_id:itemId, open_rdv:'1' })],
-            ['Recueil des besoins', setFrontTabUrl(editBase, 'needs', { action:'new', prospect_id:itemId })],
-            ['Devis', setFrontTabUrl(editBase, 'quotes', { prospect_id:itemId })],
-            ['Convention / contrat', setFrontTabUrl(editBase, 'registration_contract', { action:'new', prospect_id:itemId })],
-            ['Inscrire en formation', setFrontTabUrl(editBase, 'register_training', { action:'new', prospect_id:itemId })]
+            ['Recueil des besoins', setFrontTabUrl(editBase, 'needs', { action:'new', prospect_id:itemId })]
           ];
         }
         function hideAllMenus(except){

@@ -1572,6 +1572,73 @@ startxref
     $this->render_proposals_global_list( $nonce, $ajax_url );
   }
 
+  /**
+   * ACDC 3.25.241 — L'ÉTAT DU DEVIS DE CHAQUE PROPOSITION.
+   *
+   * Rien n'est mémorisé : l'état se re-dérive des devis à chaque affichage.
+   * Un écran qui affirme sans avoir lu est plus dangereux qu'un écran vide, et
+   * ici il commanderait l'apparition de « Créer la convention » — donc la
+   * fabrication d'une pièce contractuelle sur un devis qui n'est pas signé.
+   *
+   * La signature se lit sur TROIS traces, parce qu'aucune n'est fiable seule :
+   * le statut, le document signé archivé, et l'horodatage de signature. Il
+   * suffit qu'une seule soit là pour que le devis soit signé.
+   *
+   * Une proposition peut porter PLUSIEURS devis — un devis corrigé puis
+   * renvoyé. Dès qu'un seul est signé, c'est celui-là qui vaut, et c'est son
+   * identifiant qui est rendu pour bâtir la convention dessus.
+   *
+   * Une seule requête pour toute la liste : une par ligne ferait autant
+   * d'allers-retours qu'il y a de propositions.
+   *
+   * @param array $proposals Lignes de propositions affichées.
+   * @return array<int,array{state:string,quote_id:int}> Indexé par proposition.
+   */
+  private function acdc_quote_states_for_proposals( $proposals ) {
+    $out = array();
+    $ids = array();
+    foreach ( (array) $proposals as $p ) {
+      $pid = isset( $p->id ) ? (int) $p->id : 0;
+      if ( $pid > 0 ) {
+        $ids[]        = $pid;
+        $out[ $pid ]  = array( 'state' => 'none', 'quote_id' => 0 );
+      }
+    }
+    if ( empty( $ids ) ) {
+      return $out;
+    }
+
+    global $wpdb;
+    $table = $wpdb->prefix . 'acdc_of_quotes';
+    $in    = implode( ',', array_map( 'absint', $ids ) );
+    $rows  = $wpdb->get_results(
+      "SELECT id, proposal_id, signature_status, signed_document_url, client_signed_at
+         FROM {$table}
+        WHERE proposal_id IN ({$in})
+        ORDER BY id ASC"
+    );
+
+    foreach ( (array) $rows as $row ) {
+      $pid = (int) $row->proposal_id;
+      if ( ! isset( $out[ $pid ] ) ) {
+        continue;
+      }
+      $is_signed = ( 'signée' === (string) $row->signature_status )
+        || ( ! empty( $row->signed_document_url ) )
+        || ( ! empty( $row->client_signed_at ) );
+
+      if ( $is_signed ) {
+        $out[ $pid ] = array( 'state' => 'signed', 'quote_id' => (int) $row->id );
+        continue;                       // un devis signé l'emporte sur tout le reste
+      }
+      if ( 'signed' !== $out[ $pid ]['state'] ) {
+        $out[ $pid ] = array( 'state' => 'unsigned', 'quote_id' => (int) $row->id );
+      }
+    }
+
+    return $out;
+  }
+
   /* ---------------------------------------------------------------
    * Liste globale des propositions
    * --------------------------------------------------------------- */
@@ -1579,6 +1646,8 @@ startxref
     $proposals = $this->get_proposals_all();
     $statuses  = $this->get_proposal_status_labels();
     $new_url   = $this->portal_page_url( array( 'tab' => 'proposals', 'action' => 'new' ) );
+    /* ACDC 3.25.241 — L'état du devis, lu à chaque affichage (voir la méthode). */
+    $quote_states = $this->acdc_quote_states_for_proposals( $proposals );
 
     /* Couleurs badges statut */
     $prop_status_colors = array(
@@ -1627,6 +1696,7 @@ startxref
               <th>Formation</th>
               <th>Total HT</th>
               <th>Statut</th>
+              <th>Devis</th>
               <th>Cr&#233;&#233; le</th>
               <th>Dernier envoi</th>
               <th>Actions</th>
@@ -1646,6 +1716,18 @@ startxref
               );
               $has_doc    = ! empty( $p->pdf_url );
               $search_key = strtolower( $p->formation_title . ' ' . $p->client_company . ' ' . $p->client_name . ' ' . $p->client_email );
+              /* ACDC 3.25.241 — Trois états, pas deux. Sans « Aucun devis », une
+                 proposition dont le devis reste à faire et une proposition dont
+                 le devis attend signature s'afficheraient pareil, et l'on ne
+                 saurait pas laquelle relancer. */
+              $q_state    = isset( $quote_states[ (int) $p->id ] ) ? $quote_states[ (int) $p->id ] : array( 'state' => 'none', 'quote_id' => 0 );
+              $q_signed   = ( 'signed' === $q_state['state'] );
+              $q_labels   = array(
+                'none'     => array( 'Aucun devis', '#f3f4f6', '#6b7280' ),
+                'unsigned' => array( 'Non sign&#233;',  '#fff7ed', '#c2610c' ),
+                'signed'   => array( 'Sign&#233;',      '#ecfdf5', '#059669' ),
+              );
+              $q_label    = $q_labels[ $q_state['state'] ];
             ?>
             <tr
               data-prop-search="<?php echo esc_attr( $search_key ); ?>"
@@ -1670,6 +1752,11 @@ startxref
                   <?php echo esc_html( $status_label ); ?>
                 </span>
               </td>
+              <td>
+                <span class="acdc-need-badge" style="background:<?php echo esc_attr( $q_label[1] ); ?>;color:<?php echo esc_attr( $q_label[2] ); ?>;">
+                  <?php echo $q_label[0]; ?>
+                </span>
+              </td>
               <td style="font-size:12px;color:#4b5d76;"><?php echo mysql2date( 'd/m/Y', $p->created_at ); ?></td>
               <td style="font-size:12px;color:#4b5d76;">
                 <?php echo ! empty( $p->last_sent_at ) ? mysql2date( 'd/m/Y', $p->last_sent_at ) : '—'; ?>
@@ -1690,8 +1777,31 @@ startxref
                       <span class="acdc-action-hub-sr screen-reader-text">Actions</span>
                     </button>
                     <div class="acdc-prospect-action-dropdown" data-acdc-prospect-menu hidden>
+                      <?php
+                      /* ACDC 3.25.241 — L'ORDRE DU DOSSIER, ET RIEN QUI ANTICIPE.
+                         Le devis d'abord : c'est la seule suite possible d'une
+                         proposition. La convention ensuite, mais UNIQUEMENT si un
+                         devis est signé — avec plusieurs propositions en cours, on
+                         ne peut pas se souvenir de laquelle est signée, et bâtir
+                         une convention sur un devis en attente est une faute
+                         contractuelle. L'écran l'interdit au lieu de s'en remettre
+                         à la mémoire.
+                         Une entrée grisée serait pire qu'une entrée absente : elle
+                         se clique et ne fait rien. La colonne « Devis », juste à
+                         côté, dit pourquoi elle manque.
+                         « Créer les séances » disparaît : les séances naissent de
+                         la convention, qui porte les horaires convenus. L'écran
+                         Séances, lui, reste entier. */
+                      ?>
+                      <a class="acdc-prospect-action-item" href="<?php echo esc_url( $this->portal_page_url( array( 'tab' => 'quotes', 'scope' => 'action', 'quote_action' => 'create', 'proposal_id' => (int) $p->id ) ) ); ?>">Devis</a>
+                      <?php if ( $q_signed ) : ?>
                       <a class="acdc-prospect-action-item" href="<?php
                         $contract_args = array( 'tab' => 'registration_contract', 'action' => 'new', 'proposal_id' => (int) $p->id );
+                        /* La convention s'ouvre encore préremplie depuis la
+                           PROPOSITION, comme avant : le formulaire ne sait pas
+                           lire un devis. Passer un `quote_id` ici promettrait un
+                           chaînage qui n'existe pas — il viendra avec le lot où
+                           la convention reprendra les données de la séance. */
                         // source_prospect_id : natif (colonne native ou JOIN via get_proposals_all), sinon fallback need_id
                         $resolved_pid = ! empty( $p->source_prospect_id ) ? (int) $p->source_prospect_id : 0;
                         if ( ! $resolved_pid && ! empty( $p->need_id ) ) {
@@ -1705,14 +1815,8 @@ startxref
                           $contract_args['prospect_id'] = $resolved_pid;
                         }
                         echo esc_url( $this->portal_page_url( $contract_args ) );
-                      ?>">Convention / contrat</a>
-                      <a class="acdc-prospect-action-item" href="<?php
-                        echo esc_url( $this->portal_page_url( array(
-                          'tab'         => 'create_session',
-                          'proposal_id' => (int) $p->id,
-                        ) ) );
-                      ?>">Créer les séances</a>
-                      <a class="acdc-prospect-action-item" href="<?php echo esc_url( $this->portal_page_url( array( 'tab' => 'quotes', 'scope' => 'action', 'quote_action' => 'create', 'proposal_id' => (int) $p->id ) ) ); ?>">Devis</a>
+                      ?>">Cr&eacute;er la convention</a>
+                      <?php endif; ?>
                     </div>
                   </div>
                   <!-- Icônes directes -->
