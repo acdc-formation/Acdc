@@ -12,6 +12,7 @@ lancent sans WordPress, en quelques secondes.
     php tests/test-protection-dossiers.php # aucune protection ne remonte à la racine des uploads
     node tests/test-signature-trace.js # continuité du tracé des signatures
     php tests/scan-global-wpdb.php acdc-formation-saas-organisme-de-formation
+    php tests/scan-envois-email.php  # e-mails qui contournent la porte commune
 
 Le dernier balaie tout le plugin et signale les fonctions qui utilisent `$wpdb`
 sans l'avoir importé — la faute qui a produit l'erreur fatale de la 3.25.236.

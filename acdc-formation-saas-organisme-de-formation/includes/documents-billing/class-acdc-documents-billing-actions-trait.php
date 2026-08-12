@@ -1212,29 +1212,31 @@ trait ACDC_Documents_Billing_Actions_Trait {
     $client_email = sanitize_email( (string) $quote->apprenant_email );
     if ( '' !== $client_email && is_email( $client_email ) ) {
       $doc_link = $signed_url ?: ( ! empty( $quote->html_url ) ? esc_url_raw( (string) $quote->html_url ) : '' );
-      /* En-têtes transactionnels X-ACDC : archivage + rattachement fiable au devis/prospect. */
-      $headers_c = method_exists( $this, 'acdc_get_transactional_email_headers' )
-        ? $this->acdc_get_transactional_email_headers( array(
-            'source_module'       => 'documents-billing',
-            'source_action'       => 'quote_signed_client_copy',
-            'related_entity_type' => 'quote',
-            'related_entity_id'   => (int) $quote_id,
-            'email_category'      => 'commercial',
-            'email_audience'      => 'prospect',
-          ) )
-        : array( 'Content-Type: text/html; charset=UTF-8', 'From: ' . sanitize_text_field( $from_name_s ) . ' <' . $from_email_s . '>' );
+      /* Attribution d'archive : rattachement fiable au devis et au prospect. */
+      $attr_client = array(
+        'source_module'       => 'documents-billing',
+        'source_action'       => 'quote_signed_client_copy',
+        'related_entity_type' => 'quote',
+        'related_entity_id'   => (string) (int) $quote_id,
+        'email_category'      => 'commercial',
+        'email_audience'      => 'prospect',
+      );
       $subj_client = '📄 Votre exemplaire — Devis signé';
       $cta_client  = $doc_link
         ? '<p style="text-align:center;margin:24px 0;"><a href="' . esc_url( $doc_link ) . '" style="display:inline-block;padding:13px 26px;background:#C5A253;color:#0B0706;text-decoration:none;border-radius:8px;font-weight:700;">📄 Consulter votre devis signé</a></p>'
         : '';
-      $body_client = '<div style="font-family:Arial,sans-serif;color:#24324a;max-width:600px;margin:0 auto;">'
-                   . '<h2 style="color:#1f335d;">Votre devis a bien été signé</h2>'
-                   . '<p>Bonjour ' . esc_html( $signer_name ) . ',</p>'
-                   . '<p>Nous confirmons la signature électronique de votre devis <strong>' . esc_html( $quote_num ) . '</strong>, le ' . esc_html( mysql2date( 'd/m/Y à H\hi', $signed_at ) ) . '.</p>'
-                   . $cta_client
-                   . '<p>Vous trouverez en pièce jointe votre devis au format PDF, signé par les deux parties (organisme et client).</p>'
-                   . '<p>Merci de votre confiance.</p>'
-                   . '</div>';
+      /* ACDC 3.25.246 — Cet e-mail était écrit à la main : ni logo, ni en-tête,
+         ni pied de page, alors que le client venait d'en recevoir trois autres
+         au gabarit de la maison. Le contenu ne change pas, il est simplement
+         rangé dans les cases du gabarit commun. */
+      $tpl_client = array(
+        'greeting_name' => $signer_name,
+        'intro_html'    => '<p>Nous confirmons la signature électronique de votre devis <strong>' . esc_html( $quote_num ) . '</strong>, le ' . esc_html( mysql2date( 'd/m/Y à H\hi', $signed_at ) ) . '.</p>',
+        'body_html'     => $cta_client
+                         . '<p>Vous trouverez en pièce jointe votre devis au format PDF, signé par les deux parties (organisme et client).</p>'
+                         . '<p>Merci de votre confiance.</p>',
+        'footer_notice' => 'Cet e-mail vous est adressé à la suite de la signature de votre devis. Vos données sont traitées conformément au RGPD.',
+      );
 
       /* Pièce jointe : vrai fichier PDF du devis (gabarit mPDF dédié), signé des deux parties.
          On relit le devis pour que la ligne intègre la signature manuscrite du client. */
@@ -1257,10 +1259,13 @@ trait ACDC_Documents_Billing_Actions_Trait {
 
       /* ACDC 3.25.161 — Attribution d'archive : cet envoi client partait sans en-tête
          de module et s'affichait « plugin / wp_mail ». */
-      $headers_c[] = 'X-ACDC-Source-Module: billing';
-      $headers_c[] = 'X-ACDC-Source-Action: document_to_client';
-      $headers_c[] = 'X-ACDC-Email-Category: billing';
-      wp_mail( $client_email, $subj_client, $body_client, $headers_c, $attachments );
+      $this->acdc_send_transactional_email(
+        $client_email,
+        $subj_client,
+        $tpl_client,
+        $attr_client,
+        $attachments
+      );
 
       if ( '' !== $tmp_pdf && file_exists( $tmp_pdf ) ) {
         @unlink( $tmp_pdf ); // phpcs:ignore WordPress.PHP.NoSilencedErrors.Discouraged

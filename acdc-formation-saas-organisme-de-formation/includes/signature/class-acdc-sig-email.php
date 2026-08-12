@@ -230,7 +230,18 @@ class ACDC_Sig_Email {
             }
         }
 
-        $sent = wp_mail( $request->signer_email, $subject, $body, $headers );
+        /* ACDC 3.25.246 — Mise en page conservée telle quelle (elle est bonne),
+           mais l'envoi passe par la porte commune : c'est cet e-mail qui porte
+           le lien de signature, il ne pouvait pas rester le seul à échapper au
+           mode recette. */
+        $sent = acdc_of_send_branded_email(
+            $request->signer_email,
+            $subject,
+            array( 'raw_html' => $body ),
+            array( 'extra_headers' => array_values( array_filter( $headers, static function ( $h ) {
+                return 0 === strpos( (string) $h, 'X-ACDC-' ) || 0 === strpos( (string) $h, 'Cc:' );
+            } ) ) )
+        );
 
         $this->core->log_event(
             $request_id,
@@ -259,41 +270,28 @@ class ACDC_Sig_Email {
         $from_name  = $s['from_name']  ?: get_bloginfo( 'name' );
         $from_email = $s['from_email'] ?: get_option( 'admin_email' );
 
-        $body = '<!DOCTYPE html><html lang="fr"><head><meta charset="UTF-8"></head>'
-              . '<body style="font-family:Arial,sans-serif;max-width:600px;margin:0 auto;color:#222">'
-              . '<div style="background:#1a2744;padding:20px;text-align:center">'
-              . '<h1 style="color:#fff;margin:0;font-size:22px">✅ Document signé</h1>'
-              . '</div>'
-              . '<div style="padding:24px;background:#fff;border:1px solid #e2e2e2;border-top:none">'
-              . '<p>Bonjour <strong>' . esc_html( $request->signer_name ) . '</strong>,</p>'
-              . '<p>Votre signature a bien été enregistrée pour le document : <strong>' . esc_html( $doc_label ) . '</strong></p>'
-              . '<p style="text-align:center;margin:24px 0">'
-              . '<a href="' . esc_url( $request->signed_doc_url ) . '" style="background:#1a2744;color:#fff;text-decoration:none;padding:12px 24px;border-radius:6px;font-weight:700">'
-              . '📄 Télécharger le certificat</a></p>'
-              . '</div></body></html>';
-
-        $headers = array(
-            'Content-Type: text/html; charset=UTF-8',
-            'From: ' . sanitize_text_field( $from_name ) . ' <' . sanitize_email( $from_email ) . '>',
-        );
-        /* ACDC 3.25.159 — Attribution d'archive : sans ces en-têtes, cet envoi
-           retombait sur la source par défaut « plugin / wp_mail ». */
-        $headers[] = 'X-ACDC-Source-Module: signature';
-        $headers[] = 'X-ACDC-Source-Action: signed_copy';
-        $headers[] = 'X-ACDC-Email-Category: signature';
-        $headers[] = 'X-ACDC-Email-Audience: externe';
-
-        return wp_mail(
+        /* ACDC 3.25.246 — Gabarit commun. Cet e-mail portait un bandeau bleu écrit
+           à la main, sans logo ni pied de page, alors qu'il arrive dans la même
+           boîte que les autres. Le module de signature étant une classe
+           autonome, il passe par la fonction publique — qui applique aussi le
+           contrôle du mode recette, dont il était jusqu'ici dispensé. */
+        return acdc_of_send_branded_email(
             $request->signer_email,
             'Votre signature a été enregistrée — ' . $doc_label,
-            $body,
-            $headers
+            array(
+                'greeting_name' => (string) $request->signer_name,
+                'intro_html'    => '<p>Votre signature a bien été enregistrée pour le document : <strong>' . esc_html( $doc_label ) . '</strong>.</p>',
+                'body_html'     => '<p style="text-align:center;margin:24px 0"><a href="' . esc_url( $request->signed_doc_url ) . '" style="background:#C5A253;color:#0B0706;text-decoration:none;padding:13px 26px;border-radius:8px;font-weight:700">📄 Télécharger le certificat</a></p>',
+                'footer_notice' => 'Cet e-mail confirme la signature électronique d’un document. Vos données sont traitées conformément au RGPD.',
+            ),
+            array(
+                'source_module'  => 'signature',
+                'source_action'  => 'signed_copy',
+                'email_category' => 'signature',
+                'email_audience' => 'externe',
+            )
         );
     }
-
-    /* -----------------------------------------------------------------------
-     * E-mail OTP — double authentification niveau renforcé
-     * -------------------------------------------------------------------- */
 
     public function send_otp_email( $request_id, $otp ) {
         global $wpdb;
@@ -310,43 +308,32 @@ class ACDC_Sig_Email {
         $doc_label  = ACDC_Sig_Core::DOC_TYPES[ $request->doc_type ] ?? $request->doc_type;
         $org_name   = esc_html( get_bloginfo( 'name' ) );
 
-        $body = '<!DOCTYPE html><html lang="fr"><head><meta charset="UTF-8"></head>'
-              . '<body style="font-family:Arial,sans-serif;max-width:520px;margin:0 auto;color:#222">'
-              . '<div style="background:#1a2744;padding:20px;text-align:center">'
-              . '<h1 style="color:#fff;margin:0;font-size:20px">🔒 Code de vérification</h1>'
-              . '<p style="color:#c9a84c;margin:6px 0 0;font-size:13px">' . esc_html( $doc_label ) . '</p>'
-              . '</div>'
-              . '<div style="padding:28px;background:#fff;border:1px solid #e2e2e2;border-top:none">'
-              . '<p>Bonjour <strong>' . esc_html( $request->signer_name ) . '</strong>,</p>'
-              . '<p>Pour accéder au document à signer, veuillez saisir le code ci-dessous :</p>'
-              . '<div style="text-align:center;margin:28px 0">'
-              . '<div style="display:inline-block;background:#f0f4ff;border:2px solid #1a2744;border-radius:10px;padding:18px 36px">'
-              . '<span style="font-size:36px;font-weight:900;letter-spacing:10px;color:#1a2744;font-family:monospace">' . esc_html( $otp ) . '</span>'
-              . '</div>'
-              . '</div>'
-              . '<p style="text-align:center;color:#856404;background:#fff3cd;padding:8px 12px;border-radius:4px;font-size:13px">⏳ Ce code est valable <strong>15 minutes</strong>.</p>'
-              . '<p style="font-size:12px;color:#666;margin-top:20px">Ce code est personnel et confidentiel. Ne le communiquez à personne.<br>'
-              . 'Si vous n\'avez pas demandé à signer un document, ignorez cet e-mail.</p>'
-              . '</div>'
-              . '<div style="padding:14px;text-align:center;font-size:11px;color:#999">'
-              . $org_name . ' — ' . esc_html( home_url() )
-              . '</div></body></html>';
+        /* ACDC 3.25.246 — Gabarit commun. Le bloc du code reste tel quel : c'est
+           lui que le signataire cherche des yeux, il doit rester grand et
+           centré. Seule l'enveloppe change. */
+        $otp_block = '<div style="text-align:center;margin:28px 0">'
+                   . '<div style="display:inline-block;background:#f0f4ff;border:2px solid #1a2744;border-radius:10px;padding:18px 36px">'
+                   . '<span style="font-size:36px;font-weight:900;letter-spacing:10px;color:#1a2744;font-family:monospace">' . esc_html( $otp ) . '</span>'
+                   . '</div></div>'
+                   . '<p style="text-align:center;color:#856404;background:#fff3cd;padding:8px 12px;border-radius:4px;font-size:13px">⏳ Ce code est valable <strong>15 minutes</strong>.</p>'
+                   . '<p style="font-size:12px;color:#666;margin-top:20px">Ce code est personnel et confidentiel. Ne le communiquez à personne.<br>'
+                   . 'Si vous n\'avez pas demandé à signer un document, ignorez cet e-mail.</p>';
 
-        $headers = array(
-            'Content-Type: text/html; charset=UTF-8',
-            'From: ' . sanitize_text_field( $from_name ) . ' <' . sanitize_email( $from_email ) . '>',
-        );
-        /* ACDC 3.25.159 — Même correctif d'attribution pour le code de vérification. */
-        $headers[] = 'X-ACDC-Source-Module: signature';
-        $headers[] = 'X-ACDC-Source-Action: otp_code';
-        $headers[] = 'X-ACDC-Email-Category: signature';
-        $headers[] = 'X-ACDC-Email-Audience: externe';
-
-        $sent = wp_mail(
+        $sent = acdc_of_send_branded_email(
             $request->signer_email,
-            'Votre code de vérification — ' . esc_html( $doc_label ),
-            $body,
-            $headers
+            'Votre code de vérification — ' . $doc_label,
+            array(
+                'greeting_name' => (string) $request->signer_name,
+                'intro_html'    => '<p>Pour accéder au document à signer, veuillez saisir le code ci-dessous :</p>',
+                'body_html'     => $otp_block,
+                'footer_notice' => 'Ce code vous a été envoyé pour sécuriser la signature d’un document. Vos données sont traitées conformément au RGPD.',
+            ),
+            array(
+                'source_module'  => 'signature',
+                'source_action'  => 'otp_code',
+                'email_category' => 'signature',
+                'email_audience' => 'externe',
+            )
         );
 
         $this->core->log_event(
@@ -357,10 +344,6 @@ class ACDC_Sig_Email {
 
         return $sent;
     }
-
-    /* -----------------------------------------------------------------------
-     * Notification admin (signature ou refus)
-     * -------------------------------------------------------------------- */
 
     public function notify_admin( $request_id, $event ) {
         global $wpdb;
@@ -397,8 +380,6 @@ class ACDC_Sig_Email {
         if ( ! $portal_page_id ) { $portal_page_id = (int) get_option( 'acdc_of_portal_page_id', 0 ); }
         $portal_base = $portal_page_id ? get_permalink( $portal_page_id ) : home_url( '/' );
         $admin_url = add_query_arg( array( 'tab' => 'registration_contract' ), $portal_base );
-        $body      = '<p>' . $msg . '</p><p><a href="' . esc_url( $admin_url ) . '">Voir dans le tableau de bord</a></p>';
-        $headers   = array( 'Content-Type: text/html; charset=UTF-8' );
 
         /* En-têtes X-ACDC : rattachement/archivage de la notification interne au bon document
            (colonne « Source » de l'Archive des e-mails contextualisée au lieu de « plugin »). */
@@ -409,13 +390,24 @@ class ACDC_Sig_Email {
                 if ( ! empty( $notes_arr[ $k ] ) ) { $related_id = (int) $notes_arr[ $k ]; break; }
             }
         }
-        $headers[] = 'X-ACDC-Source-Module: signature';
-        $headers[] = 'X-ACDC-Source-Action: ' . ( 'signe' === $event ? 'document_signed' : 'document_refused' );
-        $headers[] = 'X-ACDC-Related-Entity-Type: ' . ( '' !== $related_type ? $related_type : 'document' );
-        if ( $related_id ) { $headers[] = 'X-ACDC-Related-Entity-Id: ' . $related_id; }
-        $headers[] = 'X-ACDC-Email-Category: signature';
-        $headers[] = 'X-ACDC-Email-Audience: interne';
-
-        wp_mail( $admin_email, $subject, $body, $headers );
+        /* ACDC 3.25.246 — Gabarit commun, même pour l'avis interne : David a
+           demandé l'uniformité de TOUS les envois, et l'archive des e-mails y
+           gagne une présentation homogène. */
+        acdc_of_send_branded_email(
+            $admin_email,
+            $subject,
+            array(
+                'intro_html' => '<p>' . $msg . '</p>',
+                'body_html'  => '<p style="text-align:center;margin:24px 0"><a href="' . esc_url( $admin_url ) . '" style="background:#C5A253;color:#0B0706;text-decoration:none;padding:13px 26px;border-radius:8px;font-weight:700">Voir dans le tableau de bord</a></p>',
+            ),
+            array(
+                'source_module'       => 'signature',
+                'source_action'       => ( 'signe' === $event ? 'document_signed' : 'document_refused' ),
+                'related_entity_type' => ( '' !== $related_type ? $related_type : 'document' ),
+                'related_entity_id'   => $related_id ? (string) $related_id : '',
+                'email_category'      => 'signature',
+                'email_audience'      => 'interne',
+            )
+        );
     }
 }

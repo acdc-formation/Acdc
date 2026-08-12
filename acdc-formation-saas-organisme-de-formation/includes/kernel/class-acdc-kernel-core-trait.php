@@ -230,6 +230,28 @@ private function acdc_get_transactional_email_headers( $args = array() ) {
  * échapper au garde-fou du mode recette et à l'attribution d'archive. Ajouter
  * le paramètre ici, c'est refermer la porte plutôt que d'en ouvrir une autre.
  */
+/**
+ * ACDC 3.25.246 — LA PORTE D'ENTRÉE PUBLIQUE DES E-MAILS.
+ *
+ * Le module de signature et celui d'émargement sont des CLASSES AUTONOMES :
+ * ils ne composent pas le plugin et ne peuvent donc pas appeler la méthode
+ * privée ci-dessous. Faute de porte, ils écrivaient leur HTML à la main et
+ * appelaient wp_mail() directement — d'où des e-mails sans en-tête, sans logo
+ * et sans pied de page, reçus par les mêmes personnes que les autres.
+ *
+ * Le défaut de mise en forme n'était que le symptôme visible. Le vrai : la
+ * méthode privée est AUSSI le seul endroit qui consulte le mode recette. Tout
+ * envoi qui la contourne part même lorsque la recette est censée retenir le
+ * courrier — précisément le trou par lequel une analyse du besoin nominative
+ * était partie vers un domaine étranger.
+ *
+ * Une seule porte, donc, et publique : la mise en forme et le garde-fou
+ * voyagent ensemble. On ne peut plus obtenir l'une sans l'autre.
+ */
+public function acdc_send_branded_email( $to, $subject, $template_args = array(), $header_args = array(), $attachments = array() ) {
+  return $this->acdc_send_transactional_email( $to, $subject, $template_args, $header_args, $attachments );
+}
+
 private function acdc_send_transactional_email( $to, $subject, $template_args = array(), $header_args = array(), $attachments = array() ) {
     $to = sanitize_email( (string) $to );
     if ( '' === $to || ! is_email( $to ) ) {
@@ -266,7 +288,16 @@ private function acdc_send_transactional_email( $to, $subject, $template_args = 
       return false;
     }
 
-    $html = $this->acdc_build_transactional_email_html( $template_args );
+    /* ACDC 3.25.246 — Un gabarit propre peut passer par la porte commune.
+       L'invitation à signer a sa mise en page à elle — bandeau d'expiration,
+       deux boutons, consigne smartphone — et elle est réussie : la couler dans
+       le gabarit générique la ferait régresser. Mais elle appelait wp_mail
+       directement, donc elle échappait au mode recette, alors que c'est
+       l'e-mail qui porte le LIEN DE SIGNATURE. On accepte donc un HTML déjà
+       composé : la mise en forme reste libre, le garde-fou devient obligatoire. */
+    $html = ( ! empty( $template_args['raw_html'] ) && is_string( $template_args['raw_html'] ) )
+      ? $template_args['raw_html']
+      : $this->acdc_build_transactional_email_html( $template_args );
     $headers = $this->acdc_get_transactional_email_headers( $header_args );
     return wp_mail( $to, wp_strip_all_tags( (string) $subject ), $html, $headers, array_values( (array) $attachments ) );
   }

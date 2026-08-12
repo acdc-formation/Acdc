@@ -3,7 +3,7 @@
  * Plugin Name: ACDC Formation SAAS Organisme de formation
  * Plugin URI: https://acdc-formation.com/
  * Description: Espace de gestion frontal sécurisé pour organisme de formation, réécrit sur base (dernière version du plugin : 3.20.105) avec module UI/Design système : réglage avancé des icônes d’action, taille, couleurs, espacements et choix des pictogrammes.
- * Version: 3.25.245
+ * Version: 3.25.246
  * Requires at least: 6.2
  * Requires PHP: 8.2
  * Author: ACDC Formation
@@ -15,7 +15,7 @@ if ( ! defined( 'ABSPATH' ) ) {
     exit;
 }
 
-define( 'ACDC_OF_SAAS_VERSION', '3.25.245' );
+define( 'ACDC_OF_SAAS_VERSION', '3.25.246' );
 define( 'ACDC_OF_SAAS_FILE', __FILE__ );
 define( 'ACDC_OF_SAAS_DIR', plugin_dir_path( __FILE__ ) );
 define( 'ACDC_OF_SAAS_URL', plugin_dir_url( __FILE__ ) );
@@ -413,6 +413,38 @@ if ( file_exists( ACDC_OF_SAAS_DIR . 'includes/class-acdc-plugin.php' ) ) {
 if ( ! class_exists( 'ACDC_Formation_SAAS_Plugin' ) ) {
     acdc_of_saas_store_boot_error( 'La classe principale ACDC_Formation_SAAS_Plugin est introuvable.' );
     return;
+}
+
+/**
+ * ACDC 3.25.246 — Envoi d'un e-mail au gabarit de marque, depuis n'importe où.
+ *
+ * Les modules autonomes — signature, émargement — ne composent pas la classe
+ * principale et ne peuvent donc pas atteindre ses méthodes. Cette fonction leur
+ * donne la même porte que le reste du plugin : même mise en forme, et surtout
+ * même contrôle du mode recette.
+ *
+ * Si la classe principale n'est pas là, on N'ENVOIE PAS et on le journalise.
+ * Retomber sur wp_mail() rétablirait exactement ce que l'on vient de fermer :
+ * un envoi qui échappe à la liste des destinataires autorisés.
+ *
+ * @param string $to             Destinataire.
+ * @param string $subject        Objet.
+ * @param array  $template_args  greeting_name, intro_html, body_html, summary_title, summary_rows, footer_notice.
+ * @param array  $header_args    En-têtes d'attribution (module, action, catégorie).
+ * @param array  $attachments    Chemins des pièces jointes.
+ * @return bool
+ */
+function acdc_of_send_branded_email( $to, $subject, $template_args = array(), $header_args = array(), $attachments = array() ) {
+    if ( ! class_exists( 'ACDC_Formation_SAAS_Plugin' ) || ! method_exists( 'ACDC_Formation_SAAS_Plugin', 'get_instance' ) ) {
+        error_log( '[ACDC] E-mail non envoyé (classe principale absente) : ' . wp_strip_all_tags( (string) $subject ) );
+        return false;
+    }
+    $plugin = ACDC_Formation_SAAS_Plugin::get_instance();
+    if ( ! $plugin || ! method_exists( $plugin, 'acdc_send_branded_email' ) ) {
+        error_log( '[ACDC] E-mail non envoyé (porte d’envoi absente) : ' . wp_strip_all_tags( (string) $subject ) );
+        return false;
+    }
+    return $plugin->acdc_send_branded_email( $to, $subject, $template_args, $header_args, $attachments );
 }
 
 // --- Module Signature électronique (Phase 1) ---

@@ -1150,21 +1150,29 @@ trait ACDC_Dossiers_Contracts_Core_Trait {
       $header_args['extra_headers'] = array( 'Cc: ' . implode( ',', array_map( 'sanitize_email', $recipient['cc'] ) ) );
     }
 
-    $html = $this->acdc_build_transactional_email_html( array(
-      'greeting_name' => ! empty( $recipient['to_name'] ) ? $recipient['to_name'] : 'Bonjour',
-      'intro_html' => $intro,
-      'summary_title' => 'RÉCAPITULATIF DE VOTRE CONVENTION / CONTRAT',
-      'summary_rows' => $summary_rows,
-      'body_html' => $links_html,
-      'footer_notice' => 'Cet e-mail contient des documents contractuels relatifs à votre formation.',
-    ) );
-    $headers = $this->acdc_get_transactional_email_headers( $header_args );
-        /* ACDC 3.25.161 — Attribution d'archive : sans ces en-têtes, l'envoi
-           s'affiche « plugin / wp_mail » dans l'archive, sans module identifiable. */
-        $headers[] = 'X-ACDC-Source-Module: dossiers';
-        $headers[] = 'X-ACDC-Source-Action: contract_bundle';
-        $headers[] = 'X-ACDC-Email-Category: dossiers';
-    $sent = wp_mail( $to, wp_strip_all_tags( $subject ), $html, $headers, $package['attachments'] );
+    /* ACDC 3.25.246 — Cet e-mail portait DÉJÀ le bon habillage : il construisait
+       le gabarit lui-même, puis appelait wp_mail directement. Le défaut n'était
+       donc pas visible — mais il court-circuitait le seul endroit qui consulte
+       le mode recette. Une convention nominative pouvait partir alors que la
+       recette était censée retenir le courrier. On passe par la porte commune :
+       l'apparence ne change pas, le garde-fou s'applique. */
+    $header_args['source_module']  = 'dossiers';
+    $header_args['source_action']  = 'contract_bundle';
+    $header_args['email_category'] = 'dossiers';
+    $sent = $this->acdc_send_transactional_email(
+      $to,
+      wp_strip_all_tags( $subject ),
+      array(
+        'greeting_name' => ! empty( $recipient['to_name'] ) ? $recipient['to_name'] : 'Bonjour',
+        'intro_html' => $intro,
+        'summary_title' => 'RÉCAPITULATIF DE VOTRE CONVENTION / CONTRAT',
+        'summary_rows' => $summary_rows,
+        'body_html' => $links_html,
+        'footer_notice' => 'Cet e-mail contient des documents contractuels relatifs à votre formation.',
+      ),
+      $header_args,
+      $package['attachments']
+    );
 
     return array(
       'sent' => (bool) $sent,
@@ -1291,20 +1299,16 @@ trait ACDC_Dossiers_Contracts_Core_Trait {
 
     $delivery_email = ! empty( $notes['signed_delivery_email'] ) ? sanitize_email( (string) $notes['signed_delivery_email'] ) : '';
     if ( '' !== $delivery_email && is_email( $delivery_email ) && '' !== $signed_path && file_exists( $signed_path ) ) {
-      $branding = $this->get_branding_options();
-      $from_name = ! empty( $branding['company_name'] ) ? (string) $branding['company_name'] : get_bloginfo( 'name' );
-      $subject = 'Convention / contrat signé — #' . $contract_id;
-      $body = '<p>Bonjour,</p><p>Vous trouverez en pièce jointe la convention / le contrat signé.</p>';
-      $headers = array(
-        'Content-Type: text/html; charset=UTF-8',
-        'From: ' . sanitize_text_field( $from_name ) . ' <' . sanitize_email( get_option( 'admin_email' ) ) . '>',
+      /* ACDC 3.25.246 — Gabarit commun. */
+      $this->acdc_send_transactional_email(
+        $delivery_email,
+        'Convention / contrat signé — #' . $contract_id,
+        array(
+          'intro_html' => '<p>Vous trouverez en pièce jointe la convention / le contrat signé.</p>',
+        ),
+        array( 'source_module' => 'dossiers', 'source_action' => 'signed_delivery', 'email_category' => 'dossiers' ),
+        array( $signed_path )
       );
-        /* ACDC 3.25.161 — Attribution d'archive : sans ces en-têtes, l'envoi
-           s'affiche « plugin / wp_mail » dans l'archive, sans module identifiable. */
-        $headers[] = 'X-ACDC-Source-Module: dossiers';
-        $headers[] = 'X-ACDC-Source-Action: signed_delivery';
-        $headers[] = 'X-ACDC-Email-Category: dossiers';
-      wp_mail( $delivery_email, $subject, $body, $headers, array( $signed_path ) );
     }
   }
 

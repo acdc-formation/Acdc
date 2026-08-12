@@ -1552,25 +1552,24 @@ public function handle_update_registration_contract_document() {
     $signed_at     = wp_date( 'd/m/Y à H:i' );
 
     $subject = '✅ ' . $kind . ' ' . $kind_signed . ' — ' . ( $signer_name ? $signer_name : '' ) . ( $formation ? ' — ' . $formation : '' );
-    $body    = '<div style="font-family:Arial,sans-serif;color:#24324a;max-width:600px;margin:0 auto;">'
-             . '<h2 style="color:#1f335d;">✅ ' . esc_html( $kind ) . ' ' . esc_html( $kind_signed ) . '</h2>'
-             . '<p>' . esc_html( $kind ) . ' ' . esc_html( $kind_signed ) . ' le <strong>' . esc_html( $signed_at ) . '</strong> par <strong>' . esc_html( $signer_name ? $signer_name : 'le signataire' ) . '</strong>.</p>'
-             . ( $formation ? '<p>Formation : <strong>' . esc_html( $formation ) . '</strong></p>' : '' )
-             . '<p>Le document signé est joint à cet e-mail.</p>'
-             . '</div>';
-
-    $headers = array(
-      'Content-Type: text/html; charset=UTF-8',
-      'From: ' . sanitize_text_field( $sender_name ) . ' <' . sanitize_email( $from_email ) . '>',
+    /* ACDC 3.25.246 — Gabarit commun, y compris pour l'avis interne : c'est la
+       même maison qui écrit, et l'archive des e-mails s'en trouve homogène. */
+    $sent = $this->acdc_send_transactional_email(
+      $to,
+      $subject,
+      array(
+        'intro_html'   => '<p>' . esc_html( $kind ) . ' ' . esc_html( $kind_signed ) . ' le <strong>' . esc_html( $signed_at ) . '</strong> par <strong>' . esc_html( $signer_name ? $signer_name : 'le signataire' ) . '</strong>.</p>',
+        'summary_title'=> 'Récapitulatif',
+        'summary_rows' => array_values( array_filter( array(
+          $formation ? array( 'label' => 'Formation', 'value' => $formation ) : null,
+          array( 'label' => 'Signataire', 'value' => $signer_name ? $signer_name : 'le signataire' ),
+          array( 'label' => 'Signé le', 'value' => $signed_at ),
+        ) ) ),
+        'body_html'    => '<p>Le document signé est joint à cet e-mail.</p>',
+      ),
+      array( 'source_module' => 'dossiers', 'source_action' => 'contract_sent', 'email_category' => 'dossiers' ),
+      array( (string) $pdf_result['path'] )
     );
-
-    // Envoi à l'organisme
-        /* ACDC 3.25.161 — Attribution d'archive : sans ces en-têtes, l'envoi
-           s'affiche « plugin / wp_mail » dans l'archive, sans module identifiable. */
-        $headers[] = 'X-ACDC-Source-Module: dossiers';
-        $headers[] = 'X-ACDC-Source-Action: contract_sent';
-        $headers[] = 'X-ACDC-Email-Category: dossiers';
-    $sent = wp_mail( $to, $subject, $body, $headers, array( (string) $pdf_result['path'] ) );
 
     // Log debug dans error_log pour diagnostic
     if ( defined( 'WP_DEBUG' ) && WP_DEBUG ) {
@@ -1617,19 +1616,23 @@ public function handle_update_registration_contract_document() {
         $signer_greeting = $this->acdc_person_part_of_label( (string) $sig_request_row->signer_name );
       }
 
-      $signer_subject = '📄 Votre exemplaire — ' . esc_html( $kind ) . ' ' . esc_html( $kind_signed );
-      $signer_body    = '<div style="font-family:Arial,sans-serif;color:#24324a;max-width:600px;margin:0 auto;">'
-                      . '<h2 style="color:#1f335d;">Votre exemplaire signé</h2>'
-                      . '<p>Bonjour' . ( '' !== $signer_greeting ? ' ' . esc_html( $signer_greeting ) : '' ) . ',</p>'
-                      . '<p>Veuillez trouver en pièce jointe votre exemplaire ' . esc_html( $doc_phrase ) . ' le <strong>' . esc_html( $signed_at ) . '</strong>.</p>'
-                      . '<p>Conservez ce document pour vos archives.</p>'
-                      . '</div>';
-        /* ACDC 3.25.161 — Attribution d'archive : sans ces en-têtes, l'envoi
-           s'affiche « plugin / wp_mail » dans l'archive, sans module identifiable. */
-        $headers[] = 'X-ACDC-Source-Module: dossiers';
-        $headers[] = 'X-ACDC-Source-Action: contract_to_signer';
-        $headers[] = 'X-ACDC-Email-Category: dossiers';
-      wp_mail( $signer_email_addr, $signer_subject, $signer_body, $headers, array( (string) $pdf_result['path'] ) );
+      /* ACDC 3.25.246 — Gabarit commun. Cet e-mail remet une pièce contractuelle
+         signée : il n'avait aucune raison d'être le seul du parcours à arriver
+         sans en-tête ni logo. Il échappait aussi au contrôle du mode recette,
+         que seul le point de passage commun consulte. */
+      $signer_subject = '📄 Votre exemplaire — ' . $kind . ' ' . $kind_signed;
+      $this->acdc_send_transactional_email(
+        $signer_email_addr,
+        $signer_subject,
+        array(
+          'greeting_name' => $signer_greeting,
+          'intro_html'    => '<p>Veuillez trouver en pièce jointe votre exemplaire ' . esc_html( $doc_phrase ) . ' le <strong>' . esc_html( $signed_at ) . '</strong>.</p>',
+          'body_html'     => '<p>Conservez ce document pour vos archives.</p>',
+          'footer_notice' => 'Cet e-mail vous est adressé à la suite de la signature de votre document. Vos données sont traitées conformément au RGPD.',
+        ),
+        array( 'source_module' => 'dossiers', 'source_action' => 'contract_to_signer', 'email_category' => 'dossiers' ),
+        array( (string) $pdf_result['path'] )
+      );
     }
   }
 

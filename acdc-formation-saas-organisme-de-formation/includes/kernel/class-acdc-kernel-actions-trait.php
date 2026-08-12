@@ -2498,24 +2498,29 @@ trait ACDC_Kernel_Actions_Trait {
     $from_email   = ! empty( $profile_mail['enterprise_contact_email'] ) ? sanitize_email( (string) $profile_mail['enterprise_contact_email'] ) : sanitize_email( (string) get_option( 'admin_email' ) );
 
     $subject = '📄 Votre contrat de sous-traitance — ' . $label;
-    $body    = '<div style="font-family:Arial,sans-serif;color:#24324a;max-width:600px;margin:0 auto;">'
-             . '<h2 style="color:#1f335d;">Votre contrat de sous-traitance</h2>'
-             . '<p>Bonjour ' . esc_html( $tr_name_send ) . ',</p>'
-             . '<p>Veuillez trouver en pièce jointe votre contrat de sous-traitance pour la mission <strong>' . esc_html( $label ) . '</strong>.</p>'
-             . '<p>Ce document vous sera renvoyé contresigné après validation.</p>'
-             . '</div>';
-    $headers = method_exists( $this, 'acdc_get_transactional_email_headers' )
-      ? $this->acdc_get_transactional_email_headers( array(
-          'source_module'       => 'trainers',
-          'source_action'       => 'trainer_contract_sent',
-          'related_entity_type' => 'trainer',
-          'related_entity_id'   => (int) $trainer_id,
-          'email_category'      => 'contractuel',
-          'email_audience'      => 'formateur',
-        ) )
-      : array( 'Content-Type: text/html; charset=UTF-8', 'From: ' . sanitize_text_field( $from_name ) . ' <' . $from_email . '>' );
-
-    $sent = wp_mail( $tr_email_send, $subject, $body, $headers, array( $file_path ) );
+    /* ACDC 3.25.246 — Gabarit commun. Cet envoi construisait déjà ses en-têtes
+       d'attribution par le point de passage, mais écrivait son corps à la main :
+       le formateur recevait un contrat sans logo ni pied de page, là où le
+       commanditaire en reçoit un habillé. Et il échappait au mode recette. */
+    $sent = $this->acdc_send_transactional_email(
+      $tr_email_send,
+      $subject,
+      array(
+        'greeting_name' => $tr_name_send,
+        'intro_html'    => '<p>Veuillez trouver en pièce jointe votre contrat de sous-traitance pour la mission <strong>' . esc_html( $label ) . '</strong>.</p>',
+        'body_html'     => '<p>Ce document vous sera renvoyé contresigné après validation.</p>',
+        'footer_notice' => 'Cet e-mail vous est adressé dans le cadre de votre mission de formation. Vos données sont traitées conformément au RGPD.',
+      ),
+      array(
+        'source_module'       => 'trainers',
+        'source_action'       => 'trainer_contract_sent',
+        'related_entity_type' => 'trainer',
+        'related_entity_id'   => (int) $trainer_id,
+        'email_category'      => 'contractuel',
+        'email_audience'      => 'formateur',
+      ),
+      array( $file_path )
+    );
     $this->log_action_event( 'send', 'trainer_contract_email', $contract_id, $sent ? 'success' : 'error' );
 
     wp_safe_redirect( add_query_arg( array(
@@ -3015,7 +3020,6 @@ trait ACDC_Kernel_Actions_Trait {
     $profile_s = $this->get_company_profile_options();
     $from_name_s  = ! empty( $profile_s['enterprise_contact_name'] )  ? sanitize_text_field( (string) $profile_s['enterprise_contact_name'] )  : get_bloginfo( 'name' );
     $from_email_s = ! empty( $profile_s['enterprise_contact_email'] ) ? sanitize_email( (string) $profile_s['enterprise_contact_email'] )       : sanitize_email( (string) get_option( 'admin_email' ) );
-    $headers_s    = array( 'Content-Type: text/html; charset=UTF-8', 'From: ' . sanitize_text_field( $from_name_s ) . ' <' . $from_email_s . '>' );
     /* ACDC 3.25.160 — L'exemplaire contresigné du contrat formateur part d'ICI, et
        non du module signature : les en-têtes ajoutés là-bas ne l'atteignaient donc
        pas, et la recette l'a vu retomber sur « plugin / wp_mail » alors que les
@@ -3027,34 +3031,34 @@ trait ACDC_Kernel_Actions_Trait {
        du formateur comme dans l'archive, cela se lit comme un doublon. Ce sont
        deux messages différents ; ils portent désormais deux attributions
        différentes. */
-    $headers_s[] = 'X-ACDC-Source-Module: signature';
-    $headers_s[] = 'X-ACDC-Source-Action: trainer_contract_countersigned_copy';
-    $headers_s[] = 'X-ACDC-Email-Category: signature';
-    $headers_s[] = 'X-ACDC-Related-Entity-Type: trainer_contract';
-    $headers_s[] = 'X-ACDC-Related-Entity-Id: ' . (int) $contract_id;
+    $attr_s = array(
+      'source_module'       => 'signature',
+      'source_action'       => 'trainer_contract_countersigned_copy',
+      'email_category'      => 'signature',
+      'related_entity_type' => 'trainer_contract',
+      'related_entity_id'   => (string) (int) $contract_id,
+    );
     $attachment_s = ( '' !== $signed_path && file_exists( $signed_path ) ) ? array( $signed_path ) : array();
     // Notifier l'organisme (admin)
     $admin_email = sanitize_email( (string) get_option( 'admin_email' ) );
     if ( '' !== $admin_email && is_email( $admin_email ) ) {
       $subj_admin = '✅ Contrat formateur signé — ' . $tr_name_s;
-      $body_admin = '<div style="font-family:Arial,sans-serif;color:#24324a;max-width:600px;margin:0 auto;">'
-                  . '<h2 style="color:#1f335d;">✅ Contrat formateur signé</h2>'
-                  . '<p>Le contrat de sous-traitance de <strong>' . esc_html( $tr_name_s ) . '</strong> a été signé électroniquement le <strong>' . esc_html( $signed_at ) . '</strong>.</p>'
-                  . '<p>Le document signé est joint à cet e-mail.</p>'
-                  . '</div>';
-      wp_mail( $admin_email, $subj_admin, $body_admin, $headers_s, $attachment_s );
+      /* ACDC 3.25.246 — Gabarit commun. */
+      $this->acdc_send_transactional_email( $admin_email, $subj_admin, array(
+        'intro_html' => '<p>Le contrat de sous-traitance de <strong>' . esc_html( $tr_name_s ) . '</strong> a été signé électroniquement le <strong>' . esc_html( $signed_at ) . '</strong>.</p>',
+        'body_html'  => '<p>Le document signé est joint à cet e-mail.</p>',
+      ), $attr_s, $attachment_s );
     }
     // Envoyer le PDF signé au formateur
     $tr_email_s = sanitize_email( (string) $trainer->email );
     if ( '' !== $tr_email_s && is_email( $tr_email_s ) ) {
       $subj_tr = '📄 Votre exemplaire signé — contrat de sous-traitance';
-      $body_tr = '<div style="font-family:Arial,sans-serif;color:#24324a;max-width:600px;margin:0 auto;">'
-               . '<h2 style="color:#1f335d;">Votre exemplaire contresigné</h2>'
-               . '<p>Bonjour ' . esc_html( $tr_name_s ) . ',</p>'
-               . '<p>Votre contrat de sous-traitance a été signé le <strong>' . esc_html( $signed_at ) . '</strong>. Vous trouverez votre exemplaire contresigné en pièce jointe.</p>'
-               . '<p>Conservez ce document pour vos archives.</p>'
-               . '</div>';
-      wp_mail( $tr_email_s, $subj_tr, $body_tr, $headers_s, $attachment_s );
+      $this->acdc_send_transactional_email( $tr_email_s, $subj_tr, array(
+        'greeting_name' => $tr_name_s,
+        'intro_html'    => '<p>Votre contrat de sous-traitance a été signé le <strong>' . esc_html( $signed_at ) . '</strong>. Vous trouverez votre exemplaire contresigné en pièce jointe.</p>',
+        'body_html'     => '<p>Conservez ce document pour vos archives.</p>',
+        'footer_notice' => 'Cet e-mail vous est adressé dans le cadre de votre mission de formation. Vos données sont traitées conformément au RGPD.',
+      ), $attr_s, $attachment_s );
     }
   }
 
