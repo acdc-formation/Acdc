@@ -232,7 +232,7 @@ trait ACDC_Evaluations_Core_Trait {
     $header_bg = ! empty( $profile['header_footer_bg'] ) ? $profile['header_footer_bg'] : '#F3E3BF';
     $title_color = '#0C2D52';
     $muted = '#1E4777';
-    $logo = ! empty( $profile['logo_url'] ) ? $this->prepare_pdf_jpeg_image( $profile['logo_url'], 42, 42 ) : null;
+    $logo = $this->prepare_pdf_jpeg_image( $this->acdc_resolve_pdf_logo_url(), 42, 42 );
     $footer_logo = ! empty( $profile['footer_logo_url'] ) ? $this->prepare_pdf_jpeg_image( $profile['footer_logo_url'], 120, 40 ) : null;
 
     $score_label = ( null !== $context['correct_answers'] && ! empty( $context['total_questions'] ) ) ? sprintf( '%d / %d', (int) $context['correct_answers'], (int) $context['total_questions'] ) : $context['result_label'];

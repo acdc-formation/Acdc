@@ -2517,7 +2517,7 @@ trait ACDC_Kernel_Actions_Trait {
     $mission_label = wp_strip_all_tags( html_entity_decode( (string) $contract->label, ENT_QUOTES, 'UTF-8' ) );
     $formation_ref = wp_strip_all_tags( html_entity_decode( (string) $contract->formation_ref, ENT_QUOTES, 'UTF-8' ) );
     // ── Images ────────────────────────────────────────────────────────────
-    $logo_url   = ! empty( $profile['logo_url'] ) ? (string) $profile['logo_url'] : '';
+    $logo_url   = $this->acdc_resolve_pdf_logo_url();
     $logo_image = ( '' !== $logo_url && method_exists( $this, 'prepare_pdf_jpeg_image' ) ) ? $this->prepare_pdf_jpeg_image( $logo_url, 48, 48 ) : null;
     // Cachet+signature OF — même ordre de priorité que la convention
     $stamp_candidates = array_filter( array(
@@ -4062,7 +4062,10 @@ private function acdc_build_need_pdf_pages( $need, $source_prospect_id = 0, $cli
   $pdf_assets = $this->get_acdc_internal_pdf_asset_urls();
   $default_logo_url = 'https://acdcformation.com/wp-content/uploads/2026/03/Logo-ACDC.png';
   $default_signature_url = ! empty( $pdf_assets['cachet_signature_url'] ) ? (string) $pdf_assets['cachet_signature_url'] : 'https://acdcformation.com/wp-content/uploads/2026/04/Cachet-et-signature.png';
-  $logo_url = ! empty( $profile['logo_url'] ) ? (string) $profile['logo_url'] : $default_logo_url;
+  /* ACDC 3.25.232 — Résolution en cascade : le repli écrit en dur ici
+     désignait un fichier absent de la médiathèque, et le logo disparaissait
+     du PDF sans un mot. */
+  $logo_url = $this->acdc_resolve_pdf_logo_url();
   $signature_url = ! empty( $profile['signature_url'] ) ? (string) $profile['signature_url'] : ( ! empty( $profile['stamp_url'] ) ? (string) $profile['stamp_url'] : $default_signature_url );
   $logo = $this->prepare_pdf_jpeg_image( $logo_url, 71, 71 );
   /* Cachet+signature : asset dédié, pas la signature seule du profil */

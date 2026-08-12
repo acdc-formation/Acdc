@@ -2105,13 +2105,10 @@ private function build_contract_pdf_pages( $context ) {
   $article13 = $normalize( $additional_sections[3]['content'] ?? '', "Les données personnelles de l'Apprenant sont collectées et traitées par l'Organisme conformément au RGPD et à la loi Informatique et Libertés modifiée. L'Apprenant bénéficie d'un droit d'accès, de rectification, de suppression et d'opposition. La politique de confidentialité d'ACDC - Formation est publique, accessible sur le site internet de l'Organisme et communiquée à l'apprenant au moment de l'inscription." );
   $article14 = $normalize( $additional_sections[4]['content'] ?? '', "Tout litige relatif à l'interprétation ou à l'exécution de la présente convention, non résolu amiablement, sera soumis à la compétence exclusive des juridictions du ressort de la Cour d'appel de DRAGUIGNAN." );
 
-  $logo_url = '';
-  if ( ! empty( $profile['logo_url'] ) ) {
-    $logo_url = (string) $profile['logo_url'];
-  } else {
-    $asset_urls = $this->get_acdc_internal_pdf_asset_urls();
-    $logo_url = home_url( '/wp-content/uploads/2026/03/Logo-ACDC.png' );
-  }
+  /* ACDC 3.25.232 — La convention avait, comme chaque PDF, son propre repli
+     écrit en dur — vers un fichier absent de la médiathèque. Une seule
+     résolution pour tous les documents désormais. */
+  $logo_url   = $this->acdc_resolve_pdf_logo_url();
   $logo_image = $this->prepare_pdf_jpeg_image( $logo_url, 48, 48 );
   $signature_image    = null;
   $handwritten_image  = null;

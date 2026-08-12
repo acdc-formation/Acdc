@@ -5542,7 +5542,7 @@ dbDelta( $sql_companies );
     $muted = '#1E4777';
     $org_city = ! empty( $profile['city'] ) ? $profile['city'] : ( ! empty( $branding['city'] ) ? $branding['city'] : 'Ville non renseignée' );
     $org_email = ! empty( $profile['enterprise_contact_email'] ) ? $profile['enterprise_contact_email'] : ( ! empty( $branding['email'] ) ? $branding['email'] : '' );
-    $logo = ! empty( $profile['logo_url'] ) ? $this->prepare_pdf_jpeg_image( $profile['logo_url'], 42, 42 ) : null;
+    $logo = $this->prepare_pdf_jpeg_image( $this->acdc_resolve_pdf_logo_url(), 42, 42 );
     $stamp_source = ! empty( $profile['stamp_only_url'] ) ? $profile['stamp_only_url'] : ( ! empty( $profile['stamp_url'] ) ? $profile['stamp_url'] : '' );
     $stamp = ! empty( $stamp_source ) ? $this->prepare_pdf_jpeg_image( $stamp_source, 150, 50 ) : null;
 
@@ -8911,7 +8911,7 @@ dbDelta( $sql_companies );
     $header_bg = ! empty( $profile['header_footer_bg'] ) ? $profile['header_footer_bg'] : '#F3E3BF';
     $title_color = '#0C2D52';
     $muted = '#1E4777';
-    $logo = ! empty( $profile['logo_url'] ) ? $this->prepare_pdf_jpeg_image( $profile['logo_url'], 42, 42 ) : null;
+    $logo = $this->prepare_pdf_jpeg_image( $this->acdc_resolve_pdf_logo_url(), 42, 42 );
     $footer_logo = ! empty( $profile['footer_logo_url'] ) ? $this->prepare_pdf_jpeg_image( $profile['footer_logo_url'], 120, 40 ) : null;
 
     $score_label = ( null !== $context['correct_answers'] && ! empty( $context['total_questions'] ) ) ? sprintf( '%d / %d', (int) $context['correct_answers'], (int) $context['total_questions'] ) : $context['result_label'];
@@ -9140,7 +9140,7 @@ dbDelta( $sql_companies );
     $context = $this->get_completion_certificate_context( $registration );
   }
   $profile = $this->get_company_profile_options();
-  $logo = ! empty( $profile['logo_url'] ) ? $this->prepare_pdf_jpeg_image( $profile['logo_url'], 160, 58 ) : null;
+  $logo = $this->prepare_pdf_jpeg_image( $this->acdc_resolve_pdf_logo_url(), 160, 58 );
   $stamp_source = ! empty( $profile['stamp_only_url'] ) ? $profile['stamp_only_url'] : ( ! empty( $profile['stamp_url'] ) ? $profile['stamp_url'] : '' );
   $stamp = ! empty( $stamp_source ) ? $this->prepare_pdf_jpeg_image( $stamp_source, 180, 65 ) : null;
   $navy = '#0C2D52';
@@ -9354,7 +9354,7 @@ private function build_absence_certificate_pdf_pages( $registration, $context = 
   $context = is_array( $context ) && ! empty( $context ) ? $context : $this->get_completion_certificate_context( $registration );
   $profile = $this->get_company_profile_options();
 
-  $logo = ! empty( $profile['logo_url'] ) ? $this->prepare_pdf_jpeg_image( $profile['logo_url'], 180, 54 ) : null;
+  $logo = $this->prepare_pdf_jpeg_image( $this->acdc_resolve_pdf_logo_url(), 180, 54 );
   $stamp_source = ! empty( $profile['stamp_only_url'] ) ? $profile['stamp_only_url'] : ( ! empty( $profile['stamp_url'] ) ? $profile['stamp_url'] : '' );
   $stamp = ! empty( $stamp_source ) ? $this->prepare_pdf_jpeg_image( $stamp_source, 170, 60 ) : null;
 
@@ -9440,7 +9440,7 @@ private function build_absence_certificate_pdf_pages( $registration, $context = 
     $context = $this->get_end_training_certificate_context( $registration );
   }
   $profile = $this->get_company_profile_options();
-  $logo = ! empty( $profile['logo_url'] ) ? $this->prepare_pdf_jpeg_image( $profile['logo_url'], 180, 54 ) : null;
+  $logo = $this->prepare_pdf_jpeg_image( $this->acdc_resolve_pdf_logo_url(), 180, 54 );
   $signature_source = ! empty( $profile['signature_url'] ) ? $profile['signature_url'] : ( ! empty( $profile['stamp_url'] ) ? $profile['stamp_url'] : '' );
   $signature = ! empty( $signature_source ) ? $this->prepare_pdf_jpeg_image( $signature_source, 180, 80 ) : null;
   $navy = '#0C2D52';
@@ -10832,7 +10832,89 @@ public function register_admin_menu() {
     'cachet_signature_url' => home_url( '/wp-content/uploads/2026/04/Cachet-et-signature.png' ),
     'cachet_url'           => home_url( '/wp-content/uploads/2026/04/Cachet-ACDC-Formation.png' ),
     'signature_url'        => home_url( '/wp-content/uploads/2026/04/Signature-David-Contal-scaled.png' ),
+    'logo_url'             => home_url( '/wp-content/uploads/2026/03/cropped-Logo-ACDC-1.png' ),
   );
+}
+
+/**
+ * ACDC 3.25.232 — LE LOGO MANQUAIT SUR LE PDF, PAS SUR L'E-MAIL.
+ *
+ * Le même document sortait avec l'en-tête complet dans le corps du message et
+ * sans logo dans la pièce jointe. La cause n'était pas le rendu mais la
+ * SOURCE : chaque générateur de PDF portait sa propre adresse de repli, écrite
+ * en dur, et celle-ci désignait un fichier qui n'existe plus dans la
+ * médiathèque. Le préparateur d'image ne lit que des fichiers locaux : chemin
+ * introuvable, il rend null, et l'en-tête bascule silencieusement sur sa
+ * variante sans logo. Aucun message, aucune trace — l'absence de logo est
+ * exactement le genre de défaut qu'on ne voit que sur le document fini.
+ *
+ * Une seule résolution, en cascade, pour tous les PDF : le logo saisi dans le
+ * profil de l'organisme, puis le fichier connu de la médiathèque, puis le logo
+ * du site WordPress. On ne rend une adresse que si le fichier existe vraiment.
+ *
+ * @return string URL du logo, ou chaîne vide si aucun fichier n'est lisible.
+ */
+private function acdc_resolve_pdf_logo_url() {
+  static $resolved = null;
+  if ( null !== $resolved ) {
+    return $resolved;
+  }
+
+  $candidates = array();
+
+  $profile = $this->get_company_profile_options();
+  if ( ! empty( $profile['logo_url'] ) ) {
+    $candidates[] = (string) $profile['logo_url'];
+  }
+
+  $assets = $this->get_acdc_internal_pdf_asset_urls();
+  if ( ! empty( $assets['logo_url'] ) ) {
+    $candidates[] = (string) $assets['logo_url'];
+  }
+
+  /* Le logo du site, quand l'organisme en a défini un dans WordPress. */
+  $custom_logo_id = (int) get_theme_mod( 'custom_logo' );
+  if ( $custom_logo_id > 0 ) {
+    $custom_logo = wp_get_attachment_image_url( $custom_logo_id, 'full' );
+    if ( $custom_logo ) {
+      $candidates[] = (string) $custom_logo;
+    }
+  }
+
+  foreach ( $candidates as $candidate ) {
+    if ( $this->acdc_pdf_asset_is_readable( $candidate ) ) {
+      $resolved = $candidate;
+      return $resolved;
+    }
+  }
+
+  $resolved = '';
+  return $resolved;
+}
+
+/** Le fichier derrière cette adresse existe-t-il vraiment sur le disque ? */
+private function acdc_pdf_asset_is_readable( $url ) {
+  $url = is_scalar( $url ) ? trim( (string) $url ) : '';
+  if ( '' === $url ) {
+    return false;
+  }
+
+  $uploads = wp_get_upload_dir();
+  $path    = '';
+
+  if ( ! empty( $uploads['baseurl'] ) && 0 === strpos( $url, $uploads['baseurl'] ) && ! empty( $uploads['basedir'] ) ) {
+    $relative  = (string) wp_parse_url( $url, PHP_URL_PATH );
+    $base_path = (string) wp_parse_url( $uploads['baseurl'], PHP_URL_PATH );
+    if ( '' !== $base_path && 0 === strpos( $relative, $base_path ) ) {
+      $relative = substr( $relative, strlen( $base_path ) );
+    }
+    $path = trailingslashit( $uploads['basedir'] ) . preg_replace( '#^[\/]+#', '', (string) $relative );
+  } elseif ( 0 === strpos( $url, home_url( '/' ) ) ) {
+    $relative = preg_replace( '#^[\/]+#', '', (string) wp_parse_url( $url, PHP_URL_PATH ) );
+    $path     = trailingslashit( ABSPATH ) . $relative;
+  }
+
+  return ( '' !== $path && file_exists( $path ) && is_readable( $path ) );
 }private function prepare_pdf_jpeg_image( $url, $max_width = 150, $max_height = 55 ) {
   $url = is_scalar( $url ) ? trim( (string) $url ) : '';
   if ( '' === $url || ! function_exists( 'imagecreatefromstring' ) ) {
@@ -10946,7 +11028,7 @@ public function register_admin_menu() {
   $border = '#D9E1EC';
   $muted = '#1E4777';
   $title_color = '#0C2D52';
-  $logo = ! empty( $profile['logo_url'] ) ? $this->prepare_pdf_jpeg_image( $profile['logo_url'], 42, 42 ) : null;
+  $logo = $this->prepare_pdf_jpeg_image( $this->acdc_resolve_pdf_logo_url(), 42, 42 );
   $footer_logo = ! empty( $profile['footer_logo_url'] ) ? $this->prepare_pdf_jpeg_image( $profile['footer_logo_url'], 120, 40 ) : null;
 
   $rows_per_page = 8;

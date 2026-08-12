@@ -4893,7 +4893,7 @@ trait ACDC_Quizzes_Core_Trait {
 
         // ── Logo (méthode identique aux contrats) ────────────────────────
         $profile   = method_exists( $this, 'get_training_org_profile' ) ? $this->get_training_org_profile() : array();
-        $logo_url  = ! empty( $profile['logo_url'] ) ? $profile['logo_url'] : home_url( '/wp-content/uploads/2026/03/Logo-ACDC.png' );
+        $logo_url  = $this->acdc_resolve_pdf_logo_url();
         $logo_image = $this->prepare_pdf_jpeg_image( $logo_url, 45, 45 ); // carré 16mm≈45pt
 
         // ── Helper nouvelle page ─────────────────────────────────────────

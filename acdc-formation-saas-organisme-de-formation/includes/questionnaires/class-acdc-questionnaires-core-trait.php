@@ -336,7 +336,7 @@ trait ACDC_Questionnaires_Core_Trait {
     $header_bg = ! empty( $profile['header_footer_bg'] ) ? $profile['header_footer_bg'] : '#F3E3BF';
     $title_color = '#0C2D52';
     $muted = '#1E4777';
-    $logo = ! empty( $profile['logo_url'] ) ? $this->prepare_pdf_jpeg_image( $profile['logo_url'], 42, 42 ) : null;
+    $logo = $this->prepare_pdf_jpeg_image( $this->acdc_resolve_pdf_logo_url(), 42, 42 );
     $footer_logo = ! empty( $profile['footer_logo_url'] ) ? $this->prepare_pdf_jpeg_image( $profile['footer_logo_url'], 120, 40 ) : null;
 
     $pages = array();
@@ -543,7 +543,7 @@ trait ACDC_Questionnaires_Core_Trait {
     $header_bg = ! empty( $profile['header_footer_bg'] ) ? $profile['header_footer_bg'] : '#F3E3BF';
     $title_color = '#0C2D52';
     $muted = '#1E4777';
-    $logo = ! empty( $profile['logo_url'] ) ? $this->prepare_pdf_jpeg_image( $profile['logo_url'], 42, 42 ) : null;
+    $logo = $this->prepare_pdf_jpeg_image( $this->acdc_resolve_pdf_logo_url(), 42, 42 );
     $footer_logo = ! empty( $profile['footer_logo_url'] ) ? $this->prepare_pdf_jpeg_image( $profile['footer_logo_url'], 120, 40 ) : null;
 
     $pages = array();
@@ -748,7 +748,7 @@ trait ACDC_Questionnaires_Core_Trait {
     $header_bg = ! empty( $profile['header_footer_bg'] ) ? $profile['header_footer_bg'] : '#F3E3BF';
     $title_color = '#0C2D52';
     $muted = '#1E4777';
-    $logo = ! empty( $profile['logo_url'] ) ? $this->prepare_pdf_jpeg_image( $profile['logo_url'], 42, 42 ) : null;
+    $logo = $this->prepare_pdf_jpeg_image( $this->acdc_resolve_pdf_logo_url(), 42, 42 );
     $footer_logo = ! empty( $profile['footer_logo_url'] ) ? $this->prepare_pdf_jpeg_image( $profile['footer_logo_url'], 120, 40 ) : null;
 
     $pages = array();
