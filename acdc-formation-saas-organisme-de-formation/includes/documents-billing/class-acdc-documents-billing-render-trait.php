@@ -531,10 +531,22 @@ trait ACDC_Documents_Billing_Render_Trait {
           $row['formation']           = (string) $prefill_proposal->formation_title;
           $row['duration']            = (int) $prefill_proposal->formation_days * (int) $prefill_proposal->formation_hours_per_day . 'h00';
           $row['trained_headcount']   = (string) $prefill_proposal->formation_learners_count;
-          /* Lieu de formation depuis la proposition */
-          $row['formation_address']      = (string) ( $prefill_proposal->formation_location ?? '' );
-          $row['formation_postal_code']  = ! empty( $prefill_proposal->client_postal_code ) ? (string) $prefill_proposal->client_postal_code : '';
-          $row['formation_city']         = ! empty( $prefill_proposal->client_city )        ? (string) $prefill_proposal->client_city        : '';
+          /* ACDC 3.25.244 — LE LIEU DE FORMATION N'EMPRUNTE RIEN AU COMMANDITAIRE.
+             Le code postal et la ville du client étaient recopiés ici : une
+             formation se tient pourtant souvent ailleurs qu'au siège — c'est la
+             règle que David a rappelée. Le défaut ne se voyait pas tant que ces
+             deux champs restaient vides ; la cascade livrée en 3.25.243 les
+             remplit, elle l'aurait donc armé.
+             La proposition ne stocke le lieu qu'en une seule ligne de texte. On
+             la découpe sur le motif d'un code postal français — cinq chiffres
+             suivis de la ville, en fin de ligne — parce que le devis porte trois
+             colonnes et recompose l'adresse à partir des trois. Si le motif ne
+             se trouve pas, rien n'est touché : mieux vaut une adresse entière
+             sur une seule ligne qu'une adresse étrangère mutilée. */
+          $loc_parts = $this->acdc_split_french_address( (string) ( $prefill_proposal->formation_location ?? '' ) );
+          $row['formation_address']      = $loc_parts['address'];
+          $row['formation_postal_code']  = $loc_parts['postal_code'];
+          $row['formation_city']         = $loc_parts['city'];
           /* Dates séances : parser formation_dates (CSV de YYYY-MM-DD) */
           $raw_fdates = ! empty( $prefill_proposal->formation_dates ) ? (string) $prefill_proposal->formation_dates : '';
           $fdates_arr = array();

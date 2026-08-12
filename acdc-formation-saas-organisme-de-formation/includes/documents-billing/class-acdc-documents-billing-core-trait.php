@@ -968,6 +968,56 @@ trait ACDC_Documents_Billing_Core_Trait {
     return number_format( $number, 2, ',', '' );
   }
 
+  /**
+   * ACDC 3.25.244 — Sépare une adresse écrite en une seule ligne.
+   *
+   * La proposition ne stocke le lieu de formation qu'en un bloc de texte, alors
+   * que le devis porte trois colonnes et recompose l'adresse à partir des
+   * trois. Sans découpage, le code postal et la ville s'écrivaient deux fois
+   * sur le document, ou pas du tout.
+   *
+   * On ne reconnaît qu'un motif, celui du courrier français : cinq chiffres
+   * suivis de la ville, en fin de ligne. Une adresse qui ne s'y conforme pas —
+   * étrangère, incomplète, ou simplement écrite autrement — est rendue
+   * inchangée sur la ligne d'adresse. Mieux vaut une adresse entière au mauvais
+   * endroit qu'une adresse coupée au mauvais endroit : la première se relit,
+   * la seconde se perd.
+   *
+   * Le séparateur optionnel avant le code postal couvre les deux écritures
+   * courantes, avec et sans virgule.
+   *
+   * @param string $raw Adresse sur une seule ligne.
+   * @return array{address:string,postal_code:string,city:string}
+   */
+  private function acdc_split_french_address( $raw ) {
+    $raw = is_scalar( $raw ) ? trim( preg_replace( '/\s+/u', ' ', (string) $raw ) ) : '';
+    $out = array( 'address' => $raw, 'postal_code' => '', 'city' => '' );
+    if ( '' === $raw ) {
+      return $out;
+    }
+
+    if ( ! preg_match( '/^(.*)[,\s]\s*(\d{5})\s+(.+)$/u', $raw, $m ) ) {
+      return $out;
+    }
+
+    $street = trim( rtrim( trim( (string) $m[1] ), ',' ) );
+    $city   = trim( (string) $m[3] );
+
+    /* Une rue vide signifierait que la ligne ne portait que « 83140 Ville » :
+       il n'y a alors rien à séparer, et vider la ligne d'adresse ferait perdre
+       la seule information saisie. */
+    if ( '' === $street || '' === $city ) {
+      return $out;
+    }
+
+    return array(
+      'address'     => $street,
+      'postal_code' => (string) $m[2],
+      'city'        => $city,
+    );
+  }
+
+
   private function quote_html( $value ) {
     return esc_html( (string) $value );
   }
