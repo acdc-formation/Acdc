@@ -1539,8 +1539,15 @@ public function handle_update_registration_contract_document() {
           $signer_greeting = (string) $signer_company->name;
         }
       }
-      if ( '' === $signer_greeting && ! empty( $request->signer_name ) ) {
-        $signer_greeting = (string) $request->signer_name;
+      /* ACDC 3.25.239 — LA VARIABLE N'EXISTAIT PAS. J'avais écrit `$request`
+         là où la demande de signature s'appelle `$sig_request_row` : le repli
+         ne se déclenchait donc jamais, et mon correctif du « Bonjour, » sans
+         nom ne fonctionnait que pour un commanditaire ayant une entreprise.
+         Pour un signataire particulier, l'e-mail est resté anonyme depuis la
+         3.25.226. Le nom est en outre ramené à la personne : `signer_name` a
+         pu être écrit sous la forme « Société — à l'attention de X ». */
+      if ( '' === $signer_greeting && $sig_request_row && ! empty( $sig_request_row->signer_name ) ) {
+        $signer_greeting = $this->acdc_person_part_of_label( (string) $sig_request_row->signer_name );
       }
 
       $signer_subject = '📄 Votre exemplaire — ' . esc_html( $kind ) . ' ' . esc_html( $kind_signed );

@@ -4441,12 +4441,6 @@ trait ACDC_Kernel_Render_Trait {
     </form>
     <?php
   }  private function render_front_need_analyses_tab( $action, $item_id ) {
-    // ACDC 3.21.17 — Sous-onglet alertes
-    if ( 'alerts' === $nad_subtab ) {
-      $this->render_nad_alerts_tab( $base_url );
-      return;
-    }
-
     // ACDC 3.21.13-hotfix2 — Afficher les notices de création NAD si présentes
     global $wpdb;
     $nad_notices = $wpdb->get_col( "SELECT option_name FROM {$wpdb->options} WHERE option_name LIKE '_transient_acdc_nad_creation_notice_%'" );
@@ -4464,6 +4458,18 @@ trait ACDC_Kernel_Render_Trait {
     $nad_subtab  = isset( $_GET['nad_subtab'] )  ? sanitize_text_field( wp_unslash( $_GET['nad_subtab'] ) )  : '';
     $nad_block_id= isset( $_GET['nad_block_id'] )? absint( wp_unslash( $_GET['nad_block_id'] ) ) : 0;
     $base_url    = is_admin() ? admin_url( 'admin.php?page=acdc-of-need-analyses' ) : $this->portal_page_url( array( 'tab' => 'need_analyses' ) );
+
+    /* ACDC 3.25.239 — LE SOUS-ONGLET « ALERTES » NE S'OUVRAIT JAMAIS.
+       Son routage était écrit tout en haut de la méthode, AVANT les trois
+       lignes ci-dessus qui définissent $nad_subtab et $base_url. La comparaison
+       portait donc sur une variable inexistante — toujours fausse — et le lien
+       du menu retombait silencieusement sur la liste des analyses. Défaut
+       antérieur à mes livraisons, révélé par l'analyse statique. Le routage
+       rejoint ici ses semblables, après la définition de ce qu'il lit. */
+    if ( 'alerts' === $nad_subtab ) {
+      $this->render_nad_alerts_tab( $base_url );
+      return;
+    }
 
     // ACDC 3.21.29-hotfix4 — Renvoi manuel via portail (évite le passage par wp-admin/admin-post.php).
     if ( isset( $_GET['nad_action'] ) && 'resend' === $_GET['nad_action'] && isset( $_GET['nad_id'] ) ) {
@@ -15975,7 +15981,10 @@ private function acdc_build_need_pdf_html( $need, $source_prospect_id = 0, $clie
   if ( $contact ) {
     $contact_name = trim( $contact->first_name . ' ' . $contact->last_name );
   } elseif ( $prospect ) {
-    $contact_name = trim( $this->get_prospect_display_name( $prospect ) );
+    /* ACDC 3.25.239 — « Contact » nomme une personne. L'entreprise est déjà
+       sur la ligne du dessus : l'y répéter n'apprend rien et efface le nom
+       que le lecteur cherche. */
+    $contact_name = trim( $this->get_prospect_contact_person_name( $prospect ) );
   } else {
     $contact_name = '';
   }

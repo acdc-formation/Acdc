@@ -547,7 +547,7 @@
                 <select name="prospect_id" data-acdc-prospect-list-rdv-select required>
                   <option value="">Sélectionner</option>
                   <?php foreach ( $prospects_all as $entry ) : ?>
-                    <option value="<?php echo (int) $entry->id; ?>"><?php echo esc_html( $this->get_prospect_display_name( $entry ) . ' — ' . $this->get_prospect_company_display_name( $entry ) ); ?></option>
+                    <option value="<?php echo (int) $entry->id; ?>"><?php echo esc_html( $this->get_prospect_contact_person_name( $entry ) . ' — ' . $this->get_prospect_company_display_name( $entry ) ); ?></option>
                   <?php endforeach; ?>
                 </select>
               </div>
@@ -1568,7 +1568,7 @@
             ?>
               <tr class="<?php echo $row_has_alert ? 'acdc-followup-row-alert' : ''; ?>" data-fu-status="<?php echo esc_attr( $entry->status ?: 'À traiter' ); ?>">
                 <td><?php echo esc_html( $entry->profile_type ?: '—' ); ?></td>
-                <td><strong><?php echo esc_html( $this->get_prospect_company_display_name( $entry ) ); ?></strong><br><small><?php echo esc_html( $this->get_prospect_display_name( $entry ) ); ?></small></td>
+                <td><strong><?php echo esc_html( $this->get_prospect_company_display_name( $entry ) ); ?></strong><br><small><?php echo esc_html( $this->get_prospect_contact_person_name( $entry ) ); ?></small></td>
                 <td><?php echo esc_html( $entry->desired_training ?: 'À définir' ); ?></td>
                 <td><?php echo esc_html( $entry->assigned_to ?: '—' ); ?></td>
                 <td>
@@ -1785,7 +1785,7 @@
 
     <div class="acdc-panel acdc-prospect-followup-grid">
       <div class="acdc-prospect-followup-card"><h3>Profil / formation souhaitée</h3><p><strong>Profil</strong> : <?php echo esc_html( $prospect->profile_type ?: '—' ); ?></p><p><strong>Formation souhaitée</strong> : <?php echo esc_html( $prospect->desired_training ?: 'À définir' ); ?></p></div>
-      <div class="acdc-prospect-followup-card"><h3>Nom / prénom / entreprise</h3><p><strong>Nom / prénom</strong> : <?php echo esc_html( $this->get_prospect_display_name( $prospect ) ); ?></p><p><strong>Entreprise</strong> : <?php echo esc_html( $this->get_prospect_company_display_name( $prospect ) ); ?></p></div>
+      <div class="acdc-prospect-followup-card"><h3>Nom / prénom / entreprise</h3><p><strong>Nom / prénom</strong> : <?php echo esc_html( $this->get_prospect_contact_person_name( $prospect ) ); ?></p><p><strong>Entreprise</strong> : <?php echo esc_html( $this->get_prospect_company_display_name( $prospect ) ); ?></p></div>
       <div class="acdc-prospect-followup-card"><h3>Contact</h3><p><strong>E-mail</strong> : <?php echo esc_html( ( $this->is_individual_prospect_profile( $prospect->profile_type ) ? $prospect->email : ( ! empty( $prospect->signer_email ) ? $prospect->signer_email : $prospect->email ) ) ?: '—' ); ?></p><p><strong>Téléphone</strong> : <?php echo esc_html( ( $this->is_individual_prospect_profile( $prospect->profile_type ) ? $prospect->phone : ( ! empty( $prospect->company_phone ) ? $prospect->company_phone : ( ! empty( $prospect->signer_phone ) ? $prospect->signer_phone : $prospect->phone ) ) ) ?: '—' ); ?></p><p></p></div>
       <div class="acdc-prospect-followup-card"><h3>Commentaire</h3><p><?php echo nl2br( esc_html( $prospect->comment_text ?: '—' ) ); ?></p></div>
       <div class="acdc-prospect-followup-card"><h3>Assigné / statut</h3><p><strong>Assigné à</strong> : <?php echo esc_html( $prospect->assigned_to ?: '—' ); ?></p><p><strong>Statut</strong> : <?php echo esc_html( $prospect->status ?: 'À traiter' ); ?></p></div>

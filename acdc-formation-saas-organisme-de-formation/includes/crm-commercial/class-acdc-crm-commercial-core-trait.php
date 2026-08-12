@@ -719,6 +719,62 @@
   }
 
 
+  /**
+   * ACDC 3.25.239 — LA PERSONNE, JAMAIS LA RAISON SOCIALE.
+   *
+   * `get_prospect_display_name()` nomme un DOSSIER : depuis la 3.25.225 elle
+   * rend « Raison sociale — à l'attention de Prénom Nom », ce qui est juste
+   * dans une liste, où l'on cherche l'entreprise. Mais je l'ai laissée
+   * alimenter tous les endroits où c'est une PERSONNE qui est attendue : la
+   * ligne « Contact » du recueil des besoins, le champ « Apprenant » d'un
+   * document, le nom du destinataire d'un e-mail, le nom du signataire d'une
+   * demande de signature. Ces écrans affichaient un nom de personne avant la
+   * 3.25.225 ; depuis, ils affichent la raison sociale, parfois deux fois sur
+   * la même ligne. C'est le défaut que David a résumé d'une phrase : « la
+   * raison sociale imposée partout à la place du signataire ».
+   *
+   * Une chaîne composée pour l'œil n'est pas une donnée. Il fallait donc deux
+   * fonctions distinctes, pas une seule qui serve aux deux usages :
+   *   — get_prospect_display_name()        : nomme le dossier ;
+   *   — get_prospect_contact_person_name() : nomme la personne physique.
+   *
+   * Elle sait aussi défaire un libellé déjà pollué, pour les enregistrements
+   * écrits entre la 3.25.225 et aujourd'hui.
+   */
+  private function get_prospect_contact_person_name( $prospect ) {
+    if ( ! $prospect ) {
+      return '';
+    }
+
+    $person = trim( trim( (string) ( $prospect->signer_first_name ?? '' ) ) . ' ' . trim( (string) ( $prospect->signer_last_name ?? '' ) ) );
+    if ( '' === $person ) {
+      $person = trim( trim( (string) ( $prospect->first_name ?? '' ) ) . ' ' . trim( (string) ( $prospect->last_name ?? '' ) ) );
+    }
+
+    return $this->acdc_person_part_of_label( $person );
+  }
+
+  /**
+   * Retient la seule personne d'un libellé « Société — à l'attention de X ».
+   * Une donnée déjà écrite sous cette forme reste lisible ; sinon la chaîne
+   * est rendue telle quelle.
+   */
+  private function acdc_person_part_of_label( $label ) {
+    $label = is_scalar( $label ) ? trim( (string) $label ) : '';
+    if ( '' === $label ) {
+      return '';
+    }
+    if ( false === mb_strpos( $label, 'à l’attention de' ) && false === mb_strpos( $label, "à l'attention de" ) ) {
+      return $label;
+    }
+    $split = preg_split( '/\s*—?\s*à l[’\']attention de\s*/u', $label, 2 );
+    if ( is_array( $split ) && 2 === count( $split ) && '' !== trim( (string) $split[1] ) ) {
+      return trim( (string) $split[1] );
+    }
+    return $label;
+  }
+
+
   private function get_prospect_company_display_name( $prospect ) {
     if ( ! $prospect ) {
       return '—';

@@ -525,7 +525,9 @@ trait ACDC_Documents_Billing_Render_Trait {
         if ( $prefill_prospect ) {
           $is_company_p = ! $this->is_individual_prospect_profile( $prefill_prospect->profile_type ?? '' );
           $row['commanditaire_type'] = $is_company_p ? 'Entreprise' : 'Particulier';
-          $row['apprenant']          = $this->get_prospect_display_name( $prefill_prospect );
+          /* ACDC 3.25.239 — Un apprenant est une personne ; la raison sociale
+             a sa propre colonne juste en dessous. */
+          $row['apprenant']          = $this->get_prospect_contact_person_name( $prefill_prospect );
           $row['apprenant_email']    = $this->get_prospect_primary_email( $prefill_prospect );
           $row['client_company']     = $is_company_p ? (string) ( $prefill_prospect->company_name ?? '' ) : '';
           $row['client_siret']       = (string) ( $prefill_prospect->siret ?? '' );

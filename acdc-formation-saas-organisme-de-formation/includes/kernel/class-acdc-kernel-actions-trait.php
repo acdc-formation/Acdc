@@ -3905,7 +3905,8 @@ trait ACDC_Kernel_Actions_Trait {
   $recipient_name = '';
   if ( $prospect ) {
     $recipient_email = $this->get_prospect_primary_email( $prospect );
-    $recipient_name  = trim( $this->get_prospect_display_name( $prospect ) );
+    /* ACDC 3.25.239 — On écrit à une personne. */
+    $recipient_name  = trim( $this->get_prospect_contact_person_name( $prospect ) );
   }
   if ( '' === $recipient_email && $contact && ! empty( $contact->email ) ) {
     $recipient_email = sanitize_email( $contact->email );
@@ -4099,7 +4100,8 @@ private function acdc_build_need_pdf_pages( $need, $source_prospect_id = 0, $cli
   if ( $contact ) {
     $contact_name = trim( (string) $contact->first_name . ' ' . (string) $contact->last_name );
   } elseif ( $prospect ) {
-    $contact_name = trim( $this->get_prospect_display_name( $prospect ) );
+    /* ACDC 3.25.239 — « Contact » nomme une personne, pas le dossier. */
+    $contact_name = trim( $this->get_prospect_contact_person_name( $prospect ) );
   }
 
   $clean = function( $value, $default = '—' ) {

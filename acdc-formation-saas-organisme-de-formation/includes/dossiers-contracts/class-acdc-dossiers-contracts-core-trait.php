@@ -675,7 +675,9 @@ trait ACDC_Dossiers_Contracts_Core_Trait {
       }
       if ( '' === $to && $prospect ) {
         $to = $this->get_prospect_primary_email( $prospect );
-        $to_name = $this->get_prospect_display_name( $prospect );
+        /* ACDC 3.25.239 — Ce nom devient aussi `signatory_name`, donc le nom
+           imprimé sur la demande de signature : il doit nommer la personne. */
+        $to_name = $this->get_prospect_contact_person_name( $prospect );
       }
       $recipient['to'] = $to;
       $recipient['to_name'] = $to_name;
@@ -683,7 +685,8 @@ trait ACDC_Dossiers_Contracts_Core_Trait {
     } else {
       if ( $prospect ) {
         $recipient['to'] = $this->get_prospect_primary_email( $prospect );
-        $recipient['to_name'] = $this->get_prospect_display_name( $prospect );
+        /* ACDC 3.25.239 — On écrit à une personne. */
+        $recipient['to_name'] = $this->get_prospect_contact_person_name( $prospect );
       } else {
         $learners = $this->get_registration_contract_learners( $contract );
         if ( ! empty( $learners[0] ) ) {
