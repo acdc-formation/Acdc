@@ -77,8 +77,9 @@ class ACDC_Emarg_Email {
 
         $qr_url  = 'https://api.qrserver.com/v1/create-qr-code/?size=200x200&margin=10&data=' . rawurlencode( $sign_url );
 
-        $body = '<p>Bonjour <strong>' . esc_html( $emarg_session->trainer_name ) . '</strong>,</p>'
-              . '<p style="margin:12px 0">Vous êtes formateur pour la séance suivante :</p>'
+        /* ACDC 3.25.246 — La formule d'appel est désormais posée par le gabarit
+           commun : la répéter ici donnerait deux « Bonjour » l'un sur l'autre. */
+        $body = '<p style="margin:12px 0">Vous êtes formateur pour la séance suivante :</p>'
               . '<div style="background:#f8f9fa;border-left:3px solid #c9a84c;padding:12px 16px;margin:16px 0;border-radius:0 6px 6px 0">'
               . '<strong>' . esc_html( $session_label ) . '</strong>'
               . ( $date_label ? '<br><span style="color:#6b7280;font-size:13px">' . esc_html( $date_label ) . '</span>' : '' )
@@ -94,17 +95,25 @@ class ACDC_Emarg_Email {
               . '</div>'
               . '<p style="font-size:12px;color:#666">Si le bouton ne fonctionne pas : <a href="' . esc_url( $sign_url ) . '">' . esc_url( $sign_url ) . '</a></p>';
 
-        $html = $this->wrap( 'Émargement — Séance à ouvrir', $session_label, $body );
-        $headers = array(
-            'Content-Type: text/html; charset=UTF-8',
-            'From: ' . $from['name'] . ' <' . $from['email'] . '>',
+        /* ACDC 3.25.246 — Enveloppe commune : le module d'émargement avait la
+           sienne, si bien que le formateur recevait un courrier d'une autre
+           maison que celui du commanditaire. Le contenu — encadré de séance, QR
+           code, boutons — ne change pas ; seule l'enveloppe est remplacée. */
+        acdc_of_send_branded_email(
+            $emarg_session->trainer_email,
+            'Séance à ouvrir — ' . $session_label,
+            array(
+                'greeting_name' => (string) $emarg_session->trainer_name,
+                'body_html'     => $body,
+                'footer_notice' => 'Cet e-mail vous est adressé en tant que formateur de cette séance.',
+            ),
+            array(
+                'source_module'  => 'emargement',
+                'source_action'  => 'session_to_open',
+                'email_category' => 'emargement',
+                'email_audience' => 'formateur',
+            )
         );
-        /* ACDC 3.25.161 — Attribution d'archive : sans ces en-têtes, l'envoi
-           s'affiche « plugin / wp_mail » dans l'archive, sans module identifiable. */
-        $headers[] = 'X-ACDC-Source-Module: emargement';
-        $headers[] = 'X-ACDC-Source-Action: session_to_open';
-        $headers[] = 'X-ACDC-Email-Category: emargement';
-        wp_mail( $emarg_session->trainer_email, 'Séance à ouvrir — ' . $session_label, $html, $headers );
     }
 
     /* -----------------------------------------------------------------------
@@ -120,8 +129,7 @@ class ACDC_Emarg_Email {
         $session = $wpdb->get_row( $wpdb->prepare( "SELECT * FROM {$session_table} WHERE id = %d", $learner_row->session_id ) );
         $session_label = $session ? ( $session->title ?: 'Séance #' . $session->id ) : 'Séance';
 
-        $body = '<p>Bonjour <strong>' . esc_html( $learner_row->learner_name ) . '</strong>,</p>'
-              . '<p style="margin:12px 0">Votre formateur vous invite à signer votre feuille d\'émargement pour la séance :</p>'
+        $body = '<p style="margin:12px 0">Votre formateur vous invite à signer votre feuille d\'émargement pour la séance :</p>'
               . '<div style="background:#f8f9fa;border-left:3px solid #c9a84c;padding:12px 16px;margin:16px 0">'
               . '<strong>' . esc_html( $session_label ) . '</strong>'
               . '</div>'
@@ -136,16 +144,20 @@ class ACDC_Emarg_Email {
               . '<img src="' . esc_url( 'https://api.qrserver.com/v1/create-qr-code/?size=180x180&margin=10&data=' . rawurlencode( $sign_url ) ) . '" alt="QR Code signature" width="160" height="160" style="display:inline-block;border-radius:6px;border:1px solid #e2e6ea">'
               . '</div>';
 
-        $html = $this->wrap( 'Émargement — Signature requise', $session_label, $body );
-        $headers = array(
-            'Content-Type: text/html; charset=UTF-8',
-            'From: ' . $from['name'] . ' <' . $from['email'] . '>',
+        acdc_of_send_branded_email(
+            $learner_row->learner_email,
+            'Émargement — ' . $session_label,
+            array(
+                'greeting_name' => (string) $learner_row->learner_name,
+                'body_html'     => $body,
+                'footer_notice' => 'Cet e-mail vous est adressé pour la signature de votre feuille d’émargement. Vos données sont traitées conformément au RGPD.',
+            ),
+            array(
+                'source_module'  => 'emargement',
+                'source_action'  => 'learner_signature',
+                'email_category' => 'emargement',
+                'email_audience' => 'apprenant',
+            )
         );
-        /* ACDC 3.25.161 — Attribution d'archive : sans ces en-têtes, l'envoi
-           s'affiche « plugin / wp_mail » dans l'archive, sans module identifiable. */
-        $headers[] = 'X-ACDC-Source-Module: emargement';
-        $headers[] = 'X-ACDC-Source-Action: learner_signature';
-        $headers[] = 'X-ACDC-Email-Category: emargement';
-        wp_mail( $learner_row->learner_email, 'Émargement — ' . $session_label, $html, $headers );
     }
 }

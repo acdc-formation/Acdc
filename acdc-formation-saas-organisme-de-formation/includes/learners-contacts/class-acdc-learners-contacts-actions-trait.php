@@ -297,7 +297,29 @@ trait ACDC_Learners_Contacts_Actions_Trait {
     $headers[] = 'X-ACDC-Related-Entity-Id: ' . $entity_id;
     $headers[] = 'X-ACDC-Email-Category: direct_message';
 
-    $sent = wp_mail( $to_email, $subject, $full_html, $headers, $attachments );
+    /* ACDC 3.25.246 — Enveloppe commune. Ce message est composé librement dans
+       l'interface : son corps est conservé tel quel, seule l'enveloppe change,
+       pour que le destinataire reçoive un courrier de la même maison que les
+       autres. L'expéditeur choisi (signature) et le Cc sont repassés en
+       en-têtes supplémentaires : wp_mail retient le dernier From rencontré, ils
+       l'emportent donc sur celui du gabarit. */
+    $extra_from = array_values( array_filter( $headers, static function ( $h ) {
+      return 0 === strpos( (string) $h, 'From:' ) || 0 === strpos( (string) $h, 'Reply-To:' ) || 0 === strpos( (string) $h, 'Cc:' );
+    } ) );
+    $sent = $this->acdc_send_transactional_email(
+      $to_email,
+      $subject,
+      array( 'body_html' => $full_html ),
+      array(
+        'source_module'       => 'direct_email',
+        'source_action'       => 'send_direct_email',
+        'related_entity_type' => (string) $entity_type,
+        'related_entity_id'   => (string) $entity_id,
+        'email_category'      => 'direct_message',
+        'extra_headers'       => $extra_from,
+      ),
+      $attachments
+    );
     foreach ( $attachments as $f ) { if ( file_exists( $f ) ) { @unlink( $f ); } }
 
     if ( $sent ) {
@@ -391,7 +413,29 @@ trait ACDC_Learners_Contacts_Actions_Trait {
     $headers[] = 'X-ACDC-Related-Entity-Id: ' . $entity_id;
     $headers[] = 'X-ACDC-Email-Category: direct_message';
 
-    $sent = wp_mail( $to_email, $subject, $full_html, $headers, $attachments );
+    /* ACDC 3.25.246 — Enveloppe commune. Ce message est composé librement dans
+       l'interface : son corps est conservé tel quel, seule l'enveloppe change,
+       pour que le destinataire reçoive un courrier de la même maison que les
+       autres. L'expéditeur choisi (signature) et le Cc sont repassés en
+       en-têtes supplémentaires : wp_mail retient le dernier From rencontré, ils
+       l'emportent donc sur celui du gabarit. */
+    $extra_from = array_values( array_filter( $headers, static function ( $h ) {
+      return 0 === strpos( (string) $h, 'From:' ) || 0 === strpos( (string) $h, 'Reply-To:' ) || 0 === strpos( (string) $h, 'Cc:' );
+    } ) );
+    $sent = $this->acdc_send_transactional_email(
+      $to_email,
+      $subject,
+      array( 'body_html' => $full_html ),
+      array(
+        'source_module'       => 'direct_email',
+        'source_action'       => 'send_direct_email',
+        'related_entity_type' => (string) $entity_type,
+        'related_entity_id'   => (string) $entity_id,
+        'email_category'      => 'direct_message',
+        'extra_headers'       => $extra_from,
+      ),
+      $attachments
+    );
     foreach ( $attachments as $f ) { if ( file_exists( $f ) ) { @unlink( $f ); } }
 
     if ( $sent ) {

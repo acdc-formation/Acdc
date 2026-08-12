@@ -479,15 +479,19 @@ trait ACDC_Watch_Actions_Trait {
     $body   .= "Accédez à votre veille depuis l'interface du plugin pour exploiter ces articles et maintenir votre conformité Qualiopi.\n\n";
     $body   .= "— ACDC Formation SAAS";
 
-    /* ACDC 3.25.161 — Attribution d'archive : ces deux envois partaient sans le
-       moindre en-tête, ils s'affichaient donc « plugin / wp_mail ». */
-    $watch_headers = array(
-      'X-ACDC-Source-Module: watch',
-      'X-ACDC-Source-Action: watch_digest',
-      'X-ACDC-Email-Category: watch',
-      'X-ACDC-Email-Audience: interne',
+    /* ACDC 3.25.246 — Enveloppe commune. Ce digest était rédigé en texte brut :
+       on conserve ses retours à la ligne et on l'habille comme le reste. */
+    $this->acdc_send_transactional_email(
+      $email,
+      $subject,
+      array( 'body_html' => wpautop( esc_html( $body ) ) ),
+      array(
+        'source_module'  => 'watch',
+        'source_action'  => 'watch_digest',
+        'email_category' => 'watch',
+        'email_audience' => 'interne',
+      )
     );
-    wp_mail( $email, $subject, $body, $watch_headers );
   }
 
   /* -----------------------------------------------------------------------
@@ -506,19 +510,21 @@ trait ACDC_Watch_Actions_Trait {
     }
 
     $email = get_option( 'acdc_of_watch_digest_email', get_option( 'admin_email' ) );
-    /* ACDC 3.25.161 — Attribution d'archive : ces deux envois partaient sans le
-       moindre en-tête, ils s'affichaient donc « plugin / wp_mail ». */
-    $watch_headers = array(
-      'X-ACDC-Source-Module: watch',
-      'X-ACDC-Source-Action: watch_reminder',
-      'X-ACDC-Email-Category: watch',
-      'X-ACDC-Email-Audience: interne',
-    );
-    wp_mail(
+    /* ACDC 3.25.246 — Enveloppe commune. */
+    $this->acdc_send_transactional_email(
       $email,
       '⚠️ Alerte Qualiopi — Aucune exploitation de veille depuis 30 jours',
-      "Bonjour,\n\nAucun article de veille n'a été exploité depuis plus de 30 jours.\n\nCela peut constituer une non-conformité mineure lors d'un audit Qualiopi (critère 6).\n\nMerci de vous connecter à votre interface ACDC Formation pour exploiter au moins un article.\n\n— ACDC Formation SAAS",
-      $watch_headers
+      array(
+        'intro_html' => '<p>Aucun article de veille n’a été exploité depuis plus de 30 jours.</p>',
+        'body_html'  => '<p>Cela peut constituer une non-conformité mineure lors d’un audit Qualiopi (critère 6).</p>'
+                      . '<p>Merci de vous connecter à votre interface ACDC Formation pour exploiter au moins un article.</p>',
+      ),
+      array(
+        'source_module'  => 'watch',
+        'source_action'  => 'watch_reminder',
+        'email_category' => 'watch',
+        'email_audience' => 'interne',
+      )
     );
   }
 

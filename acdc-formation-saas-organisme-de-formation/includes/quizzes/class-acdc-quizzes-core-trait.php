@@ -3652,24 +3652,25 @@ trait ACDC_Quizzes_Core_Trait {
                 $to = '"' . $clean_name . '" <' . $to . '>';
             }
         }
-        $headers = array( 'Content-Type: text/html; charset=UTF-8' );
-        $from_name  = $this->get_qz_organisation_name();
-        $from_email = $this->get_qz_organisation_email();
-        if ( '' !== $from_email ) {
-            $headers[] = 'From: ' . $from_name . ' <' . $from_email . '>';
-        }
-        // Capture l'erreur PHPMailer si wp_mail échoue
+        // Capture l'erreur PHPMailer si l'envoi échoue
         $mail_error = null;
         $error_handler = function( $wp_error ) use ( &$mail_error ) {
             $mail_error = $wp_error->get_error_message();
         };
         add_action( 'wp_mail_failed', $error_handler );
-        /* ACDC 3.25.161 — Attribution d'archive : sans ces en-têtes, l'envoi
-           s'affiche « plugin / wp_mail » dans l'archive, sans module identifiable. */
-        $headers[] = 'X-ACDC-Source-Module: quizzes';
-        $headers[] = 'X-ACDC-Source-Action: quiz_email';
-        $headers[] = 'X-ACDC-Email-Category: quizzes';
-        $sent = wp_mail( $to, $subject, $html_body, $headers );
+        /* ACDC 3.25.246 — Enveloppe commune. Les invitations aux quiz partaient
+           avec leur propre habillage, différent de tout le reste du parcours, et
+           surtout sans passer par le seul point qui consulte le mode recette. */
+        $sent = $this->acdc_send_transactional_email(
+            $to,
+            $subject,
+            array( 'body_html' => $html_body ),
+            array(
+                'source_module'  => 'quizzes',
+                'source_action'  => 'quiz_email',
+                'email_category' => 'quizzes',
+            )
+        );
         remove_action( 'wp_mail_failed', $error_handler );
         if ( ! $sent && $mail_error ) {
             error_log( '[ACDC QZ] wp_mail échec vers ' . $to . ' : ' . $mail_error );

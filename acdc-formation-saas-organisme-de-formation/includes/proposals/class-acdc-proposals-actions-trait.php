@@ -564,29 +564,33 @@ trait Acdc_Proposals_Actions_Trait {
 
     $subject = 'Votre proposition commerciale — ' . $formation_title . ' — ' . $acdc_name;
 
-    $html = $this->acdc_build_transactional_email_html( array(
-      'greeting_name' => $recipient_name ?: 'Client',
-      'intro_html'    => $intro_html,
-      'summary_title' => 'RÉCAPITULATIF DE VOTRE PROPOSITION',
-      'summary_rows'  => $summary_rows,
-      'body_html'     => '',
-      'footer_notice' => 'Cet e-mail a été envoyé dans le cadre de votre demande de formation. Vos données sont traitées conformément au RGPD.',
-    ) );
-    $headers = $this->acdc_get_transactional_email_headers( array(
-      'source_module'       => 'proposals',
-      'source_action'       => 'send_proposal',
-      'email_category'      => 'commercial',
-      'email_audience'      => 'prospect',
-      'related_entity_type' => 'proposal',
-      'related_entity_id'   => (int) $proposal_id,
-    ) );
-
-        /* ACDC 3.25.161 — Attribution d'archive : sans ces en-têtes, l'envoi
-           s'affiche « plugin / wp_mail » dans l'archive, sans module identifiable. */
-        $headers[] = 'X-ACDC-Source-Module: proposals';
-        $headers[] = 'X-ACDC-Source-Action: proposal_sent';
-        $headers[] = 'X-ACDC-Email-Category: proposals';
-    $sent = wp_mail( $recipient_email, wp_strip_all_tags( $subject ), $html, $headers, $attachments );
+    /* ACDC 3.25.246 — Cet e-mail portait DÉJÀ le bon habillage : il composait le
+       gabarit lui-même puis appelait wp_mail directement. Rien ne se voyait —
+       mais il court-circuitait le seul endroit qui consulte le mode recette.
+       Une proposition nominative pouvait donc partir alors que la recette était
+       censée retenir le courrier. L'apparence ne change pas ; le garde-fou
+       s'applique. */
+    $sent = $this->acdc_send_transactional_email(
+      $recipient_email,
+      wp_strip_all_tags( $subject ),
+      array(
+        'greeting_name' => $recipient_name ?: 'Client',
+        'intro_html'    => $intro_html,
+        'summary_title' => 'RÉCAPITULATIF DE VOTRE PROPOSITION',
+        'summary_rows'  => $summary_rows,
+        'body_html'     => '',
+        'footer_notice' => 'Cet e-mail a été envoyé dans le cadre de votre demande de formation. Vos données sont traitées conformément au RGPD.',
+      ),
+      array(
+        'source_module'       => 'proposals',
+        'source_action'       => 'send_proposal',
+        'email_category'      => 'commercial',
+        'email_audience'      => 'prospect',
+        'related_entity_type' => 'proposal',
+        'related_entity_id'   => (string) (int) $proposal_id,
+      ),
+      $attachments
+    );
 
     if ( $sent ) {
       global $wpdb;
