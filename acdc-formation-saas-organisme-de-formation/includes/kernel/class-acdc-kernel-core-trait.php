@@ -695,6 +695,11 @@ private function acdc_send_transactional_email( $to, $subject, $template_args = 
        Idempotent : flag d'option empêche toute re-exécution. */
     $this->backfill_is_self_trainer_from_trainer_type();
 
+    /* ACDC 3.25.251 — Purge des adresses de programme héritées du Manager.
+       Elles portent un nonce périmé : elles ne mènent nulle part et ne servent
+       plus qu'à faire croire qu'un programme est disponible. */
+    $this->purge_dead_manager_programme_urls();
+
     /* ACDC 3.25.92 — C03 (audit) : chiffrement au repos des clés API de veille.
        Idempotent : flag d'option acdc_of_watch_keys_encrypted_v1 empêche toute
        re-exécution. Les valeurs déjà au format "acdcenc1:" sont ignorées. */
@@ -1015,6 +1020,35 @@ private function acdc_send_transactional_email( $to, $subject, $template_args = 
     global $wpdb;
     $wpdb->query( "UPDATE {$this->trainer_table} SET is_self_trainer = CASE WHEN trainer_type = 'Interne' THEN 1 ELSE 0 END" );
     update_option( 'acdc_of_saas_3_22_0_is_self_trainer_backfill_done', '1', false );
+  }
+
+  /**
+   * ACDC 3.25.251 — Les adresses de programme qui ne mènent nulle part sont effacées.
+   *
+   * Le motif visé est étroit et sans ambiguïté : une route d'administration
+   * (`admin-ajax.php` / `admin-post.php`) ET une action de l'ancien plugin
+   * Manager (`acdc_fm_…`, `acdc_pdf_nonce`). Ces adresses portent un nonce, donc
+   * un jeton valable vingt-quatre heures : elles sont mortes depuis longtemps.
+   *
+   * Rien d'utile n'est perdu — on efface une adresse qui ne désigne aucun
+   * fichier. Ce qui est gagné : les écrans cessent d'annoncer un programme
+   * qu'ils ne peuvent pas fournir, et le formulaire de formation cesse de
+   * proposer « ouvrir » sur un lien qui affiche « Lien invalide ».
+   *
+   * Idempotent : un flag d'option empêche toute nouvelle passe.
+   */
+  private function purge_dead_manager_programme_urls() {
+    if ( '1' === get_option( 'acdc_of_saas_3_25_251_manager_programme_purged' ) ) {
+      return;
+    }
+    global $wpdb;
+    $wpdb->query(
+      "UPDATE {$this->formation_table}
+          SET program_file_url = ''
+        WHERE ( program_file_url LIKE '%admin-ajax.php%' OR program_file_url LIKE '%admin-post.php%' )
+          AND ( program_file_url LIKE '%acdc_fm_%' OR program_file_url LIKE '%acdc_pdf_nonce%' )"
+    );
+    update_option( 'acdc_of_saas_3_25_251_manager_programme_purged', '1', false );
   }
 
   /**
@@ -5254,6 +5288,93 @@ dbDelta( $sql_companies );
   }  private function get_formation( $id ) {
     global $wpdb;
     return $wpdb->get_row( $wpdb->prepare( "SELECT * FROM {$this->formation_table} WHERE id = %d", $id ) );
+  }
+
+  /**
+   * ACDC 3.25.251 — UN NONCE AVAIT ÉTÉ RANGÉ DANS UNE COLONNE DE BASE.
+   *
+   * La colonne `program_file_url` de certaines formations contient une adresse
+   * héritée de l'ancien plugin Manager :
+   *
+   *   /wp-admin/admin-ajax.php?action=acdc_fm_download_programme_pdf&…&acdc_pdf_nonce=…
+   *
+   * Un nonce WordPress est un jeton daté — vingt-quatre heures — et lié à
+   * l'utilisateur qui l'a créé. Le ranger dans une donnée, c'est enregistrer une
+   * clé qui ne rentre déjà plus dans la serrure le lendemain. Ces liens sont
+   * morts pour tout le monde, et deux fois morts pour un destinataire d'e-mail
+   * qui n'est même pas connecté : d'où le « Lien invalide » constaté par David
+   * sur la convention comme dans « Documents → Programmes de formation ».
+   *
+   * Un seul écran le savait — le portail apprenant, qui écartait ces adresses
+   * en dur. Tous les autres affichaient la colonne telle quelle. La
+   * connaissance vit désormais ici, et nulle part ailleurs.
+   */
+  private function acdc_is_dead_manager_url( $url ) {
+    $url = is_scalar( $url ) ? trim( (string) $url ) : '';
+    if ( '' === $url ) {
+      return false;
+    }
+    /* Le motif complet : une route d'administration ET une action du Manager.
+       Les deux ensemble — une URL d'uploads contenant « admin-ajax » dans son
+       nom de fichier resterait un fichier parfaitement valide. */
+    $is_admin_route = ( false !== strpos( $url, 'admin-ajax.php' ) || false !== strpos( $url, 'admin-post.php' ) );
+    return $is_admin_route && ( false !== strpos( $url, 'acdc_fm_' ) || false !== strpos( $url, 'acdc_pdf_nonce' ) );
+  }
+
+  /**
+   * Le programme de cette formation sous forme de FICHIER, ou rien.
+   *
+   * C'est ce qu'il faut pour une pièce jointe ou pour un lien destiné à
+   * quelqu'un qui n'a pas de compte : un fichier déposé dans les uploads, que
+   * l'on peut joindre et que le destinataire peut ouvrir. La page programme du
+   * portail, elle, exige une connexion.
+   *
+   * @return array{path:string,url:string} Chemin et adresse, vides si aucun fichier.
+   */
+  private function acdc_formation_programme_file( $formation ) {
+    $none = array( 'path' => '', 'url' => '' );
+    if ( empty( $formation ) || empty( $formation->program_file_url ) ) {
+      return $none;
+    }
+    $url = trim( (string) $formation->program_file_url );
+    if ( '' === $url || $this->acdc_is_dead_manager_url( $url ) ) {
+      return $none;
+    }
+
+    $uploads = wp_get_upload_dir();
+    if ( empty( $uploads['baseurl'] ) || empty( $uploads['basedir'] ) ) {
+      return array( 'path' => '', 'url' => $url );
+    }
+    if ( 0 !== strpos( $url, (string) $uploads['baseurl'] ) ) {
+      /* Adresse externe : utilisable en lien, pas en pièce jointe. */
+      return array( 'path' => '', 'url' => $url );
+    }
+    $relative = ltrim( substr( $url, strlen( (string) $uploads['baseurl'] ) ), '/' );
+    $path     = trailingslashit( (string) $uploads['basedir'] ) . $relative;
+    if ( ! file_exists( $path ) || ! is_readable( $path ) ) {
+      /* L'adresse promet un fichier qui n'est pas là : ne rien affirmer. */
+      return $none;
+    }
+    return array( 'path' => $path, 'url' => $url );
+  }
+
+  /**
+   * L'adresse à donner pour consulter le programme d'une formation.
+   *
+   * Le fichier déposé fait foi. À défaut, la page programme du portail, qui
+   * fabrique un lien neuf à chaque affichage — et qui, elle, demande une
+   * connexion : c'est pourquoi les envois passent par
+   * acdc_formation_programme_file(), jamais par ici.
+   */
+  private function acdc_formation_programme_url( $formation ) {
+    $file = $this->acdc_formation_programme_file( $formation );
+    if ( '' !== $file['url'] ) {
+      return $file['url'];
+    }
+    if ( ! empty( $formation->id ) && method_exists( $this, 'get_programme_pdf_url' ) ) {
+      return (string) $this->get_programme_pdf_url( (int) $formation->id );
+    }
+    return '';
   }private function get_pre_meetings( $search = '' ) {
     global $wpdb;
     $where = '';

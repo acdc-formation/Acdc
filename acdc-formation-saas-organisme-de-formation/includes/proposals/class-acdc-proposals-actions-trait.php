@@ -494,13 +494,12 @@ trait Acdc_Proposals_Actions_Trait {
     $attachments = array();
     if ( ! empty( $proposal->formation_id ) ) {
       $formation = $this->get_formation( (int) $proposal->formation_id );
-      if ( $formation && ! empty( $formation->program_file_url ) ) {
-        $prog_url_norm       = set_url_scheme( (string) $formation->program_file_url );
-        $upload_baseurl_norm = set_url_scheme( trailingslashit( $upload_dir['baseurl'] ) );
-        $prog_path = str_replace( $upload_baseurl_norm, trailingslashit( $upload_dir['basedir'] ), $prog_url_norm );
-        if ( file_exists( $prog_path ) ) {
-          $attachments[] = $prog_path;
-        }
+      /* ACDC 3.25.251 — Même lecture que partout : seul un fichier réellement
+         déposé peut être joint. La colonne pouvait porter une adresse de
+         l'ancien Manager, qui ne désigne aucun fichier. */
+      $prog_file = $this->acdc_formation_programme_file( $formation );
+      if ( '' !== $prog_file['path'] ) {
+        $attachments[] = $prog_file['path'];
       }
     }
     $company_profile_attach = get_option( 'acdc_of_company_profile', array() );

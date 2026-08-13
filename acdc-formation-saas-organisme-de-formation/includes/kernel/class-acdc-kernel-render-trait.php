@@ -2450,7 +2450,7 @@ trait ACDC_Kernel_Render_Trait {
             <?php if ( ! empty( $linked_formation->prerequisites ) ) : ?><div class="tf-ug-field tf-full"><span class="tf-ug-label">Prérequis</span><span style="font-size:13px;color:#0f2c52;padding-top:7px;display:block;white-space:pre-line;"><?php echo esc_html( wp_trim_words( $linked_formation->prerequisites, 40, '…' ) ); ?></span></div><?php endif; ?>
             <?php if ( ! empty( $linked_formation->objectives ) ) : ?><div class="tf-ug-field tf-full"><span class="tf-ug-label">Objectifs de la formation</span><span style="font-size:13px;color:#0f2c52;padding-top:7px;display:block;white-space:pre-line;"><?php echo esc_html( wp_trim_words( $linked_formation->objectives, 50, '…' ) ); ?></span></div><?php endif; ?>
             <?php if ( ! empty( $linked_formation->program ) ) : ?><div class="tf-ug-field tf-full"><span class="tf-ug-label">Programme</span><span style="font-size:13px;color:#0f2c52;padding-top:7px;display:block;white-space:pre-line;"><?php echo esc_html( wp_trim_words( $linked_formation->program, 50, '…' ) ); ?></span></div><?php endif; ?>
-            <?php if ( ! empty( $linked_formation->program_file_url ) ) : ?><div class="tf-ug-field tf-full"><span class="tf-ug-label">Programme PDF</span><span style="font-size:13px;padding-top:7px;"><a href="<?php echo esc_url( $linked_formation->program_file_url ); ?>" target="_blank" style="color:#8b5b23;font-weight:600;">📄 Télécharger le programme</a></span></div><?php endif; ?>
+            <?php $linked_program_url = $this->acdc_formation_programme_url( $linked_formation ); ?><?php if ( '' !== $linked_program_url ) : ?><div class="tf-ug-field tf-full"><span class="tf-ug-label">Programme PDF</span><span style="font-size:13px;padding-top:7px;"><a href="<?php echo esc_url( $linked_program_url ); ?>" target="_blank" style="color:#8b5b23;font-weight:600;">📄 Télécharger le programme</a></span></div><?php endif; ?>
           </div>
         </div>
         <?php else : ?>
@@ -11424,10 +11424,14 @@ trait ACDC_Kernel_Render_Trait {
             <tbody>
             <?php foreach ( $items as $entry ) : ?>
               <?php
-                $view_url = ! empty( $entry->program_file_url ) ? $entry->program_file_url : ( is_admin() ? $this->admin_tab_url( 'formations', array( 'action' => 'view', 'item_id' => (int) $entry->id ) ) : $this->portal_page_url( array( 'tab' => 'formations', 'action' => 'view', 'item_id' => (int) $entry->id ) ) );
+                /* ACDC 3.25.251 — Le lien du programme passe par le résolveur : la
+                   colonne pouvait contenir une adresse morte de l'ancien Manager,
+                   et cet écran l'affichait telle quelle (« Lien invalide »). */
+                $entry_program_url = $this->acdc_formation_programme_url( $entry );
+                $view_url = '' !== $entry_program_url ? $entry_program_url : ( is_admin() ? $this->admin_tab_url( 'formations', array( 'action' => 'view', 'item_id' => (int) $entry->id ) ) : $this->portal_page_url( array( 'tab' => 'formations', 'action' => 'view', 'item_id' => (int) $entry->id ) ) );
                 $edit_url = is_admin() ? $this->admin_tab_url( 'formations', array( 'action' => 'edit', 'item_id' => (int) $entry->id ) ) : $this->portal_page_url( array( 'tab' => 'formations', 'action' => 'edit', 'item_id' => (int) $entry->id ) );
                 $delete_url = wp_nonce_url( admin_url( 'admin-post.php?action=acdc_delete_formation&formation_id=' . (int) $entry->id ), 'acdc_delete_formation_' . (int) $entry->id );
-                $menu_download_url = ! empty( $entry->program_file_url ) ? $entry->program_file_url : '';
+                $menu_download_url = $entry_program_url;
                 $duration = trim( (string) $entry->duration );
                 if ( preg_match( '/^(\d{1,2}):(\d{2})$/', $duration, $m ) ) {
                   $duration = sprintf( '%02dh%02d', (int) $m[1], (int) $m[2] );
@@ -11440,7 +11444,7 @@ trait ACDC_Kernel_Render_Trait {
                 <td><input type="checkbox" aria-label="Sélectionner ce programme"></td>
                 <td><?php echo esc_html( $entry->id ); ?></td>
                 <td>
-                  <a href="<?php echo esc_url( $view_url ); ?>" class="acdc-program-link" <?php echo ! empty( $entry->program_file_url ) ? 'target="_blank" rel="noopener"' : ''; ?>><?php echo esc_html( $entry->title ); ?></a>
+                  <a href="<?php echo esc_url( $view_url ); ?>" class="acdc-program-link" <?php echo '' !== $entry_program_url ? 'target="_blank" rel="noopener"' : ''; ?>><?php echo esc_html( $entry->title ); ?></a>
                 </td>
                 <td><?php echo esc_html( ! empty( $entry->modality ) ? $entry->modality : '—' ); ?></td>
                 <td><?php echo esc_html( $updated_label ); ?></td>
@@ -11449,14 +11453,14 @@ trait ACDC_Kernel_Render_Trait {
                   <div class="acdc-row-menu" data-acdc-row-menu>
                     <button type="button" class="acdc-row-menu-toggle" data-acdc-row-menu-toggle aria-expanded="false" title="Actions"><?php echo $this->render_inline_icon( 'more-horizontal', 25 ); ?></button>
                     <div class="acdc-row-menu-dropdown" data-acdc-row-menu-dropdown hidden>
-                      <a href="<?php echo esc_url( $view_url ); ?>" <?php echo ! empty( $entry->program_file_url ) ? 'target="_blank" rel="noopener"' : ''; ?>>Voir</a>
+                      <a href="<?php echo esc_url( $view_url ); ?>" <?php echo '' !== $entry_program_url ? 'target="_blank" rel="noopener"' : ''; ?>>Voir</a>
                       <a href="<?php echo esc_url( $edit_url ); ?>">Modifier</a>
                       <?php if ( '' !== $menu_download_url ) : ?><a href="<?php echo esc_url( $menu_download_url ); ?>" target="_blank" rel="noopener">Télécharger</a><?php endif; ?>
                       <a href="<?php echo esc_url( $delete_url ); ?>" onclick="return confirm('Supprimer ce programme ?');">Supprimer</a>
                     </div>
                   </div>
                 </td>
-                <td><a href="<?php echo esc_url( $view_url ); ?>" title="Voir" aria-label="Voir" class="acdc-row-view-link" <?php echo ! empty( $entry->program_file_url ) ? 'target="_blank" rel="noopener"' : ''; ?>><?php echo $this->render_inline_icon( 'view', 25 ); ?></a></td>
+                <td><a href="<?php echo esc_url( $view_url ); ?>" title="Voir" aria-label="Voir" class="acdc-row-view-link" <?php echo '' !== $entry_program_url ? 'target="_blank" rel="noopener"' : ''; ?>><?php echo $this->render_inline_icon( 'view', 25 ); ?></a></td>
                 <td><a href="<?php echo esc_url( $edit_url ); ?>" title="Modifier" aria-label="Modifier" class="acdc-row-edit-link"><?php echo $this->render_inline_icon( 'edit-pencil', 25 ); ?></a></td>
               </tr>
             <?php endforeach; ?>
@@ -13718,7 +13722,9 @@ Nb de questions réussies / Nb de questions : <?php echo esc_html( (int) $contex
             <div class="acdc-form-tab-panel" id="acdc-tab-panel-programme" role="tabpanel" hidden>
               <div class="acdc-formation-section">
                 <div class="acdc-grid-2cols" style="margin-bottom:18px;">
-                  <p><label>Programme de formation (fichier)</label><?php if ( ! $is_view ) : ?><input type="file" name="program_file" accept=".pdf,.doc,.docx,.ppt,.pptx,.zip"><?php endif; ?><?php if ( $formation && ! empty( $formation->program_file_url ) ) : ?><span class="acdc-help">Fichier actuel : <a target="_blank" href="<?php echo esc_url( $formation->program_file_url ); ?>">ouvrir</a></span><?php endif; ?>
+                  <p><label>Programme de formation (fichier)</label><?php if ( ! $is_view ) : ?><input type="file" name="program_file" accept=".pdf,.doc,.docx,.ppt,.pptx,.zip"><?php endif; ?><?php $form_prog_file = $formation ? $this->acdc_formation_programme_file( $formation ) : array( 'path' => '', 'url' => '' ); ?>
+                  <?php if ( '' !== $form_prog_file['url'] ) : ?><span class="acdc-help">Fichier actuel : <a target="_blank" href="<?php echo esc_url( $form_prog_file['url'] ); ?>">ouvrir</a></span>
+                  <?php elseif ( $formation && ! empty( $formation->program_file_url ) ) : ?><span class="acdc-help" style="color:#b3261e;">L'adresse enregistrée ne mène à aucun fichier (lien hérité de l'ancien Manager). Utilisez « Enregistrer le programme pour les envois ».</span><?php endif; ?>
                   <?php if ( ! $is_view ) : ?><p style="margin:8px 0 0;"><label style="font-size:12px;color:#5a6577;">Ou URL directe du programme <span class="acdc-label-hint">Renseignée automatiquement par la synchronisation Manager</span></label><input type="url" name="program_file_url_direct" placeholder="https://..." value="<?php echo $formation && isset( $formation->program_file_url ) ? esc_attr( $formation->program_file_url ) : ''; ?>"></p><?php endif; ?>
                   <p><label>Nombre de jours <span class="acdc-label-hint">Synchronisé depuis acdc-formation.com</span></label><input type="number" name="jours_count" min="0" max="30" value="<?php echo $formation && isset( $formation->jours_count ) ? esc_attr( (int) $formation->jours_count ) : '0'; ?>" <?php disabled( $is_view ); ?>></p>
                 </div>
@@ -14027,6 +14033,12 @@ Nb de questions réussies / Nb de questions : <?php echo esc_html( (int) $contex
           <div class="acdc-inline-actions" style="margin-top:18px;">
             <a class="acdc-button acdc-button-link" href="<?php echo esc_url( $this->portal_page_url( array( 'tab' => 'formations', 'action' => $is_archived ? 'archived' : 'list' ) ) ); ?>">Annuler</a>
             <?php if ( $formation ) : ?><a class="acdc-button acdc-button-soft" href="<?php echo esc_url( $this->get_programme_pdf_url( $formation->id ) ); ?>" target="_blank" rel="noopener noreferrer"><?php echo self::render_inline_icon( 'file-text', 16 ); ?> Programme PDF</a><?php endif; ?>
+            <?php /* ACDC 3.25.251 — Le même document, déposé sur le serveur au lieu
+                     d'être téléchargé : c'est lui qui sera joint aux conventions et
+                     offert dans les extranets. Un onglet s'ouvre et annonce le
+                     résultat — un dépôt silencieux qui échoue serait pire que pas
+                     de dépôt du tout. */ ?>
+            <?php if ( $formation && ! $is_view ) : ?><a class="acdc-button acdc-button-soft" href="<?php echo esc_url( $this->get_programme_pdf_store_url( $formation->id ) ); ?>" target="_blank" rel="noopener noreferrer" title="Fabrique le PDF du programme et l'enregistre pour les envois"><?php echo self::render_inline_icon( 'upload', 16 ); ?> Enregistrer le programme pour les envois</a><?php endif; ?>
             <?php if ( ! $is_view ) : ?><button type="submit" class="acdc-button acdc-button-primary"><?php echo $formation ? 'Modifier la formation' : 'Créer la formation'; ?></button><?php endif; ?>
           </div>
         </form>
@@ -14106,6 +14118,7 @@ Nb de questions réussies / Nb de questions : <?php echo esc_html( (int) $contex
                     <button type="button" class="acdc-row-menu-toggle" data-acdc-row-menu-toggle aria-label="Actions complémentaires" title="Actions complémentaires"><?php echo self::render_inline_icon( 'more-horizontal', 25 ); ?></button>
                     <span class="acdc-row-menu-dropdown" data-acdc-row-menu-dropdown>
                       <a href="<?php echo esc_url( $this->get_programme_pdf_url( $entry->id ) ); ?>" target="_blank" rel="noopener noreferrer"><?php echo self::render_inline_icon( 'file-text' ); ?> Programme PDF</a>
+                      <a href="<?php echo esc_url( $this->get_programme_pdf_store_url( $entry->id ) ); ?>" target="_blank" rel="noopener noreferrer"><?php echo self::render_inline_icon( 'upload' ); ?> Enregistrer pour les envois</a>
                       <a href="<?php echo esc_url( wp_nonce_url( admin_url( 'admin-post.php?action=acdc_duplicate_formation&formation_id=' . $entry->id ), 'acdc_duplicate_formation_' . $entry->id ) ); ?>"><?php echo self::render_inline_icon( 'copy' ); ?> Dupliquer</a>
                       <a href="<?php echo esc_url( wp_nonce_url( admin_url( 'admin-post.php?action=acdc_toggle_formation_archive&formation_id=' . $entry->id . '&archive=' . ( $is_archived ? '0' : '1' ) ), 'acdc_toggle_formation_archive_' . $entry->id ) ); ?>"><?php echo self::render_inline_icon( 'archive' ); ?> <?php echo $is_archived ? 'Restaurer' : 'Archiver'; ?></a>
                     </span>

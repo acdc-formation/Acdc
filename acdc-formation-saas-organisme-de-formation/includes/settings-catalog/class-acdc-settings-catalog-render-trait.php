@@ -898,8 +898,12 @@ trait ACDC_Settings_Catalog_Render_Trait {
 
             <div class="acdc-catalog-info-card">
               <h3>Programme de formation</h3>
-              <?php if ( ! empty( $formation->program_file_url ) ) : ?>
-                <a class="acdc-catalog-cta acdc-catalog-download" href="<?php echo esc_url( $formation->program_file_url ); ?>" target="_blank" rel="noopener">Télécharger le programme</a>
+              <?php $catalog_program_url = $this->acdc_formation_programme_file( $formation )['url']; ?>
+              <?php /* ACDC 3.25.251 — Catalogue PUBLIC : uniquement un fichier déposé.
+                       La page programme du portail exige une connexion ; l'offrir ici
+                       enverrait le visiteur sur un écran de refus. */ ?>
+              <?php if ( '' !== $catalog_program_url ) : ?>
+                <a class="acdc-catalog-cta acdc-catalog-download" href="<?php echo esc_url( $catalog_program_url ); ?>" target="_blank" rel="noopener">Télécharger le programme</a>
               <?php else : ?>
                 <p>Aucun programme disponible.</p>
               <?php endif; ?>

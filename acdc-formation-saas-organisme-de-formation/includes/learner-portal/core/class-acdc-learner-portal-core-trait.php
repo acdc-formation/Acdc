@@ -1264,7 +1264,11 @@ trait ACDC_Learner_Portal_Core_Trait {
       $formation_title = ! empty( $formation->title ) ? $formation->title : 'Formation';
       $session_label   = $session && ! empty( $session->title ) ? $session->title : '';
 
-      if ( ! empty( $formation->program_file_url ) ) {
+      /* ACDC 3.25.251 — La ligne « Programme » n'apparaît que si le programme
+         est atteignable : un fichier déposé, ou la page programme du portail —
+         à laquelle l'apprenant connecté a accès. Pas l'adresse brute, qui
+         pouvait être un lien mort de l'ancien Manager. */
+      if ( '' !== $this->acdc_formation_programme_url( $formation ) ) {
         $entries[] = array(
           'label'          => 'Programme de formation',
           'formation'      => $formation_title,
@@ -1538,19 +1542,12 @@ trait ACDC_Learner_Portal_Core_Trait {
 
       $unlocked_by_registration[ (int) $registration->id ] = $this->acdc_session_docs_registration_unlocked( $item );
 
-      $prog_url = '';
-      if ( $formation && ! empty( $formation->id ) ) {
-        // Si program_file_url existe ET n'est pas une URL Manager (admin-ajax), l'utiliser directement
-        if ( ! empty( $formation->program_file_url )
-          && false === strpos( (string) $formation->program_file_url, 'admin-ajax.php' )
-          && false === strpos( (string) $formation->program_file_url, 'admin-post.php' )
-        ) {
-          $prog_url = (string) $formation->program_file_url;
-        } elseif ( method_exists( $this, 'get_programme_pdf_url' ) ) {
-          // Générer le PDF depuis le SAAS directement
-          $prog_url = $this->get_programme_pdf_url( (int) $formation->id );
-        }
-      }
+      /* ACDC 3.25.251 — Cet écran était le SEUL à savoir que la colonne pouvait
+         contenir une adresse morte de l'ancien Manager. Il l'écartait à sa
+         manière, dans son coin, pendant que la convention, le catalogue et la
+         liste des programmes affichaient le lien mort. La règle a déménagé dans
+         le noyau ; ici on l'appelle, comme tout le monde. */
+      $prog_url = ( $formation && ! empty( $formation->id ) ) ? $this->acdc_formation_programme_url( $formation ) : '';
       $groups['program']['items'][] = array_merge( $base, array(
         'label'         => 'Programme de formation',
         'document_type' => 'program',
@@ -1934,8 +1931,9 @@ trait ACDC_Learner_Portal_Core_Trait {
 
     switch ( $document_type ) {
       case 'program':
-        if ( $formation && ! empty( $formation->program_file_url ) ) {
-          return (string) $formation->program_file_url;
+        $portal_prog = $this->acdc_formation_programme_file( $formation );
+        if ( '' !== $portal_prog['url'] ) {
+          return $portal_prog['url'];
         }
         // Fallback : URL de génération à la volée du programme PDF
         if ( $formation && ! empty( $formation->id ) && method_exists( $this, 'get_programme_pdf_url' ) ) {

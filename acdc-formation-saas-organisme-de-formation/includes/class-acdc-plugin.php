@@ -308,6 +308,8 @@ class ACDC_Formation_SAAS_Plugin {
     add_action( 'wp_ajax_acdc_save_table_lock', array( $this, 'ajax_save_table_lock' ) );
     /* ACDC 3.23.2 — Forçage manuel du statut workflow dossier. */
     add_action( 'wp_ajax_acdc_set_registration_workflow_status', array( $this, 'ajax_set_registration_workflow_status' ) );
+    /* ACDC 3.25.251 — Dépôt du PDF du programme fabriqué par le navigateur. */
+    add_action( 'wp_ajax_acdc_store_programme_pdf', array( $this, 'ajax_store_programme_pdf' ) );
 
     add_action( 'admin_post_nopriv_acdc_front_login', array( $this, 'handle_front_login' ) );
     add_action( 'admin_post_nopriv_acdc_learner_login', array( $this, 'handle_learner_portal_login' ) );

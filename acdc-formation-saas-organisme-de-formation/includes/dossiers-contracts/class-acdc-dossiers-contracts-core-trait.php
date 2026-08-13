@@ -1048,28 +1048,42 @@ trait ACDC_Dossiers_Contracts_Core_Trait {
     if ( ! $formation && ! empty( $contract->formation_id ) ) {
       $formation = $this->get_formation( (int) $contract->formation_id );
     }
-    if ( $formation && ! empty( $formation->program_file_url ) ) {
-      $program_url = esc_url_raw( (string) $formation->program_file_url );
-      $program_path = $this->get_registration_contract_upload_file_path_from_url( $program_url );
-      $package['program_file'] = array( 'path' => $program_path, 'url' => $program_url, 'label' => 'Programme de formation' );
-      if ( $program_path ) {
-        $package['attachments'][] = $program_path;
-      }
-      $package['links'][] = array( 'label' => 'Programme de formation', 'url' => $program_url );
-    }
-
-    if ( empty( $package['program_file']['url'] ) && ! empty( $contract->formation_title ) ) {
+    /* ACDC 3.25.251 — LE PROGRAMME N'EST ANNONCÉ QUE S'IL EXISTE VRAIMENT.
+     *
+     * Ce bloc lisait `program_file_url` telle quelle. Sur les formations
+     * importées, cette colonne contient une adresse de l'ancien plugin Manager
+     * portant un nonce périmé : le destinataire recevait un lien « Lien
+     * invalide », et comme cette adresse ne désigne aucun fichier des uploads,
+     * la pièce jointe n'était pas ajoutée non plus. L'e-mail promettait donc un
+     * programme « ci-joint » qui n'était ni joint ni consultable.
+     *
+     * On ne retient plus qu'un FICHIER réellement présent sur le disque. Pas de
+     * fichier : pas de lien, pas de pièce jointe, et la phrase d'introduction ne
+     * le mentionne pas. Un e-mail qui affirme sans avoir lu est plus dangereux
+     * qu'un e-mail qui se tait.
+     */
+    $program = $this->acdc_formation_programme_file( $formation );
+    if ( '' === $program['path'] && ! empty( $contract->formation_title ) ) {
       global $wpdb;
       $program_row = $wpdb->get_row( $wpdb->prepare( "SELECT * FROM {$this->formation_table} WHERE title = %s ORDER BY id DESC LIMIT 1", (string) $contract->formation_title ) );
-      if ( $program_row && ! empty( $program_row->program_file_url ) ) {
-        $program_url = esc_url_raw( (string) $program_row->program_file_url );
-        $program_path = $this->get_registration_contract_upload_file_path_from_url( $program_url );
-        $package['program_file'] = array( 'path' => $program_path, 'url' => $program_url, 'label' => 'Programme de formation' );
-        if ( $program_path ) {
-          $package['attachments'][] = $program_path;
-        }
-        $package['links'][] = array( 'label' => 'Programme de formation', 'url' => $program_url );
+      if ( $program_row ) {
+        $program = $this->acdc_formation_programme_file( $program_row );
       }
+    }
+    if ( '' !== $program['path'] ) {
+      /* Un e-mail trop lourd n'arrive pas : passé ce poids, le programme reste
+         accessible par son lien mais ne voyage plus en pièce jointe — et la
+         phrase d'introduction, qui se construit sur `path`, cesse de l'annoncer
+         comme joint. La convention, elle, part toujours : c'est la pièce qui
+         engage. */
+      $program_size = (int) @filesize( $program['path'] );
+      if ( $program_size > 0 && $program_size <= 4 * 1024 * 1024 ) {
+        $package['program_file'] = array( 'path' => $program['path'], 'url' => $program['url'], 'label' => 'Programme de formation' );
+        $package['attachments'][] = $program['path'];
+      } else {
+        $package['program_file'] = array( 'path' => '', 'url' => $program['url'], 'label' => 'Programme de formation' );
+      }
+      $package['links'][] = array( 'label' => 'Programme de formation', 'url' => $program['url'] );
     }
 
     $profile = $this->get_company_profile_options();
@@ -1125,9 +1139,16 @@ trait ACDC_Dossiers_Contracts_Core_Trait {
       }
     }
 
+    /* ACDC 3.25.251 — La phrase énumère ce qui est RÉELLEMENT joint.
+       Elle annonçait « le programme de formation et le règlement intérieur » dès
+       que l'un des deux était renseigné — donc parfois pour un programme absent
+       de l'envoi. Le destinataire cherchait alors une pièce jointe inexistante. */
+    $joined = array();
+    if ( ! empty( $package['program_file']['path'] ) ) { $joined[] = 'du programme de formation'; }
+    if ( ! empty( $package['rules_file']['path'] ) )   { $joined[] = 'du règlement intérieur'; }
     $intro = '<p style="font-size:18px;line-height:1.65;margin:0 0 22px;">Veuillez trouver ci-joint votre convention / contrat de formation';
-    if ( ! empty( $package['program_file']['path'] ) || ! empty( $package['program_file']['url'] ) || ! empty( $package['rules_file']['path'] ) || ! empty( $package['rules_file']['url'] ) ) {
-      $intro .= ', accompagnée du programme de formation et du règlement intérieur';
+    if ( $joined ) {
+      $intro .= ', accompagnée ' . ( 2 === count( $joined ) ? $joined[0] . ' et ' . $joined[1] : $joined[0] );
     }
     $intro .= '.</p>';
 

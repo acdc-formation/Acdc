@@ -81,12 +81,23 @@ trait ACDC_Settings_Catalog_Programme_PDF_Trait {
 
 		$auto_pdf = isset( $_GET['fm_pdf_mode'] ) && '1' === sanitize_text_field( wp_unslash( $_GET['fm_pdf_mode'] ) );
 
+		/* ACDC 3.25.251 — Mode dépôt : la page fabrique le PDF et l'envoie au
+		   serveur au lieu de le proposer en téléchargement. Réservé à qui a le
+		   droit d'écrire : un apprenant peut lire son programme, pas remplacer
+		   le fichier de référence de l'organisme. */
+		$store_pdf = isset( $_GET['fm_pdf_store'] )
+			&& '1' === sanitize_text_field( wp_unslash( $_GET['fm_pdf_store'] ) )
+			&& current_user_can( 'edit_posts' );
+		if ( $store_pdf ) {
+			$auto_pdf = true;
+		}
+
 		nocache_headers();
 		header( 'Content-Type: text/html; charset=UTF-8' );
 		header( 'X-Frame-Options: SAMEORIGIN' );
 		header( 'Content-Disposition: inline' );
 
-		echo $this->build_programme_pdf_html( $formation, $auto_pdf ); // phpcs:ignore WordPress.Security.EscapeOutput
+		echo $this->build_programme_pdf_html( $formation, $auto_pdf, $store_pdf ); // phpcs:ignore WordPress.Security.EscapeOutput
 		exit;
 	}
 
@@ -103,6 +114,94 @@ trait ACDC_Settings_Catalog_Programme_PDF_Trait {
 			$args['fm_pdf_mode'] = '1';
 		}
 		return $this->portal_page_url( $args );
+	}
+
+	/**
+	 * ACDC 3.25.251 — LA MÊME PAGE, MAIS QUI DÉPOSE AU LIEU DE TÉLÉCHARGER.
+	 *
+	 * Le programme n'existe qu'en HTML : le PDF est fabriqué dans le navigateur
+	 * — html2canvas photographie chaque page, jsPDF les assemble. Aucun serveur
+	 * mutualisé ne sait faire cela : il faudrait un navigateur.
+	 *
+	 * Or un e-mail a besoin d'un FICHIER. Un lien vers la page programme exige
+	 * une connexion que le commanditaire n'a pas, et le PDF n'existait nulle
+	 * part sur le disque.
+	 *
+	 * On ne fabrique donc pas un second rendu — ce serait deux documents
+	 * différents portant le même nom, et David a demandé l'inverse : le fichier
+	 * envoyé doit être fidèle à celui du bouton. On garde le seul générateur qui
+	 * existe et on lui demande, dans ce mode, de déposer son résultat sur le
+	 * serveur au lieu de l'offrir en téléchargement. Le fichier envoyé est
+	 * exactement celui du bouton, au bit près.
+	 */
+	public function get_programme_pdf_store_url( $formation_id ) {
+		return $this->portal_page_url( array(
+			'fm_action'       => 'programme_pdf',
+			'fm_formation_id' => (int) $formation_id,
+			'fm_pdf_nonce'    => wp_create_nonce( 'acdc_of_programme_pdf_' . (int) $formation_id ),
+			'fm_pdf_store'    => '1',
+		) );
+	}
+
+	/** Emplacement du programme déposé pour cette formation. Nom non devinable, stable. */
+	private function get_programme_pdf_storage( $formation_id ) {
+		$uploads = wp_get_upload_dir();
+		$dir     = trailingslashit( (string) $uploads['basedir'] ) . 'acdc-programmes/';
+		$url     = trailingslashit( (string) $uploads['baseurl'] ) . 'acdc-programmes/';
+		/* Un nom stable : le lien déjà parti dans un e-mail reste valable après
+		   une régénération. Et non devinable : le programme d'une formation ne
+		   se déduit pas de son identifiant. */
+		$token = substr( wp_hash( 'acdc_programme_pdf_' . (int) $formation_id ), 0, 20 );
+		$name  = 'programme-' . (int) $formation_id . '-' . $token . '.pdf';
+		return array( 'dir' => $dir, 'path' => $dir . $name, 'url' => $url . $name );
+	}
+
+	/**
+	 * Réception du PDF fabriqué par le navigateur.
+	 *
+	 * Trois vérifications, dans cet ordre : le droit d'écrire, le jeton de la
+	 * formation, puis le contenu lui-même — un fichier n'est accepté que s'il
+	 * commence par « %PDF- ». Le nom proposé par le navigateur n'est jamais
+	 * utilisé.
+	 */
+	public function ajax_store_programme_pdf() {
+		if ( ! current_user_can( 'edit_posts' ) ) {
+			wp_send_json_error( array( 'message' => 'Permission refusée.' ) );
+		}
+		$formation_id = isset( $_POST['formation_id'] ) ? absint( wp_unslash( $_POST['formation_id'] ) ) : 0;
+		$nonce        = isset( $_POST['nonce'] ) ? sanitize_text_field( wp_unslash( $_POST['nonce'] ) ) : '';
+		if ( ! $formation_id || ! wp_verify_nonce( $nonce, 'acdc_of_store_programme_pdf_' . $formation_id ) ) {
+			wp_send_json_error( array( 'message' => 'Lien invalide ou expiré.' ) );
+		}
+		if ( empty( $_FILES['pdf']['tmp_name'] ) || ! is_uploaded_file( $_FILES['pdf']['tmp_name'] ) ) {
+			wp_send_json_error( array( 'message' => 'Aucun fichier reçu.' ) );
+		}
+		$tmp = $_FILES['pdf']['tmp_name']; // phpcs:ignore WordPress.Security.ValidatedSanitizedInput
+		$head = (string) @file_get_contents( $tmp, false, null, 0, 5 );
+		if ( '%PDF-' !== $head ) {
+			wp_send_json_error( array( 'message' => "Le fichier reçu n'est pas un PDF." ) );
+		}
+
+		$storage = $this->get_programme_pdf_storage( $formation_id );
+		if ( ! wp_mkdir_p( $storage['dir'] ) ) {
+			wp_send_json_error( array( 'message' => "Dossier de dépôt impossible à créer." ) );
+		}
+		if ( ! @move_uploaded_file( $tmp, $storage['path'] ) ) {
+			wp_send_json_error( array( 'message' => "Le fichier n'a pas pu être enregistré." ) );
+		}
+		@chmod( $storage['path'], 0644 );
+
+		global $wpdb;
+		$wpdb->update(
+			$this->formation_table,
+			array( 'program_file_url' => $storage['url'], 'updated_at' => current_time( 'mysql' ) ),
+			array( 'id' => $formation_id )
+		);
+
+		wp_send_json_success( array(
+			'url'   => $storage['url'],
+			'bytes' => (int) filesize( $storage['path'] ),
+		) );
 	}
 
 	/* ─────────────────────────────────────────
@@ -270,7 +369,7 @@ trait ACDC_Settings_Catalog_Programme_PDF_Trait {
 		/* ─────────────────────────────────────────
 	   CONSTRUCTION HTML COMPLET (identique au Manager)
 	───────────────────────────────────────── */
-	private function build_programme_pdf_html( $formation, $auto_pdf = false ) {
+	private function build_programme_pdf_html( $formation, $auto_pdf = false, $store_pdf = false ) {
 		$d            = $this->get_prog_pdf_data( $formation );
 		$t            = esc_html( $d['titre'] );
 		$logo_url     = $this->get_prog_pdf_logo_url();
@@ -445,7 +544,10 @@ body{font-family:'Rubik',sans-serif;font-size:14px;color:var(--text);background:
 		echo '<style>@media print{#acdc-print-bar,.acdc-print-spacer,#acdc-pdf-loader{display:none !important;}} body.is-pdf-auto #acdc-print-bar, body.is-pdf-auto .acdc-print-spacer{display:none !important;}</style>';
 
 		if ( $auto_pdf ) {
-			echo '<div id="acdc-pdf-loader" style="position:fixed;inset:0;z-index:10000;background:rgba(255,255,255,.94);display:flex;align-items:center;justify-content:center;font-family:Rubik,sans-serif;color:#174a6d;text-align:center;padding:24px;"><div><strong style="font-size:18px;">Préparation du PDF en cours…</strong><br><span style="font-size:13px;color:#555;">Le document va s\'ouvrir automatiquement dans le lecteur PDF du navigateur.</span></div></div>';
+			$loader_hint = $store_pdf
+				? 'Le programme est en cours d\'enregistrement pour les envois.'
+				: 'Le document va s\'ouvrir automatiquement dans le lecteur PDF du navigateur.';
+			echo '<div id="acdc-pdf-loader" style="position:fixed;inset:0;z-index:10000;background:rgba(255,255,255,.94);display:flex;align-items:center;justify-content:center;font-family:Rubik,sans-serif;color:#174a6d;text-align:center;padding:24px;"><div><strong style="font-size:18px;">Préparation du PDF en cours…</strong><br><span style="font-size:13px;color:#555;">' . esc_html( $loader_hint ) . '</span></div></div>';
 		}
 
 		echo '<div id="acdc-programme-content">';
@@ -719,7 +821,7 @@ body{font-family:'Rubik',sans-serif;font-size:14px;color:var(--text);background:
 
 		echo '</div>'; // #acdc-programme-content
 
-		$this->prog_pdf_print_js( $auto_pdf, $pdf_filename );
+		$this->prog_pdf_print_js( $auto_pdf, $pdf_filename, $store_pdf ? (int) $formation->id : 0 );
 
 		echo '</body></html>';
 		return '';
@@ -860,9 +962,17 @@ body{font-family:'Rubik',sans-serif;font-size:14px;color:var(--text);background:
 	/* ─────────────────────────────────────────
 	   HELPER : SCRIPT GÉNÉRATION PDF NAVIGATEUR
 	───────────────────────────────────────── */
-	private function prog_pdf_print_js( $auto_pdf, $pdf_filename ) {
+	private function prog_pdf_print_js( $auto_pdf, $pdf_filename, $store_formation_id = 0 ) {
 		$auto        = $auto_pdf ? 'true' : 'false';
 		$filename    = wp_json_encode( $pdf_filename );
+		/* ACDC 3.25.251 — Contexte du dépôt : vide tant qu'on est en simple
+		   téléchargement, c'est-à-dire dans le cas de figure d'origine. */
+		$store_id    = (int) $store_formation_id;
+		$store_cfg   = wp_json_encode( $store_id > 0 ? array(
+			'ajax'         => admin_url( 'admin-ajax.php' ),
+			'nonce'        => wp_create_nonce( 'acdc_of_store_programme_pdf_' . $store_id ),
+			'formation_id' => $store_id,
+		) : null );
 		$vendor_base = trailingslashit( ACDC_OF_SAAS_URL ) . 'assets/js/vendor/';
 		$html2canvas = wp_json_encode( $vendor_base . 'html2canvas.min.js' );
 		$jspdf       = wp_json_encode( $vendor_base . 'jspdf.umd.min.js' );
@@ -872,6 +982,7 @@ body{font-family:'Rubik',sans-serif;font-size:14px;color:var(--text);background:
 	'use strict';
 	var ACDC_PDF_AUTO = <?php echo $auto; ?>;
 	var ACDC_PDF_FILENAME = <?php echo $filename; ?>;
+	var ACDC_PDF_STORE = <?php echo $store_cfg; ?>;
 	var acdcPdfGenerationRunning = false;
 
 	function acdcLoadScript(src) {
@@ -958,25 +1069,70 @@ body{font-family:'Rubik',sans-serif;font-size:14px;color:var(--text);background:
 					scale: 2, useCORS: true, allowTaint: true, backgroundColor: '#ffffff',
 					logging: false, windowWidth: page.scrollWidth, windowHeight: page.scrollHeight
 				});
-				var imageData = canvas.toDataURL('image/jpeg', 0.96);
+				/* ACDC 3.25.251 — Même définition qu'avant (scale 2, soit environ
+				   190 points par pouce sur une A4) : la mise en page et la netteté
+				   ne changent pas. Seule la compression JPEG passe de 0,96 à 0,85,
+				   ce qui divise le poids par deux ou trois. Un programme de 6,5 Mo
+				   ne passe pas dans la messagerie du client, et c'est un document
+				   qui n'existe que pour lui être envoyé. */
+				var imageData = canvas.toDataURL('image/jpeg', 0.85);
 				if (i > 0) { pdf.addPage('a4', 'portrait'); }
 				pdf.addImage(imageData, 'JPEG', 0, 0, 210, 297);
 			}
-			var blobUrl = pdf.output('bloburl');
-			var dlLink = document.createElement('a');
-			dlLink.href = blobUrl;
-			dlLink.download = ACDC_PDF_FILENAME;
-			dlLink.style.display = 'none';
-			document.body.appendChild(dlLink);
-			dlLink.click();
-			window.setTimeout(function () {
-				document.body.removeChild(dlLink);
-				window.URL.revokeObjectURL(blobUrl);
-			}, 1000);
+			/* Mode dépôt : le MÊME document part sur le serveur au lieu d'être
+			   téléchargé. Rien d'autre ne change — c'est ce qui garantit que le
+			   fichier envoyé au client est celui du bouton. */
+			if (ACDC_PDF_STORE) {
+				var fd = new FormData();
+				fd.append('action', 'acdc_store_programme_pdf');
+				fd.append('nonce', ACDC_PDF_STORE.nonce);
+				fd.append('formation_id', ACDC_PDF_STORE.formation_id);
+				fd.append('pdf', pdf.output('blob'), ACDC_PDF_FILENAME);
+				var res = await fetch(ACDC_PDF_STORE.ajax, { method: 'POST', body: fd, credentials: 'same-origin' });
+				var json = await res.json();
+				if (!json || !json.success) {
+					throw new Error(json && json.data && json.data.message ? json.data.message : 'Dépôt refusé.');
+				}
+				var poids = Math.round((json.data.bytes || 0) / 1024);
+				var loaderEl = document.getElementById('acdc-pdf-loader');
+				if (loaderEl) {
+					loaderEl.innerHTML = '<div><strong style="font-size:18px;">Programme enregistré</strong><br>'
+						+ '<span style="font-size:13px;color:#555;">' + poids + ' Ko — il sera joint aux conventions et visible dans les extranets.</span></div>';
+				}
+				if (window.parent && window.parent !== window) {
+					window.parent.postMessage({ acdcProgrammeStored: true, url: json.data.url }, window.location.origin);
+				}
+			} else {
+				var blobUrl = pdf.output('bloburl');
+				var dlLink = document.createElement('a');
+				dlLink.href = blobUrl;
+				dlLink.download = ACDC_PDF_FILENAME;
+				dlLink.style.display = 'none';
+				document.body.appendChild(dlLink);
+				dlLink.click();
+				window.setTimeout(function () {
+					document.body.removeChild(dlLink);
+					window.URL.revokeObjectURL(blobUrl);
+				}, 1000);
+			}
 		} catch (error) {
 			console.error('[ACDC Formation SAAS] Génération PDF impossible :', error);
-			alert("Le PDF n'a pas pu être généré automatiquement. La fenêtre d'impression va s'ouvrir en solution de secours. Choisissez « Enregistrer au format PDF » si besoin.");
-			window.print();
+			if (ACDC_PDF_STORE) {
+				/* En dépôt, ouvrir une fenêtre d'impression ne servirait à rien :
+				   personne ne regarde. On le DIT, plutôt que de laisser croire
+				   que le programme est enregistré. */
+				var failEl = document.getElementById('acdc-pdf-loader');
+				if (failEl) {
+					failEl.innerHTML = '<div><strong style="font-size:18px;color:#b3261e;">Programme non enregistré</strong><br>'
+						+ '<span style="font-size:13px;color:#555;">' + (error && error.message ? error.message : 'Erreur inconnue') + '</span></div>';
+				}
+				if (window.parent && window.parent !== window) {
+					window.parent.postMessage({ acdcProgrammeStored: false }, window.location.origin);
+				}
+			} else {
+				alert("Le PDF n'a pas pu être généré automatiquement. La fenêtre d'impression va s'ouvrir en solution de secours. Choisissez « Enregistrer au format PDF » si besoin.");
+				window.print();
+			}
 		} finally {
 			acdcSetButtonState(false);
 			acdcPdfGenerationRunning = false;
