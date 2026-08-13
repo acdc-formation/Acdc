@@ -453,16 +453,44 @@ trait ACDC_Sessions_Actions_Trait {
         $greeting    = trim( $prenom ) ?: trim( $prenom . ' ' . $nom );
 
         if ( $send_convocation ) {
+          /* ACDC 3.25.249 — DEUX CONVOCATIONS, UNE SEULE FAISAIT LE TRAVAIL.
+             Cet envoi-ci, automatique, annonçait la formation et renvoyait vers
+             l'extranet sans joindre quoi que ce soit ; l'autre, manuel, fabrique
+             le PDF détaillé. L'apprenant recevait donc, selon le chemin, deux
+             courriers très différents pour la même chose.
+             On fabrique et on ENREGISTRE ici la même convocation : elle part en
+             pièce jointe, elle se télécharge d'un bouton, et elle apparaît dans
+             l'extranet de l'apprenant — le rayon « Convocations » n'attendait
+             que cette adresse. */
+          $conv_registration = $wpdb->get_row( $wpdb->prepare(
+            "SELECT * FROM {$this->training_registration_table}
+              WHERE learner_id = %d AND formation_id = %d AND is_draft = 0
+              ORDER BY id DESC LIMIT 1",
+            (int) $learner->id,
+            (int) $session->formation_id
+          ) );
+          $conv_stored = array( 'url' => '', 'path' => '' );
+          if ( $conv_registration && method_exists( $this, 'acdc_store_training_convocation_pdf' ) ) {
+            $conv_stored = $this->acdc_store_training_convocation_pdf( $conv_registration );
+          }
+
           $summary_rows = array(
             array( 'label' => 'Formation',     'value' => $formation_title ),
             array( 'label' => 'Date de début', 'value' => ucfirst( $date_formatted ) ),
+            array( 'label' => 'Horaires',      'value' => $this->acdc_session_hours_label( $session ) ),
             array( 'label' => 'Lieu / format', 'value' => ! empty( $session->location ) ? (string) $session->location : ( ! empty( $session->remote_link ) ? 'Distanciel' : '—' ) ),
           );
           $body_html  = '<p style="font-size:19px;line-height:1.7;margin:0 0 20px;">Vous êtes convoqué(e) à la formation indiquée ci-dessous. Merci de vous présenter à l\'heure et muni(e) des documents nécessaires.</p>';
           if ( ! empty( $session->remote_link ) ) {
             $body_html .= '<p style="font-size:18px;line-height:1.7;margin:0 0 20px;">Lien de connexion : <a href="' . esc_url( (string) $session->remote_link ) . '" style="color:#C5A253;text-decoration:underline;">' . esc_html( (string) $session->remote_link ) . '</a></p>';
           }
-          $body_html .= '<p style="margin:24px 0;text-align:center;"><a href="' . esc_url( $portal_url ) . '" style="display:inline-block;padding:14px 28px;background:#C5A253;color:#0B0706;text-decoration:none;border-radius:8px;font-weight:700;font-size:16px;">Accéder à mon espace apprenant</a></p>';
+          if ( ! empty( $conv_stored['url'] ) ) {
+            $body_html .= '<p style="margin:24px 0;text-align:center;"><a href="' . esc_url( $conv_stored['url'] ) . '" style="display:inline-block;padding:14px 28px;background:#C5A253;color:#0B0706;text-decoration:none;border-radius:8px;font-weight:700;font-size:16px;">📄 Télécharger ma convocation</a></p>';
+          } else {
+            $body_html .= '<p style="margin:24px 0;text-align:center;"><a href="' . esc_url( $portal_url ) . '" style="display:inline-block;padding:14px 28px;background:#C5A253;color:#0B0706;text-decoration:none;border-radius:8px;font-weight:700;font-size:16px;">Accéder à mon espace apprenant</a></p>';
+          }
+
+          $conv_attachments = ( ! empty( $conv_stored['path'] ) && file_exists( $conv_stored['path'] ) ) ? array( $conv_stored['path'] ) : array();
 
           $this->acdc_send_transactional_email(
             $email,
@@ -485,48 +513,12 @@ trait ACDC_Sessions_Actions_Trait {
             )
           );
 
-          // ACDC 3.25.115 — persister l'URL de convocation pour l'affichage portail.
-          // Reproduit le schéma de _auto_send_completion_certificate_for_session :
-          // génération du PDF via build_training_convocation_pdf_pages + sauvegarde fichier,
-          // puis écriture de l'URL/chemin sur le dossier (training_registration).
-          if ( ! empty( $session->formation_id )
-               && method_exists( $this, 'get_training_convocation_context' )
-               && method_exists( $this, 'build_training_convocation_pdf_pages' )
-               && method_exists( $this, '_build_simple_pdf_string' ) ) {
-            $conv_reg = $wpdb->get_row( $wpdb->prepare(
-              "SELECT * FROM {$this->training_registration_table} WHERE learner_id = %d AND formation_id = %d AND is_draft = 0 ORDER BY id DESC LIMIT 1",
-              (int) $learner->id,
-              (int) $session->formation_id
-            ) );
-            if ( $conv_reg && empty( $conv_reg->convocation_document_url ) ) {
-              $conv_context = $this->get_training_convocation_context( $conv_reg );
-              $conv_pages   = $this->build_training_convocation_pdf_pages( $conv_reg, $conv_context );
-              $conv_pdf     = $this->_build_simple_pdf_string( $conv_pages );
-              if ( ! empty( $conv_pdf ) ) {
-                $conv_upload_dir = wp_upload_dir();
-                $conv_subdir     = $conv_upload_dir['basedir'] . '/acdc-convocations';
-                if ( ! file_exists( $conv_subdir ) ) {
-                  wp_mkdir_p( $conv_subdir );
-                }
-                $conv_filename = sanitize_file_name( 'convocation-' . (int) $conv_reg->id . '.pdf' );
-                $conv_filepath = $conv_subdir . '/' . $conv_filename;
-                if ( file_put_contents( $conv_filepath, $conv_pdf ) !== false ) {
-                  $conv_fileurl = $conv_upload_dir['baseurl'] . '/acdc-convocations/' . $conv_filename;
-                  $wpdb->update(
-                    $this->training_registration_table,
-                    array(
-                      'convocation_document_url'  => esc_url_raw( $conv_fileurl ),
-                      'convocation_document_path' => sanitize_text_field( $conv_filepath ),
-                      'updated_at'                => current_time( 'mysql' ),
-                    ),
-                    array( 'id' => (int) $conv_reg->id ),
-                    array( '%s', '%s', '%s' ),
-                    array( '%d' )
-                  );
-                }
-              }
-            }
-          }
+          /* ACDC 3.25.249 — Le bloc de persistance qui se trouvait ici faisait le
+             même travail, mais APRÈS l'envoi : l'e-mail ne pouvait donc pas
+             contenir le lien, et le nom du fichier était devinable. Il est
+             remplacé par l'appel unique fait plus haut, avant la composition du
+             message. Deux codes pour une même écriture finissent toujours par
+             diverger. */
 
         } elseif ( $send_reminder ) {
           $body_html  = '<p style="font-size:19px;line-height:1.7;margin:0 0 20px;">Votre formation <strong>' . esc_html( $formation_title ) . '</strong> commence demain, le <strong>' . esc_html( ucfirst( $date_formatted ) ) . '</strong>.</p>';

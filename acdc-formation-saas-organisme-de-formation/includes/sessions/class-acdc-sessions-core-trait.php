@@ -299,6 +299,45 @@ trait ACDC_Sessions_Core_Trait {
     return $values;
   }
 
+  /**
+   * ACDC 3.25.249 — Les horaires d'une séance, en demi-journées.
+   *
+   * La convocation annonçait la date mais pas les heures : l'apprenant devait
+   * ouvrir la pièce jointe pour savoir quand se présenter. Les demi-journées
+   * sont pourtant écrites sur la séance depuis que la convention porte son
+   * déroulé.
+   *
+   * `schedule_json` contient des datetimes LOCALES : on les lit avec
+   * mysql2date, jamais avec strtotime — c'est la règle de ce plugin, et s'en
+   * écarter décale l'affichage d'un fuseau.
+   */
+  private function acdc_session_hours_label( $session ) {
+    if ( ! $session ) {
+      return '—';
+    }
+    $slots = array();
+    if ( ! empty( $session->schedule_json ) ) {
+      $decoded = json_decode( (string) $session->schedule_json, true );
+      if ( is_array( $decoded ) ) {
+        foreach ( $decoded as $slot ) {
+          if ( empty( $slot['start_at'] ) || empty( $slot['end_at'] ) ) {
+            continue;
+          }
+          $slots[] = mysql2date( 'H\hi', (string) $slot['start_at'] ) . '–' . mysql2date( 'H\hi', (string) $slot['end_at'] );
+        }
+      }
+    }
+    if ( ! empty( $slots ) ) {
+      return implode( ' et ', $slots );
+    }
+    /* Pas de découpage : on retombe sur les heures de la séance entière plutôt
+       que de laisser croire qu'aucun horaire n'est prévu. */
+    if ( ! empty( $session->start_at ) && ! empty( $session->end_at ) ) {
+      return mysql2date( 'H\hi', (string) $session->start_at ) . '–' . mysql2date( 'H\hi', (string) $session->end_at );
+    }
+    return '—';
+  }
+
   private function get_session_datetime_label( $session ) {
     if ( ! $session ) {
       return '—';

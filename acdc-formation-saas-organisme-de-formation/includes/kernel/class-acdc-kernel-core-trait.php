@@ -5600,7 +5600,92 @@ dbDelta( $sql_companies );
       );
     }
     return $rows;
-  }  private function build_training_convocation_pdf_pages( $registration, $context = array() ) {
+  }
+
+  /**
+   * ACDC 3.25.249 — LA CONVOCATION EST ENFIN CONSERVÉE.
+   *
+   * Le PDF de convocation n'existait que le temps d'un affichage : il était
+   * fabriqué à la volée pour le téléchargement, et joint à l'e-mail depuis un
+   * fichier temporaire. Il n'était JAMAIS enregistré sur le dossier. Trois
+   * conséquences en cascade :
+   *   — l'apprenant ne la retrouvait pas dans son extranet, alors que le rayon
+   *     « Convocations » existe et n'attendait que cette adresse ;
+   *   — la pastille « Convocation » de la barre de complétude restait grise,
+   *     puisqu'elle lit précisément cette colonne — d'où « les convocations sont
+   *     parties mais pas en vert » ;
+   *   — et l'organisme n'avait aucune trace de la pièce envoyée, alors qu'une
+   *     convocation se justifie devant un financeur.
+   *
+   * Le nom du fichier porte un condensat dérivé des clés du site : déterministe,
+   * donc une régénération retrouve le même fichier, mais impossible à deviner de
+   * l'extérieur — même procédé que les attestations et les contrats formateurs.
+   *
+   * @return array{url:string,path:string} Vide si la fabrication échoue.
+   */
+  private function acdc_store_training_convocation_pdf( $registration, $context = array() ) {
+    $empty = array( 'url' => '', 'path' => '' );
+    if ( ! is_object( $registration ) || empty( $registration->id ) ) {
+      return $empty;
+    }
+
+    /* Déjà enregistrée et le fichier est là : on ne refabrique pas. Une
+       convocation déjà expédiée ne doit pas changer sous les pieds de
+       l'apprenant qui la relit. */
+    if ( ! empty( $registration->convocation_document_path ) && file_exists( (string) $registration->convocation_document_path ) ) {
+      return array(
+        'url'  => (string) $registration->convocation_document_url,
+        'path' => (string) $registration->convocation_document_path,
+      );
+    }
+
+    if ( empty( $context ) ) {
+      $context = $this->get_training_convocation_context( $registration );
+    }
+    $pages = $this->build_training_convocation_pdf_pages( $registration, $context );
+    if ( empty( $pages ) || ! method_exists( $this, '_build_simple_pdf_string' ) ) {
+      return $empty;
+    }
+    $pdf = $this->_build_simple_pdf_string( $pages );
+    if ( '' === (string) $pdf ) {
+      return $empty;
+    }
+
+    $uploads = wp_upload_dir();
+    if ( empty( $uploads['basedir'] ) || empty( $uploads['baseurl'] ) ) {
+      return $empty;
+    }
+    $dir = trailingslashit( $uploads['basedir'] ) . 'acdc-convocations/';
+    wp_mkdir_p( $dir );
+
+    $token    = substr( wp_hash( 'acdc-convocation-' . (int) $registration->id ), 0, 20 );
+    $filename = sanitize_file_name( 'convocation-' . (int) $registration->id . '-' . $token . '.pdf' );
+    $path     = $dir . $filename;
+    if ( false === file_put_contents( $path, $pdf ) ) { // phpcs:ignore WordPress.WP.AlternativeFunctions.file_system_operations_file_put_contents
+      return $empty;
+    }
+    $url = trailingslashit( $uploads['baseurl'] ) . 'acdc-convocations/' . $filename;
+
+    global $wpdb;
+    $wpdb->update(
+      $this->training_registration_table,
+      array(
+        'convocation_document_url'  => esc_url_raw( $url ),
+        'convocation_document_path' => $path,
+        'updated_at'                => $this->now_mysql(),
+      ),
+      array( 'id' => (int) $registration->id )
+    );
+
+    /* L'objet en mémoire doit refléter la base : l'appelant s'en sert juste
+       après pour composer l'e-mail. */
+    $registration->convocation_document_url  = $url;
+    $registration->convocation_document_path = $path;
+
+    return array( 'url' => $url, 'path' => $path );
+  }
+
+  private function build_training_convocation_pdf_pages( $registration, $context = array() ) {
     $context = is_array( $context ) ? $context : array();
     if ( empty( $context ) ) {
       $context = $this->get_training_convocation_context( $registration );
@@ -11385,19 +11470,59 @@ private function acdc_pdf_asset_is_readable( $url ) {
 
   // ── ACDC 3.23.4 — Score de complétude dossier de formation ───────────────
 
+  /**
+   * ACDC 3.25.249 — LA BARRE DIT ENFIN OÙ EN EST LE DOSSIER.
+   *
+   * Trois défauts la rendaient trompeuse.
+   *
+   * 1. ELLE MENTAIT SUR L'ÉMARGEMENT. La pastille « Émargement » lisait le
+   *    document de l'ENQUÊTE À MI-PARCOURS — une autre pièce, un autre moment.
+   *    Elle annonçait donc une chose et en vérifiait une autre. L'assiduité se
+   *    lit maintenant là où elle existe : les feuilles signées. Et elle n'est
+   *    verte que lorsque TOUTES les demi-journées de cet apprenant sont
+   *    réglées, comme David l'a tranché — vert à la première signature serait
+   *    plus flatteur et faux devant un financeur.
+   *
+   * 2. IL LUI MANQUAIT LA MOITIÉ DU PARCOURS. Ouverture de l'extranet,
+   *    évaluation diagnostique, évaluation des acquis, certificat de formation
+   *    et enquête à froid n'y figuraient pas, alors que chacune a sa colonne en
+   *    base depuis longtemps. Le pourcentage se calculait sur un parcours
+   *    tronqué, donc il était faux.
+   *
+   * 3. LE TEST DE POSITIONNEMENT PLOMBAIT LES DOSSIERS QUI N'EN ONT PAS.
+   *    Il ne compte désormais que si la formation l'exige : sinon la pastille
+   *    DISPARAÎT, du tableau comme du calcul. Une exigence qui ne s'applique
+   *    pas ne doit pas peser sur un score.
+   *
+   * L'ordre est celui du parcours réel, tel que David l'a dicté.
+   */
   private function compute_registration_completude_score( $registration ) {
+    $doc = static function ( $registration, $field ) {
+      return ! empty( $registration->{$field . '_url'} ) || ! empty( $registration->{$field . '_path'} );
+    };
+
     $criteria = array(
-      array( 'label' => 'Apprenant / groupe',  'ok' => ! empty( $registration->learner_id ) || ! empty( $registration->group_id ),                       'points' => 10 ),
-      array( 'label' => 'Formation',            'ok' => ! empty( $registration->formation_id ),                                                            'points' => 10 ),
-      array( 'label' => 'Convention',           'ok' => ! empty( $registration->autofill_contract_id ),                                                   'points' => 15 ),
-      array( 'label' => 'Convocation',          'ok' => ! empty( $registration->convocation_document_url ) || ! empty( $registration->convocation_document_path ),         'points' => 10 ),
-      array( 'label' => 'Positionnement',       'ok' => ! empty( $registration->positioning_result_document_url ) || ! empty( $registration->positioning_result_document_path ), 'points' => 10 ),
-      array( 'label' => 'Émargement',           'ok' => ! empty( $registration->mid_survey_document_url ) || ! empty( $registration->mid_survey_document_path ),             'points' => 10 ),
-      array( 'label' => 'Évaluation',           'ok' => ! empty( $registration->evaluation_result_document_url ) || ! empty( $registration->evaluation_result_document_path ), 'points' => 15 ),
-      array( 'label' => 'Enquête à chaud',      'ok' => ! empty( $registration->hot_survey_document_url ) || ! empty( $registration->hot_survey_document_path ),             'points' => 10 ),
-      array( 'label' => 'Attestation',          'ok' => ! empty( $registration->completion_certificate_document_url ) || ! empty( $registration->completion_certificate_document_path ), 'points' => 10 ),
+      array( 'label' => 'Apprenant / groupe', 'ok' => ! empty( $registration->learner_id ) || ! empty( $registration->group_id ), 'points' => 10 ),
+      array( 'label' => 'Formation',          'ok' => ! empty( $registration->formation_id ),                                    'points' => 10 ),
+      array( 'label' => 'Convention',         'ok' => ! empty( $registration->autofill_contract_id ),                            'points' => 10 ),
+      array( 'label' => 'Convocation',        'ok' => $doc( $registration, 'convocation_document' ),                             'points' => 10 ),
+      array( 'label' => 'Ouverture intranet', 'ok' => $this->acdc_registration_portal_is_active( $registration ),                'points' => 5 ),
     );
-    $total = 0;
+
+    /* Le positionnement n'apparaît que s'il est exigé par la formation. */
+    if ( $this->acdc_registration_positioning_required( $registration ) ) {
+      $criteria[] = array( 'label' => 'Test de positionnement', 'ok' => $doc( $registration, 'positioning_result_document' ), 'points' => 10 );
+    }
+
+    $criteria[] = array( 'label' => 'Émargement',               'ok' => $this->acdc_registration_attendance_complete( $registration ), 'points' => 10 );
+    $criteria[] = array( 'label' => 'Évaluation diagnostique',  'ok' => $doc( $registration, 'mid_survey_document' ),                  'points' => 5 );
+    $criteria[] = array( 'label' => 'Évaluation des acquis',    'ok' => $doc( $registration, 'evaluation_result_document' ),           'points' => 10 );
+    $criteria[] = array( 'label' => 'Enquête à chaud',          'ok' => $doc( $registration, 'hot_survey_document' ),                  'points' => 10 );
+    $criteria[] = array( 'label' => 'Attestation de formation', 'ok' => $doc( $registration, 'completion_certificate_document' ),      'points' => 10 );
+    $criteria[] = array( 'label' => 'Certificat de formation',  'ok' => $doc( $registration, 'end_training_certificate_document' ),    'points' => 5 );
+    $criteria[] = array( 'label' => 'Enquête à froid',          'ok' => $doc( $registration, 'cold_survey_document' ),                 'points' => 5 );
+
+    $total  = 0;
     $earned = 0;
     foreach ( $criteria as $c ) {
       $total += $c['points'];
@@ -11411,6 +11536,68 @@ private function acdc_pdf_asset_is_readable( $url ) {
       'total'    => $total,
       'criteria' => $criteria,
     );
+  }
+
+  /**
+   * L'extranet de l'apprenant est-il RÉELLEMENT ouvert ?
+   *
+   * On lit l'état du compte, pas l'envoi de l'e-mail d'activation : un courrier
+   * parti n'est pas un accès ouvert. C'est la distinction que David a demandée,
+   * et c'est la même que partout ailleurs dans ce plugin entre « envoyé » et
+   * « fait ».
+   */
+  private function acdc_registration_portal_is_active( $registration ) {
+    $learner_id = (int) ( $registration->learner_id ?? 0 );
+    if ( $learner_id <= 0 || empty( $this->learner_portal_account_table ) ) {
+      return false;
+    }
+    global $wpdb;
+    $status = $wpdb->get_var( $wpdb->prepare(
+      "SELECT status FROM {$this->learner_portal_account_table} WHERE learner_id = %d ORDER BY id DESC LIMIT 1",
+      $learner_id
+    ) );
+    return ( 'active' === (string) $status );
+  }
+
+  /** La formation de ce dossier exige-t-elle un test de positionnement ? */
+  private function acdc_registration_positioning_required( $registration ) {
+    $formation_id = (int) ( $registration->formation_id ?? 0 );
+    if ( $formation_id <= 0 || ! method_exists( $this, 'get_formation' ) ) {
+      return false;
+    }
+    $formation = $this->get_formation( $formation_id );
+    return ( $formation && ! empty( $formation->positioning_test_enabled ) );
+  }
+
+  /**
+   * Toutes les demi-journées de cet apprenant sont-elles réglées ?
+   *
+   * On compte les feuilles où il est attendu, et celles qui portent une
+   * signature — ou une absence déclarée. Une absence est un fait établi : le
+   * dossier est traité, c'est l'assiduité qui ne l'est pas. Deux questions
+   * différentes, et cette barre répond à la première.
+   *
+   * Sans aucune feuille, la réponse est NON : il n'y a rien à prouver, donc
+   * rien de prouvé. Rendre vrai un état vide, c'est exactement ce que fait un
+   * écran qui affirme sans avoir lu.
+   */
+  private function acdc_registration_attendance_complete( $registration ) {
+    $learner_id = (int) ( $registration->learner_id ?? 0 );
+    if ( $learner_id <= 0 ) {
+      return false;
+    }
+    global $wpdb;
+    $table = $wpdb->prefix . 'acdc_of_emarg_learners';
+    $row   = $wpdb->get_row( $wpdb->prepare(
+      "SELECT COUNT(*) AS total,
+              SUM( CASE WHEN ( signed_at IS NOT NULL AND signed_at <> '' ) OR is_absent = 1 THEN 1 ELSE 0 END ) AS settled
+         FROM {$table} WHERE learner_id = %d",
+      $learner_id
+    ) );
+    if ( ! $row || (int) $row->total <= 0 ) {
+      return false;
+    }
+    return ( (int) $row->settled >= (int) $row->total );
   }
 
   // ── ACDC 3.23.2 — Workflow statut dossier de formation ────────────────────
@@ -11427,7 +11614,12 @@ private function acdc_pdf_asset_is_readable( $url ) {
 
   private function get_workflow_status_labels() {
     return array(
-      'prospect_cree'              => 'Prospect créé',
+      /* ACDC 3.25.249 — « Prospect créé » est un contresens sur un apprenant
+         inscrit : la liste des statuts est partagée avec le cycle de vie du
+         dossier commercial, où le terme a un sens. Sur la liste des apprenants,
+         il désigne en réalité l'état « le dossier existe, rien n'est encore
+         parti ». On le nomme donc pour ce qu'il est. */
+      'prospect_cree'              => 'Dossier créé',
       'recueil_en_cours'           => 'Recueil en cours',
       'proposition_a_rediger'      => 'Proposition à rédiger',
       'proposition_envoyee'        => 'Proposition envoyée',
