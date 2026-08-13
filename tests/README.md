@@ -14,6 +14,7 @@ lancent sans WordPress, en quelques secondes.
     php tests/test-images-pdf.php      # réduction des images embarquées dans le PDF
     php tests/test-programme-formation.php # lien et pièce jointe du programme de formation
     php tests/test-convocation.php     # dates, horaires et lieu annoncés par la convocation
+    php tests/test-inscription-convention.php # la convention signée crée les dossiers
     php tests/test-protection-dossiers.php # aucune protection ne remonte à la racine des uploads
     node tests/test-signature-trace.js # continuité du tracé des signatures
     php tests/scan-global-wpdb.php acdc-formation-saas-organisme-de-formation
@@ -22,6 +23,7 @@ lancent sans WordPress, en quelques secondes.
     php tests/scan-tarif-jour.php    # tarif catalogue (un TOTAL) injecté dans « Tarif jour »
     php tests/scan-programme-formation.php # lecture directe de program_file_url
     php tests/scan-convocation-unique.php  # convocation composée hors du composeur commun
+    php tests/scan-seances-en-dur.php # horaires de séance écrits en dur
 
 Le dernier balaie tout le plugin et signale les fonctions qui utilisent `$wpdb`
 sans l'avoir importé — la faute qui a produit l'erreur fatale de la 3.25.236.

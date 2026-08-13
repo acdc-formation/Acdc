@@ -149,163 +149,21 @@ public function handle_save_training_registration() {
     }
     $message = $is_draft ? 'Brouillon enregistré.' : 'Inscription enregistrée.';
 
-    // ACDC 3.25.74 — Créer les séances depuis seances_dates
-    $created_session_ids = array();
-    if ( ! $is_draft && $formation_id && ! empty( $seances_dates_raw ) ) {
-      $seances_arr = array();
-      foreach ( array_filter( array_map( 'trim', explode( ',', $seances_dates_raw ) ) ) as $d ) {
-        if ( preg_match( '/^\d{4}-\d{2}-\d{2}$/', $d ) ) { $seances_arr[] = $d; }
-      }
-      sort( $seances_arr );
-      $now_s = $this->now_mysql();
-      // Récupérer location et format depuis la formation
-      $formation_for_session = $formation_id ? $this->get_formation( $formation_id ) : null;
-      $session_location = '';
-      $session_format   = '';
-      if ( $formation_for_session ) {
-        $addr_parts = array_filter( array(
-          ! empty( $formation_for_session->address ) ? (string) $formation_for_session->address : '',
-          ! empty( $formation_for_session->city )    ? (string) $formation_for_session->city : '',
-        ) );
-        $session_location = implode( ', ', $addr_parts );
-        $session_format   = ! empty( $formation_for_session->modality ) ? (string) $formation_for_session->modality : '';
-      }
-
-      /* ACDC 3.25.213 — LE LIEU EST CELUI DU COMMANDITAIRE, comme la convention.
-         La séance héritait de l'adresse portée par la FORMATION, c'est-à-dire
-         celle de l'organisme : « 7 avenue Paul Cézanne, Cogolin » s'affichait
-         alors que la convention engage une intervention chez le client. Le
-         document et la fiche disaient deux lieux différents pour la même
-         journée. Dès qu'une entreprise commande, c'est chez elle. */
-      if ( $company_id ) {
-        $company_for_session = $this->get_company( (int) $company_id );
-        if ( $company_for_session ) {
-          $company_addr = array_filter( array(
-            ! empty( $company_for_session->address ) ? trim( (string) $company_for_session->address ) : '',
-            trim( ( ! empty( $company_for_session->postal_code ) ? (string) $company_for_session->postal_code : '' )
-              . ' ' . ( ! empty( $company_for_session->city ) ? (string) $company_for_session->city : '' ) ),
-          ) );
-          if ( ! empty( $company_addr ) ) {
-            $session_location = implode( ', ', $company_addr );
-          }
-        }
-      }
-
-      /* ACDC 3.25.213 — LES HORAIRES SONT POSÉS, PAS LAISSÉS VIDES.
-         La séance ne portait qu'un « 09:00 » de début, sans fin, sans journée
-         de fin et sans découpage. Trois conséquences en cascade : la durée
-         restait vide, la méthode d'émargement aussi, et surtout le workflow ne
-         pouvait planifier NI convocation NI rappel d'émargement — il n'avait
-         aucune demi-journée à viser. Un dossier complet se retrouvait bloqué
-         par une information que personne n'avait été invité à saisir.
-         On pose donc la journée type de l'organisme, en deux demi-journées.
-         C'est une valeur de départ, modifiable séance par séance : proposer une
-         journée éditable vaut mieux qu'exiger une saisie que rien ne réclame. */
-      /* ACDC 3.25.242 — Ces quatre horaires ne sont PLUS la vérité : ils ne
-         servent que si la convention ne dit rien (celles créées avant cette
-         version). Le déroulé saisi journée par journée les remplace, et il est
-         relu à l'intérieur de la boucle ci-dessous. */
-      $ct_params           = $this->get_contract_params_options();
-      $day_morning_start   = (string) ( $ct_params['default_am_start'] ?? '09:00' ) . ':00';
-      $day_morning_end     = (string) ( $ct_params['default_am_end']   ?? '12:30' ) . ':00';
-      $day_afternoon_start = (string) ( $ct_params['default_pm_start'] ?? '13:30' ) . ':00';
-      $day_afternoon_end   = (string) ( $ct_params['default_pm_end']   ?? '17:00' ) . ':00';
-
-      /* Groupe ou individuelle : la question se tranche en comptant les
-         apprenants nommés dans la convention, pas en laissant la case vide.
-         Le décompte se lit ICI, avant la création des séances — la liste
-         utilisée plus bas pour créer les dossiers n'existe pas encore. */
-      $session_learner_count = 1;
-      if ( $autofill_contract_id ) {
-        $contract_for_count = $this->get_registration_contract( $autofill_contract_id );
-        if ( $contract_for_count && ! empty( $contract_for_count->learner_ids ) ) {
-          $session_learner_count = count( array_filter( array_map( 'absint', explode( ',', (string) $contract_for_count->learner_ids ) ) ) );
-        }
-      }
-      $session_type = $session_learner_count > 1 ? 'Groupe' : 'Individuelle';
-
-      /* ACDC 3.25.242 — CE QUE LA CONVENTION DIT L'EMPORTE SUR CE QUE JE DEVINE.
-         Le type de séance restait déduit du nombre d'apprenants, la méthode
-         d'émargement était écrite en dur, et le lien distanciel n'était jamais
-         posé — une journée à distance naissait donc sans accès. Ces trois
-         réglages se saisissent désormais sur la convention ; la déduction ne
-         sert plus que de repli pour les conventions antérieures. */
-      $contract_for_seances = $autofill_contract_id ? $this->get_registration_contract( $autofill_contract_id ) : null;
-      if ( $contract_for_seances && ! empty( $contract_for_seances->session_type ) ) {
-        $session_type = (string) $contract_for_seances->session_type;
-      }
-      $ct_attendance = ( $contract_for_seances && ! empty( $contract_for_seances->attendance_method ) )
-        ? (string) $contract_for_seances->attendance_method
-        : 'Électronique';
-      $ct_remote_link = ( $contract_for_seances && ! empty( $contract_for_seances->remote_link ) )
-        ? (string) $contract_for_seances->remote_link
-        : '';
-      /* ACDC 3.25.245 — Le lieu vient de la convention, qui le porte désormais
-         en propre. La dérivation depuis la fiche formation ou l'adresse de
-         l'entreprise n'est plus qu'un repli pour les conventions antérieures :
-         deux écrans qui déduisent chacun de leur côté finissent par se
-         contredire, et c'est la convention qui fait foi. */
-      if ( $contract_for_seances && '' !== trim( (string) ( $contract_for_seances->formation_address ?? '' ) ) ) {
-        $session_location = trim( preg_replace( '/\s+/u', ' ', trim(
-          (string) $contract_for_seances->formation_address . ' '
-          . trim( (string) ( $contract_for_seances->formation_postal_code ?? '' ) . ' ' . (string) ( $contract_for_seances->formation_city ?? '' ) )
-        ) ) );
-      }
-
-      foreach ( $seances_arr as $idx => $sdate ) {
-        /* Le déroulé de CETTE journée : format et quatre horaires. Une
-           convention antérieure à cette version retombe sur les horaires type,
-           ce qui reproduit exactement l'ancien comportement. */
-        $day_cfg  = $this->acdc_seance_day_settings( $contract_for_seances, $sdate );
-        $d_am_s   = $day_cfg['am_start'] . ':00';
-        $d_am_e   = $day_cfg['am_end']   . ':00';
-        $d_pm_s   = $day_cfg['pm_start'] . ':00';
-        $d_pm_e   = $day_cfg['pm_end']   . ':00';
-        $d_remote = ( 'Distanciel' === $day_cfg['format'] );
-        /* Une journée à distance n'a pas lieu à l'adresse de la convention :
-           on laisse `location` vide, ce que les écrans savent déjà lire comme
-           « Distanciel », et on pose le lien. */
-        $d_location = $d_remote ? '' : $session_location;
-        $d_format   = $d_remote ? 'Distanciel' : ( '' !== (string) $session_format ? (string) $session_format : 'Présentiel' );
-        // Anti-doublon : pas deux séances même formation + même date
-        $exists = $wpdb->get_var( $wpdb->prepare(
-          "SELECT id FROM {$this->session_table} WHERE formation_id = %d AND start_date = %s LIMIT 1",
-          $formation_id, $sdate
-        ) );
-        if ( $exists ) {
-          $created_session_ids[] = (int) $exists;
-          continue;
-        }
-        $session_title = 'Séance J' . ( $idx + 1 ) . ( $formation_title ? ' — ' . $formation_title : '' );
-        $wpdb->insert( $this->session_table, array(
-          'formation_id'   => $formation_id,
-          'company_id'     => $company_id ?: null,
-          'title'          => $session_title,
-          'start_date'     => $sdate,
-          'end_date'       => $sdate,
-          'start_at'       => $sdate . ' ' . $d_am_s,
-          'end_at'         => $sdate . ' ' . $d_pm_e,
-          /* Les deux demi-journées sont écrites explicitement : c'est ce que lit
-             le moteur pour poser un rappel d'émargement 30 minutes avant chaque
-             séance, matin et après-midi. */
-          'schedule_json'  => wp_json_encode( array(
-            array( 'start_date' => $sdate, 'start_at' => $sdate . ' ' . $d_am_s, 'end_at' => $sdate . ' ' . $d_am_e, 'half' => 'am' ),
-            array( 'start_date' => $sdate, 'start_at' => $sdate . ' ' . $d_pm_s, 'end_at' => $sdate . ' ' . $d_pm_e, 'half' => 'pm' ),
-          ) ),
-          'status'         => 'Planifiée',
-          'trainer_id'     => $trainer_id ?: null,
-          'location'       => $d_location,
-          'remote_link'    => $d_remote ? $ct_remote_link : '',
-          'session_format' => $d_format,
-          'session_type'      => $session_type,
-          'attendance_method' => $ct_attendance,
-          'is_draft'       => 0,
-          'created_at'     => $now_s,
-          'updated_at'     => $now_s,
-        ) );
-        if ( $wpdb->insert_id ) { $created_session_ids[] = (int) $wpdb->insert_id; }
-      }
-    }
+    /* ACDC 3.25.253 — La fabrique des séances a déménagé dans le noyau des
+       conventions : elle est appelée ici, par l'inscription en masse, et par la
+       signature de la convention. Trois portes, une seule fabrique. */
+    $created_session_ids = $this->acdc_create_sessions_from_contract(
+      $autofill_contract_id ? $this->get_registration_contract( $autofill_contract_id ) : null,
+      array(
+        'formation_id'    => $formation_id,
+        'company_id'      => $company_id,
+        'formation_title' => $formation_title,
+        'trainer_id'      => $trainer_id,
+        'seances_dates'   => $seances_dates_raw,
+        'is_draft'        => $is_draft,
+        'contract_id'     => $autofill_contract_id,
+      )
+    );
 
     // ACDC 3.25.74 — Créer automatiquement un dossier par apprenant supplémentaire (convention multi-apprenants)
     if ( ! $is_draft && $autofill_contract_id && $registration_id ) {
@@ -1666,147 +1524,16 @@ public function handle_update_registration_contract_document() {
       exit;
     }
 
-    /* ── Données de la convention ─────────────────────────────── */
-    $formation_id    = (int) $contract->formation_id;
-    $formation_title = ! empty( $contract->formation_title ) ? (string) $contract->formation_title : '';
-    $company_id      = ! empty( $contract->company_id )      ? (int) $contract->company_id      : null;
-    $price_ht        = ! empty( $contract->price_ht )        ? (string) $contract->price_ht     : '';
-    $transport       = ! empty( $contract->transport_fees_enabled ) ? 1 : 0;
-    $meal            = ! empty( $contract->meal_fees_enabled )      ? 1 : 0;
-    $contract_title  = ! empty( $contract->title )           ? (string) $contract->title        : '';
-    $now             = $this->now_mysql();
-
-    /* Label entreprise */
-    $company_label = '';
-    if ( $company_id ) {
-      $company_obj   = $this->get_company( $company_id );
-      $company_label = $company_obj && ! empty( $company_obj->name ) ? (string) $company_obj->name : '';
-    }
-
-    /* ── Inscriptions — une par apprenant ─────────────────────── */
-    $raw_learner_ids = array_values( array_filter( array_map( 'absint', explode( ',', (string) $contract->learner_ids ) ) ) );
-    $enrolled = 0;
-    $skipped  = 0;
-
-    foreach ( $raw_learner_ids as $learner_id ) {
-      /* Dédoublonnage strict : même apprenant + même formation + même convention */
-      $exists = $wpdb->get_var( $wpdb->prepare(
-        "SELECT id FROM {$this->training_registration_table}
-         WHERE learner_id = %d AND formation_id = %d AND autofill_contract_id = %d LIMIT 1",
-        $learner_id, $formation_id, $contract_id
-      ) );
-      if ( $exists ) {
-        $skipped++;
-        continue;
-      }
-
-      $learner       = $this->get_learner( $learner_id );
-      $learner_label = $learner ? trim( (string) $learner->first_name . ' ' . (string) $learner->usage_last_name ) : '';
-      $reg_title     = $this->get_training_registration_title( 'Non', '', $learner_label, $learner_label, $formation_title );
-
-      $reg_data = array(
-        'title'                   => $reg_title,
-        'belongs_to_group'        => 'Non',
-        'autofill_contract_id'    => $contract_id,
-        'autofill_contract_label' => $contract_title,
-        'group_id'                => null,
-        'group_label'             => '',
-        'learner_id'              => $learner_id,
-        'learner_label'           => $learner_label,
-        'learner_ids'             => (string) $learner_id,
-        'learners_label'          => $learner_label,
-        'company_id'              => $company_id,
-        'company_label'           => $company_label,
-        'formation_id'            => $formation_id ?: null,
-        'formation_title'         => $formation_title,
-        'extranet_access'         => 1,
-        'price_ht'                => $price_ht,
-        'transport_fees_enabled'  => $transport,
-        'meal_fees_enabled'       => $meal,
-        'is_draft'                => 0,
-        'created_at'              => $now,
-        'updated_at'              => $now,
-      );
-
-      $result = $wpdb->insert( $this->training_registration_table, $reg_data );
-      if ( false !== $result ) {
-        $enrolled++;
-      }
-    }
-
-    /* ── Séances — une par date ────────────────────────────────── */
-    $seances_arr = array();
-    if ( ! empty( $contract->seances_dates ) ) {
-      foreach ( array_filter( array_map( 'trim', explode( ',', (string) $contract->seances_dates ) ) ) as $d ) {
-        if ( preg_match( '/^\d{4}-\d{2}-\d{2}$/', $d ) ) {
-          $seances_arr[] = $d;
-        }
-      }
-      sort( $seances_arr );
-    }
-
-    $sessions_created = 0;
-    foreach ( $seances_arr as $date ) {
-      $date_fr = mysql2date( 'd/m/Y', $date );
-
-      /* Demi-journées Qualiopi */
-      $half_days = array(
-        array(
-          'label'  => 'Matin',
-          'start'  => $date . ' 09:00:00',
-          'end'    => $date . ' 12:30:00',
-        ),
-        array(
-          'label'  => 'Après-midi',
-          'start'  => $date . ' 13:30:00',
-          'end'    => $date . ' 17:00:00',
-        ),
-      );
-
-      foreach ( $half_days as $half ) {
-        $start_at = $half['start'];
-        $end_at   = $half['end'];
-
-        $session_title = $formation_title
-          ? sprintf( 'Séance — %s — %s — %s', $formation_title, $date_fr, $half['label'] )
-          : sprintf( 'Séance — %s — %s', $date_fr, $half['label'] );
-
-        $slot = array(
-          'start_at'   => $start_at,
-          'end_at'     => $end_at,
-          'start_date' => $date,
-          'end_date'   => $date,
-        );
-
-        $session_data = array(
-          'formation_id'      => $formation_id ?: null,
-          'company_id'        => $company_id,
-          'trainer_id'        => null,
-          'title'             => $session_title,
-          'session_type'      => '',
-          'attendance_method' => '',
-          'session_format'    => '',
-          'start_at'          => $start_at,
-          'end_at'            => $end_at,
-          'start_date'        => $date,
-          'end_date'          => $date,
-          'location'          => '',
-          'remote_link'       => '',
-          'status'            => 'Planifiée',
-          'max_learners'      => 0,
-          'is_draft'          => 0,
-          'schedule_json'     => wp_json_encode( array( $slot ) ),
-          'notes'             => '',
-          'created_at'        => $now,
-          'updated_at'        => $now,
-        );
-
-        $result = $wpdb->insert( $this->session_table, $session_data );
-        if ( false !== $result ) {
-          $sessions_created++;
-        }
-      }
-    }
+    /* ACDC 3.25.253 — Ce gestionnaire avait sa propre fabrique : elle créait
+       DEUX séances par jour avec 09h00–12h30 et 13h30–17h00 écrits en dur,
+       ignorant le déroulé saisi sur la convention — précisément ce que David
+       avait demandé de ne jamais faire. Il appelle désormais les deux mêmes
+       méthodes que la signature et que l'enregistrement d'un dossier. */
+    $report   = $this->acdc_enroll_learners_from_contract( $contract );
+    $sessions = $this->acdc_create_sessions_from_contract( $contract );
+    $enrolled         = (int) $report['created'];
+    $skipped          = (int) $report['skipped'];
+    $sessions_created = count( (array) $sessions );
 
     /* ── Message de succès ─────────────────────────────────────── */
     $parts = array();
@@ -1817,7 +1544,9 @@ public function handle_update_registration_contract_document() {
       $parts[] = 1 === $skipped ? '1 inscription ignorée (doublon)' : $skipped . ' inscriptions ignorées (doublons)';
     }
     if ( $sessions_created > 0 ) {
-      $parts[] = 1 === $sessions_created ? '1 séance créée' : $sessions_created . ' séances créées';
+      /* « rattachée » et non « créée » : la fabrique réutilise une séance déjà
+         planifiée pour la même formation à la même date. */
+      $parts[] = 1 === $sessions_created ? '1 séance rattachée' : $sessions_created . ' séances rattachées';
     }
     if ( empty( $parts ) ) {
       $parts[] = 'Aucun enregistrement créé (apprenants déjà inscrits, aucune date de séance).';
@@ -1832,6 +1561,48 @@ public function handle_update_registration_contract_document() {
     exit;
   }
 
+
+  /**
+   * ACDC 3.25.253 — À LA SIGNATURE, LES DOSSIERS EXISTENT.
+   *
+   * La convention signée est l'engagement : c'est le moment où les apprenants
+   * nommés deviennent des inscrits. Jusqu'ici, il fallait qu'un humain ouvre un
+   * formulaire et l'enregistre, une fois par apprenant — pendant que le
+   * parcours affichait l'étape en vert. Personne ne le faisait, et tout ce qui
+   * pend au dossier restait vide : la liste des inscrits, l'extranet, la barre
+   * de complétude.
+   *
+   * Les séances sont créées dans la foulée, avec le déroulé saisi sur la
+   * convention. Les deux opérations sont idempotentes.
+   */
+  public function handle_registration_contract_signed_enroll( $request_id, $request ) {
+    global $wpdb;
+    $request_id = absint( $request_id );
+    if ( ! $request_id ) { return; }
+
+    $contract = $wpdb->get_row( $wpdb->prepare(
+      "SELECT * FROM {$this->registration_contract_table} WHERE signature_request_id = %d LIMIT 1",
+      $request_id
+    ) );
+    if ( ! $contract ) { return; }   // La requête ne porte pas sur une convention.
+
+    $report   = $this->acdc_enroll_learners_from_contract( $contract );
+    $sessions = $this->acdc_create_sessions_from_contract( $contract );
+
+    if ( method_exists( $this, 'log_action_event' ) ) {
+      $this->log_action_event(
+        'create',
+        'registrations_from_signed_contract',
+        (int) $contract->id,
+        'success',
+        array(
+          'created'  => (int) $report['created'],
+          'skipped'  => (int) $report['skipped'],
+          'sessions' => count( (array) $sessions ),
+        )
+      );
+    }
+  }
 
   /* ACDC 3.25.157 — Le prospect devient commanditaire À LA SIGNATURE de la
      convention, et pas avant : c'est la signature qui fait le client.

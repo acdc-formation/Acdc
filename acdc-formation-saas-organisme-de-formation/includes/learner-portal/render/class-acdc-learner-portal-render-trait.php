@@ -1031,15 +1031,29 @@ trait ACDC_Learner_Portal_Render_Trait {
        il écrit à l'organisme, et l'organisme lui répond ce que cette phrase
        aurait suffi à dire. */
     $has_locked = false;
+    $total_items = 0;
     foreach ( $groups as $group ) {
       foreach ( (array) ( $group['items'] ?? array() ) as $doc ) {
+        $total_items++;
         if ( ! empty( $doc['locked'] ) ) {
           $has_locked = true;
-          break 2;
         }
       }
     }
     ?>
+    <?php if ( 0 === $total_items ) : ?>
+      <?php /* ACDC 3.25.253 — DIRE POURQUOI L'ESPACE EST VIDE.
+               Neuf onglets à zéro et « aucun document dans cet onglet » : rien
+               ne permettait de distinguer un document qui n'est pas encore prêt
+               d'un dossier qui n'existe pas. L'apprenante le lisait comme une
+               panne, et l'organisme ne pouvait pas la détromper. Aucune ligne —
+               pas même une ligne indisponible — ne peut apparaître tant qu'aucun
+               dossier n'est rattaché : c'est ce que dit ce message. */ ?>
+      <div class="acdc-panel acdc-mb-18" style="border-left:4px solid #C5A253;">
+        <p style="margin:0 0 8px;font-weight:600;">Aucun dossier de formation n’est rattaché à votre compte pour le moment.</p>
+        <p style="margin:0;">Vos documents — programme, convocation, règlement intérieur, analyse du besoin — apparaîtront ici dès que votre inscription sera enregistrée par l’organisme. Si votre formation approche, écrivez-nous : nous vérifierons votre dossier.</p>
+      </div>
+    <?php endif; ?>
     <?php if ( $has_locked ) : ?>
       <div class="acdc-panel acdc-mb-18" style="border-left:4px solid #C5A253;">
         <p style="margin:0;">Vos documents officiels — programme, convocation, livret d’accueil, règlement intérieur — sont disponibles dès maintenant. Les supports de cours et les résultats d’évaluation s’ouvriront à la fin de votre formation, ou plus tôt si votre formateur les débloque.</p>

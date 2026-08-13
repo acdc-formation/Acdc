@@ -609,14 +609,55 @@ trait ACDC_Workflow_Engine_Trait {
        On la traite pour ce qu'elle est : un constat. Si les apprenants sont
        inscrits, elle est FAITE, et l'on dit combien. Sinon, elle reste à faire,
        entre les mains de l'organisme. */
-    $learner_count = is_array( $pieces['learners'] ?? null ) ? count( $pieces['learners'] ) : 0;
+    /* ACDC 3.25.253 — CETTE ÉTAPE COMPTAIT DES NOMS ET ANNONÇAIT DES DOSSIERS.
+       `$pieces['learners']`, ce sont les apprenants NOMMÉS DANS LA CONVENTION.
+       L'étape se peignait en vert — « 2 apprenant(s) inscrit(s) au dossier » —
+       sans qu'aucun dossier n'existe. Verte, elle n'était jamais faite ; et
+       comme la liste des inscrits, l'extranet apprenant et la barre de
+       complétude pendent tous au dossier, ils restaient vides. La convocation,
+       elle, partait : elle lit la convention, pas les dossiers. C'est ainsi que
+       des apprenants ont reçu leur convocation sans figurer nulle part.
 
-    if ( $learner_count > 0 ) {
+       On compte désormais les VRAIS dossiers. Et puisque la signature de la
+       convention est l'engagement, une convention signée dont les dossiers
+       manquent les fait créer ici — le moteur re-dérive à chaque passe, c'est sa
+       règle : les conventions signées avant cette version se rattrapent seules. */
+    $learner_count = is_array( $pieces['learners'] ?? null ) ? count( $pieces['learners'] ) : 0;
+    $contract_wf   = $pieces['contract'] ?? null;
+
+    /* La même lecture de « signée » que partout ailleurs dans ce moteur : le
+       statut, ou l'horodatage de signature. */
+    $contract_signed_wf = $contract_wf
+      && ( $this->acdc_wf_is_signed( '', $contract_wf->signature_status ?? '' )
+        || ! empty( $contract_wf->signature_completed_at ) );
+
+    if ( $learner_count > 0 && $contract_signed_wf
+      && method_exists( $this, 'acdc_enroll_learners_from_contract' ) ) {
+      $this->acdc_enroll_learners_from_contract( $contract_wf );
+      if ( method_exists( $this, 'acdc_create_sessions_from_contract' ) ) {
+        $this->acdc_create_sessions_from_contract( $contract_wf );
+      }
+    }
+
+    $enrolled_count = 0;
+    if ( $contract_wf && ! empty( $contract_wf->id ) ) {
+      $enrolled_count = (int) $wpdb->get_var( $wpdb->prepare(
+        "SELECT COUNT(*) FROM {$this->training_registration_table}
+          WHERE autofill_contract_id = %d AND is_draft = 0",
+        (int) $contract_wf->id
+      ) );
+    }
+
+    if ( $enrolled_count > 0 ) {
       $this->acdc_wf_settle_step(
         $run_id,
         'registration',
         'done',
-        sprintf( '%d apprenant(s) inscrit(s) au dossier.', $learner_count )
+        sprintf(
+          '%d dossier(s) d\'inscription créé(s) pour %d apprenant(s) nommé(s) dans la convention.',
+          $enrolled_count,
+          $learner_count
+        )
       );
     } else {
       $this->acdc_wf_upsert_step( $run_id, 'registration', array( 'scheduled_at' => $now ) );

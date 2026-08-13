@@ -616,6 +616,10 @@ class ACDC_Formation_SAAS_Plugin {
        convention : c'est la signature qui fait le client, pas l'ouverture d'un
        formulaire ni l'enregistrement d'un brouillon. */
     add_action( 'acdc_sig_request_signed', array( $this, 'handle_registration_contract_signed_company' ), 25, 2 );
+    /* ACDC 3.25.253 — La convention signée crée les dossiers d'inscription et
+       les séances. Priorité 40 : après le rattachement du commanditaire (25),
+       dont les dossiers reprennent l'identifiant. */
+    add_action( 'acdc_sig_request_signed', array( $this, 'handle_registration_contract_signed_enroll' ), 40, 2 );
     add_action( 'wp_ajax_acdc_nad_public_submit',        array( $this, 'handle_nad_public_submit' ) );
     add_action( 'wp_ajax_nopriv_acdc_nad_public_submit', array( $this, 'handle_nad_public_submit' ) );
     add_filter( 'template_include', array( $this, 'nad_maybe_override_template' ) );
