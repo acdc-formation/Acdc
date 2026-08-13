@@ -6025,15 +6025,11 @@ dbDelta( $sql_companies );
     $params = $this->get_convocation_params_options();
     $branding = $this->get_branding_options();
     $org_name = ! empty( $profile['enterprise'] ) ? $profile['enterprise'] : ( ! empty( $branding['company_name'] ) ? $branding['company_name'] : 'ACDC Formation' );
-    $header_bg = ! empty( $profile['header_footer_bg'] ) ? $profile['header_footer_bg'] : '#F3E3BF';
-    $header_text = ! empty( $profile['header_footer_text'] ) ? $profile['header_footer_text'] : '#1E4777';
+    /* ACDC 3.25.254 — Le bandeau beige, le logo et le cachet étaient préparés
+       ici ; la charte s'en charge. Seules restent les données du texte. */
     $title_color = '#0C2D52';
-    $muted = '#1E4777';
     $org_city = ! empty( $profile['city'] ) ? $profile['city'] : ( ! empty( $branding['city'] ) ? $branding['city'] : 'Ville non renseignée' );
     $org_email = ! empty( $profile['enterprise_contact_email'] ) ? $profile['enterprise_contact_email'] : ( ! empty( $branding['email'] ) ? $branding['email'] : '' );
-    $logo = $this->prepare_pdf_jpeg_image( $this->acdc_resolve_pdf_logo_url(), 42, 42 );
-    $stamp_source = ! empty( $profile['stamp_only_url'] ) ? $profile['stamp_only_url'] : ( ! empty( $profile['stamp_url'] ) ? $profile['stamp_url'] : '' );
-    $stamp = ! empty( $stamp_source ) ? $this->prepare_pdf_jpeg_image( $stamp_source, 150, 50 ) : null;
 
     $learner_name = $context['learner_name'];
     $formation_title = $context['formation_title'];
@@ -6110,7 +6106,8 @@ dbDelta( $sql_companies );
     }
 
     $blocks = array(
-      array( 'type' => 'title', 'text' => 'CONVOCATION EN FORMATION' ),
+      /* Le titre est porté par l'en-tête de la charte : le répéter ici en
+         ferait un doublon à deux tailles différentes. */
       array( 'type' => 'spacer' ),
       /* Pas de civilité devinée : « M. » était écrit en dur devant chaque
          nom, y compris ceux de trois apprenantes. */
@@ -6163,21 +6160,15 @@ dbDelta( $sql_companies );
     $current = array();
     $y = 792;
 
-    $header = array(
-      array( 'type' => 'rect', 'x' => 0, 'y' => 760, 'width' => 595, 'height' => 82, 'fill_color' => $header_bg ),
-    );
-    if ( $logo ) {
-      $header[] = array(
-        'type' => 'image', 'image_key' => $logo['key'], 'image_data' => $logo['data'], 'image_width' => $logo['width'], 'image_height' => $logo['height'], 'display_width' => $logo['display_width'], 'display_height' => $logo['display_height'], 'x' => 58, 'y' => 783,
-      );
-    }
-    $header[] = array( 'text' => strtoupper( $org_name ), 'x' => 120, 'y' => 810, 'size' => 15, 'font' => 'Helvetica-Bold', 'color' => $title_color );
-    if ( ! empty( $branding['company_name'] ) && $branding['company_name'] !== $org_name ) {
-      $header[] = array( 'text' => (string) $branding['company_name'], 'x' => 120, 'y' => 796, 'size' => 8.5, 'font' => 'Helvetica', 'color' => $muted );
-    }
-    $header[] = array( 'text' => 'CONVOCATION EN FORMATION', 'x' => 320, 'y' => 760 + 30, 'size' => 16, 'font' => 'Helvetica-Bold', 'color' => $title_color );
+    /* ACDC 3.25.254 — LA CONVOCATION ENTRE DANS LA CHARTE.
+       Elle portait un bandeau beige pleine largeur, la raison sociale en
+       capitales à 15 pt et son titre posé au milieu du bandeau : elle ne
+       ressemblait ni au contrat formateur ni à la convention. Elle prend
+       maintenant le même en-tête et le même pied que les autres pièces du
+       dossier — c'est le même organisme qui les signe. */
+    $header = $this->acdc_pdf_charte_header( 'Convocation en formation' );
     $current = array_merge( $current, $header );
-    $y = 728;
+    $y = 700;
 
     foreach ( $blocks as $block ) {
       $type = $block['type'];
@@ -6199,32 +6190,41 @@ dbDelta( $sql_companies );
         $lines = $this->pdf_wrap_text( $block['text'], 'title' === $type ? 46 : 92 );
       }
       foreach ( $lines as $line ) {
-        if ( $y < 86 ) {
-          if ( $stamp ) {
-            $current[] = array( 'type' => 'image', 'image_key' => $stamp['key'], 'image_data' => $stamp['data'], 'image_width' => $stamp['width'], 'image_height' => $stamp['height'], 'display_width' => $stamp['display_width'], 'display_height' => $stamp['display_height'], 'x' => 360, 'y' => 24 );
-          }
+        /* 86 pt suffisaient tant qu'il n'y avait pas de pied de page ; il en
+           occupe 30, et le texte passait par-dessus. */
+        if ( $y < 110 ) {
           $pages[] = $current;
           $current = array_merge( array(), $header );
-          $y = 728;
+          $y = 700;
         }
         $current[] = array(
           'text' => $line,
-          'x' => 56,
+          /* Aligné sur la marge de la charte : le corps commençait vingt points
+             plus à droite que l'en-tête, et le décalage se voyait. */
+          'x' => 35.43,
           'y' => $y,
           'size' => $font_size,
           'font' => in_array( $type, array( 'title', 'heading' ), true ) ? 'Helvetica-Bold' : 'Helvetica',
-          'color' => 'title' === $type ? $title_color : '#000000',
+          'color' => in_array( $type, array( 'title', 'heading' ), true ) ? $title_color : '#1f2937',
         );
         $y -= $line_height;
       }
       $y -= 4;
     }
 
-    if ( $stamp ) {
-      $current[] = array( 'type' => 'image', 'image_key' => $stamp['key'], 'image_data' => $stamp['data'], 'image_width' => $stamp['width'], 'image_height' => $stamp['height'], 'display_width' => $stamp['display_width'], 'display_height' => $stamp['display_height'], 'x' => 360, 'y' => 24 );
+    $stamp_line = $this->acdc_pdf_charte_stamp( 360, 52, 170, 128 );
+    if ( $stamp_line ) {
+      $current[] = $stamp_line;
     }
     if ( ! empty( $current ) ) {
       $pages[] = $current;
+    }
+    /* Le pied de page manquait : une convocation partait sans l'adresse, le
+       SIRET ni le NDA de l'organisme, quand la convention et le contrat les
+       portent. On l'ajoute sur chaque page. */
+    foreach ( $pages as $index => $page_lines ) {
+      $this->acdc_pdf_charte_footer( $page_lines );
+      $pages[ $index ] = $page_lines;
     }
     return $pages;
   }  private function get_training_file_status_label( $registration ) {
@@ -11404,7 +11404,201 @@ private function acdc_pdf_asset_is_readable( $url ) {
   }
 
   return ( '' !== $path && file_exists( $path ) && is_readable( $path ) );
-}private function prepare_pdf_jpeg_image( $url, $max_width = 150, $max_height = 55 ) {
+}
+  /**
+   * ACDC 3.25.254 — LA CHARTE DES DOCUMENTS, ÉCRITE UNE SEULE FOIS.
+   *
+   * Le contrat formateur, la convention et la convocation dessinaient chacun
+   * leur en-tête et leur pied. Ils avaient divergé au point que la convention
+   * n'a « plus rien de la charte » : boîtes blanches contre panneaux bleutés,
+   * texte noir pur contre encre, titre en minuscules contre capitales, et une
+   * convocation à bandeau beige qui ne ressemble à aucun des deux.
+   *
+   * Pire, le pied de la convention était écrit EN DUR : changer l'adresse ou le
+   * SIRET dans les Réglages ne changeait pas la convention. Un document
+   * contractuel qui affiche une identité périmée n'est pas un défaut de style.
+   *
+   * Ces quatre méthodes sont désormais la seule source de la charte. Le contrat
+   * formateur reste la référence : ce sont ses mesures, reprises à l'identique.
+   *
+   * @return array Palette de la charte.
+   */
+  private function acdc_pdf_charte_colors() {
+    return array(
+      'navy'  => '#0C2D52',
+      'gold'  => '#C5A253',
+      'ink'   => '#1f2937',
+      'muted' => '#6b7280',
+      'line'  => '#d7dde6',
+      'panel' => '#f8fafc',
+      'band'  => '#eef2f8',
+      'soft'  => '#f0f4fa',
+    );
+  }
+
+  /** Géométrie commune : A4 portrait et marges du contrat formateur. */
+  private function acdc_pdf_charte_metrics() {
+    return array( 'page_w' => 595, 'page_h' => 842, 'left' => 35.43, 'right' => 35.43 );
+  }
+
+  /**
+   * L'identité de l'organisme, lue dans les Réglages — jamais écrite en dur.
+   */
+  private function acdc_pdf_charte_org() {
+    $profile = $this->get_company_profile_options();
+    $address = trim(
+      (string) ( $profile['address'] ?? '' )
+      . ( ! empty( $profile['postal_code'] ) ? ', ' . (string) $profile['postal_code'] : '' )
+      . ( ! empty( $profile['city'] ) ? ' ' . (string) $profile['city'] : '' )
+    );
+    return array(
+      'name'    => ! empty( $profile['enterprise'] ) ? (string) $profile['enterprise'] : 'ACDC-Formation',
+      'address' => $address,
+      'siret'   => (string) ( $profile['siret_identification'] ?? '' ),
+      'nda'     => (string) ( $profile['nda_number'] ?? '' ),
+      'phone'   => (string) ( $profile['enterprise_contact_phone'] ?? '' ),
+      'email'   => ! empty( $profile['enterprise_contact_email'] ) ? (string) $profile['enterprise_contact_email'] : (string) get_option( 'admin_email' ),
+      'site'    => (string) ( $profile['website'] ?? '' ),
+      'city'    => (string) ( $profile['city'] ?? '' ),
+    );
+  }
+
+  /**
+   * L'en-tête : logo, raison sociale, baseline dorée, identité à droite, filet.
+   *
+   * @param string $title    Titre du document — imprimé en capitales.
+   * @param string $subtitle Sous-titre facultatif.
+   * @return array Lignes de la page, page_meta compris.
+   */
+  private function acdc_pdf_charte_header( $title, $subtitle = '' ) {
+    $c = $this->acdc_pdf_charte_colors();
+    $m = $this->acdc_pdf_charte_metrics();
+    $org = $this->acdc_pdf_charte_org();
+
+    $page = array( array( 'type' => 'page_meta', 'width' => $m['page_w'], 'height' => $m['page_h'] ) );
+    $page[] = array( 'type' => 'rect', 'x' => $m['left'], 'y' => 754, 'width' => $m['page_w'] - $m['left'] - $m['right'], 'height' => 1.2, 'fill_color' => $c['gold'] );
+
+    $logo = $this->prepare_pdf_jpeg_image( $this->acdc_resolve_pdf_logo_url(), 48, 48 );
+    if ( $logo ) {
+      $page[] = array(
+        'type' => 'image', 'image_key' => $logo['key'], 'image_data' => $logo['data'],
+        'image_width' => $logo['width'], 'image_height' => $logo['height'],
+        'display_width' => $logo['display_width'], 'display_height' => $logo['display_height'],
+        'x' => $m['left'], 'y' => 782,
+      );
+    }
+    $page[] = array( 'text' => 'ACDC-Formation', 'x' => $m['left'] + 62, 'y' => 806, 'size' => 13.6, 'font' => 'Helvetica-Bold', 'color' => $c['navy'] );
+    $page[] = array( 'text' => 'Azur - Compétences - Développement - Conseils', 'x' => $m['left'] + 62, 'y' => 792, 'size' => 8.4, 'font' => 'Helvetica', 'color' => $c['gold'] );
+
+    $company_x = $m['page_w'] - $m['right'] - 130;
+    $company_lines = array_values( array_filter( array(
+      $org['name'],
+      $org['siret'] ? 'Siret : ' . $org['siret'] : '',
+      $org['nda'] ? 'NDA : ' . $org['nda'] : '',
+    ) ) );
+    $cy = 806;
+    foreach ( $company_lines as $idx => $lt ) {
+      $page[] = array( 'text' => $lt, 'x' => $company_x, 'y' => $cy, 'size' => 8, 'font' => 0 === $idx ? 'Helvetica-Bold' : 'Helvetica', 'color' => '#374151' );
+      $cy -= 10;
+    }
+
+    $page[] = array( 'text' => $this->acdc_pdf_charte_upper( $title ), 'x' => $m['left'], 'y' => 736, 'size' => 15.6, 'font' => 'Helvetica-Bold', 'color' => $c['navy'] );
+    if ( '' !== trim( (string) $subtitle ) ) {
+      $page[] = array( 'text' => (string) $subtitle, 'x' => $m['left'], 'y' => 718, 'size' => 8.5, 'font' => 'Helvetica', 'color' => $c['muted'] );
+    }
+    return $page;
+  }
+
+  /**
+   * Capitales sans casse-tête d'accents : le moteur PDF écrit en WinAnsi, et
+   * strtoupper() laisserait « é » intact au milieu d'un titre en capitales.
+   */
+  private function acdc_pdf_charte_upper( $text ) {
+    $text = (string) $text;
+    return function_exists( 'mb_strtoupper' ) ? mb_strtoupper( $text, 'UTF-8' ) : strtoupper( $text );
+  }
+
+  /** Le pied de page : filet et deux lignes centrées, lues dans les Réglages. */
+  private function acdc_pdf_charte_footer( &$page ) {
+    $c = $this->acdc_pdf_charte_colors();
+    $m = $this->acdc_pdf_charte_metrics();
+    $org = $this->acdc_pdf_charte_org();
+
+    $page[] = array( 'type' => 'rect', 'x' => $m['left'] - 5, 'y' => 30, 'width' => $m['page_w'] - 2 * ( $m['left'] - 5 ), 'height' => 1, 'fill_color' => $c['line'] );
+
+    $line1 = implode( ' - ', array_values( array_filter( array(
+      $org['address'],
+      $org['siret'] ? 'Siret : ' . $org['siret'] : '',
+      $org['nda'] ? 'NDA : ' . $org['nda'] : '',
+    ) ) ) );
+    $line2 = implode( ' - ', array_values( array_filter( array(
+      $org['email'] ? 'e-mail : ' . $org['email'] : '',
+      $org['phone'] ? 'Tél : ' . $org['phone'] : '',
+      $org['site'] ? 'site web : ' . $org['site'] : '',
+    ) ) ) );
+
+    if ( '' !== $line1 ) {
+      $page[] = array( 'text' => $line1, 'x' => 0, 'y' => 21, 'size' => 6.8, 'font' => 'Helvetica', 'color' => '#4b5563', 'center' => true, 'page_w' => $m['page_w'] );
+    }
+    if ( '' !== $line2 ) {
+      $page[] = array( 'text' => $line2, 'x' => 0, 'y' => 12, 'size' => 6.8, 'font' => 'Helvetica', 'color' => '#4b5563', 'center' => true, 'page_w' => $m['page_w'] );
+    }
+  }
+
+  /**
+   * LE CACHET ET LA SIGNATURE, AUX BONNES PROPORTIONS.
+   *
+   * Le contrat formateur les plafonnait séparément :
+   *
+   *     $w = min( 280, largeur * 1.5 );    // 255
+   *     $h = min( 160, hauteur * 1.5 );    // 191 → rabaissé à 160
+   *
+   * Deux plafonds indépendants écrasent l'image dès que l'un des deux mord :
+   * un cachet de 1600 × 1200 sortait aplati de 16 %. On calcule désormais UN
+   * SEUL rapport de réduction, appliqué aux deux dimensions — la seule façon
+   * de garantir qu'un cachet reste rond.
+   *
+   * @return array|null Ligne image prête à poser, ou null si aucun cachet.
+   */
+  private function acdc_pdf_charte_stamp( $x, $y, $max_w = 255, $max_h = 191 ) {
+    $profile = $this->get_company_profile_options();
+    $candidates = array_values( array_filter( array(
+      (string) ( $profile['stamp_url'] ?? '' ),
+      (string) ( $profile['signature_url'] ?? '' ),
+      (string) ( $profile['stamp_only_url'] ?? '' ),
+    ) ) );
+    if ( empty( $candidates ) ) {
+      return null;
+    }
+
+    $image = null;
+    foreach ( $candidates as $candidate ) {
+      /* On demande l'image dans sa taille native : la mise à l'échelle se fait
+         ici, en une seule fois, pour ne pas cumuler deux arrondis. */
+      $image = $this->prepare_pdf_jpeg_image( $candidate, 4000, 4000 );
+      if ( $image ) {
+        break;
+      }
+    }
+    if ( ! $image || empty( $image['width'] ) || empty( $image['height'] ) ) {
+      return null;
+    }
+
+    $ratio = min( $max_w / (float) $image['width'], $max_h / (float) $image['height'], 1 );
+    return array(
+      'type'           => 'image',
+      'image_key'      => $image['key'],
+      'image_data'     => $image['data'],
+      'image_width'    => $image['width'],
+      'image_height'   => $image['height'],
+      'display_width'  => max( 1.0, round( (float) $image['width'] * $ratio, 2 ) ),
+      'display_height' => max( 1.0, round( (float) $image['height'] * $ratio, 2 ) ),
+      'x'              => $x,
+      'y'              => $y,
+    );
+  }
+
+  private function prepare_pdf_jpeg_image( $url, $max_width = 150, $max_height = 55 ) {
   $url = is_scalar( $url ) ? trim( (string) $url ) : '';
   if ( '' === $url || ! function_exists( 'imagecreatefromstring' ) ) {
     return null;

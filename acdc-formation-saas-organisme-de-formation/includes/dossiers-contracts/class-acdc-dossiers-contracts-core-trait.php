@@ -2873,64 +2873,23 @@ private function build_contract_pdf_pages( $context ) {
       }
     }
   }
-  $signature_candidates = array(
-    ! empty( $profile['stamp_url'] ) ? (string) $profile['stamp_url'] : '',
-    ! empty( $profile['signature_url'] ) ? (string) $profile['signature_url'] : '',
-    ! empty( $profile['stamp_only_url'] ) ? (string) $profile['stamp_only_url'] : '',
-  );
-  foreach ( $signature_candidates as $signature_candidate ) {
-    if ( '' === $signature_candidate ) {
-      continue;
-    }
-    $signature_image = $this->prepare_pdf_jpeg_image( $signature_candidate, 170, 170 );
-    if ( $signature_image ) {
-      break;
-    }
-  }
+  /* ACDC 3.25.254 — L'ordre des sources du cachet est celui de la charte, qui
+     le pose elle-même sur la dernière page. Le charger ici en plus revenait à
+     lire deux fois le même fichier. */
 
-  $create_page = function( $title_line ) use ( $page_w, $page_h, $logo_image, $training_org_name, $training_org_siret, $left, $right, $navy, $gold, $ink, $muted, $line ) {
-    $page = array(
-      array( 'type' => 'page_meta', 'width' => $page_w, 'height' => $page_h ),
-    );
-    $header_top = 811;
-    $header_bottom = 754;
-    $page[] = array( 'type' => 'rect', 'x' => $left, 'y' => $header_bottom, 'width' => $page_w - $left - $right, 'height' => 1.2, 'fill_color' => $gold );
-    if ( $logo_image ) {
-      $page[] = array(
-        'type' => 'image',
-        'image_key' => $logo_image['key'],
-        'image_data' => $logo_image['data'],
-        'image_width' => $logo_image['width'],
-        'image_height' => $logo_image['height'],
-        'display_width' => $logo_image['display_width'],
-        'display_height' => $logo_image['display_height'],
-        'x' => $left,
-        'y' => 782,
-      );
-    }
-    $page[] = array( 'text' => 'ACDC-Formation', 'x' => $left + 62, 'y' => 806, 'size' => 13.6, 'font' => 'Helvetica-Bold', 'color' => $navy );
-    $page[] = array( 'text' => 'Azur - Compétences - Développement - Conseils', 'x' => $left + 62, 'y' => 792, 'size' => 8.4, 'font' => 'Helvetica', 'color' => $gold );
-    $company_x = $page_w - $right - 130;
-    $company_lines = array(
-      $training_org_name,
-      '7 avenue Paul Cézanne',
-      '83310 Cogolin - France',
-      'Siret : ' . $training_org_siret,
-      'NDA : 93 83 08347 83',
-    );
-    $cy = 806;
-    foreach ( $company_lines as $index => $line_text ) {
-      $page[] = array( 'text' => $line_text, 'x' => $company_x, 'y' => $cy, 'size' => 8, 'font' => 0 === $index ? 'Helvetica-Bold' : 'Helvetica', 'color' => '#374151' );
-      $cy -= 10;
-    }
-    $page[] = array( 'text' => $title_line, 'x' => $left, 'y' => 736, 'size' => 15.6, 'font' => 'Helvetica-Bold', 'color' => $navy );
-    return $page;
+  /* ACDC 3.25.254 — EN-TÊTE ET PIED VIENNENT DE LA CHARTE COMMUNE.
+     Cet en-tête recopiait celui du contrat formateur — et le pied écrivait
+     l'adresse, le SIRET, le NDA, le téléphone et le site EN DUR. Changer
+     l'identité de l'organisme dans les Réglages ne changeait donc pas la
+     convention : la pièce contractuelle affichait une identité périmée sans
+     que rien ne le signale. La charte les lit dans les Réglages, pour tous les
+     documents à la fois. */
+  $create_page = function( $title_line ) {
+    return $this->acdc_pdf_charte_header( $title_line );
   };
 
-  $add_footer = function( &$page ) use ( $page_w, $left, $right, $line, $muted ) {
-    $page[] = array( 'type' => 'rect', 'x' => $left - 5, 'y' => 30, 'width' => $page_w - ( 2 * ( $left - 5 ) ), 'height' => 1, 'fill_color' => $line );
-    $page[] = array( 'text' => '7 avenue Paul Cézanne - 83310 Cogolin - France - Siret : 405109901 00042 - NDA : 93 83 08347 83', 'x' => 0, 'y' => 21, 'size' => 6.8, 'font' => 'Helvetica', 'color' => '#4b5563', 'center' => true, 'page_w' => $page_w );
-    $page[] = array( 'text' => 'e-mail : contact@acdc-formation.com - Tél : 06 78 26 91 10 - site web : acdc-formation.com', 'x' => 0, 'y' => 12, 'size' => 6.8, 'font' => 'Helvetica', 'color' => '#4b5563', 'center' => true, 'page_w' => $page_w );
+  $add_footer = function( &$page ) {
+    $this->acdc_pdf_charte_footer( $page );
   };
 
   $add_box = function( &$page, &$cursor_y, $title, $paragraphs, $opts = array() ) use ( $left, $content_w, $line, $gold, $ink ) {
@@ -3024,7 +2983,10 @@ private function build_contract_pdf_pages( $context ) {
       $height = $min_height;
     }
     $bottom_y = $cursor_y - $height;
-    $page[] = array( 'type' => 'rect', 'x' => $x, 'y' => $bottom_y, 'width' => $w, 'height' => $height, 'stroke_color' => $line, 'fill_color' => '#ffffff', 'line_width' => 1 );
+    /* ACDC 3.25.254 — Panneau de la charte : le fond bleuté très clair du
+       contrat formateur, et non le blanc pur qui donnait à la convention son
+       air de formulaire. */
+    $page[] = array( 'type' => 'rect', 'x' => $x, 'y' => $bottom_y, 'width' => $w, 'height' => $height, 'stroke_color' => $line, 'fill_color' => '#f8fafc', 'line_width' => 1 );
     $page[] = array( 'text' => strtoupper( $title ), 'x' => $x + $padding_left, 'y' => $cursor_y - 16.2, 'size' => 8.4, 'font' => 'Helvetica-Bold', 'color' => $gold );
     $ty = $cursor_y - 31.8;
     foreach ( $lines as $line_item ) {
@@ -3051,7 +3013,7 @@ private function build_contract_pdf_pages( $context ) {
     $inner_w = $w - ( 2 * $padding_x );
     $col_w = ( $inner_w - $grid_gap ) / 2;
     $bottom = $cursor_y - 147.5;
-    $page[] = array( 'type' => 'rect', 'x' => $x, 'y' => $bottom, 'width' => $w, 'height' => 147.5, 'stroke_color' => $line, 'fill_color' => '#ffffff', 'line_width' => 1 );
+    $page[] = array( 'type' => 'rect', 'x' => $x, 'y' => $bottom, 'width' => $w, 'height' => 147.5, 'stroke_color' => $line, 'fill_color' => '#f0f4fa', 'line_width' => 1 );
     $page[] = array( 'text' => 'ENTRE LES SOUSSIGNÉS', 'x' => $x + $padding_x, 'y' => $cursor_y - 16.2, 'size' => 8.4, 'font' => 'Helvetica-Bold', 'color' => $gold );
 
     $col1x = $x + $padding_x;
@@ -3157,7 +3119,7 @@ private function build_contract_pdf_pages( $context ) {
 
   $pages = array();
 
-  $page1 = $create_page( 'Convention de formation professionnelle' );
+  $page1 = $create_page( 'Convention de formation professionnelle' );   // la charte le met en capitales
   $page1[] = array( 'text' => 'Articles L6353-1 et L.6353-2 du Code du travail et Décret n°2018-1341 du 28 décembre 2018', 'x' => $left, 'y' => 718, 'size' => 8.1, 'font' => 'Helvetica', 'color' => '#4b5563' );
   $cursor = 690;
   $add_box( $page1, $cursor, 'Formation', array( $formation_title ), array( 'width' => $content_w ) );
@@ -3225,20 +3187,13 @@ private function build_contract_pdf_pages( $context ) {
     );
   }
   $page4[] = array( 'text' => "Signature de l'organisme de formation", 'x' => $page_w - $right - $sign_box_width + 36, 'y' => $sign_top - 14, 'size' => 7.9, 'font' => 'Helvetica', 'color' => '#4b5563' );
-  if ( $signature_image ) {
-    $signature_display_width = min( 390, max( 1, (float) $signature_image['display_width'] * 1.5 ) );
-    $signature_display_height = min( 255, max( 1, (float) $signature_image['display_height'] * 1.5 ) );
-    $page4[] = array(
-      'type' => 'image',
-      'image_key' => $signature_image['key'],
-      'image_data' => $signature_image['data'],
-      'image_width' => $signature_image['width'],
-      'image_height' => $signature_image['height'],
-      'display_width' => $signature_display_width,
-      'display_height' => $signature_display_height,
-      'x' => $page_w - $right - $signature_display_width - 18,
-      'y' => 78,
-    );
+  /* ACDC 3.25.254 — Même calcul d'échelle que partout : un seul rapport, jamais
+     deux plafonds. Le rendu ne change pas ici — la convention était déjà juste —
+     mais la règle n'a plus qu'un seul endroit où être vraie. */
+  $stamp_line = $this->acdc_pdf_charte_stamp( 0, 78, 390, 255 );
+  if ( $stamp_line ) {
+    $stamp_line['x'] = $page_w - $right - (float) $stamp_line['display_width'] - 18;
+    $page4[] = $stamp_line;
   }
   $add_footer( $page4 );
   $pages[] = $page4;

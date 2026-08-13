@@ -2553,9 +2553,8 @@ trait ACDC_Kernel_Actions_Trait {
     $org_addr  = trim( ( ! empty( $profile['address'] )           ? (string) $profile['address']          : '' ) . ( ! empty( $profile['postal_code'] ) ? ', ' . (string) $profile['postal_code'] : '' ) . ( ! empty( $profile['city'] ) ? ' ' . (string) $profile['city'] : '' ) );
     $org_siret = ! empty( $profile['siret_identification'] )      ? (string) $profile['siret_identification']      : '';
     $org_nda   = ! empty( $profile['nda_number'] )                ? (string) $profile['nda_number']                : '';
-    $org_phone = ! empty( $profile['enterprise_contact_phone'] )  ? (string) $profile['enterprise_contact_phone']  : '';
-    $org_email = ! empty( $profile['enterprise_contact_email'] )  ? (string) $profile['enterprise_contact_email']  : (string) get_option( 'admin_email' );
-    $org_site  = ! empty( $profile['website'] )                   ? (string) $profile['website']                   : '';
+    /* Téléphone, e-mail et site ne servaient qu'au pied de page : la charte les
+       lit elle-même dans les Réglages. */
     $org_rep   = trim( ( ! empty( $profile['first_name'] ) ? (string) $profile['first_name'] : '' ) . ' ' . ( ! empty( $profile['last_name'] ) ? (string) $profile['last_name'] : '' ) );
     if ( '' === trim( $org_rep ) ) { $org_rep = $org_name; }
     // ── Données formateur ─────────────────────────────────────────────────
@@ -2571,22 +2570,10 @@ trait ACDC_Kernel_Actions_Trait {
     $mission_label = wp_strip_all_tags( html_entity_decode( (string) $contract->label, ENT_QUOTES, 'UTF-8' ) );
     $formation_ref = wp_strip_all_tags( html_entity_decode( (string) $contract->formation_ref, ENT_QUOTES, 'UTF-8' ) );
     // ── Images ────────────────────────────────────────────────────────────
-    $logo_url   = $this->acdc_resolve_pdf_logo_url();
-    $logo_image = ( '' !== $logo_url && method_exists( $this, 'prepare_pdf_jpeg_image' ) ) ? $this->prepare_pdf_jpeg_image( $logo_url, 48, 48 ) : null;
-    // Cachet+signature OF — même ordre de priorité que la convention
-    $stamp_candidates = array_filter( array(
-      ! empty( $profile['stamp_url'] )      ? (string) $profile['stamp_url']      : '',
-      ! empty( $profile['signature_url'] )  ? (string) $profile['signature_url']  : '',
-      ! empty( $profile['stamp_only_url'] ) ? (string) $profile['stamp_only_url'] : '',
-      'https://acdcformation.com/wp-content/uploads/2026/04/Cachet-et-signature.png',
-    ) );
-    $stamp_image = null;
-    if ( method_exists( $this, 'prepare_pdf_jpeg_image' ) ) {
-      foreach ( $stamp_candidates as $sc ) {
-        $stamp_image = $this->prepare_pdf_jpeg_image( $sc, 170, 170 );
-        if ( $stamp_image ) { break; }
-      }
-    }
+    /* Le logo est posé par la charte : le charger ici une seconde fois coûtait
+       une lecture de fichier à chaque génération, pour rien. */
+    /* ACDC 3.25.254 — Le cachet et la signature sont posés plus bas par la
+       charte : c'est elle qui connaît l'ordre des sources et le calcul d'échelle. */
     // Signature manuscrite du formateur (apposée après OTP) — même pattern que la convention
     $handwritten_image = null;
     if ( '' !== $handwritten_sig_path && file_exists( $handwritten_sig_path ) && function_exists( 'imagecreatefromstring' ) ) {
@@ -2617,43 +2604,15 @@ trait ACDC_Kernel_Actions_Trait {
         }
       }
     }
-    // ── Helper : footer complet depuis profil (2 lignes, centré) ─────────
-    $add_footer = function( &$page ) use ( $page_w, $left, $right, $org_addr, $org_siret, $org_nda, $org_phone, $org_email, $org_site, $line ) {
-      $page[] = array( 'type' => 'rect', 'x' => $left - 5, 'y' => 30, 'width' => $page_w - 2 * ( $left - 5 ), 'height' => 1, 'fill_color' => $line );
-      // Ligne 1 : adresse + Siret + NDA
-      $line1_parts = array_filter( array( $org_addr, $org_siret ? 'Siret : ' . $org_siret : '', $org_nda ? 'NDA : ' . $org_nda : '' ) );
-      $line1 = implode( ' - ', array_values( $line1_parts ) );
-      // Ligne 2 : email + tél + site
-      $line2_parts = array_filter( array( $org_email ? 'e-mail : ' . $org_email : '', $org_phone ? 'Tél : ' . $org_phone : '', $org_site ? 'site web : ' . $org_site : '' ) );
-      $line2 = implode( ' - ', array_values( $line2_parts ) );
-      if ( '' !== $line1 ) {
-        $page[] = array( 'text' => $line1, 'x' => 0, 'y' => 21, 'size' => 6.8, 'font' => 'Helvetica', 'color' => '#4b5563', 'center' => true, 'page_w' => $page_w );
-      }
-      if ( '' !== $line2 ) {
-        $page[] = array( 'text' => $line2, 'x' => 0, 'y' => 12, 'size' => 6.8, 'font' => 'Helvetica', 'color' => '#4b5563', 'center' => true, 'page_w' => $page_w );
-      }
+    /* ACDC 3.25.254 — En-tête et pied viennent de la charte commune. Ce sont
+       les mesures de ce document — il est la référence — mais elles vivent
+       maintenant à un seul endroit, où la convention et la convocation les
+       lisent aussi. */
+    $add_footer = function( &$page ) {
+      $this->acdc_pdf_charte_footer( $page );
     };
-    // ── Helper : header de page (logo + OF + titre) ───────────────────────
-    $create_page = function( $title_line, $subtitle_line = '' ) use ( $page_w, $page_h, $logo_image, $org_name, $org_siret, $org_nda, $left, $right, $navy, $gold, $ink, $muted, $line ) {
-      $page = array( array( 'type' => 'page_meta', 'width' => $page_w, 'height' => $page_h ) );
-      $page[] = array( 'type' => 'rect', 'x' => $left, 'y' => 754, 'width' => $page_w - $left - $right, 'height' => 1.2, 'fill_color' => $gold );
-      if ( $logo_image ) {
-        $page[] = array( 'type' => 'image', 'image_key' => $logo_image['key'], 'image_data' => $logo_image['data'], 'image_width' => $logo_image['width'], 'image_height' => $logo_image['height'], 'display_width' => $logo_image['display_width'], 'display_height' => $logo_image['display_height'], 'x' => $left, 'y' => 782 );
-      }
-      $page[] = array( 'text' => 'ACDC-Formation',                              'x' => $left + 62, 'y' => 806, 'size' => 13.6, 'font' => 'Helvetica-Bold', 'color' => $navy );
-      $page[] = array( 'text' => 'Azur - Compétences - Développement - Conseils', 'x' => $left + 62, 'y' => 792, 'size' => 8.4,  'font' => 'Helvetica',      'color' => $gold );
-      $company_x = $page_w - $right - 130;
-      $company_lines = array_filter( array( $org_name, $org_siret ? 'Siret : ' . $org_siret : '', $org_nda ? 'NDA : ' . $org_nda : '' ) );
-      $cy = 806;
-      foreach ( array_values( $company_lines ) as $idx => $lt ) {
-        $page[] = array( 'text' => $lt, 'x' => $company_x, 'y' => $cy, 'size' => 8, 'font' => 0 === $idx ? 'Helvetica-Bold' : 'Helvetica', 'color' => '#374151' );
-        $cy -= 10;
-      }
-      $page[] = array( 'text' => $title_line, 'x' => $left, 'y' => 736, 'size' => 15.6, 'font' => 'Helvetica-Bold', 'color' => $navy );
-      if ( '' !== $subtitle_line ) {
-        $page[] = array( 'text' => $subtitle_line, 'x' => $left, 'y' => 718, 'size' => 8.5, 'font' => 'Helvetica', 'color' => $muted );
-      }
-      return $page;
+    $create_page = function( $title_line, $subtitle_line = '' ) {
+      return $this->acdc_pdf_charte_header( $title_line, $subtitle_line );
     };
     // ── Helper : bloc article ─────────────────────────────────────────────
     $add_box = function( &$page, &$cursor_y, $title, $text ) use ( $left, $content_w, $line, $gold, $ink, $navy ) {
@@ -2747,20 +2706,15 @@ trait ACDC_Kernel_Actions_Trait {
     $p2[] = array( 'text' => $tr_name, 'x' => $page_w - $right - $sign_box_w, 'y' => $sig_top - 12, 'size' => 8, 'font' => 'Helvetica', 'color' => $ink );
     $sig_img_y = $sig_top - 18;
     // Cachet+signature OF (gauche) — ratio préservé, même pattern que la convention
-    if ( $stamp_image ) {
-      $sd_w = min( 280, max( 1, (float) $stamp_image['display_width']  * 1.5 ) );
-      $sd_h = min( 160, max( 1, (float) $stamp_image['display_height'] * 1.5 ) );
-      $p2[] = array(
-        'type'           => 'image',
-        'image_key'      => $stamp_image['key'],
-        'image_data'     => $stamp_image['data'],
-        'image_width'    => $stamp_image['width'],
-        'image_height'   => $stamp_image['height'],
-        'display_width'  => $sd_w,
-        'display_height' => $sd_h,
-        'x'              => $left,
-        'y'              => max( 42, $sig_img_y - $sd_h ),
-      );
+    /* ACDC 3.25.254 — Le cachet sortait ÉCRASÉ de 16 %. Deux plafonds
+       indépendants — 280 en largeur, 160 en hauteur — rabotaient la hauteur
+       seule dès qu'elle mordait : un cachet de 1600 × 1200 devenait 255 × 160
+       au lieu de 255 × 191, et un cachet rond devient alors un ovale. La charte
+       calcule un SEUL rapport de réduction pour les deux dimensions. */
+    $stamp_line = $this->acdc_pdf_charte_stamp( $left, 0, 255, 191 );
+    if ( $stamp_line ) {
+      $stamp_line['y'] = max( 42, $sig_img_y - (float) $stamp_line['display_height'] );
+      $p2[] = $stamp_line;
     } else {
       $p2[] = array( 'type' => 'rect', 'x' => $left, 'y' => $sig_img_y - 40, 'width' => $sign_box_w, 'height' => 0.5, 'fill_color' => '#aab4c0' );
     }
