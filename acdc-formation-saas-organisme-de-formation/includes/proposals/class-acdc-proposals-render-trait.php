@@ -49,539 +49,48 @@ trait Acdc_Proposals_Render_Trait {
       : implode( "\n", $formatted );
   }
 
+  /**
+   * ACDC 3.25.250 — UN SEUL CHEMIN POUR CRÉER UNE PROPOSITION.
+   *
+   * Il y en avait deux, et ils ne disaient pas la même chose.
+   *
+   * L'assistant en trois étapes ne portait qu'une poignée de champs : ni
+   * objectifs, ni programme, ni approche, ni modalités d'accès. On pouvait
+   * pourtant, depuis sa troisième étape, générer le document — donc fabriquer
+   * une proposition amputée sans qu'aucun écran ne le signale. Et il fallait
+   * ensuite rouvrir la proposition « Modifier » pour vérifier ce qui manquait.
+   * Deux écrans, deux vérités, exactement la famille de défauts que ce plugin
+   * traque partout ailleurs.
+   *
+   * Il se trompait en plus sur le prix : il recopiait le tarif catalogue —
+   * qui est un tarif TOTAL pour la durée — dans « Tarif jour ». Une formation
+   * à 1 800 € sur deux jours ressortait donc à 3 600 €. Le formulaire complet
+   * fait la division depuis toujours (voir plus bas, la reprise du tarif
+   * catalogue) ; c'est cette règle-là qui survit.
+   *
+   * Le bouton mène désormais au formulaire complet, prérempli depuis le
+   * recueil des besoins : même écran, même règle de prix, aucune étape en
+   * moins puisque celles de l'assistant étaient de toute façon à refaire.
+   */
   private function render_proposal_trigger_button( $need_id ) {
+    $need_id = (int) $need_id;
     if ( ! $need_id ) {
       return;
     }
-    /* hotfix11 — Bases + variantes, triées par groupe (get_formations ORDER BY composite) */
-    $formations = $this->get_formations( array( 'archived' => false ) );
-    $trainers   = $this->get_trainers_for_proposal();
-    $need       = $this->get_need( $need_id );
-    $prefill    = $this->build_proposal_from_need( $need_id );
-    $nonce      = wp_create_nonce( 'acdc_proposal_nonce' );
-    $ajax_url   = admin_url( 'admin-ajax.php' );
+    $need = $this->get_need( $need_id );
+    $args = array( 'tab' => 'proposals', 'action' => 'new', 'need_id' => $need_id );
+    /* Le prospect voyage avec le recueil : c'est lui qui porte le signataire,
+       l'e-mail et la formation souhaitée du préremplissage. */
+    if ( $need && ! empty( $need->source_prospect_id ) ) {
+      $args['prospect_id'] = (int) $need->source_prospect_id;
+    }
     ?>
-    <button type="button"
-            class="acdc-button acdc-button-soft"
-            id="acdc-proposal-trigger"
-            data-acdc-no-iconize="1"
-            data-need-id="<?php echo esc_attr( $need_id ); ?>"
-            data-nonce="<?php echo esc_attr( $nonce ); ?>"
-            data-ajax="<?php echo esc_url( $ajax_url ); ?>"
-            onclick="acdcOpenProposalModal(<?php echo esc_attr( $need_id ); ?>)">
+    <a href="<?php echo esc_url( $this->portal_page_url( $args ) ); ?>"
+       class="acdc-button acdc-button-soft"
+       data-acdc-no-iconize="1">
       <?php echo $this->render_inline_icon( 'file-text', 20 ); ?>
       Cr&#233;er une proposition commerciale
-    </button>
-
-    <?php $this->render_proposal_modal( $need_id, $prefill, $formations, $trainers, $nonce, $ajax_url ); ?>
-    <?php
-  }
-
-  /* ---------------------------------------------------------------
-   * Modale 3 étapes
-   * --------------------------------------------------------------- */
-  private function render_proposal_modal( $need_id, $prefill, $formations, $trainers, $nonce, $ajax_url ) {
-    $company_profile = get_option( 'acdc_of_company_profile', array() );
-    $acdc_name    = ! empty( $company_profile['company_name'] ) ? $company_profile['company_name'] : 'ACDC Formation';
-    $acdc_address = ! empty( $company_profile['address'] ) ? $company_profile['address'] : '7 avenue Paul C&#233;zanne, 83310 Cogolin';
-    $acdc_nda     = ! empty( $company_profile['nda_number'] ) ? $company_profile['nda_number'] : '93 83 08347 83';
-    $acdc_siret   = ! empty( $company_profile['siret'] ) ? $company_profile['siret'] : '';
-    ?>
-    <div id="acdc-proposal-modal" class="acdc-modal-shell" hidden style="z-index:100001">
-      <div class="acdc-modal-backdrop" id="acdc-proposal-backdrop"></div>
-      <div class="acdc-modal-dialog" style="max-width:720px;max-height:90vh;overflow-y:auto;border-radius:12px;">
-
-        <div class="acdc-modal-header" style="position:sticky;top:0;background:#fff;z-index:2;border-bottom:1px solid #f0e6dc;padding:16px 24px;">
-          <div style="display:flex;align-items:center;gap:12px;">
-            <h4 style="color:#0f2c52;font-size:16px;font-weight:600;margin:0;">Cr&#233;er une proposition commerciale</h4>
-            <div id="acdc-prop-steps" style="display:flex;gap:6px;margin-left:auto;">
-              <?php for ( $i = 1; $i <= 3; $i++ ) : ?>
-                <span id="acdc-prop-step-<?php echo $i; ?>"
-                      style="width:28px;height:28px;border-radius:50%;display:inline-flex;align-items:center;justify-content:center;font-size:12px;font-weight:700;background:<?php echo 1 === $i ? '#d6a353' : '#f0e6dc'; ?>;color:<?php echo 1 === $i ? '#fff' : '#8a6d2a'; ?>">
-                  <?php echo $i; ?>
-                </span>
-              <?php endfor; ?>
-            </div>
-          </div>
-          <button type="button" class="acdc-modal-close" onclick="acdcCloseProposalModal()" style="color:#4b5d76;">&times;</button>
-        </div>
-
-        <div class="acdc-modal-body" style="padding:24px;">
-
-          <?php /* ---- Étape 1 : Formation & organisation ---- */ ?>
-          <div id="acdc-prop-panel-1">
-            <div style="font-size:11px;font-weight:700;color:#8a6d2a;text-transform:uppercase;letter-spacing:.08em;margin-bottom:14px;">
-              &#201;tape 1 &#8212; Formation &amp; organisation
-            </div>
-            <input type="hidden" id="acdc-prop-need-id" value="<?php echo esc_attr( $need_id ); ?>">
-            <input type="hidden" id="acdc-prop-proposal-id" value="0">
-
-            <p style="margin-bottom:12px;">
-              <label style="font-size:13px;font-weight:500;color:#0f2c52;display:block;margin-bottom:5px;">Formation du catalogue *</label>
-              <select id="acdc-prop-formation-id" style="width:100%;height:40px;border-radius:10px;border:1px solid #dfe5ee;padding:0 12px;font-size:13px;">
-                <option value="">&#8212; S&#233;lectionner une formation &#8212;</option>
-                <?php foreach ( $formations as $f ) : ?>
-                  <option value="<?php echo esc_attr( $f->id ); ?>"
-                          data-title="<?php echo esc_attr( $f->title ); ?>"
-                          data-duration="<?php echo esc_attr( $f->duration ); ?>"
-                          data-price="<?php echo esc_attr( $f->price_ht ?: '' ); ?>"
-                          data-objectives="<?php echo esc_attr( $f->objectives ?: '' ); ?>"
-                          data-program="<?php echo esc_attr( $f->program ?: '' ); ?>"
-                          data-thematique="<?php echo esc_attr( $f->thematique ?: '' ); ?>">
-                    <?php
-                      /* hotfix10 — [ID] Titre — Modalité — Prix */
-                      echo esc_html( $this->build_formation_option_label( $f ) );
-                    ?>
-                  </option>
-                <?php endforeach; ?>
-              </select>
-            </p>
-
-            <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:12px;margin-bottom:12px;">
-              <p style="margin:0">
-                <label style="font-size:12px;font-weight:500;color:#0f2c52;display:block;margin-bottom:4px;">Nombre de jours *</label>
-                <input type="number" id="acdc-prop-days" min="1" value="<?php echo esc_attr( $prefill['formation_days'] ?? 1 ); ?>" style="width:100%;height:40px;border-radius:10px;border:1px solid #dfe5ee;padding:0 12px;font-size:13px;" oninput="acdcPropCalcTotal()">
-              </p>
-              <p style="margin:0">
-                <label style="font-size:12px;font-weight:500;color:#0f2c52;display:block;margin-bottom:4px;">Heures/jour</label>
-                <input type="number" id="acdc-prop-hours" min="1" max="10" value="7" style="width:100%;height:40px;border-radius:10px;border:1px solid #dfe5ee;padding:0 12px;font-size:13px;">
-              </p>
-              <p style="margin:0">
-                <label style="font-size:12px;font-weight:500;color:#0f2c52;display:block;margin-bottom:4px;">Tarif jour (&#8364; HT) *</label>
-                <input type="number" id="acdc-prop-price" min="0" step="10" value="900" style="width:100%;height:40px;border-radius:10px;border:1px solid #dfe5ee;padding:0 12px;font-size:13px;" oninput="acdcPropCalcTotal()">
-              </p>
-            </div>
-
-            <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:12px;">
-              <p style="margin:0">
-                <label style="font-size:12px;font-weight:500;color:#0f2c52;display:block;margin-bottom:4px;">Nombre d&#8217;apprenants</label>
-                <input type="number" id="acdc-prop-learners" min="1" value="<?php echo esc_attr( $prefill['formation_learners_count'] ?? 1 ); ?>" style="width:100%;height:40px;border-radius:10px;border:1px solid #dfe5ee;padding:0 12px;font-size:13px;">
-              </p>
-              <p style="margin:0">
-                <label style="font-size:12px;font-weight:500;color:#0f2c52;display:block;margin-bottom:4px;">Financement</label>
-                <?php
-                $prefill_funding = (string) ( $prefill['formation_funding'] ?? '' );
-                /* Détecter si c'est un OPCO nommé (ex : "OPCO — ATLAS") */
-                $is_opco_named = ( 'OPCO' === $prefill_funding || 0 === strpos( $prefill_funding, 'OPCO' ) );
-                $funding_select_val = $is_opco_named ? 'OPCO' : $prefill_funding;
-                ?>
-                <select id="acdc-prop-funding-select" style="width:100%;height:40px;border-radius:10px;border:1px solid #dfe5ee;padding:0 12px;font-size:13px;">
-                  <?php foreach ( $this->get_need_funding_options() as $fk => $fl ) : ?>
-                    <option value="<?php echo esc_attr( $fk ); ?>" <?php selected( $funding_select_val, $fk ); ?>><?php echo esc_html( $fl ); ?></option>
-                  <?php endforeach; ?>
-                </select>
-                <!-- Champ caché qui stocke la valeur finale transmise au JS -->
-                <input type="hidden" id="acdc-prop-funding" value="<?php echo esc_attr( $prefill_funding ); ?>">
-                <div id="acdc-prop-opco-row" style="margin-top:6px;<?php echo $is_opco_named ? '' : 'display:none;'; ?>">
-                  <label style="font-size:11px;color:#4b5d76;display:block;margin-bottom:3px;">OPCO / Financeur</label>
-                  <select id="acdc-prop-funder-select" style="width:100%;height:40px;border-radius:10px;border:1px solid #dfe5ee;padding:0 12px;font-size:13px;">
-                    <option value="">— Sélectionner un OPCO —</option>
-                    <?php foreach ( $this->get_funders() as $funder ) : ?>
-                      <option value="OPCO — <?php echo esc_attr( $funder->name ); ?>"
-                        <?php selected( $prefill_funding, 'OPCO — ' . $funder->name ); ?>>
-                        <?php echo esc_html( $funder->name ); ?><?php if ( $funder->sector ) : ?> (<?php echo esc_html( $funder->sector ); ?>)<?php endif; ?>
-                      </option>
-                    <?php endforeach; ?>
-                  </select>
-                </div>
-                <script>
-                (function(){
-                  var sel = document.getElementById('acdc-prop-funding-select');
-                  var opcoRow = document.getElementById('acdc-prop-opco-row');
-                  var hidden = document.getElementById('acdc-prop-funding');
-                  var opcoSel = document.getElementById('acdc-prop-funder-select');
-                  if (!sel) return;
-                  function sync(){
-                    var v = sel.value;
-                    opcoRow.style.display = (v === 'OPCO') ? '' : 'none';
-                    if (v === 'OPCO') {
-                      hidden.value = opcoSel.value || 'OPCO';
-                    } else {
-                      hidden.value = v;
-                    }
-                  }
-                  sel.addEventListener('change', sync);
-                  if (opcoSel) {
-                    opcoSel.addEventListener('change', sync);
-                  }
-                  sync();
-                })();
-                </script>
-              </p>
-            </div>
-
-            <p style="margin-bottom:12px;">
-              <label style="font-size:12px;font-weight:500;color:#0f2c52;display:block;margin-bottom:6px;">Dates des séances</label>
-              <input type="hidden" id="acdc-prop-dates" value="">
-              <span id="acdc-modal-seances-chips" style="display:flex;flex-wrap:wrap;gap:6px;margin-bottom:8px;min-height:0;"></span>
-              <span style="display:flex;gap:6px;align-items:center;">
-                <input type="date" id="acdc-modal-seance-picker" style="height:36px;border-radius:8px;border:1px solid #dfe5ee;padding:0 10px;font-size:13px;color:#0f2c52;">
-                <button type="button" id="acdc-modal-seance-add"
-                        style="height:36px;padding:0 14px;background:#0f2c52;color:#fff;border:none;border-radius:8px;font-size:13px;font-weight:600;cursor:pointer;white-space:nowrap;">
-                  + Ajouter
-                </button>
-              </span>
-            </p>
-            <script>
-            (function(){
-              var dates = [];
-              var chipsEl = document.getElementById('acdc-modal-seances-chips');
-              var hiddenEl = document.getElementById('acdc-prop-dates');
-              var picker  = document.getElementById('acdc-modal-seance-picker');
-              var addBtn  = document.getElementById('acdc-modal-seance-add');
-              if(!chipsEl||!hiddenEl||!picker||!addBtn){return;}
-              var months=['jan.','fév.','mars','avr.','mai','juin','juil.','août','sept.','oct.','nov.','déc.'];
-              function fmtDate(iso){var p=iso.split('-');if(p.length!==3){return iso;}return p[2]+' '+months[parseInt(p[1],10)-1]+' '+p[0];}
-              function render(){
-                chipsEl.innerHTML='';
-                dates.forEach(function(d,i){
-                  var chip=document.createElement('span');
-                  chip.style.cssText='display:inline-flex;align-items:center;gap:5px;background:#eef2ff;border:1px solid #c7d2fe;border-radius:20px;padding:3px 10px 3px 12px;font-size:12px;font-weight:600;color:#1e3a8a;white-space:nowrap;';
-                  chip.innerHTML='<span>Séance '+(i+1)+' — '+fmtDate(d)+'</span>';
-                  var rm=document.createElement('button');
-                  rm.type='button';rm.innerHTML='×';
-                  rm.setAttribute('aria-label','Supprimer');
-                  rm.style.cssText='background:none;border:none;font-size:15px;line-height:1;cursor:pointer;color:#6366f1;padding:0 0 1px;';
-                  rm.addEventListener('click',function(){dates.splice(i,1);render();});
-                  chip.appendChild(rm);chipsEl.appendChild(chip);
-                });
-                hiddenEl.value=dates.join(',');
-              }
-              addBtn.addEventListener('click',function(){
-                var v=picker.value;if(!v){return;}
-                if(dates.indexOf(v)===-1){dates.push(v);dates.sort();render();}
-                picker.value='';picker.focus();
-              });
-              picker.addEventListener('keydown',function(e){if(e.key==='Enter'){e.preventDefault();addBtn.click();}});
-              render();
-            })();
-            </script>
-
-            <p style="margin-bottom:12px;">
-              <label style="font-size:12px;font-weight:500;color:#0f2c52;display:block;margin-bottom:4px;">Lieu de formation</label>
-              <input type="text" id="acdc-prop-location" value="<?php echo esc_attr( $prefill['client_address'] ?? '' ); ?>" placeholder="Dans vos locaux, adresse…" style="width:100%;height:40px;border-radius:10px;border:1px solid #dfe5ee;padding:0 12px;font-size:13px;">
-            </p>
-
-            <?php /* Formateurs */ ?>
-            <p style="margin-bottom:4px;">
-              <label style="font-size:12px;font-weight:500;color:#0f2c52;display:block;margin-bottom:4px;">Formateurs</label>
-              <div id="acdc-prop-trainers" style="display:flex;gap:8px;flex-wrap:wrap;">
-                <?php foreach ( $trainers as $trainer ) :
-                  $checked = (int) $trainer->id === get_current_user_id() || ! empty( $trainer->is_self_trainer ) ? 'checked' : '';
-                ?>
-                  <label style="display:inline-flex;align-items:center;gap:6px;font-size:13px;color:#0f2c52;cursor:pointer;background:#fbf8f7;border:1px solid #f0e6dc;border-radius:8px;padding:6px 10px;">
-                    <input type="checkbox" name="acdc_prop_trainer[]" value="<?php echo esc_attr( $trainer->id ); ?>" <?php echo $checked; ?>>
-                    <?php echo esc_html( trim( $trainer->first_name . ' ' . $trainer->last_name ) ); ?>
-                  </label>
-                <?php endforeach; ?>
-              </div>
-            </p>
-
-            <?php /* Total calculé */ ?>
-            <div style="background:linear-gradient(135deg,#fef6e4 0%,#fbf8f7 100%);border:1px solid #f0e6dc;border-radius:10px;padding:12px 16px;margin-top:14px;display:flex;align-items:center;justify-content:space-between;">
-              <span style="font-size:13px;color:#4b5d76;">Total de la proposition</span>
-              <strong id="acdc-prop-total" style="font-size:20px;font-weight:700;color:#0f2c52;">2&#160;700&#160;&#8364;</strong>
-            </div>
-          </div>
-
-          <?php /* ---- Étape 2 : À propos du client ---- */ ?>
-          <div id="acdc-prop-panel-2" hidden>
-            <div style="font-size:11px;font-weight:700;color:#8a6d2a;text-transform:uppercase;letter-spacing:.08em;margin-bottom:14px;">
-              &#201;tape 2 &#8212; &#192; propos du client
-            </div>
-
-            <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:12px;">
-              <p style="margin:0">
-                <label style="font-size:12px;font-weight:500;color:#0f2c52;display:block;margin-bottom:4px;">Nom du destinataire</label>
-                <input type="text" id="acdc-prop-client-name" value="<?php echo esc_attr( $prefill['client_name'] ?? '' ); ?>" placeholder="Prénom NOM" style="width:100%;height:40px;border-radius:10px;border:1px solid #dfe5ee;padding:0 12px;font-size:13px;">
-              </p>
-              <p style="margin:0">
-                <label style="font-size:12px;font-weight:500;color:#0f2c52;display:block;margin-bottom:4px;">Titre / Fonction</label>
-                <input type="text" id="acdc-prop-client-title" value="<?php echo esc_attr( $prefill['client_title'] ?? '' ); ?>" placeholder="Directeur &amp; CEO" style="width:100%;height:40px;border-radius:10px;border:1px solid #dfe5ee;padding:0 12px;font-size:13px;">
-              </p>
-            </div>
-
-            <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:12px;">
-              <p style="margin:0">
-                <label style="font-size:12px;font-weight:500;color:#0f2c52;display:block;margin-bottom:4px;">Raison sociale</label>
-                <input type="text" id="acdc-prop-client-company" value="<?php echo esc_attr( $prefill['client_company'] ?? '' ); ?>" style="width:100%;height:40px;border-radius:10px;border:1px solid #dfe5ee;padding:0 12px;font-size:13px;">
-              </p>
-              <p style="margin:0">
-                <label style="font-size:12px;font-weight:500;color:#0f2c52;display:block;margin-bottom:4px;">SIRET</label>
-                <input type="text" id="acdc-prop-client-siret" value="<?php echo esc_attr( $prefill['client_siret'] ?? '' ); ?>" style="width:100%;height:40px;border-radius:10px;border:1px solid #dfe5ee;padding:0 12px;font-size:13px;">
-              </p>
-            </div>
-
-            <div style="display:grid;grid-template-columns:120px 1fr;gap:10px;margin-bottom:12px;">
-              <p style="margin:0">
-                <label style="font-size:12px;font-weight:500;color:#0f2c52;display:block;margin-bottom:4px;">Code postal</label>
-                <input type="text" id="acdc-prop-client-postal-code" value="<?php echo esc_attr( $prefill['client_postal_code'] ?? '' ); ?>" placeholder="83310" style="width:100%;height:40px;border-radius:10px;border:1px solid #dfe5ee;padding:0 12px;font-size:13px;">
-              </p>
-              <p style="margin:0">
-                <label style="font-size:12px;font-weight:500;color:#0f2c52;display:block;margin-bottom:4px;">Ville</label>
-                <input type="text" id="acdc-prop-client-city" value="<?php echo esc_attr( $prefill['client_city'] ?? '' ); ?>" placeholder="Cogolin" style="width:100%;height:40px;border-radius:10px;border:1px solid #dfe5ee;padding:0 12px;font-size:13px;">
-              </p>
-            </div>
-
-            <p style="margin-bottom:12px;">
-              <label style="font-size:12px;font-weight:500;color:#0f2c52;display:block;margin-bottom:4px;">Site web (pour la g&#233;n&#233;ration IA)</label>
-              <input type="url" id="acdc-prop-client-website" value="<?php echo esc_attr( $prefill['client_website'] ?? '' ); ?>" placeholder="https://…" style="width:100%;height:40px;border-radius:10px;border:1px solid #dfe5ee;padding:0 12px;font-size:13px;">
-            </p>
-
-            <p style="margin-bottom:12px;">
-              <label style="font-size:12px;font-weight:500;color:#0f2c52;display:block;margin-bottom:4px;">Activit&#233;</label>
-              <input type="text" id="acdc-prop-client-activity" value="<?php echo esc_attr( $prefill['client_activity'] ?? '' ); ?>" placeholder="formation continue d&#8217;adultes…" style="width:100%;height:40px;border-radius:10px;border:1px solid #dfe5ee;padding:0 12px;font-size:13px;">
-            </p>
-
-            <p style="margin-bottom:8px;">
-              <label style="font-size:12px;font-weight:500;color:#0f2c52;display:block;margin-bottom:4px;">
-                &#192; propos de l&#8217;entreprise (texte du PDF)
-              </label>
-              <textarea id="acdc-prop-client-about" rows="6" style="width:100%;border-radius:10px;border:1px solid #dfe5ee;padding:10px 12px;font-size:13px;line-height:1.55;resize:vertical;" placeholder="Description de l&#8217;entreprise cliente…"><?php echo esc_textarea( $prefill['client_about_text'] ?? '' ); ?></textarea>
-            </p>
-            <div style="display:flex;align-items:center;gap:10px;">
-              <button type="button" id="acdc-prop-ai-btn"
-                      class="acdc-button acdc-button-soft"
-                      style="height:36px;font-size:12px;"
-                      onclick="acdcPropGenerateAbout()">
-                &#9889; G&#233;n&#233;rer via IA
-              </button>
-              <span id="acdc-prop-ai-status" style="font-size:12px;color:#4b5d76;"></span>
-            </div>
-          </div>
-
-          <?php /* ---- Étape 3 : Récap & génération ---- */ ?>
-          <div id="acdc-prop-panel-3" hidden>
-            <div style="font-size:11px;font-weight:700;color:#8a6d2a;text-transform:uppercase;letter-spacing:.08em;margin-bottom:14px;">
-              &#201;tape 3 &#8212; R&#233;capitulatif &amp; g&#233;n&#233;ration
-            </div>
-            <div id="acdc-prop-recap" style="background:#fbf8f7;border:1px solid #f0e6dc;border-radius:12px;padding:16px 20px;font-size:13px;color:#0f2c52;line-height:1.7;margin-bottom:16px;">
-              Chargement du r&#233;capitulatif…
-            </div>
-            <div id="acdc-prop-pdf-result" style="display:none;background:#fef6e4;border:1px solid #d6a353;border-radius:10px;padding:12px 16px;margin-bottom:14px;font-size:13px;color:#8a6d2a;">
-            </div>
-          </div>
-
-        </div><!-- /.acdc-modal-body -->
-
-        <div style="display:flex;align-items:center;justify-content:space-between;padding:14px 24px;border-top:1px solid #f0e6dc;background:#fff;position:sticky;bottom:0;">
-          <button type="button" id="acdc-prop-btn-prev" class="acdc-button acdc-button-soft" style="display:none;height:36px;font-size:13px;" onclick="acdcPropPrevStep()">
-            &#8592; Pr&#233;c&#233;dent
-          </button>
-          <div style="display:flex;gap:8px;margin-left:auto;">
-            <button type="button" id="acdc-prop-btn-save" class="acdc-button acdc-button-soft" style="height:36px;font-size:13px;" onclick="acdcPropSaveDraft()">
-              Enregistrer le brouillon
-            </button>
-            <button type="button" id="acdc-prop-btn-next" class="acdc-button acdc-button-primary" style="height:36px;font-size:13px;" onclick="acdcPropNextStep()">
-              Suivant &#8594;
-            </button>
-          </div>
-        </div>
-
-      </div><!-- /.acdc-modal-dialog -->
-    </div>
-
-    <script>
-    var acdcPropCurrentStep = 1;
-    var acdcPropNonce = '<?php echo esc_js( $nonce ); ?>';
-    var acdcPropAjax  = '<?php echo esc_url( $ajax_url ); ?>';
-
-    function acdcOpenProposalModal() {
-      document.getElementById('acdc-proposal-modal').hidden = false;
-    }
-    function acdcCloseProposalModal() {
-      document.getElementById('acdc-proposal-modal').hidden = true;
-    }
-    function acdcPropCalcTotal() {
-      var days  = parseFloat(document.getElementById('acdc-prop-days').value) || 0;
-      var price = parseFloat(document.getElementById('acdc-prop-price').value) || 0;
-      var total = days * price;
-      document.getElementById('acdc-prop-total').textContent = total.toLocaleString('fr-FR') + '\u00a0\u20ac';
-    }
-    document.getElementById('acdc-prop-formation-id').addEventListener('change', function() {
-      var opt = this.options[this.selectedIndex];
-      if (!opt.value) return;
-      var title = opt.getAttribute('data-title') || '';
-      var dur   = opt.getAttribute('data-duration') || '';
-      var price = opt.getAttribute('data-price') || '900';
-      document.getElementById('acdc-prop-price').value = price || 900;
-      acdcPropCalcTotal();
-    });
-    function acdcPropNextStep() {
-      if (acdcPropCurrentStep === 3) {
-        acdcPropGeneratePdf();
-        return;
-      }
-      if (acdcPropCurrentStep === 2) {
-        acdcPropBuildRecap();
-      }
-      acdcPropCurrentStep++;
-      acdcPropUpdateUI();
-    }
-    function acdcPropPrevStep() {
-      if (acdcPropCurrentStep <= 1) return;
-      acdcPropCurrentStep--;
-      acdcPropUpdateUI();
-    }
-    function acdcPropUpdateUI() {
-      for (var i = 1; i <= 3; i++) {
-        document.getElementById('acdc-prop-panel-' + i).hidden = (i !== acdcPropCurrentStep);
-        var dot = document.getElementById('acdc-prop-step-' + i);
-        dot.style.background = (i === acdcPropCurrentStep) ? '#d6a353' : (i < acdcPropCurrentStep ? '#35b37e' : '#f0e6dc');
-        dot.style.color = (i <= acdcPropCurrentStep) ? '#fff' : '#8a6d2a';
-      }
-      document.getElementById('acdc-prop-btn-prev').style.display = acdcPropCurrentStep > 1 ? '' : 'none';
-      var nextBtn = document.getElementById('acdc-prop-btn-next');
-      nextBtn.textContent = acdcPropCurrentStep === 3 ? 'G\u00e9n\u00e9rer le PDF' : 'Suivant \u2192';
-    }
-    function acdcPropBuildRecap() {
-      var fOpt  = document.getElementById('acdc-prop-formation-id');
-      var fTitle = fOpt.options[fOpt.selectedIndex] ? fOpt.options[fOpt.selectedIndex].text : '—';
-      var days  = document.getElementById('acdc-prop-days').value || '—';
-      var price = document.getElementById('acdc-prop-price').value || '—';
-      var total = (parseFloat(days) || 0) * (parseFloat(price) || 0);
-      var client = document.getElementById('acdc-prop-client-company').value || '—';
-      var contact = document.getElementById('acdc-prop-client-name').value || '—';
-      var dates = document.getElementById('acdc-prop-dates').value || 'Non renseign\u00e9es';
-      document.getElementById('acdc-prop-recap').innerHTML =
-        '<strong>Formation :</strong> ' + fTitle + '<br>' +
-        '<strong>Dur\u00e9e :</strong> ' + days + ' jour(s)<br>' +
-        '<strong>Tarif :</strong> ' + parseFloat(price).toLocaleString('fr-FR') + '\u00a0\u20ac/jour<br>' +
-        '<strong>Total :</strong> ' + total.toLocaleString('fr-FR') + '\u00a0\u20ac net de TVA<br>' +
-        '<strong>Client :</strong> ' + client + ' — ' + contact + '<br>' +
-        '<strong>Dates :</strong> ' + dates;
-    }
-    function acdcPropGenerateAbout() {
-      var btn = document.getElementById('acdc-prop-ai-btn');
-      var status = document.getElementById('acdc-prop-ai-status');
-      btn.disabled = true;
-      status.textContent = 'Génération en cours…';
-      var fd = new FormData();
-      fd.append('action', 'acdc_proposal_generate_about');
-      fd.append('nonce', acdcPropNonce);
-      fd.append('client_company', document.getElementById('acdc-prop-client-company').value);
-      fd.append('client_website', document.getElementById('acdc-prop-client-website').value);
-      fd.append('client_activity', document.getElementById('acdc-prop-client-activity').value);
-      fd.append('need_id', document.getElementById('acdc-prop-need-id').value || 0);
-      fetch(acdcPropAjax, { method: 'POST', body: fd })
-        .then(function(r) { return r.json(); })
-        .then(function(data) {
-          btn.disabled = false;
-          if (data.success) {
-            var aboutText = data.data.about || data.data.text || '';
-            document.getElementById('acdc-prop-client-about').value = aboutText;
-            status.textContent = '✓ Texte généré — vous pouvez le modifier.';
-            status.style.color = '#35b37e';
-          } else {
-            status.textContent = 'Erreur : ' + (data.data ? data.data.message : 'inconnue');
-            status.style.color = '#e06d6d';
-          }
-        })
-        .catch(function() { btn.disabled = false; status.textContent = 'Erreur réseau.'; });
-    }
-    function acdcPropSaveDraft() {
-      var fd = new FormData();
-      fd.append('action', 'acdc_proposal_save_draft');
-      fd.append('nonce', acdcPropNonce);
-      var data = acdcPropCollectData();
-      for (var k in data) { fd.append('proposal[' + k + ']', data[k]); }
-      fetch(acdcPropAjax, { method: 'POST', body: fd })
-        .then(function(r) { return r.json(); })
-        .then(function(res) {
-          if (res.success) {
-            document.getElementById('acdc-prop-proposal-id').value = res.data.id;
-            alert('Brouillon enregistr\u00e9.');
-          } else {
-            alert('Erreur : ' + (res.data ? res.data.message : 'inconnue'));
-          }
-        });
-    }
-    function acdcPropGeneratePdf() {
-      acdcPropSaveDraftThen(function(proposalId) {
-        var fd = new FormData();
-        fd.append('action', 'acdc_proposal_generate_pdf');
-        fd.append('nonce', acdcPropNonce);
-        fd.append('proposal_id', proposalId);
-        document.getElementById('acdc-prop-btn-next').disabled = true;
-        document.getElementById('acdc-prop-btn-next').textContent = 'G\u00e9n\u00e9ration\u2026';
-        fetch(acdcPropAjax, { method: 'POST', body: fd })
-          .then(function(r) { return r.json(); })
-          .then(function(res) {
-            document.getElementById('acdc-prop-btn-next').disabled = false;
-            document.getElementById('acdc-prop-btn-next').textContent = 'G\u00e9n\u00e9rer le PDF';
-            var div = document.getElementById('acdc-prop-pdf-result');
-            div.style.display = '';
-            if (res.success) {
-              var label = res.data.type === 'html'
-                ? 'Ouvrir la proposition (imprimer → PDF)'
-                : 'Télécharger le PDF';
-              div.innerHTML = '✓ Proposition générée — <a href="' + res.data.pdf_url + '" target="_blank" style="color:#8b5b23;font-weight:700;">' + label + '</a>';
-            } else {
-              div.innerHTML = 'Erreur : ' + (res.data ? res.data.message : 'inconnue');
-              div.style.background = '#fff0f0';
-              div.style.borderColor = '#f5c6c6';
-              div.style.color = '#c2410c';
-            }
-          });
-      });
-    }
-    function acdcPropSaveDraftThen(cb) {
-      var fd = new FormData();
-      fd.append('action', 'acdc_proposal_save_draft');
-      fd.append('nonce', acdcPropNonce);
-      var data = acdcPropCollectData();
-      for (var k in data) { fd.append('proposal[' + k + ']', data[k]); }
-      fetch(acdcPropAjax, { method: 'POST', body: fd })
-        .then(function(r) { return r.json(); })
-        .then(function(res) {
-          if (res.success) {
-            document.getElementById('acdc-prop-proposal-id').value = res.data.id;
-            cb(res.data.id);
-          } else {
-            alert('Erreur sauvegarde : ' + (res.data ? res.data.message : 'inconnue'));
-          }
-        });
-    }
-    function acdcPropCollectData() {
-      var fOpt = document.getElementById('acdc-prop-formation-id');
-      var formationId = fOpt.value || 0;
-      var fTitle = formationId ? (fOpt.options[fOpt.selectedIndex].getAttribute('data-title') || '') : '';
-      var fDur   = formationId ? (fOpt.options[fOpt.selectedIndex].getAttribute('data-duration') || '') : '';
-      var days   = parseInt(document.getElementById('acdc-prop-days').value) || 1;
-      var hours  = parseInt(document.getElementById('acdc-prop-hours').value) || 7;
-      var price  = parseFloat(document.getElementById('acdc-prop-price').value) || 0;
-      var selectedTrainers = [];
-      document.querySelectorAll('#acdc-prop-trainers input[type=checkbox]:checked').forEach(function(cb) {
-        selectedTrainers.push(cb.value);
-      });
-      return {
-        id:                        document.getElementById('acdc-prop-proposal-id').value || 0,
-        need_id:                   document.getElementById('acdc-prop-need-id').value || 0,
-        formation_id:              formationId,
-        formation_title:           fTitle,
-        formation_duration:        fDur,
-        formation_days:            days,
-        formation_hours_per_day:   hours,
-        formation_price_per_day:   price,
-        formation_total:           days * price,
-        formation_learners_count:  document.getElementById('acdc-prop-learners').value || 1,
-        formation_funding:         document.getElementById('acdc-prop-funding').value || '',
-        formation_dates:           document.getElementById('acdc-prop-dates').value || '',
-        formation_location:        document.getElementById('acdc-prop-location').value || '',
-        trainer_ids:               selectedTrainers.join(','),
-        client_name:               document.getElementById('acdc-prop-client-name').value || '',
-        client_title:              document.getElementById('acdc-prop-client-title').value || '',
-        client_company:            document.getElementById('acdc-prop-client-company').value || '',
-        client_siret:              document.getElementById('acdc-prop-client-siret').value || '',
-        client_postal_code:        document.getElementById('acdc-prop-client-postal-code') ? document.getElementById('acdc-prop-client-postal-code').value || '' : '',
-        client_city:               document.getElementById('acdc-prop-client-city') ? document.getElementById('acdc-prop-client-city').value || '' : '',
-        client_website:            document.getElementById('acdc-prop-client-website').value || '',
-        client_activity:           document.getElementById('acdc-prop-client-activity').value || '',
-        client_about_text:         document.getElementById('acdc-prop-client-about').value || '',
-        status:                    'brouillon',
-      };
-    }
-    </script>
+    </a>
     <?php
   }
 
@@ -2187,7 +1696,13 @@ startxref
     /* Valeurs du formulaire */
     $v = array(
       'id'                       => $is_edit ? (int) $p->id : 0,
-      'need_id'                  => $is_edit && ! empty( $p->need_id ) ? (int) $p->need_id : 0,
+      /* ACDC 3.25.250 — Le recueil arrive maintenant par l'URL : c'est par lui
+         que passe la création depuis « Créer une proposition commerciale »,
+         l'assistant en trois étapes ayant disparu. Sans cette lecture, le
+         formulaire s'ouvrait vide et tout était à ressaisir. */
+      'need_id'                  => $is_edit && ! empty( $p->need_id )
+                                      ? (int) $p->need_id
+                                      : ( isset( $_GET['need_id'] ) ? absint( wp_unslash( $_GET['need_id'] ) ) : 0 ),
       'source_prospect_id'       => $is_edit && ! empty( $p->source_prospect_id )
                                       ? (int) $p->source_prospect_id
                                       : ( isset( $_GET['prospect_id'] ) ? absint( wp_unslash( $_GET['prospect_id'] ) ) : 0 ),
@@ -2217,6 +1732,12 @@ startxref
       'client_company'           => $is_edit ? (string) $p->client_company : '',
       'client_siret'             => $is_edit ? (string) $p->client_siret : '',
       'client_address'           => $is_edit ? (string) $p->client_address : '',
+      /* ACDC 3.25.250 — Code postal et ville : la base les porte, le
+         préremplissage les remplissait, et le formulaire ne les montrait pas.
+         Ils repartaient donc vides à l'enregistrement, et le devis bâti sur la
+         proposition perdait la moitié de l'adresse du client. */
+      'client_postal_code'       => $is_edit && ! empty( $p->client_postal_code ) ? (string) $p->client_postal_code : '',
+      'client_city'              => $is_edit && ! empty( $p->client_city )        ? (string) $p->client_city        : '',
       'client_activity'          => $is_edit ? (string) $p->client_activity : '',
       'client_website'           => $is_edit ? (string) $p->client_website : '',
       'client_about_text'        => $is_edit ? (string) $p->client_about_text : '',
@@ -2244,6 +1765,19 @@ startxref
       'access_conditions'        => $is_edit ? (string) $p->access_conditions : '',
       'status'                   => $is_edit ? (string) $p->status : 'brouillon',
     );
+    /* ACDC 3.25.250 — LE RECUEIL AMÈNE SON PROSPECT AVEC LUI.
+       Le préremplissage riche ci-dessous (signataire, e-mail, formation
+       catalogue, tarif réparti par jour) est suspendu à source_prospect_id.
+       Ouvert depuis un recueil, il aurait donc fallu que l'URL porte les deux
+       identifiants pour que le formulaire se remplisse — un lien incomplet et
+       tout retombait à zéro sans le dire. On lit le prospect sur le recueil. */
+    if ( ! $is_edit && empty( $v['source_prospect_id'] ) && ! empty( $v['need_id'] ) ) {
+      $need_for_prospect = $this->get_need( (int) $v['need_id'] );
+      if ( $need_for_prospect && ! empty( $need_for_prospect->source_prospect_id ) ) {
+        $v['source_prospect_id'] = (int) $need_for_prospect->source_prospect_id;
+      }
+    }
+
     /* --- Nouveau depuis un prospect (menu Suivi commercial → Proposition commerciale) ---
        Le formulaire capte prospect_id mais ne se préremplissait que via un recueil lié.
        Lancé sans recueil (need_id=0), il restait entièrement vide. On préremplit ici depuis
@@ -2340,6 +1874,35 @@ startxref
         if ( '' === (string) $v['thematique'] && ! empty( $pp->desired_thematique ) ) { $v['thematique'] = (string) $pp->desired_thematique; }
         if ( '' === (string) $v['title'] && ! empty( $pp->desired_training ) ) { $v['title'] = (string) $pp->desired_training; }
         if ( '' === (string) $v['formation_title'] && ! empty( $pp->desired_training ) ) { $v['formation_title'] = (string) $pp->desired_training; }
+      }
+    }
+
+    /* ACDC 3.25.250 — LE CLIENT DU RECUEIL ARRIVE ENFIN JUSQU'ICI.
+       Raison sociale, SIRET, adresse, activité, site : tout cela est déjà
+       résolu par build_proposal_from_need(), qui remonte l'entreprise du
+       recueil puis, à défaut, celle du prospect. L'assistant supprimé était
+       son seul lecteur ; le formulaire complet, lui, repartait du prospect
+       seul et laissait ces champs vides — c'est le « il ne reprend ni le nom
+       de l'entreprise ni son SIRET ni l'adresse » constaté sur le document.
+       On ne remplit que ce qui est encore vide : ce qui vient du prospect
+       (signataire, e-mail) et du catalogue (tarif, durée) reste prioritaire. */
+    if ( ! $is_edit && ! empty( $v['need_id'] ) ) {
+      $seed = $this->build_proposal_from_need( (int) $v['need_id'] );
+      $seed_keys = array(
+        'client_company', 'client_siret', 'client_address', 'client_postal_code',
+        'client_city', 'client_activity', 'client_website', 'client_name',
+        'client_title', 'client_email', 'formation_funding', 'formation_public',
+      );
+      foreach ( $seed_keys as $seed_key ) {
+        if ( empty( $v[ $seed_key ] ) && ! empty( $seed[ $seed_key ] ) ) {
+          $v[ $seed_key ] = (string) $seed[ $seed_key ];
+        }
+      }
+      if ( '' === (string) $v['title'] && ! empty( $seed['formation_title'] ) ) {
+        $v['title'] = (string) $seed['formation_title'];
+      }
+      if ( '' === (string) $v['formation_title'] && ! empty( $seed['formation_title'] ) ) {
+        $v['formation_title'] = (string) $seed['formation_title'];
       }
     }
 
@@ -2668,7 +2231,11 @@ startxref
               <label style="font-size:12px;font-weight:600;color:#0f2c52;display:block;margin-bottom:5px;">Email du signataire <span style="color:#c99d4a;font-weight:400;font-size:11px;">(utilis&#233; pour l&#8217;envoi de la proposition)</span></label>
               <input type="email" name="proposal[client_email]" value="<?php echo esc_attr( $v['client_email'] ); ?>" placeholder="prenom.nom@entreprise.com" style="width:100%;height:40px;border-radius:10px;border:1px solid #dfe5ee;padding:0 12px;font-size:13px;">
             </p>
-            <?php $field_ta( '', 'Adresse du si&#232;ge', 'client_address', 2, '512 chemin des N&#233;gadoux, 83140 Six-Fours…' ); ?>
+            <?php $field_ta( '', 'Adresse du si&#232;ge', 'client_address', 2, '512 chemin des N&#233;gadoux…' ); ?>
+            <div style="display:grid;grid-template-columns:180px 1fr;gap:14px;">
+              <?php $field_s( '', 'Code postal', 'client_postal_code', '83140' ); ?>
+              <?php $field_s( '', 'Ville', 'client_city', 'Six-Fours-les-Plages' ); ?>
+            </div>
             <?php $field_ta( '', '&#192; propos de l&#8217;entreprise (texte du document)', 'client_about_text', 6, 'Description de l\'entreprise cliente…' ); ?>
             <div style="display:flex;align-items:center;gap:10px;margin-top:-6px;">
               <button type="button" id="acdc-full-ai-btn" class="acdc-button acdc-button-soft" style="height:36px;font-size:12px;"
@@ -3059,9 +2626,12 @@ startxref
       if (!opt.value) return;
       document.getElementById('acdc-full-formation-title').value = opt.getAttribute('data-title') || '';
       document.getElementById('acdc-full-thematique').value = opt.getAttribute('data-thematique') || '';
-      var price = opt.getAttribute('data-price');
-      if (price) { document.getElementById('acdc-full-price').value = price; }
-      acdcFullCalcTotal();
+      /* ACDC 3.25.250 — Le tarif ne se règle plus ici. Ce bloc écrivait le
+         tarif catalogue — un montant TOTAL pour la durée — dans « Tarif jour »,
+         pendant qu'un second écouteur, plus bas, le divisait correctement par
+         le nombre de jours. Deux écritures sur le même champ, et le total
+         retenu restait celui de la première : le prix doublait. La règle vit
+         désormais à un seul endroit, plus bas. */
       acdcUpdateProgramDays();
       acdcFullGenerateObjectives(opt.value);
       /* Auto-génération programme — une journée toutes les 1.2s pour éviter le throttle */
@@ -3257,15 +2827,11 @@ startxref
             var d = parseFloat( dF ? dF.value : 1 ) || 1;
             document.getElementById('acdc-full-price').value = Math.round( acdcFullTotalPriceGlobal / d );
           }
-        });
-      }
-      var backdrop = document.getElementById('acdc-proposal-backdrop');
-      if ( backdrop ) {
-        var mdOnBackdrop = false;
-        backdrop.addEventListener('mousedown', function(e) { mdOnBackdrop = (e.target === backdrop); });
-        backdrop.addEventListener('mouseup', function(e) {
-          if ( mdOnBackdrop && e.target === backdrop ) { acdcCloseProposalModal(); }
-          mdOnBackdrop = false;
+          /* ACDC 3.25.250 — Recalculer APRÈS avoir corrigé jours et tarif :
+             sans cela le total affiché — et le montant réellement enregistré —
+             restaient ceux d'avant la correction. */
+          acdcFullCalcTotal();
+          acdcUpdateProgramDays();
         });
       }
     })();

@@ -15,7 +15,6 @@ trait Acdc_Proposals_Actions_Trait {
     add_action( 'wp_ajax_acdc_proposal_generate_about',        array( $this, 'ajax_proposal_generate_about' ) );
     add_action( 'wp_ajax_acdc_proposal_generate_objectives',   array( $this, 'ajax_proposal_generate_objectives' ) );
     add_action( 'wp_ajax_acdc_proposal_generate_program_day',  array( $this, 'ajax_proposal_generate_program_day' ) );
-    add_action( 'wp_ajax_acdc_proposal_save_draft',            array( $this, 'ajax_proposal_save_draft' ) );
     add_action( 'wp_ajax_acdc_proposal_generate_pdf',   array( $this, 'ajax_proposal_generate_pdf' ) );
     add_action( 'wp_ajax_acdc_proposal_save_full',      array( $this, 'ajax_proposal_save_full' ) );
     add_action( 'admin_post_acdc_delete_proposal',             array( $this, 'handle_delete_proposal' ) );
@@ -208,23 +207,12 @@ trait Acdc_Proposals_Actions_Trait {
     }
   }
 
-  /* ---------------------------------------------------------------
-   * AJAX : Sauvegarder le brouillon (modale 3 étapes)
-   * --------------------------------------------------------------- */
-  public function ajax_proposal_save_draft() {
-    check_ajax_referer( 'acdc_proposal_nonce', 'nonce' );
-    if ( ! current_user_can( 'edit_posts' ) ) {
-      wp_send_json_error( array( 'message' => 'Permission refus&#233;e.' ) );
-    }
-    $raw  = isset( $_POST['proposal'] ) && is_array( $_POST['proposal'] ) ? $_POST['proposal'] : array();
-    $data = $this->sanitize_proposal_input( $raw );
-    $id   = $this->save_proposal( $data );
-    if ( $id ) {
-      wp_send_json_success( array( 'id' => $id, 'message' => 'Brouillon sauvegard&#233;.' ) );
-    } else {
-      wp_send_json_error( array( 'message' => 'Erreur lors de la sauvegarde.' ) );
-    }
-  }
+  /* ACDC 3.25.250 — « acdc_proposal_save_draft » a été retiré avec l'assistant
+     en trois étapes, son unique appelant. Un point d'entrée AJAX qui écrit en
+     base sans que rien ne l'appelle est une porte ouverte sur un couloir muré :
+     personne ne la surveille, et il enregistrait avec un jeu de champs plus
+     pauvre que le formulaire. L'enregistrement passe désormais uniquement par
+     « acdc_proposal_save_full ». */
 
   /* ---------------------------------------------------------------
    * AJAX : Sauvegarder formulaire complet (page Propositions)

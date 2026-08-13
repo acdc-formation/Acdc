@@ -301,6 +301,150 @@ trait Acdc_Proposals_Core_Trait {
     return array();
   }
 
+  /**
+   * ACDC 3.25.250 — LES IMAGES DU PDF À LA TAILLE OÙ ELLES SONT VUES.
+   *
+   * Une proposition pesait 19,5 Mo pour 13 pages : 19,1 Mo d'images. Les
+   * visuels de thématique font 2 à 3 Mo pièce et sont posés en pleine largeur
+   * A4 — 210 mm — puis repris en bandeau sur chaque page. Aucun de ces pixels
+   * supplémentaires n'est visible, ni à l'écran ni à l'impression : au-delà de
+   * 150 points par pouce, une imprimante de bureau ne restitue plus la
+   * différence. En revanche le poids, lui, se voit : un document de 19 Mo est
+   * refusé par la plupart des messageries, et c'est un document commercial
+   * dont le seul but est d'arriver chez le client.
+   *
+   * On fabrique donc une copie réduite, mise en cache sur disque, et c'est
+   * elle qui part dans le PDF. L'original n'est jamais modifié.
+   *
+   * La transparence est préservée : un PNG à canal alpha — un logo, typiquement
+   * — reste un PNG. L'aplatir sur du blanc donnerait un cartouche blanc sur les
+   * fonds colorés. Seules les images opaques deviennent des JPEG, là où la
+   * compression rapporte vraiment.
+   *
+   * En cas de doute — GD absent, fichier illisible, écriture impossible — on
+   * rend l'URL d'origine : un document lourd vaut mieux qu'un document sans
+   * images.
+   *
+   * @param string $url      URL de l'image d'origine.
+   * @param int    $max_w    Largeur maximale en pixels (150 dpi sur la largeur utile).
+   * @param int    $quality  Qualité JPEG (1-100).
+   * @return string URL à utiliser dans le document.
+   */
+  private function acdc_pdf_image_src( $url, $max_w = 1240, $quality = 72 ) {
+    $url = trim( (string) $url );
+    if ( '' === $url ) {
+      return '';
+    }
+    if ( ! function_exists( 'imagecreatefromstring' ) || ! function_exists( 'imagejpeg' ) ) {
+      return $url;
+    }
+
+    $uploads = wp_upload_dir();
+    if ( ! empty( $uploads['error'] ) ) {
+      return $url;
+    }
+
+    /* En dessous de ce seuil, le gain ne vaut pas le traitement. */
+    $threshold = 150 * 1024;
+
+    $data = '';
+    if ( 0 === strpos( $url, (string) $uploads['baseurl'] ) ) {
+      $relative = preg_replace( '/[?#].*$/', '', substr( $url, strlen( (string) $uploads['baseurl'] ) ) );
+      $path     = untrailingslashit( (string) $uploads['basedir'] ) . $relative;
+      if ( ! is_file( $path ) || filesize( $path ) <= $threshold ) {
+        return $url;
+      }
+      $data = (string) @file_get_contents( $path );
+    } else {
+      $resp = wp_remote_get( $url, array( 'timeout' => 15 ) );
+      if ( is_wp_error( $resp ) || 200 !== (int) wp_remote_retrieve_response_code( $resp ) ) {
+        return $url;
+      }
+      $data = (string) wp_remote_retrieve_body( $resp );
+      if ( strlen( $data ) <= $threshold ) {
+        return $url;
+      }
+    }
+    if ( '' === $data ) {
+      return $url;
+    }
+
+    $cache_dir = trailingslashit( (string) $uploads['basedir'] ) . 'acdc-proposals/img/';
+    $cache_url = trailingslashit( (string) $uploads['baseurl'] ) . 'acdc-proposals/img/';
+
+    /* Un PNG à canal alpha (type couleur 4 ou 6) ou à palette transparente
+       (chunk tRNS) reste un PNG ; tout le reste devient un JPEG. */
+    $is_png    = ( 0 === strpos( $data, "\x89PNG" ) );
+    $has_alpha = false;
+    if ( $is_png ) {
+      $color_type = isset( $data[25] ) ? ord( $data[25] ) : 0;
+      $has_alpha  = in_array( $color_type, array( 4, 6 ), true ) || ( false !== strpos( substr( $data, 0, 4096 ), 'tRNS' ) );
+    }
+    $ext = $has_alpha ? 'png' : 'jpg';
+
+    $key  = md5( $url . '|' . strlen( $data ) . '|' . (int) $max_w . '|' . (int) $quality ) . '.' . $ext;
+    $file = $cache_dir . $key;
+    if ( is_file( $file ) ) {
+      return $cache_url . $key;
+    }
+
+    if ( ! wp_mkdir_p( $cache_dir ) ) {
+      return $url;
+    }
+
+    $src = @imagecreatefromstring( $data );
+    if ( false === $src ) {
+      return $url;
+    }
+    $sw = imagesx( $src );
+    $sh = imagesy( $src );
+    if ( $sw < 1 || $sh < 1 ) {
+      imagedestroy( $src );
+      return $url;
+    }
+
+    $ratio = min( 1, $max_w / $sw );
+    $dw    = max( 1, (int) round( $sw * $ratio ) );
+    $dh    = max( 1, (int) round( $sh * $ratio ) );
+
+    $dst = imagecreatetruecolor( $dw, $dh );
+    if ( false === $dst ) {
+      imagedestroy( $src );
+      return $url;
+    }
+    if ( $has_alpha ) {
+      imagealphablending( $dst, false );
+      imagesavealpha( $dst, true );
+      $transparent = imagecolorallocatealpha( $dst, 0, 0, 0, 127 );
+      imagefilledrectangle( $dst, 0, 0, $dw, $dh, $transparent );
+    } else {
+      /* Fond blanc : un PNG opaque converti en JPEG n'a pas de canal alpha,
+         mais GD laisserait du noir dans les zones non écrites. */
+      $white = imagecolorallocate( $dst, 255, 255, 255 );
+      imagefilledrectangle( $dst, 0, 0, $dw, $dh, $white );
+    }
+    imagecopyresampled( $dst, $src, 0, 0, 0, 0, $dw, $dh, $sw, $sh );
+    imagedestroy( $src );
+
+    ob_start();
+    if ( $has_alpha ) {
+      imagepng( $dst, null, 9 );
+    } else {
+      imagejpeg( $dst, null, (int) $quality );
+    }
+    $out = (string) ob_get_clean();
+    imagedestroy( $dst );
+
+    if ( '' === $out || strlen( $out ) >= strlen( $data ) ) {
+      /* Réduction sans effet : on garde l'original plutôt qu'une copie inutile. */
+      return $url;
+    }
+    if ( false === @file_put_contents( $file, $out ) ) {
+      return $url;
+    }
+    return $cache_url . $key;
+  }
+
   /** URLs images fixes communes à toutes les propositions */
   private function get_proposal_static_images() {
     $base = 'https://acdcformation.com/wp-content/uploads/2026/05/';
@@ -315,6 +459,45 @@ trait Acdc_Proposals_Core_Trait {
       'ressources'          => $base . 'Ressources-complementaires-propal.png',
       'contact'             => $base . 'Contact-propal.png',
     );
+  }
+
+  /**
+   * ACDC 3.25.250 — La fiche entreprise d'un prospect, quand il en existe une.
+   *
+   * Aucune colonne ne relie les deux tables : le rapprochement se fait sur le
+   * SIRET d'abord — c'est l'identifiant, il ne se confond pas — puis sur la
+   * raison sociale exacte. Rien de flou : rattacher la mauvaise société à une
+   * proposition, c'est envoyer un devis au nom d'un tiers.
+   *
+   * @param object $prospect Ligne prospect.
+   * @return object|null Ligne entreprise, ou null si aucun rapprochement sûr.
+   */
+  private function acdc_find_company_for_prospect( $prospect ) {
+    if ( empty( $prospect ) || empty( $this->company_table ) ) {
+      return null;
+    }
+    global $wpdb;
+
+    $siret = trim( (string) ( $prospect->siret ?? '' ) );
+    if ( '' !== $siret ) {
+      $row = $wpdb->get_row( $wpdb->prepare(
+        "SELECT * FROM {$this->company_table} WHERE siret = %s ORDER BY id DESC LIMIT 1",
+        $siret
+      ) );
+      if ( $row ) {
+        return $row;
+      }
+    }
+
+    $name = trim( (string) ( $prospect->company_name ?? '' ) );
+    if ( '' !== $name ) {
+      return $wpdb->get_row( $wpdb->prepare(
+        "SELECT * FROM {$this->company_table} WHERE name = %s ORDER BY id DESC LIMIT 1",
+        $name
+      ) );
+    }
+
+    return null;
   }
 
   private function build_proposal_from_need( $need_id ) {
@@ -371,26 +554,39 @@ trait Acdc_Proposals_Core_Trait {
         $data['client_website']     = ! empty( $company->website ) ? (string) $company->website : '';
       }
     }
-    // ACDC 3.25.60 — Fallback : chercher l'entreprise via le prospect si company_id absent de la NAD
+    /* ACDC 3.25.250 — LE CLIENT DU PROSPECT, LU SUR DES COLONNES QUI EXISTENT.
+     *
+     * Ce repli cherchait l'entreprise sur « prospect.company_id », puis sur
+     * « prospect.company ». La table des prospects n'a jamais eu ni l'une ni
+     * l'autre : elle porte company_name et siret. Les deux tests étaient donc
+     * toujours faux, en silence, et le repli ne repliait rien — raison sociale,
+     * SIRET et adresse restaient vides sur la proposition dès que le recueil
+     * n'était pas rattaché à une fiche entreprise.
+     *
+     * On lit désormais le prospect lui-même, puis on tente d'enrichir depuis
+     * la fiche entreprise correspondante (par SIRET, sinon par raison sociale)
+     * quand elle existe : elle seule porte le site web et le complément
+     * d'adresse. Ce qui vient du prospect n'est jamais écrasé.
+     */
     if ( empty( $data['client_company'] ) && ! empty( $need->source_prospect_id ) ) {
       $prospect_for_company = $this->get_prospect( (int) $need->source_prospect_id );
-      if ( $prospect_for_company && ! empty( $prospect_for_company->company_id ) ) {
-        $company_from_prospect = $this->get_company( (int) $prospect_for_company->company_id );
+      if ( $prospect_for_company ) {
+        if ( ! empty( $prospect_for_company->company_name ) ) { $data['client_company']     = (string) $prospect_for_company->company_name; }
+        if ( ! empty( $prospect_for_company->siret ) )        { $data['client_siret']       = (string) $prospect_for_company->siret; }
+        if ( ! empty( $prospect_for_company->address ) )      { $data['client_address']     = (string) $prospect_for_company->address; }
+        if ( ! empty( $prospect_for_company->postal_code ) )  { $data['client_postal_code'] = (string) $prospect_for_company->postal_code; }
+        if ( ! empty( $prospect_for_company->city ) )         { $data['client_city']        = (string) $prospect_for_company->city; }
+
+        $company_from_prospect = $this->acdc_find_company_for_prospect( $prospect_for_company );
         if ( $company_from_prospect ) {
-          $data['company_id']         = (int) $company_from_prospect->id;
-          $data['client_company']     = (string) $company_from_prospect->name;
-          $data['client_siret']       = ! empty( $company_from_prospect->siret )       ? (string) $company_from_prospect->siret       : '';
-          $data['client_address']     = ! empty( $company_from_prospect->address )     ? (string) $company_from_prospect->address     : '';
-          $data['client_postal_code'] = ! empty( $company_from_prospect->postal_code ) ? (string) $company_from_prospect->postal_code : '';
-          $data['client_city']        = ! empty( $company_from_prospect->city )        ? (string) $company_from_prospect->city        : '';
-          $data['client_activity']    = ! empty( $company_from_prospect->activity )    ? (string) $company_from_prospect->activity    : '';
-          $data['client_website']     = ! empty( $company_from_prospect->website )     ? (string) $company_from_prospect->website     : '';
+          $data['company_id'] = (int) $company_from_prospect->id;
+          if ( empty( $data['client_company'] )     && ! empty( $company_from_prospect->name ) )        { $data['client_company']     = (string) $company_from_prospect->name; }
+          if ( empty( $data['client_siret'] )       && ! empty( $company_from_prospect->siret ) )       { $data['client_siret']       = (string) $company_from_prospect->siret; }
+          if ( empty( $data['client_address'] )     && ! empty( $company_from_prospect->address ) )     { $data['client_address']     = (string) $company_from_prospect->address; }
+          if ( empty( $data['client_postal_code'] ) && ! empty( $company_from_prospect->postal_code ) ) { $data['client_postal_code'] = (string) $company_from_prospect->postal_code; }
+          if ( empty( $data['client_city'] )        && ! empty( $company_from_prospect->city ) )        { $data['client_city']        = (string) $company_from_prospect->city; }
+          if ( empty( $data['client_website'] )     && ! empty( $company_from_prospect->website ) )     { $data['client_website']     = (string) $company_from_prospect->website; }
         }
-      }
-      // Fallback 2 : chercher via le champ company (nom) du prospect
-      if ( empty( $data['client_company'] ) && ! empty( $prospect_for_company ) && ! empty( $prospect_for_company->company ) ) {
-        $data['client_company'] = (string) $prospect_for_company->company;
-        if ( ! empty( $prospect_for_company->siret ) ) { $data['client_siret'] = (string) $prospect_for_company->siret; }
       }
     }
     if ( ! empty( $need->contact_id ) ) {

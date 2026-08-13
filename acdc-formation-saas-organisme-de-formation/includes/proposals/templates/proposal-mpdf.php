@@ -68,6 +68,15 @@ $th_imgs  = $th_code ? $this->get_proposal_thematique_images( $th_code ) : array
 $img_cover= ! empty( $th_imgs['cover'] ) ? (string) $th_imgs['cover'] : ( ! empty( $formation->catalog_image_url ) ? (string) $formation->catalog_image_url : '' );
 $img_prog = ! empty( $th_imgs['programme'] ) ? (string) $th_imgs['programme'] : $img_cover;
 
+/* ACDC 3.25.250 — Toutes les images du document passent par la copie réduite
+   (voir acdc_pdf_image_src) : le visuel de thématique est repris en bandeau sur
+   chaque page, un original de 2,6 Mo pesait donc treize fois. Les quatre
+   variables ci-dessous sont les seules sources d'images du document — les
+   $_imgN plus bas retombent tous sur $img_cover. */
+$logo_url  = $this->acdc_pdf_image_src( $logo_url,  400 );
+$img_cover = $this->acdc_pdf_image_src( $img_cover, 1240 );
+$img_prog  = $this->acdc_pdf_image_src( $img_prog,  1240 );
+
 /* Générateur de header de page standard */
 $pg_header = function( $img_url = '' ) use ( $logo_url, $form_title_esc, $eu ) {
   $logo_html = $logo_url ? '<img src="' . $eu($logo_url) . '" style="width:40pt;height:40pt;display:block;object-fit:contain;">' : '';
@@ -430,7 +439,7 @@ $_pg_fin = 10 + $prog_days;
 <?php
 /* ══════════════════ PAGE CONTACT ══════════════════ */
 $_pg_con = 11 + $prog_days;
-$_fav = $acdc['logo_favicon_url'] ?? $logo_url;
+$_fav = $this->acdc_pdf_image_src( $acdc['logo_favicon_url'] ?? $logo_url, 400 );
 ?>
 <div class="pb"></div>
 <?php echo $pg_header(); echo $rib('Nous contacter'); ?>
