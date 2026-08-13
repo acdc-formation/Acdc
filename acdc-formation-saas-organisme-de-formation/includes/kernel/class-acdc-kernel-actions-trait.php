@@ -548,32 +548,31 @@ trait ACDC_Kernel_Actions_Trait {
       $this->redirect_to_portal( 'training_convocations', 'Aucune adresse e-mail sur la fiche apprenant : rien n’a été envoyé.', 'error' );
     }
 
-    /* ACDC 3.25.249 — Le PDF part en pièce jointe ET reste sur le dossier.
-       Il n'était écrit que dans un fichier temporaire : l'apprenant ne le
-       retrouvait donc nulle part, et l'organisme n'en gardait aucune trace. */
-    $attachments = array();
-    $stored      = $this->acdc_store_training_convocation_pdf( $registration, $context );
-    if ( ! empty( $stored['path'] ) && file_exists( $stored['path'] ) ) {
-      $attachments[] = $stored['path'];
-    }
+    /* ACDC 3.25.252 — Récapitulatif, corps et pièce jointe : composés une seule
+       fois, pour les trois chemins d'envoi. Cet e-mail-ci annonçait « Durée » et
+       « Format » quand les deux autres annonçaient les horaires et le lieu ;
+       l'apprenant recevait un courrier différent selon le bouton cliqué par
+       l'organisme. */
+    global $wpdb;
+    $conv_contract = ! empty( $registration->autofill_contract_id )
+      ? $wpdb->get_row( $wpdb->prepare( "SELECT * FROM {$this->registration_contract_table} WHERE id = %d", (int) $registration->autofill_contract_id ) )
+      : null;
+    /* La première séance planifiée du dossier : c'est elle qui porte le déroulé
+       en demi-journées et, quand elle est renseignée, l'adresse du terrain. */
+    $conv_session   = ( ! empty( $context['sessions'] ) && is_array( $context['sessions'] ) ) ? $context['sessions'][0] : null;
+    $conv_formation = ( isset( $context['formation'] ) && is_object( $context['formation'] ) ) ? $context['formation'] : null;
 
     $formation = (string) ( $context['formation_title'] ?? 'Formation' );
-    $rows      = array(
-      array( 'label' => 'Formation', 'value' => $formation ),
-      array( 'label' => 'Dates',     'value' => $this->format_pdf_date( $context['start_date'] ?? '' ) . ' au ' . $this->format_pdf_date( $context['end_date'] ?? '' ) ),
-      array( 'label' => 'Durée',     'value' => (string) ( $context['duration'] ?? '—' ) ),
-      array( 'label' => 'Format',    'value' => (string) ( $context['format'] ?? '—' ) ),
-    );
-
-    /* ACDC 3.25.249 — Un bouton qui télécharge la convocation, plutôt qu'un
-       renvoi vers l'extranet : l'apprenant vient chercher SA convocation, pas
-       un espace où la retrouver. */
-    $dl_html = '';
-    if ( ! empty( $stored['url'] ) ) {
-      $dl_html = '<p style="text-align:center;margin:26px 0;"><a href="' . esc_url( $stored['url'] ) . '" style="display:inline-block;padding:14px 28px;background:#C5A253;color:#0B0706;text-decoration:none;border-radius:8px;font-weight:700;font-size:16px;">📄 Télécharger ma convocation</a></p>';
-    }
-    $body  = '<p style="font-size:18px;line-height:1.7;margin:0 0 18px;">Vous êtes convoqué(e) à la formation indiquée ci-dessus. Vous trouverez votre convocation détaillée en pièce jointe : elle précise le lieu, les horaires demi-journée par demi-journée et les modalités d’accès.</p>' . $dl_html;
-    $body .= '<p style="font-size:16px;line-height:1.7;margin:0 0 18px;color:#4b5d76;">Merci de vous présenter quelques minutes avant le début de la première demi-journée.</p>';
+    $parts     = $this->acdc_convocation_email_parts( array(
+      'formation_title' => $formation,
+      'session'         => $conv_session,
+      'contract'        => $conv_contract,
+      'formation'       => $conv_formation,
+      'registration'    => $registration,
+      'start'           => (string) ( $context['start_date'] ?? '' ),
+      'end'             => (string) ( $context['end_date'] ?? '' ),
+    ) );
+    $attachments = $parts['attachments'];
 
     $sent = $this->acdc_send_transactional_email(
       $email,
@@ -582,8 +581,8 @@ trait ACDC_Kernel_Actions_Trait {
         'greeting_name' => (string) ( $context['learner_name'] ?? '' ),
         'intro_html'    => '',
         'summary_title' => 'DÉTAILS DE VOTRE CONVOCATION',
-        'summary_rows'  => $rows,
-        'body_html'     => $body,
+        'summary_rows'  => $parts['summary_rows'],
+        'body_html'     => $parts['body_html'],
         'footer_notice' => 'Cet e-mail est votre convocation officielle. Conservez-le pour vos dossiers.',
       ),
       array(

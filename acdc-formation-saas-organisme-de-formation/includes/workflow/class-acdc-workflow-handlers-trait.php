@@ -330,23 +330,33 @@ trait ACDC_Workflow_Handlers_Trait {
     $session   = $pieces['session'];
     $dates     = $this->acdc_wf_resolve_dates( $pieces );
     $formation = $this->acdc_wf_formation_title( $pieces );
-    $portal_id = (int) get_option( 'acdc_of_learner_portal_page_id', 0 );
-    $portal    = $portal_id ? get_permalink( $portal_id ) : home_url( '/' );
-    $lieu      = ! empty( $session->location )
-      ? (string) $session->location
-      : ( ! empty( $session->remote_link ) ? 'Distanciel' : '—' );
 
-    $rows = array(
-      array( 'label' => 'Formation',     'value' => $formation ),
-      array( 'label' => 'Date de début', 'value' => $dates['start'] > 0 ? ucfirst( wp_date( 'l d F Y', $dates['start'] ) ) : 'À préciser' ),
-      array( 'label' => 'Lieu / format', 'value' => $lieu ),
-    );
+    /* ACDC 3.25.252 — CE CHEMIN-CI ÉCRIVAIT SA PROPRE CONVOCATION.
+       C'est pourtant lui qui expédie la plupart d'entre elles — la veille à
+       17 h. Il n'annonçait ni les horaires ni le lieu (il ne lisait que la
+       colonne `location` de la séance, vide la plupart du temps, et écrivait un
+       tiret sans jamais regarder la convention), ne joignait pas le document et
+       renvoyait vers l'extranet. Trois codes pour une seule convocation : ils
+       avaient divergé. Le récapitulatif est désormais composé au même endroit
+       que celui des deux autres chemins. */
+    $formation_row = ( ! empty( $pieces['formation_id'] ) && method_exists( $this, 'get_formation' ) )
+      ? $this->get_formation( (int) $pieces['formation_id'] )
+      : null;
 
-    $body = '<p style="font-size:19px;line-height:1.7;margin:0 0 20px;">Vous êtes convoqué(e) à la formation indiquée ci-dessous. Merci de vous présenter à l\'heure et muni(e) des documents nécessaires.</p>';
-    if ( ! empty( $session->remote_link ) ) {
-      $body .= '<p style="font-size:18px;line-height:1.7;margin:0 0 20px;">Lien de connexion : <a href="' . esc_url( (string) $session->remote_link ) . '">' . esc_html( (string) $session->remote_link ) . '</a></p>';
-    }
-    $body .= '<p style="margin:24px 0;text-align:center;"><a href="' . esc_url( $portal ) . '" style="display:inline-block;padding:14px 28px;background:#C5A253;color:#0B0706;text-decoration:none;border-radius:8px;font-weight:700;font-size:16px;">Accéder à mon espace apprenant</a></p>';
+    /* Les lignes du récapitulatif ne dépendent que de la formation, des dates,
+       des horaires et du lieu : elles sont identiques pour tout le monde. Seul
+       le document joint est nominatif. On les compose donc une fois, et c'est
+       la même information qui part au commanditaire. */
+    $common = $this->acdc_convocation_email_parts( array(
+      'formation_title' => $formation,
+      'session'         => $session,
+      'contract'        => $pieces['contract'] ?? null,
+      'formation'       => $formation_row,
+      'registration'    => null,
+      'start'           => $dates['start'] > 0 ? $dates['start'] : '',
+      'end'             => $dates['end'] > 0 ? $dates['end'] : '',
+    ) );
+    $rows = $common['summary_rows'];
 
     $sent = array();
     $held = array();
@@ -362,6 +372,28 @@ trait ACDC_Workflow_Handlers_Trait {
         $held[] = (string) $learner['name'] . ' <' . $email . '>';
         continue;
       }
+      /* Le dossier de CET apprenant : c'est lui qui porte la convocation en PDF.
+         Sans dossier, le message part quand même — avec le lien vers l'espace
+         apprenant plutôt qu'un bouton de téléchargement qui ne téléchargerait
+         rien. */
+      $learner_registration = $wpdb->get_row( $wpdb->prepare(
+        "SELECT * FROM {$this->training_registration_table}
+          WHERE learner_id = %d AND formation_id = %d AND is_draft = 0
+          ORDER BY id DESC LIMIT 1",
+        (int) $learner['id'],
+        (int) $pieces['formation_id']
+      ) );
+
+      $parts = $this->acdc_convocation_email_parts( array(
+        'formation_title' => $formation,
+        'session'         => $session,
+        'contract'        => $pieces['contract'] ?? null,
+        'formation'       => $formation_row,
+        'registration'    => $learner_registration,
+        'start'           => $dates['start'] > 0 ? $dates['start'] : '',
+        'end'             => $dates['end'] > 0 ? $dates['end'] : '',
+      ) );
+
       $ok = $this->acdc_send_transactional_email(
         $email,
         'Convocation — ' . $formation,
@@ -369,8 +401,8 @@ trait ACDC_Workflow_Handlers_Trait {
           'greeting_name' => (string) $learner['name'],
           'intro_html'    => '',
           'summary_title' => 'DÉTAILS DE VOTRE CONVOCATION',
-          'summary_rows'  => $rows,
-          'body_html'     => $body,
+          'summary_rows'  => $parts['summary_rows'],
+          'body_html'     => $parts['body_html'],
           'footer_notice' => 'Cet e-mail est votre convocation officielle. Conservez-le pour vos dossiers.',
         ),
         array(
@@ -380,7 +412,8 @@ trait ACDC_Workflow_Handlers_Trait {
           'related_entity_id'   => (int) $pieces['session_id'],
           'email_category'      => 'convocation',
           'email_audience'      => 'apprenant',
-        )
+        ),
+        $parts['attachments']
       );
       if ( $ok ) {
         $sent[] = (string) $learner['name'];

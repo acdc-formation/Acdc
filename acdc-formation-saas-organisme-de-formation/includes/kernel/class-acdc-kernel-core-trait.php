@@ -5744,6 +5744,216 @@ dbDelta( $sql_companies );
    *
    * @return array{url:string,path:string} Vide si la fabrication échoue.
    */
+  /**
+   * ACDC 3.25.252 — IL N'Y A PLUS QU'UNE CONVOCATION.
+   *
+   * Trois codes l'écrivaient, et ils ne disaient pas la même chose : l'envoi
+   * manuel annonçait « Formation / Dates / Durée / Format », l'envoi automatique
+   * d'une séance ajoutait les horaires et le lieu, et le moteur — celui qui
+   * expédie la veille à 17 h, donc celui que reçoivent la plupart des apprenants
+   * — n'avait ni horaires, ni pièce jointe, et renvoyait vers l'extranet au lieu
+   * de donner la convocation. Selon le chemin emprunté par l'organisme, la même
+   * personne recevait pour la même formation un courrier différent.
+   *
+   * Le récapitulatif est composé ici, une fois. Les trois chemins l'appellent.
+   *
+   * @param array $args session, contract, formation, registration, formation_title, start, end.
+   * @return array{summary_rows:array,body_html:string,attachments:array,pdf_url:string}
+   */
+  private function acdc_convocation_email_parts( $args = array() ) {
+    $session      = isset( $args['session'] ) && is_object( $args['session'] ) ? $args['session'] : null;
+    $contract     = isset( $args['contract'] ) && is_object( $args['contract'] ) ? $args['contract'] : null;
+    $registration = isset( $args['registration'] ) && is_object( $args['registration'] ) ? $args['registration'] : null;
+    $formation    = isset( $args['formation'] ) && is_object( $args['formation'] ) ? $args['formation'] : null;
+
+    $formation_title = trim( (string) ( $args['formation_title'] ?? '' ) );
+    if ( '' === $formation_title && $formation && ! empty( $formation->title ) ) {
+      $formation_title = (string) $formation->title;
+    }
+    if ( '' === $formation_title ) {
+      $formation_title = 'Formation';
+    }
+
+    /* La convocation dit COMBIEN DE JOURS, pas seulement quand ça commence :
+       une formation de deux jours annoncée par sa seule date de début laisse
+       l'apprenant organiser une seule journée. */
+    $rows = array(
+      array( 'label' => 'Formation', 'value' => $formation_title ),
+      array( 'label' => ( $args['dates_label'] ?? '' ) ?: 'Dates', 'value' => $this->acdc_convocation_dates_label( $args['start'] ?? '', $args['end'] ?? '' ) ),
+      array( 'label' => 'Horaires', 'value' => $this->acdc_convocation_hours_label( $session, $contract ) ),
+      array( 'label' => 'Lieu / format', 'value' => $this->acdc_convocation_location_label( $session, $contract, $formation ) ),
+    );
+
+    $remote_link = '';
+    if ( $session && ! empty( $session->remote_link ) ) {
+      $remote_link = (string) $session->remote_link;
+    } elseif ( $contract && ! empty( $contract->remote_link ) ) {
+      $remote_link = (string) $contract->remote_link;
+    }
+
+    /* Le document lui-même : fabriqué et conservé AVANT la composition, pour
+       que le message puisse porter son lien. */
+    $stored = array( 'url' => '', 'path' => '' );
+    if ( $registration && method_exists( $this, 'acdc_store_training_convocation_pdf' ) ) {
+      $stored = $this->acdc_store_training_convocation_pdf( $registration );
+    }
+
+    $body = '<p style="font-size:18px;line-height:1.7;margin:0 0 18px;">Vous êtes convoqué(e) à la formation indiquée ci-dessus. Merci de vous présenter quelques minutes avant le début de la première demi-journée, muni(e) des documents nécessaires.</p>';
+    if ( '' !== $remote_link ) {
+      $body .= '<p style="font-size:17px;line-height:1.7;margin:0 0 18px;">Lien de connexion : <a href="' . esc_url( $remote_link ) . '" style="color:#C5A253;text-decoration:underline;">' . esc_html( $remote_link ) . '</a></p>';
+    }
+    if ( ! empty( $stored['url'] ) ) {
+      $body .= '<p style="margin:24px 0;text-align:center;"><a href="' . esc_url( (string) $stored['url'] ) . '" style="display:inline-block;padding:14px 28px;background:#C5A253;color:#0B0706;text-decoration:none;border-radius:8px;font-weight:700;font-size:16px;">📄 Télécharger ma convocation</a></p>';
+    } else {
+      /* Sans document, on ne promet pas un téléchargement : on renvoie à
+         l'espace apprenant, qui existe toujours. */
+      $portal_id  = (int) get_option( 'acdc_of_learner_portal_page_id', 0 );
+      $portal_url = $portal_id ? get_permalink( $portal_id ) : home_url( '/' );
+      $body .= '<p style="margin:24px 0;text-align:center;"><a href="' . esc_url( $portal_url ) . '" style="display:inline-block;padding:14px 28px;background:#C5A253;color:#0B0706;text-decoration:none;border-radius:8px;font-weight:700;font-size:16px;">Accéder à mon espace apprenant</a></p>';
+    }
+
+    $attachments = ( ! empty( $stored['path'] ) && file_exists( (string) $stored['path'] ) ) ? array( (string) $stored['path'] ) : array();
+
+    return array(
+      'summary_rows' => $rows,
+      'body_html'    => $body,
+      'attachments'  => $attachments,
+      'pdf_url'      => (string) $stored['url'],
+    );
+  }
+
+  /**
+   * « Vendredi 14 août 2026 » sur une journée, « Du … au … » sur plusieurs.
+   *
+   * Accepte indifféremment un horodatage réel ou une date de base : les deux
+   * circulent dans le plugin, et une convocation qui refuse une des deux formes
+   * affiche « À préciser » sur un dossier parfaitement daté.
+   */
+  private function acdc_convocation_dates_label( $start, $end = '' ) {
+    $fmt = function ( $value ) {
+      if ( empty( $value ) ) {
+        return '';
+      }
+      if ( is_numeric( $value ) ) {
+        return (int) $value > 0 ? ucfirst( wp_date( 'l d F Y', (int) $value ) ) : '';
+      }
+      /* Date locale de la base : mysql2date, jamais strtotime. */
+      $label = mysql2date( 'l d F Y', (string) $value, true );
+      return $label ? ucfirst( $label ) : '';
+    };
+
+    $start_label = $fmt( $start );
+    $end_label   = $fmt( $end );
+
+    if ( '' === $start_label && '' === $end_label ) {
+      return 'À préciser';
+    }
+    if ( '' === $end_label || $end_label === $start_label ) {
+      return $start_label ?: $end_label;
+    }
+    if ( '' === $start_label ) {
+      return $end_label;
+    }
+    return 'Du ' . lcfirst( $start_label ) . ' au ' . lcfirst( $end_label );
+  }
+
+  /**
+   * Les horaires annoncés à l'apprenant.
+   *
+   * Deux sources, dans l'ordre où elles font foi : le déroulé de la séance —
+   * ce qui a été réellement planifié — puis celui de la convention, qui est ce
+   * qui a été contractualisé. Aucune heure inventée : sans l'une ni l'autre, on
+   * le dit.
+   */
+  private function acdc_convocation_hours_label( $session, $contract = null ) {
+    if ( $session && method_exists( $this, 'acdc_session_hours_label' ) ) {
+      $label = (string) $this->acdc_session_hours_label( $session );
+      if ( '' !== $label && '—' !== $label ) {
+        return $label;
+      }
+    }
+
+    if ( $contract && ! empty( $contract->seances_schedule_json ) ) {
+      $decoded = json_decode( (string) $contract->seances_schedule_json, true );
+      if ( is_array( $decoded ) ) {
+        foreach ( $decoded as $day ) {
+          if ( ! is_array( $day ) ) {
+            continue;
+          }
+          $am = ( ! empty( $day['am_start'] ) && ! empty( $day['am_end'] ) )
+            ? str_replace( ':', 'h', (string) $day['am_start'] ) . '–' . str_replace( ':', 'h', (string) $day['am_end'] )
+            : '';
+          $pm = ( ! empty( $day['pm_start'] ) && ! empty( $day['pm_end'] ) )
+            ? str_replace( ':', 'h', (string) $day['pm_start'] ) . '–' . str_replace( ':', 'h', (string) $day['pm_end'] )
+            : '';
+          $parts = array_filter( array( $am, $pm ) );
+          if ( $parts ) {
+            /* Les journées d'une même convention partagent leurs horaires dans
+               l'immense majorité des cas : on annonce ceux de la première, et
+               la convocation détaillée en pièce jointe donne le jour par jour. */
+            return implode( ' et ', $parts );
+          }
+        }
+      }
+    }
+
+    return 'À préciser';
+  }
+
+  /**
+   * Le lieu annoncé à l'apprenant.
+   *
+   * La séance d'abord — c'est le terrain —, puis la convention, qui est la
+   * pièce qui engage, puis la fiche formation. Le distanciel n'est retenu que
+   * si aucune adresse n'existe : une formation en salle avec un lien de secours
+   * reste une formation en salle.
+   *
+   * « À préciser » plutôt qu'un tiret : un tiret ne dit rien à quelqu'un qui
+   * doit se déplacer.
+   */
+  private function acdc_convocation_location_label( $session, $contract = null, $formation = null ) {
+    $compose = static function ( $address, $postal_code = '', $city = '' ) {
+      $address = trim( (string) $address );
+      if ( '' === $address ) {
+        return '';
+      }
+      $tail = trim( trim( (string) $postal_code ) . ' ' . trim( (string) $city ) );
+      /* Ne pas répéter le code postal ou la ville déjà présents dans la ligne. */
+      if ( '' !== $tail && false === stripos( $address, $tail ) ) {
+        return $address . ', ' . $tail;
+      }
+      return $address;
+    };
+
+    if ( $session && ! empty( $session->location ) ) {
+      $label = $compose( $session->location, $session->postal_code ?? '', $session->city ?? '' );
+      if ( '' !== $label ) {
+        return $label;
+      }
+    }
+
+    if ( $contract ) {
+      $label = $compose(
+        $contract->formation_address ?? '',
+        $contract->formation_postal_code ?? '',
+        $contract->formation_city ?? ''
+      );
+      if ( '' !== $label ) {
+        return $label;
+      }
+    }
+
+    if ( $formation ) {
+      $label = $compose( $formation->address ?? '', $formation->postal_code ?? '', $formation->city ?? '' );
+      if ( '' !== $label ) {
+        return $label;
+      }
+    }
+
+    $remote = ( $session && ! empty( $session->remote_link ) ) || ( $contract && ! empty( $contract->remote_link ) );
+    return $remote ? 'Distanciel' : 'À préciser';
+  }
+
   private function acdc_store_training_convocation_pdf( $registration, $context = array() ) {
     $empty = array( 'url' => '', 'path' => '' );
     if ( ! is_object( $registration ) || empty( $registration->id ) ) {

@@ -469,28 +469,29 @@ trait ACDC_Sessions_Actions_Trait {
             (int) $learner->id,
             (int) $session->formation_id
           ) );
-          $conv_stored = array( 'url' => '', 'path' => '' );
-          if ( $conv_registration && method_exists( $this, 'acdc_store_training_convocation_pdf' ) ) {
-            $conv_stored = $this->acdc_store_training_convocation_pdf( $conv_registration );
+          /* ACDC 3.25.252 — Le récapitulatif, le corps et la pièce jointe viennent
+             maintenant du composeur commun : cet envoi-ci et celui du moteur ne
+             peuvent plus décrire différemment la même convocation. */
+          $conv_contract = null;
+          if ( $conv_registration && ! empty( $conv_registration->autofill_contract_id ) ) {
+            $conv_contract = $wpdb->get_row( $wpdb->prepare(
+              "SELECT * FROM {$this->registration_contract_table} WHERE id = %d",
+              (int) $conv_registration->autofill_contract_id
+            ) );
           }
+          $conv_formation = ! empty( $session->formation_id ) && method_exists( $this, 'get_formation' )
+            ? $this->get_formation( (int) $session->formation_id )
+            : null;
 
-          $summary_rows = array(
-            array( 'label' => 'Formation',     'value' => $formation_title ),
-            array( 'label' => 'Date de début', 'value' => ucfirst( $date_formatted ) ),
-            array( 'label' => 'Horaires',      'value' => $this->acdc_session_hours_label( $session ) ),
-            array( 'label' => 'Lieu / format', 'value' => ! empty( $session->location ) ? (string) $session->location : ( ! empty( $session->remote_link ) ? 'Distanciel' : '—' ) ),
-          );
-          $body_html  = '<p style="font-size:19px;line-height:1.7;margin:0 0 20px;">Vous êtes convoqué(e) à la formation indiquée ci-dessous. Merci de vous présenter à l\'heure et muni(e) des documents nécessaires.</p>';
-          if ( ! empty( $session->remote_link ) ) {
-            $body_html .= '<p style="font-size:18px;line-height:1.7;margin:0 0 20px;">Lien de connexion : <a href="' . esc_url( (string) $session->remote_link ) . '" style="color:#C5A253;text-decoration:underline;">' . esc_html( (string) $session->remote_link ) . '</a></p>';
-          }
-          if ( ! empty( $conv_stored['url'] ) ) {
-            $body_html .= '<p style="margin:24px 0;text-align:center;"><a href="' . esc_url( $conv_stored['url'] ) . '" style="display:inline-block;padding:14px 28px;background:#C5A253;color:#0B0706;text-decoration:none;border-radius:8px;font-weight:700;font-size:16px;">📄 Télécharger ma convocation</a></p>';
-          } else {
-            $body_html .= '<p style="margin:24px 0;text-align:center;"><a href="' . esc_url( $portal_url ) . '" style="display:inline-block;padding:14px 28px;background:#C5A253;color:#0B0706;text-decoration:none;border-radius:8px;font-weight:700;font-size:16px;">Accéder à mon espace apprenant</a></p>';
-          }
-
-          $conv_attachments = ( ! empty( $conv_stored['path'] ) && file_exists( $conv_stored['path'] ) ) ? array( $conv_stored['path'] ) : array();
+          $parts = $this->acdc_convocation_email_parts( array(
+            'formation_title' => $formation_title,
+            'session'         => $session,
+            'contract'        => $conv_contract,
+            'formation'       => $conv_formation,
+            'registration'    => $conv_registration,
+            'start'           => ! empty( $session->start_at ) ? (string) $session->start_at : (string) ( $session->start_date ?? '' ),
+            'end'             => ! empty( $session->end_at ) ? (string) $session->end_at : (string) ( $session->end_date ?? '' ),
+          ) );
 
           $this->acdc_send_transactional_email(
             $email,
@@ -499,8 +500,8 @@ trait ACDC_Sessions_Actions_Trait {
               'greeting_name' => $greeting,
               'intro_html'    => '',
               'summary_title' => 'DÉTAILS DE VOTRE CONVOCATION',
-              'summary_rows'  => $summary_rows,
-              'body_html'     => $body_html,
+              'summary_rows'  => $parts['summary_rows'],
+              'body_html'     => $parts['body_html'],
               'footer_notice' => 'Cet e-mail est votre convocation officielle. Conservez-le pour vos dossiers.',
             ),
             array(
@@ -510,7 +511,8 @@ trait ACDC_Sessions_Actions_Trait {
               'related_entity_id'   => $session_id,
               'email_category'      => 'convocation',
               'email_audience'      => 'apprenant',
-            )
+            ),
+            $parts['attachments']
           );
 
           /* ACDC 3.25.249 — Le bloc de persistance qui se trouvait ici faisait le
