@@ -2930,9 +2930,14 @@ public function render_admin_registration_contract_page() { $this->render_admin_
       ) );
     } elseif ( 'session' === $entity_type ) {
       // Apprenants de la séance → leurs inscriptions
-      $learner_ids_sess = $wpdb->get_col( $wpdb->prepare(
-        "SELECT id FROM {$this->learner_table} WHERE session_id = %d", $entity_id
-      ) );
+      /* ACDC 3.25.267 — Les trois rattachements, pas le seul direct. */
+      $seance_for_regs  = $this->get_session( (int) $entity_id );
+      $learner_ids_sess = array();
+      if ( $seance_for_regs ) {
+        foreach ( (array) $this->acdc_session_learners( $seance_for_regs ) as $sl ) {
+          if ( ! empty( $sl->id ) ) { $learner_ids_sess[] = (int) $sl->id; }
+        }
+      }
       $registrations = array();
       if ( ! empty( $learner_ids_sess ) ) {
         $ph = implode( ',', array_fill( 0, count( $learner_ids_sess ), '%d' ) );

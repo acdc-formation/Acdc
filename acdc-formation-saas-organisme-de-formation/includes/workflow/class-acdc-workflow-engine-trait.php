@@ -250,10 +250,7 @@ trait ACDC_Workflow_Engine_Trait {
     $run_id = (int) $run->id;
     $now    = $this->acdc_wf_now();
 
-    $need = ! empty( $run->need_id ) ? $wpdb->get_row( $wpdb->prepare(
-      "SELECT * FROM {$this->need_table} WHERE id = %d",
-      (int) $run->need_id
-    ) ) : null;
+    $need = $this->acdc_wf_need_for_run( $run );
 
     if ( ! $need ) {
       /* ACDC 3.25.226 — Un parcours peut naître d'une CONVENTION SIGNÉE, sans
@@ -261,21 +258,8 @@ trait ACDC_Workflow_Engine_Trait {
          été supprimé » reviendrait à annuler, à la première réconciliation, le
          seul dossier qui avait de quoi s'armer. On ne ferme donc que si le
          parcours n'a plus AUCUNE ancre : ni recueil, ni convention. */
-      if ( empty( $run->contract_id ) ) {
-        $this->acdc_wf_close_run( $run_id, 'cancelled', 'Recueil des besoins supprimé.' );
-        return;
-      }
-      /* Un objet minimal, pour que la résolution des pièces trouve les mêmes
-         clés qu'avec un recueil. Ce qu'il ne sait pas, il le laisse vide — il
-         ne l'invente pas. */
-      $need = (object) array(
-        'id'                 => 0,
-        'source_prospect_id' => (int) $run->prospect_id,
-        'company_id'         => (int) $run->company_id,
-        'formation_id'       => (int) $run->formation_id,
-        'dossier_id'         => (int) $run->contract_id,
-        'theme'              => (string) $run->label,
-      );
+      $this->acdc_wf_close_run( $run_id, 'cancelled', 'Recueil des besoins supprimé.' );
+      return;
     }
 
     $this->acdc_wf_touched_keys = array();
@@ -930,6 +914,56 @@ trait ACDC_Workflow_Engine_Trait {
   /* =====================================================================
    * Résolution des pièces du dossier
    * ===================================================================== */
+
+  /**
+   * ACDC 3.25.267 — L'ANCRE D'UN PARCOURS : LE RECUEIL, OU LA CONVENTION.
+   *
+   * Le moteur savait déjà qu'un parcours peut naître d'une convention signée,
+   * sans recueil des besoins : il fabriquait alors un objet minimal à partir
+   * des colonnes du parcours (3.25.226). Les GESTIONNAIRES d'étapes, eux, ne
+   * l'avaient jamais appris : leur contexte interrogeait la table des recueils
+   * et rendait null quand il n'y en avait pas.
+   *
+   * Conséquence observée en recette : la planification fonctionnait — les
+   * étapes s'affichaient — mais chaque étape qui doit ENVOYER quelque chose
+   * échouait sur « Dossier introuvable au moment de l'envoi ». Le dossier du
+   * formateur, l'ouverture des trois extranets apprenants et la convocation :
+   * tout le bas du parcours, en échec, sur un dossier parfaitement en règle.
+   *
+   * Deux endroits calculaient la même chose ; un seul le savait. Ils n'en font
+   * plus qu'un.
+   *
+   * @return object|null L'ancre du parcours, ou null s'il n'en a aucune.
+   */
+  private function acdc_wf_need_for_run( $run ) {
+    global $wpdb;
+    if ( ! $run ) {
+      return null;
+    }
+    if ( ! empty( $run->need_id ) ) {
+      $need = $wpdb->get_row( $wpdb->prepare(
+        "SELECT * FROM {$this->need_table} WHERE id = %d",
+        (int) $run->need_id
+      ) );
+      if ( $need ) {
+        return $need;
+      }
+    }
+    if ( empty( $run->contract_id ) ) {
+      return null;
+    }
+    /* Un objet minimal, pour que la résolution des pièces trouve les mêmes
+       clés qu'avec un recueil. Ce qu'il ne sait pas, il le laisse vide — il
+       ne l'invente pas. */
+    return (object) array(
+      'id'                 => 0,
+      'source_prospect_id' => (int) $run->prospect_id,
+      'company_id'         => (int) $run->company_id,
+      'formation_id'       => (int) $run->formation_id,
+      'dossier_id'         => (int) $run->contract_id,
+      'theme'              => (string) $run->label,
+    );
+  }
 
   private function acdc_wf_resolve_pieces( $run, $need ) {
     global $wpdb;

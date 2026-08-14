@@ -243,6 +243,49 @@ trait ACDC_Session_Documents_Trait {
    * C'est le même principe que le moteur du workflow : relire le dossier plutôt
    * que se fier à un raccourci écrit une fois.
    */
+  /**
+   * ACDC 3.25.267 — LES DOSSIERS RATTACHÉS À UNE SÉANCE.
+   *
+   * Deux étapes du parcours scopaient « les dossiers de cette séance » par une
+   * sous-requête sur apprenants.session_id — le rattachement direct, vide
+   * depuis que la convention crée les séances. Résultat : à l'envoi des
+   * convocations, aucun dossier ne passait à « convocations envoyées » ; à la
+   * clôture, aucun ne passait à « formation réalisée ». Cette dernière étape
+   * commande les documents de fin de formation et l'enquête à froid : tout le
+   * bas du cycle restait en attente, sans qu'aucun écran ne le dise.
+   *
+   * On part des apprenants réellement rattachés à la séance — les trois
+   * chemins — et l'on remonte à leurs dossiers.
+   *
+   * @return array Lignes d'inscriptions (id).
+   */
+  private function acdc_registrations_for_session( $session, $formation_id = 0 ) {
+    global $wpdb;
+    if ( ! $session || empty( $session->id ) ) {
+      return array();
+    }
+    $formation_id = (int) ( $formation_id ?: ( $session->formation_id ?? 0 ) );
+    if ( $formation_id <= 0 ) {
+      return array();
+    }
+    $learner_ids = array();
+    foreach ( (array) $this->acdc_session_learners( $session ) as $learner ) {
+      if ( ! empty( $learner->id ) ) {
+        $learner_ids[] = (int) $learner->id;
+      }
+    }
+    if ( empty( $learner_ids ) ) {
+      return array();
+    }
+    $placeholders = implode( ',', array_fill( 0, count( $learner_ids ), '%d' ) );
+    $params       = array_merge( array( $formation_id ), $learner_ids );
+    return (array) $wpdb->get_results( $wpdb->prepare(
+      "SELECT id FROM {$this->training_registration_table}
+        WHERE formation_id = %d AND is_draft = 0 AND learner_id IN ({$placeholders})",
+      $params
+    ) );
+  }
+
   private function acdc_session_learners( $session ) {
     global $wpdb;
 
@@ -1146,10 +1189,9 @@ trait ACDC_Session_Documents_Trait {
     $state     = $this->acdc_session_docs_unlock_state( $session );
 
     global $wpdb;
-    $learners = (array) $wpdb->get_results( $wpdb->prepare(
-      "SELECT id, first_name, last_name, usage_last_name FROM {$this->learner_table} WHERE session_id = %d",
-      (int) $session->id
-    ) );
+    /* ACDC 3.25.267 — Le formateur croyait diffuser à personne : cette liste
+       ne lisait que le rattachement direct. */
+    $learners = (array) $this->acdc_session_learners( $session );
     $learner_names = array();
     foreach ( $learners as $l ) {
       $last = ! empty( $l->usage_last_name ) ? $l->usage_last_name : $l->last_name;

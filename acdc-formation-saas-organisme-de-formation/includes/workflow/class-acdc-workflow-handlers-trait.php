@@ -35,16 +35,19 @@ trait ACDC_Workflow_Handlers_Trait {
    * vaut aussi à l'envoi — on relit la donnée.
    */
   private function acdc_wf_step_context( $step ) {
-    global $wpdb;
-
     $run = $this->acdc_wf_get_run( (int) $step->run_id );
     if ( ! $run ) {
       return null;
     }
-    $need = $wpdb->get_row( $wpdb->prepare(
-      "SELECT * FROM {$this->need_table} WHERE id = %d",
-      (int) $run->need_id
-    ) );
+    /* ACDC 3.25.267 — MÊME ANCRE QUE LE MOTEUR.
+       Ce contexte exigeait un recueil des besoins. Un parcours né d'une
+       convention signée n'en a pas : la planification passait, mais chaque
+       étape qui envoie échouait sur « Dossier introuvable au moment de
+       l'envoi » — le dossier du formateur, les trois ouvertures d'extranet et
+       la convocation, sur un dossier pourtant en règle.
+       Le moteur savait déjà retomber sur la convention ; les gestionnaires ne
+       le savaient pas. C'est la même fonction, désormais. */
+    $need = $this->acdc_wf_need_for_run( $run );
     if ( ! $need ) {
       return null;
     }

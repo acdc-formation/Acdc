@@ -2733,9 +2733,12 @@ private function get_contract_pdf_context( $request ) {
   if ( ! $learner ) {
     global $wpdb;
     if ( $session ) {
-      $learner = $wpdb->get_row( $wpdb->prepare( "SELECT * FROM {$this->learner_table} WHERE session_id = %d ORDER BY created_at DESC, id DESC LIMIT 1", $session->id ) );
-      if ( $learner ) {
-        $learner = $this->get_learner( $learner->id );
+      /* ACDC 3.25.267 — Les trois rattachements. Sur le seul session_id, ce
+         repli ne trouvait jamais personne pour une séance née d'une
+         convention, et la cascade descendait d'un cran pour rien. */
+      $session_learners_fb = (array) $this->acdc_session_learners( $session );
+      if ( ! empty( $session_learners_fb ) ) {
+        $learner = $this->get_learner( (int) $session_learners_fb[0]->id );
       }
     }
     if ( ! $learner && $company ) {
@@ -3647,10 +3650,9 @@ private function build_contract_pdf_pages( $context ) {
       ) );
     } elseif ( 'session' === $entity_type ) {
       // NAD liées aux apprenants d'une séance
-      $learner_rows = $wpdb->get_results( $wpdb->prepare(
-        "SELECT id FROM {$this->learner_table} WHERE session_id = %d",
-        $entity_id
-      ) );
+      /* ACDC 3.25.267 — Les trois rattachements, pas le seul direct. */
+      $seance_for_nad = $this->get_session( (int) $entity_id );
+      $learner_rows   = $seance_for_nad ? (array) $this->acdc_session_learners( $seance_for_nad ) : array();
       $l_ids = array_values( array_map( function( $r ) { return (int) $r->id; }, (array) $learner_rows ) );
       if ( ! empty( $l_ids ) ) {
         $ph = implode( ',', array_fill( 0, count( $l_ids ), '%d' ) );

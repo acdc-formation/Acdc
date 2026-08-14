@@ -2984,7 +2984,13 @@ Vos réponses nous permettront d’évaluer nos pratiques, d’identifier des ax
     $session_id = ! empty( $session->seance_id ) ? absint( $session->seance_id ) : 0;
     $formation_id = ! empty( $session->formation_id ) ? absint( $session->formation_id ) : 0;
     if ( $session_id ) {
-      $session_learners = $wpdb->get_results( $wpdb->prepare( "SELECT * FROM {$this->learner_table} WHERE session_id = %d ORDER BY first_name ASC, last_name ASC", $session_id ) );
+      /* ACDC 3.25.267 — Les apprenants d'une séance, par les trois
+         rattachements. Sur le seul session_id, une enquête de séance née d'une
+         convention ne ciblait personne — et rien ne le disait. */
+      $seance_row       = method_exists( $this, 'get_session' ) ? $this->get_session( $session_id ) : null;
+      $session_learners = ( $seance_row && method_exists( $this, 'acdc_session_learners' ) )
+        ? (array) $this->acdc_session_learners( $seance_row )
+        : array();
       if ( ! empty( $session_learners ) ) {
         return $session_learners;
       }

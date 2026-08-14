@@ -644,7 +644,11 @@ trait ACDC_Sessions_Actions_Trait {
         if ( $formation_id_for_wf ) {
           // ACDC 3.25.116 — scoper à LA session (via learner_table.session_id), sinon la clôture
           // d'une session contamine les dossiers des autres sessions de la même formation.
-          $linked_regs_wf = $wpdb->get_results( $wpdb->prepare( "SELECT id FROM {$this->training_registration_table} WHERE formation_id = %d AND is_draft = 0 AND learner_id IN ( SELECT id FROM {$this->learner_table} WHERE session_id = %d )", $formation_id_for_wf, $session_id ) );
+          /* ACDC 3.25.267 — CETTE SOUS-REQUÊTE NE RENVOYAIT PLUS RIEN.
+             Elle scopait les dossiers « à la séance » par apprenants.session_id,
+             le rattachement direct — vide depuis que la convention crée les
+             séances. Aucun dossier n'avançait donc à « convocations envoyées ». */
+          $linked_regs_wf = $this->acdc_registrations_for_session( $session, $formation_id_for_wf );
           foreach ( (array) $linked_regs_wf as $lr_wf ) {
             $this->advance_registration_workflow( (int) $lr_wf->id, 'convocations_envoyees' );
           }
@@ -715,11 +719,12 @@ trait ACDC_Sessions_Actions_Trait {
       // ACDC 3.25.116 — scoper à LA session (via learner_table.session_id), sinon la clôture d'une
       // session pousse « formation réalisée » aux inscrits d'autres sessions de la même formation.
       if ( $formation_id > 0 ) {
-        $linked_regs = $wpdb->get_results( $wpdb->prepare(
-          "SELECT id FROM {$this->training_registration_table} WHERE formation_id = %d AND is_draft = 0 AND learner_id IN ( SELECT id FROM {$this->learner_table} WHERE session_id = %d )",
-          $formation_id,
-          $session_id
-        ) );
+        /* ACDC 3.25.267 — MÊME SOUS-REQUÊTE, MÊME SILENCE, CONSÉQUENCE PIRE.
+           À la clôture d'une séance, aucun dossier ne passait à « formation
+           réalisée » : c'est l'étape qui déclenche les documents de fin de
+           formation et l'enquête à froid. Tout le bas du cycle restait en
+           attente sans que rien ne le signale. */
+        $linked_regs = $this->acdc_registrations_for_session( $session, $formation_id );
         foreach ( (array) $linked_regs as $lr ) {
           $this->advance_registration_workflow( (int) $lr->id, 'formation_realisee' );
         }

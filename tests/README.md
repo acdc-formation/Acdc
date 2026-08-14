@@ -41,6 +41,7 @@ lancent sans WordPress, en quelques secondes.
     php tests/scan-noms-documents.php # certificat de réalisation et attestation ne s'échangent pas
     php tests/scan-colonnes-lues.php # conclure sur une colonne jamais chargée
     php tests/scan-apprenants-seance.php # les apprenants d'une séance comptés au même endroit
+    php tests/scan-ancre-parcours.php # un parcours s'ancre au recueil OU à la convention
 
 Le dernier balaie tout le plugin et signale les fonctions qui utilisent `$wpdb`
 sans l'avoir importé — la faute qui a produit l'erreur fatale de la 3.25.236.
