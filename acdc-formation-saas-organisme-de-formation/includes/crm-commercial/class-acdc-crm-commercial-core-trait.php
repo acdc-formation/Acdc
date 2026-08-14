@@ -528,6 +528,108 @@
     );
   }
 
+  /**
+   * ACDC 3.25.259 — LES JALONS RÉELLEMENT FRANCHIS PAR CHAQUE PROSPECT.
+   *
+   * Le suivi commercial comptait le STATUT COURANT, et rien d'autre : un
+   * prospect = une pastille. Un prospect à « Proposition envoyée » affichait
+   * donc « Recueil envoyé 0 » alors que son recueil était bien parti, et
+   * « Devis envoyé 0 » alors que son devis l'était aussi. Le statut ne garde
+   * pas la trace des étapes franchies — c'est sa nature, il n'en retient
+   * qu'une.
+   *
+   * Ici, chaque jalon est établi par un FAIT : un recueil avec une date
+   * d'envoi, une proposition envoyée, un devis envoyé ou signé, un rendez-vous
+   * non annulé, une convention signée. S'y ajoute toujours le statut courant —
+   * ce que la ligne affiche dans sa colonne « Statut » doit rester joignable
+   * par la pastille du même nom, sinon l'écran se contredirait lui-même.
+   *
+   * Trois jalons n'ont aucun objet derrière eux — « À traiter », « Premier
+   * contact », « À relancer », ainsi que « Perdu » : rien ne les matérialise
+   * en base, seul le statut saisi les porte. C'est pourquoi ils ne comptent
+   * que par lui.
+   *
+   * Conséquence assumée : la somme des pastilles ne fait plus le total des
+   * prospects. Un prospect avancé en coche plusieurs — c'est précisément ce
+   * qu'on veut voir.
+   *
+   * Une seule requête par famille de jalon, jamais une par prospect.
+   *
+   * @param int[] $prospect_ids
+   * @return array<int, array<string, bool>> prospect_id => jalon => true
+   */
+  private function get_prospect_milestones_map( $prospect_ids ) {
+    global $wpdb;
+
+    $ids = array();
+    foreach ( (array) $prospect_ids as $pid ) {
+      $pid = absint( $pid );
+      if ( $pid ) { $ids[ $pid ] = $pid; }
+    }
+    if ( empty( $ids ) ) {
+      return array();
+    }
+    $in  = implode( ',', array_map( 'intval', $ids ) );
+    $map = array();
+    $poser = static function ( &$map, $pid, $jalon ) {
+      $pid = (int) $pid;
+      if ( ! $pid ) { return; }
+      if ( ! isset( $map[ $pid ] ) ) { $map[ $pid ] = array(); }
+      $map[ $pid ][ $jalon ] = true;
+    };
+
+    /* Rendez-vous planifié — un rendez-vous annulé n'en est plus un. */
+    $rows = $wpdb->get_col( "SELECT DISTINCT prospect_id FROM {$this->prospect_rdv_table}
+      WHERE prospect_id IN ({$in})
+        AND ( comment_text IS NULL OR comment_text NOT LIKE '%[RDV_ANNULE]%' )" );
+    foreach ( (array) $rows as $pid ) { $poser( $map, $pid, 'Rendez-vous planifié' ); }
+
+    /* Recueil envoyé — la date d'envoi, pas la simple existence du recueil. */
+    $rows = $wpdb->get_col( "SELECT DISTINCT source_prospect_id FROM {$this->need_table}
+      WHERE source_prospect_id IN ({$in}) AND sent_at IS NOT NULL" );
+    foreach ( (array) $rows as $pid ) { $poser( $map, $pid, 'Recueil envoyé' ); }
+
+    /* Proposition envoyée — rattachée en direct ou par son recueil. */
+    $proposal_table = $wpdb->prefix . 'acdc_of_proposals';
+    $rows = $wpdb->get_col( "SELECT DISTINCT COALESCE(NULLIF(p.source_prospect_id, 0), n.source_prospect_id)
+      FROM {$proposal_table} p
+      LEFT JOIN {$this->need_table} n ON n.id = p.need_id
+      WHERE ( p.source_prospect_id IN ({$in}) OR n.source_prospect_id IN ({$in}) )
+        AND ( p.status = 'envoyee' OR p.last_sent_at IS NOT NULL )" );
+    foreach ( (array) $rows as $pid ) { $poser( $map, $pid, 'Proposition envoyée' ); }
+
+    /* Devis envoyé, et Converti quand il est signé. */
+    $rows = $wpdb->get_results( "SELECT DISTINCT source_prospect_id AS pid, status FROM {$this->quote_table}
+      WHERE source_prospect_id IN ({$in}) AND status IN ('envoye','signe')" );
+    foreach ( (array) $rows as $row ) {
+      $poser( $map, $row->pid, 'Devis envoyé' );
+      if ( 'signe' === (string) $row->status ) { $poser( $map, $row->pid, 'Converti' ); }
+    }
+
+    /* Converti — une convention signée vaut conversion, devis ou pas. */
+    $rows = $wpdb->get_col( "SELECT DISTINCT source_prospect_id FROM {$this->registration_contract_table}
+      WHERE source_prospect_id IN ({$in})
+        AND ( signature_status = 'completed' OR signed_document_url IS NOT NULL AND signed_document_url <> '' )" );
+    foreach ( (array) $rows as $pid ) { $poser( $map, $pid, 'Converti' ); }
+
+    return $map;
+  }
+
+  /**
+   * Les jalons d'UN prospect : les faits, plus son statut courant.
+   *
+   * @return string[] Libellés de jalons.
+   */
+  private function get_prospect_milestones( $prospect, $milestones_map = array() ) {
+    $pid   = ! empty( $prospect->id ) ? (int) $prospect->id : 0;
+    $faits = ( $pid && ! empty( $milestones_map[ $pid ] ) ) ? array_keys( $milestones_map[ $pid ] ) : array();
+    return \ACDC\Support\ProspectMilestones::forProspect(
+      $faits,
+      ! empty( $prospect->status ) ? (string) $prospect->status : 'À traiter',
+      $this->get_prospect_status_order()
+    );
+  }
+
   private function get_prospect_status_order() {
     return array(
       'À traiter'           => 1,

@@ -1398,11 +1398,29 @@
       $fu_status_counts  = array();
       foreach ( array_keys( $fu_status_options ) as $fu_sk ) { $fu_status_counts[ $fu_sk ] = 0; }
       $fu_total_count = 0;
+      /* ACDC 3.25.259 — LES PASTILLES COMPTENT LES JALONS FRANCHIS.
+         Elles comptaient le statut courant : un prospect à « Proposition
+         envoyée » affichait « Recueil envoyé 0 » alors que son recueil était
+         bien parti. Un statut ne retient qu'une étape ; le parcours en compte
+         plusieurs, et ce sont les faits qui les établissent.
+         La somme des pastilles ne fait donc plus le total — c'est voulu, et
+         c'est dit sous la barre. */
+      $fu_milestones_map = array();
+      $fu_jalons_by_row  = array();
       if ( ! empty( $prospect_rows ) ) {
+        $fu_ids = array();
         foreach ( $prospect_rows as $fu_pr ) {
-          $fu_st = ! empty( $fu_pr['entry']->status ) ? (string) $fu_pr['entry']->status : 'À traiter';
-          if ( ! isset( $fu_status_counts[ $fu_st ] ) ) { $fu_status_counts[ $fu_st ] = 0; }
-          $fu_status_counts[ $fu_st ]++;
+          if ( ! empty( $fu_pr['entry']->id ) ) { $fu_ids[] = (int) $fu_pr['entry']->id; }
+        }
+        $fu_milestones_map = $this->get_prospect_milestones_map( $fu_ids );
+
+        foreach ( $prospect_rows as $fu_idx => $fu_pr ) {
+          $fu_jalons = $this->get_prospect_milestones( $fu_pr['entry'], $fu_milestones_map );
+          $fu_jalons_by_row[ $fu_idx ] = $fu_jalons;
+          foreach ( $fu_jalons as $fu_j ) {
+            if ( ! isset( $fu_status_counts[ $fu_j ] ) ) { $fu_status_counts[ $fu_j ] = 0; }
+            $fu_status_counts[ $fu_j ]++;
+          }
           $fu_total_count++;
         }
       }
@@ -1529,7 +1547,11 @@
             <button type="button" class="acdc-fu-tab<?php echo ( 0 === $fu_c ) ? ' is-empty' : ''; ?>" data-fu-filter="<?php echo esc_attr( $fu_key ); ?>"><span class="acdc-fu-tab-dot" style="background:<?php echo esc_attr( $fu_dot ); ?>;"></span><?php echo esc_html( $fu_label ); ?> <span class="acdc-fu-tab-count"><?php echo $fu_c; ?></span></button>
           <?php endforeach; ?>
         </div>
-        <p class="acdc-fu-status-empty" data-acdc-fu-status-empty="1" style="display:none;color:#64748b;padding:12px 4px;">Aucun prospect pour ce statut.</p>
+        <p style="margin:-8px 0 14px;font-size:12px;color:#64748b;">
+          Chaque pastille compte les prospects qui ont franchi cette étape — recueil parti, proposition envoyée, devis émis.
+          Un prospect avancé en coche donc plusieurs : le total des pastilles dépasse normalement « Tous ».
+        </p>
+        <p class="acdc-fu-status-empty" data-acdc-fu-status-empty="1" style="display:none;color:#64748b;padding:12px 4px;">Aucun prospect pour cette étape.</p>
         <style>
           .acdc-fu-status-tabs{display:flex;flex-wrap:wrap;gap:8px;margin:0 0 16px;}
           .acdc-fu-status-tabs .acdc-fu-tab{display:inline-flex;align-items:center;gap:7px;font-size:13px;font-weight:500;padding:7px 13px;border-radius:999px;background:#f1efe8;color:#3a3a3a;border:0.5px solid #e2ddd0;cursor:pointer;line-height:1;}
@@ -1563,12 +1585,18 @@
               </tr>
             </thead>
             <tbody>
-            <?php if ( ! empty( $prospect_rows ) ) : foreach ( $prospect_rows as $prospect_row ) :
+            <?php if ( ! empty( $prospect_rows ) ) : foreach ( $prospect_rows as $prospect_row_index => $prospect_row ) :
               $entry = $prospect_row['entry'];
               $entry_latest_rdv = $prospect_row['latest_rdv'];
               $row_has_alert = ! empty( $prospect_row['has_alert'] );
+              /* ACDC 3.25.259 — La ligne porte TOUS ses jalons : le filtre suit
+                 la même règle que les compteurs, sinon une pastille annoncerait
+                 des lignes que le clic ne montrerait pas. */
+              $row_jalons = isset( $fu_jalons_by_row[ $prospect_row_index ] )
+                ? $fu_jalons_by_row[ $prospect_row_index ]
+                : array( $entry->status ?: 'À traiter' );
             ?>
-              <tr class="<?php echo $row_has_alert ? 'acdc-followup-row-alert' : ''; ?>" data-fu-status="<?php echo esc_attr( $entry->status ?: 'À traiter' ); ?>">
+              <tr class="<?php echo $row_has_alert ? 'acdc-followup-row-alert' : ''; ?>" data-fu-status="<?php echo esc_attr( $entry->status ?: 'À traiter' ); ?>" data-fu-jalons="<?php echo esc_attr( '|' . implode( '|', $row_jalons ) . '|' ); ?>">
                 <td><?php echo esc_html( $entry->profile_type ?: '—' ); ?></td>
                 <td><strong><?php echo esc_html( $this->get_prospect_company_display_name( $entry ) ); ?></strong><br><small><?php echo esc_html( $this->get_prospect_contact_person_name( $entry ) ); ?></small></td>
                 <td><?php echo esc_html( $entry->desired_training ?: 'À définir' ); ?></td>
@@ -1687,7 +1715,10 @@
             for(var j=0;j<rows.length;j++){
               var r=rows[j];
               if(!r.hasAttribute('data-fu-status')){continue;}
-              var match=(filter==='__all__'||r.getAttribute('data-fu-status')===filter);
+              /* Un prospect avancé porte plusieurs jalons : on cherche le jalon
+                 dans la liste de la ligne, pas l'égalité avec son statut. */
+              var jalons=r.getAttribute('data-fu-jalons')||('|'+r.getAttribute('data-fu-status')+'|');
+              var match=(filter==='__all__'||jalons.indexOf('|'+filter+'|')!==-1);
               r.style.display=match?'':'none';
               if(match){visible++;}
             }

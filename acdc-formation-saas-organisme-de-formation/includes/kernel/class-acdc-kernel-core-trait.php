@@ -700,6 +700,12 @@ private function acdc_send_transactional_email( $to, $subject, $template_args = 
        plus qu'à faire croire qu'un programme est disponible. */
     $this->purge_dead_manager_programme_urls();
 
+    /* ACDC 3.25.259 — Rattrapage des devis créés sans leur prospect, et remise
+       à niveau des statuts qui n'ont pas pu avancer faute de ce lien. */
+    if ( method_exists( $this, 'acdc_backfill_quote_prospect_links' ) ) {
+      $this->acdc_backfill_quote_prospect_links();
+    }
+
     /* ACDC 3.25.92 — C03 (audit) : chiffrement au repos des clés API de veille.
        Idempotent : flag d'option acdc_of_watch_keys_encrypted_v1 empêche toute
        re-exécution. Les valeurs déjà au format "acdcenc1:" sont ignorées. */

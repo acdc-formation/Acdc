@@ -96,6 +96,76 @@ trait ACDC_Documents_Billing_Core_Trait {
     $this->maybe_add_table_column( $this->quote_table, 'client_signed_at', 'DATETIME NULL' );
   }
 
+  /**
+   * ACDC 3.25.259 — LE PROSPECT DERRIÈRE UNE PROPOSITION COMMERCIALE.
+   *
+   * Deux rattachements coexistent : la colonne native de la proposition, et
+   * celui de son recueil des besoins. Les propositions anciennes n'ont que le
+   * second — ne lire que le premier reviendrait à perdre le prospect pour
+   * elles. C'est la même cascade que celle du préremplissage d'adresse.
+   */
+  private function acdc_prospect_id_from_proposal( $proposal_id ) {
+    global $wpdb;
+    $proposal_id = (int) $proposal_id;
+    if ( ! $proposal_id ) {
+      return 0;
+    }
+    $proposal_table = $wpdb->prefix . 'acdc_of_proposals';
+    return (int) $wpdb->get_var( $wpdb->prepare(
+      "SELECT COALESCE(NULLIF(p.source_prospect_id, 0), n.source_prospect_id)
+         FROM {$proposal_table} p
+         LEFT JOIN {$this->need_table} n ON n.id = p.need_id
+        WHERE p.id = %d
+        LIMIT 1",
+      $proposal_id
+    ) );
+  }
+
+  /**
+   * ACDC 3.25.259 — RATTRAPAGE DES DEVIS DÉJÀ ORPHELINS.
+   *
+   * Réparer la porte ne répare pas ce qui est déjà passé au travers. Les devis
+   * enregistrés sans prospect mais avec leur proposition d'origine retrouvent
+   * ici leur rattachement — sans quoi un devis signé aujourd'hui laisserait
+   * encore son prospect à « Proposition envoyée ».
+   *
+   * Passage unique, marqué par une option : on ne réécrit pas à chaque chargement.
+   */
+  private function acdc_backfill_quote_prospect_links() {
+    if ( '1' === (string) get_option( 'acdc_of_quote_prospect_backfill_v1', '' ) ) {
+      return;
+    }
+    global $wpdb;
+    $proposal_table = $wpdb->prefix . 'acdc_of_proposals';
+    $wpdb->query(
+      "UPDATE {$this->quote_table} q
+         JOIN {$proposal_table} p ON p.id = q.proposal_id
+         LEFT JOIN {$this->need_table} n ON n.id = p.need_id
+          SET q.source_prospect_id = COALESCE(NULLIF(p.source_prospect_id, 0), n.source_prospect_id)
+        WHERE (q.source_prospect_id IS NULL OR q.source_prospect_id = 0)
+          AND COALESCE(NULLIF(p.source_prospect_id, 0), n.source_prospect_id) > 0"
+    );
+
+    /* Le lien retrouvé ne suffit pas : les statuts n'ont pas avancé pendant
+       qu'il manquait. On les redérive des faits — un devis envoyé fait
+       « Devis envoyé », un devis signé fait « Converti ». maybe_advance
+       n'autorise que la progression : rien ne peut reculer ici. */
+    if ( method_exists( $this, 'maybe_advance_prospect_status' ) ) {
+      $rows = $wpdb->get_results(
+        "SELECT source_prospect_id, status FROM {$this->quote_table}
+          WHERE source_prospect_id > 0 AND status IN ('envoye','signe')"
+      );
+      foreach ( (array) $rows as $row ) {
+        $this->maybe_advance_prospect_status( (int) $row->source_prospect_id, 'Devis envoyé' );
+        if ( 'signe' === (string) $row->status ) {
+          $this->maybe_advance_prospect_status( (int) $row->source_prospect_id, 'Converti', true );
+        }
+      }
+    }
+
+    update_option( 'acdc_of_quote_prospect_backfill_v1', '1', false );
+  }
+
   private function get_quotes( $args = array() ) {
     global $wpdb;
     $t      = $this->quote_table;

@@ -54,13 +54,38 @@ trait ACDC_Documents_Billing_Actions_Trait {
       }
     }
 
+    /* ACDC 3.25.259 — LE DEVIS PERDAIT SON PROSPECT.
+       Le champ n'était rempli que si l'URL portait ?prospect_id=, ce qui n'est
+       pas le cas quand on arrive depuis une proposition commerciale. L'écran
+       CONNAISSAIT pourtant le prospect — il venait de s'en servir pour
+       préremplir l'adresse — puis il le jetait.
+       Sans ce lien, aucun envoi de devis ne fait avancer le prospect à
+       « Devis envoyé », et surtout aucune signature ne le fait passer à
+       « Converti » : le code qui le fait lit exactement cette colonne.
+       On répare la porte, pas seulement le formulaire : le rattachement est
+       redéduit ici de la proposition d'origine, puis de son recueil. */
+    $posted_prospect_id = ! empty( $input['source_prospect_id'] ) ? absint( $input['source_prospect_id'] ) : 0;
+    $posted_proposal_id = ! empty( $input['proposal_id'] ) ? absint( $input['proposal_id'] ) : 0;
+    if ( ! $posted_prospect_id && $quote_id ) {
+      /* Modification d'un devis existant : un formulaire qui ne renvoie pas le
+         rattachement ne demande pas de le supprimer. */
+      $existing_quote     = $this->get_quote( $quote_id );
+      $posted_prospect_id = ( $existing_quote && ! empty( $existing_quote->source_prospect_id ) ) ? (int) $existing_quote->source_prospect_id : 0;
+      if ( ! $posted_proposal_id && $existing_quote && ! empty( $existing_quote->proposal_id ) ) {
+        $posted_proposal_id = (int) $existing_quote->proposal_id;
+      }
+    }
+    if ( ! $posted_prospect_id && $posted_proposal_id ) {
+      $posted_prospect_id = $this->acdc_prospect_id_from_proposal( $posted_proposal_id );
+    }
+
     $data = array(
       'id'                      => $quote_id,
       'scope'                   => $scope,
       'number'                  => $number,
       'commanditaire_type'      => sanitize_text_field( $input['commanditaire_type'] ?? 'Particulier' ),
-      'source_prospect_id'      => ! empty( $input['source_prospect_id'] ) ? absint( $input['source_prospect_id'] ) : null,
-      'proposal_id'             => ! empty( $input['proposal_id'] ) ? absint( $input['proposal_id'] ) : null,
+      'source_prospect_id'      => $posted_prospect_id ?: null,
+      'proposal_id'             => $posted_proposal_id ?: null,
       'company_id'              => ! empty( $input['company_id'] ) ? absint( $input['company_id'] ) : null,
       'formation_id'            => ! empty( $input['formation_id'] ) ? absint( $input['formation_id'] ) : null,
       'formation_title'         => sanitize_text_field( $input['formation_title'] ?? '' ),

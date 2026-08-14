@@ -495,6 +495,15 @@ trait ACDC_Documents_Billing_Render_Trait {
           $addr_prospect = ( $addr_prospect_id > 0 && method_exists( $this, 'get_prospect' ) )
             ? $this->get_prospect( $addr_prospect_id )
             : null;
+
+          /* ACDC 3.25.259 — ET ON GARDE LE PROSPECT, PAS SEULEMENT SON ADRESSE.
+             L'écran le résolvait pour préremplir la rue et la ville, puis le
+             laissait tomber : le devis partait sans rattachement, et le
+             prospect ne pouvait plus jamais passer à « Devis envoyé » ni à
+             « Converti » à la signature. */
+          if ( empty( $row['source_prospect_id'] ) && $addr_prospect_id > 0 ) {
+            $row['source_prospect_id'] = $addr_prospect_id;
+          }
           $first_filled = static function ( ...$values ) {
             foreach ( $values as $value ) {
               $value = is_scalar( $value ) ? trim( (string) $value ) : '';
