@@ -263,8 +263,21 @@ trait ACDC_Documents_Billing_Actions_Trait {
     }
     $row  = $this->build_quote_row_from_record( $quote );
     $html = $this->get_quote_document_html( $row );
-    $this->log_action_event( 'download', 'quote_document', $quote_id );
-    $this->send_html_download_response( 'devis-' . sanitize_file_name( $row['number'] ) . '.html', $html );
+    $this->log_action_event( 'preview', 'quote_document', $quote_id );
+
+    /* ACDC 3.25.256 — « VERSION IMPRIMABLE » APERÇOIT, ELLE NE TÉLÉCHARGE PLUS.
+       Ce bouton posait un en-tête « Content-Disposition: attachment » : il
+       enregistrait donc un fichier .html sur le disque, alors que le bouton
+       voisin — celui qui doit enregistrer — plantait. Les deux faisaient
+       l'inverse de ce qu'ils annonçaient. */
+    while ( ob_get_level() ) { ob_end_clean(); }
+    nocache_headers();
+    header( 'X-Content-Type-Options: nosniff' );
+    header( 'X-Frame-Options: SAMEORIGIN' );
+    header( 'Referrer-Policy: same-origin' );
+    header( 'Content-Type: text/html; charset=UTF-8' );
+    echo $html; // phpcs:ignore WordPress.Security.EscapeOutput -- gabarit de document déjà échappé.
+    exit;
   }
 
   /** Téléchargement d'un vrai fichier PDF du devis (gabarit mPDF dédié). */
@@ -285,13 +298,40 @@ trait ACDC_Documents_Billing_Actions_Trait {
        fichier PDF puis exit ; il n'y a plus de repli silencieux en HTML. */
     $autoload = dirname( dirname( dirname( dirname( plugin_dir_path( __FILE__ ) ) ) ) ) . '/acdc-libs/vendor/autoload.php';
     if ( method_exists( $this, 'render_html_pdf' ) && file_exists( $autoload ) ) {
-      $html = $this->get_quote_pdf_html( $row );
-      $this->render_html_pdf( $html, $filename, 'attachment' ); // diffuse + exit
+      /* ACDC 3.25.256 — UN DÉFAUT DE PDF NE DOIT PAS TUER LA PAGE.
+         Ce bouton rendait « une erreur critique sur ce site » — un écran blanc,
+         sans document et sans explication. La fabrication d'un PDF dépend de
+         mPDF, de la mémoire disponible et des images du document : elle peut
+         échouer, et cela ne doit jamais coûter la page. On tente, on note
+         l'erreur réelle dans le journal, et à défaut on sert la version
+         imprimable : un document imparfait vaut mieux qu'un écran blanc.
+         Même discipline que pour la convention en 3.25.237. */
+      if ( function_exists( 'wp_raise_memory_limit' ) ) {
+        wp_raise_memory_limit( 'image' );
+      }
+      try {
+        $html = $this->get_quote_pdf_html( $row );
+        $this->render_html_pdf( $html, $filename, 'attachment' ); // diffuse + exit
+      } catch ( \Throwable $e ) {
+        error_log( '[ACDC] PDF du devis n° ' . $quote_id . ' impossible : ' . $e->getMessage() );
+        if ( method_exists( $this, 'log_action_event' ) ) {
+          $this->log_action_event( 'error', 'quote_pdf', $quote_id, 'error', array( 'message' => $e->getMessage() ) );
+        }
+      }
     }
 
-    /* mPDF réellement absent : dernier recours, HTML imprimable. */
+    /* mPDF absent ou en échec : dernier recours, la version imprimable, affichée
+       et non téléchargée — et elle DIT pourquoi elle est là. */
     $html = $this->get_quote_document_html( $row );
-    $this->send_html_download_response( 'devis-' . sanitize_file_name( $row['number'] ) . '.html', $html );
+    $avis = '<div style="max-width:800px;margin:12px auto;padding:10px 14px;border:1px solid #e8c97a;background:#fff8e8;'
+          . 'border-radius:6px;font-family:sans-serif;font-size:13px;color:#7a5c00;">'
+          . 'Le PDF n\'a pas pu être fabriqué : voici la version imprimable du devis. '
+          . 'Utilisez « Imprimer » puis « Enregistrer au format PDF ».</div>';
+    while ( ob_get_level() ) { ob_end_clean(); }
+    nocache_headers();
+    header( 'Content-Type: text/html; charset=UTF-8' );
+    echo $avis . $html; // phpcs:ignore WordPress.Security.EscapeOutput
+    exit;
   }
 
   public function handle_download_invoice_document() {

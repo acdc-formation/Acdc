@@ -1043,9 +1043,9 @@ trait ACDC_Documents_Billing_Core_Trait {
     $sig_img_url  = 'https://acdcformation.com/wp-content/uploads/2026/04/Cachet-et-signature.png';
     $sig2_img_url = 'https://acdcformation.com/wp-content/uploads/2026/04/Signature-seule-David-scaled.png';
     $logo_img_url = ! empty( $row['_org_logo'] ) ? (string) $row['_org_logo'] : 'https://acdcformation.com/wp-content/uploads/2026/03/Logo-ACDC.png';
-    $sig_data_uri    = $this->quote_img_to_data_uri( $sig_img_url );
-    $sig_data_uri_t2 = $this->quote_img_to_data_uri( $sig2_img_url );
-    $logo_data_uri   = $this->quote_img_to_data_uri( $logo_img_url );
+    $sig_data_uri    = $this->quote_img_to_data_uri( $sig_img_url, 400 );
+    $sig_data_uri_t2 = $this->quote_img_to_data_uri( $sig2_img_url, 400 );
+    $logo_data_uri   = $this->quote_img_to_data_uri( $logo_img_url, 200 );
     ob_start();
     ?>
 <!DOCTYPE html>
@@ -1170,7 +1170,7 @@ trait ACDC_Documents_Billing_Core_Trait {
     </div>
 
     <div style="position:absolute;right:21mm;bottom:22mm;width:calc(50% - 26mm);">
-      <div style="font-size:7pt;font-weight:700;text-transform:uppercase;letter-spacing:.05em;color:#C5A253;margin-bottom:1mm;">Bon pour accord — Lu et approuvé</div>
+      <div style="font-size:7pt;font-weight:700;text-transform:uppercase;letter-spacing:.05em;color:#C5A253;margin-bottom:1mm;">Bon pour accord</div>
       <?php
       /* ACDC 3.25.236 — La mention recopiée par le signataire s'imprime ici,
          au-dessus de sa signature. Le cadre existait, vide de toute mention :
@@ -1245,8 +1245,10 @@ trait ACDC_Documents_Billing_Core_Trait {
 
     $sig_img_url   = 'https://acdcformation.com/wp-content/uploads/2026/04/Cachet-et-signature.png';
     $logo_img_url  = ! empty( $row['_org_logo'] ) ? (string) $row['_org_logo'] : 'https://acdcformation.com/wp-content/uploads/2026/03/Logo-ACDC.png';
-    $sig_data_uri  = $this->quote_img_to_data_uri( $sig_img_url );
-    $logo_data_uri = $this->quote_img_to_data_uri( $logo_img_url );
+    /* Affichés à 120 px et 48 px de haut : 400 et 200 px de large suffisent
+       largement, y compris à l'impression. */
+    $sig_data_uri  = $this->quote_img_to_data_uri( $sig_img_url, 400 );
+    $logo_data_uri = $this->quote_img_to_data_uri( $logo_img_url, 200 );
 
     /* Désignation (formation + dates/modalités) sur plusieurs lignes. */
     $designation_lines = array( $this->quote_html( $formation ) );
@@ -1406,7 +1408,7 @@ trait ACDC_Documents_Billing_Core_Trait {
         </div>
       </td>
       <td width="50%" valign="top">
-        <div class="sig-title">Bon pour accord — Lu et approuvé</div>
+        <div class="sig-title">Bon pour accord</div>
         <div class="sig-cell" style="min-height:120px;text-align:center;">
           <?php if ( ! empty( $row['accord_signature_uri'] ) ) : ?>
             <img src="<?php echo $row['accord_signature_uri']; ?>" height="34" style="display:block;margin:0 auto 2mm;" /><br />
@@ -1666,8 +1668,8 @@ trait ACDC_Documents_Billing_Core_Trait {
     $methods = $is_credit ? ( $row['credit_note']['payment_methods'] ?? '' ) : ( $row['payment_methods'] ?? '' );
     // ACDC — Images inlinées en base64 (mêmes sources que le devis)
     $logo_img_url    = ! empty( $row['_org_logo'] ) ? (string) $row['_org_logo'] : 'https://acdcformation.com/wp-content/uploads/2026/03/Logo-ACDC.png';
-    $logo_data_uri   = $this->quote_img_to_data_uri( $logo_img_url );
-    $sig_data_uri_t2 = $this->quote_img_to_data_uri( 'https://acdcformation.com/wp-content/uploads/2026/04/Signature-seule-David-scaled.png' );
+    $logo_data_uri   = $this->quote_img_to_data_uri( $logo_img_url, 200 );
+    $sig_data_uri_t2 = $this->quote_img_to_data_uri( 'https://acdcformation.com/wp-content/uploads/2026/04/Signature-seule-David-scaled.png', 400 );
     ob_start();
     ?>
 <!DOCTYPE html>
@@ -1729,8 +1731,28 @@ trait ACDC_Documents_Billing_Core_Trait {
    * ACDC 3.24.99 — Convertit une URL d'image en data-URI base64 pour embed autonome dans le HTML.
    * Fallback sur l'URL originale si le fichier est inaccessible (réseau ou disque).
    */
-  private function quote_img_to_data_uri( $url ) {
+  /**
+   * ACDC 3.25.256 — LES IMAGES DU DEVIS ÉTAIENT INCORPORÉES EN TAILLE RÉELLE.
+   *
+   * Le cachet fait 1600 × 1200 et le logo 1563 × 1563 ; ils sont affichés à 120
+   * et 48 pixels de haut. Les incorporer en base64 dans le HTML oblige mPDF à
+   * décoder les images entières en mémoire — sur un hébergement mutualisé,
+   * c'est le profil exact du dépassement de mémoire, et c'est le seul document
+   * du plugin qui procède ainsi. On demande donc une copie réduite, celle-là
+   * même que fabrique la proposition commerciale depuis la 3.25.250, avant
+   * d'encoder.
+   *
+   * @param string $url       Adresse de l'image.
+   * @param int    $max_width Largeur maximale en pixels ; 0 = taille d'origine.
+   */
+  private function quote_img_to_data_uri( $url, $max_width = 0 ) {
     if ( '' === (string) $url ) return '';
+    if ( $max_width > 0 && method_exists( $this, 'acdc_pdf_image_src' ) ) {
+      /* La copie réduite est mise en cache sur disque : l'original n'est jamais
+         modifié, et le format peut changer (un PNG opaque devient un JPEG) —
+         d'où la relecture de l'extension plus bas, sur l'adresse retournée. */
+      $url = $this->acdc_pdf_image_src( $url, $max_width );
+    }
     $upload_dir = wp_upload_dir();
     $local_path = str_replace( trailingslashit( $upload_dir['baseurl'] ), trailingslashit( $upload_dir['basedir'] ), $url );
     $content = '';

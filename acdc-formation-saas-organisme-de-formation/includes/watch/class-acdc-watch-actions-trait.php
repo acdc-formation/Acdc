@@ -445,7 +445,16 @@ trait ACDC_Watch_Actions_Trait {
     // Génération PDF via render_html_pdf (moteur plugin existant)
     if ( method_exists( $this, 'render_html_pdf' ) ) {
       $filename = 'veille-qualiopi-indicateur-' . $ind_num . '-' . wp_date( 'Y-m-d' ) . '.pdf';
-      $this->render_html_pdf( $html, $filename );
+      /* ACDC 3.25.256 — Même filet que les autres fabrications : un échec de
+         mPDF sert le HTML au lieu d'une page blanche. */
+      try {
+        $this->render_html_pdf( $html, $filename );
+      } catch ( \Throwable $e ) {
+        while ( ob_get_level() ) { ob_end_clean(); }
+        header( 'Content-Type: text/html; charset=UTF-8' );
+        echo $html; // phpcs:ignore WordPress.Security.EscapeOutput
+        exit;
+      }
     } else {
       // Fallback : HTML direct
       header( 'Content-Type: text/html; charset=UTF-8' );

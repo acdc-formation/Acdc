@@ -27,6 +27,7 @@ lancent sans WordPress, en quelques secondes.
     php tests/scan-seances-en-dur.php # horaires de séance écrits en dur
     php tests/scan-charte-documents.php # documents qui dessinent leur propre en-tête
     php tests/scan-actions-publiques.php # actions publiques bloquées pour les visiteurs
+    php tests/scan-pdf-sans-filet.php # fabrication de PDF sans rattrapage d'erreur
 
 Le dernier balaie tout le plugin et signale les fonctions qui utilisent `$wpdb`
 sans l'avoir importé — la faute qui a produit l'erreur fatale de la 3.25.236.

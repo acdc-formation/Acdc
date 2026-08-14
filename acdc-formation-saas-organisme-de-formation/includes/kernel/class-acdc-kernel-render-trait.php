@@ -15948,10 +15948,24 @@ private function render_html_pdf( $html, $filename = 'document.pdf', $dispositio
   ) );
 
   $mpdf->SetTitle( sanitize_file_name( $filename ) );
-  $mpdf->WriteHTML( $html );
 
-  $disposition = in_array( $disposition, array( 'inline', 'attachment' ), true ) ? $disposition : 'inline';
-  $mpdf->Output( sanitize_file_name( $filename ), 'I' === strtoupper( $disposition[0] ) ? 'I' : 'D' );
+  /* ACDC 3.25.256 — LA FABRIQUE DU PDF NE DOIT PAS EMPORTER LA PAGE.
+     mPDF lève une exception sur un gabarit qu'il ne sait pas lire, et meurt tout
+     court quand la mémoire manque — c'est ce qu'a produit l'écran « erreur
+     critique » sur le devis. Quatre écrans passent par ici : le devis, le
+     recueil des besoins, l'analyse du besoin et la veille. Aucun ne doit rendre
+     une page blanche.
+     On note l'erreur réelle — personne ne l'avait jamais lue — et on la relance
+     pour que l'appelant décide : servir sa version imprimable, ou afficher un
+     message. Ce qu'on ne fait plus, c'est mourir en silence. */
+  try {
+    $mpdf->WriteHTML( $html );
+    $disposition = in_array( $disposition, array( 'inline', 'attachment' ), true ) ? $disposition : 'inline';
+    $mpdf->Output( sanitize_file_name( $filename ), 'I' === strtoupper( $disposition[0] ) ? 'I' : 'D' );
+  } catch ( \Throwable $e ) {
+    error_log( '[ACDC] Fabrication PDF impossible (' . $filename . ') : ' . $e->getMessage() );
+    throw $e;
+  }
   exit;
 }
 

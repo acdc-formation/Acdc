@@ -4058,7 +4058,17 @@ public function handle_download_need_pdf() {
   $client_only = isset( $_GET['token'] ) && '' !== $_GET['token'];
   $html        = $this->acdc_build_need_pdf_html( $need, $source_prospect_id, $client_only );
   $filename    = 'recueil-des-besoins-' . (int) $need_id . '.pdf';
-  $this->render_html_pdf( $html, $filename, 'inline' );
+  /* ACDC 3.25.256 — Filet commun à toutes les fabrications de PDF : en cas
+     d'échec, le document part en version imprimable plutôt que de laisser un
+     écran blanc. L'erreur réelle est journalisée par render_html_pdf(). */
+  try {
+    $this->render_html_pdf( $html, $filename, 'inline' );
+  } catch ( \Throwable $e ) {
+    while ( ob_get_level() ) { ob_end_clean(); }
+    nocache_headers();
+    header( 'Content-Type: text/html; charset=UTF-8' );
+    echo '<div style="max-width:800px;margin:12px auto;padding:10px 14px;border:1px solid #e8c97a;background:#fff8e8;border-radius:6px;font-family:sans-serif;font-size:13px;color:#7a5c00;">Le PDF n\'a pas pu être fabriqué : voici la version imprimable. Utilisez « Imprimer » puis « Enregistrer au format PDF ».</div>' . $html; // phpcs:ignore WordPress.Security.EscapeOutput
+  }
   exit;
 }
 
@@ -7132,7 +7142,18 @@ public function handle_purge_plugin_data() {
       }
     }
     // Fallback : stream direct sans sauvegarde
-    $this->render_html_pdf( $html, $filename, 'inline' );
+  /* ACDC 3.25.256 — Filet commun à toutes les fabrications de PDF : en cas
+     d'échec, le document part en version imprimable plutôt que de laisser un
+     écran blanc. L'erreur réelle est journalisée par render_html_pdf(). */
+    try {
+      $this->render_html_pdf( $html, $filename, 'inline' );
+    } catch ( \Throwable $e ) {
+      while ( ob_get_level() ) { ob_end_clean(); }
+      nocache_headers();
+      header( 'Content-Type: text/html; charset=UTF-8' );
+      echo '<div style="max-width:800px;margin:12px auto;padding:10px 14px;border:1px solid #e8c97a;background:#fff8e8;border-radius:6px;font-family:sans-serif;font-size:13px;color:#7a5c00;">Le PDF n\'a pas pu être fabriqué : voici la version imprimable. Utilisez « Imprimer » puis « Enregistrer au format PDF ».</div>' . $html; // phpcs:ignore WordPress.Security.EscapeOutput
+      exit;
+    }
   }
 
   // ── ACDC 3.25.42 — Dispatcher front des actions trf_action (template_redirect, avant tout rendu)
