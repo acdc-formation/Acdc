@@ -23,6 +23,7 @@ lancent sans WordPress, en quelques secondes.
     php tests/test-rappel-contrat-formateur.php # rappel du contrat formateur après signature
     php tests/test-montant-mission.php # heures, taux et montant : le calcul dans les deux sens
     php tests/test-seance-brouillon.php # séance sans formateur : convocation retenue, extranet ouvert
+    php tests/test-mots-reserves.php   # le calendrier ne s'arrête pas au 31 décembre
     node tests/test-signature-trace.js # continuité du tracé des signatures
     php tests/scan-global-wpdb.php acdc-formation-saas-organisme-de-formation
     php tests/scan-envois-email.php  # e-mails qui contournent la porte commune
@@ -44,6 +45,7 @@ lancent sans WordPress, en quelques secondes.
     php tests/scan-apprenants-seance.php # les apprenants d'une séance comptés au même endroit
     php tests/scan-ancre-parcours.php # un parcours s'ancre au recueil OU à la convention
     php tests/scan-seance-brouillon.php # tous les chemins de convocation passent par la même porte
+    php tests/scan-mots-reserves.php # un écran n'emploie jamais un mot réservé de WordPress
 
 Le dernier balaie tout le plugin et signale les fonctions qui utilisent `$wpdb`
 sans l'avoir importé — la faute qui a produit l'erreur fatale de la 3.25.236.

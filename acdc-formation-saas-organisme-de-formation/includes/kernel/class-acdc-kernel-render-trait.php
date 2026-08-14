@@ -1792,7 +1792,7 @@ trait ACDC_Kernel_Render_Trait {
     if ( ! in_array( $per_page, array( 25, 50, 100 ), true ) ) {
       $per_page = 25;
     }
-    $paged = isset( $_GET['paged'] ) ? max( 1, absint( wp_unslash( $_GET['paged'] ) ) ) : 1;
+    $paged = \ACDC\Support\ScreenQuery::readPaged( $_GET );
     $base_tab = 'training_convocations';
     $base_url = is_admin() ? $this->admin_tab_url( $base_tab ) : $this->portal_page_url( array( 'tab' => $base_tab ) );
     $rows = $this->get_training_convocation_entries( $search );
@@ -1918,7 +1918,7 @@ trait ACDC_Kernel_Render_Trait {
           </table>
         </div>
         <?php if ( $total_pages > 1 ) : ?>
-          <div class="acdc-pagination-wrap"><div class="acdc-pagination"><?php for ( $page = 1; $page <= $total_pages; $page++ ) : ?><a class="<?php echo $page === $paged ? 'is-active' : ''; ?>" href="<?php echo esc_url( add_query_arg( array( 'q' => $search, 'per_page' => $per_page, 'paged' => $page ), $base_url ) ); ?>"><?php echo esc_html( $page ); ?></a><?php endfor; ?></div><div class="acdc-pagination-summary"><?php echo esc_html( sprintf( '%d-%d de %d', $total ? $offset + 1 : 0, min( $offset + $per_page, $total ), $total ) ); ?></div></div>
+          <div class="acdc-pagination-wrap"><div class="acdc-pagination"><?php for ( $page = 1; $page <= $total_pages; $page++ ) : ?><a class="<?php echo $page === $paged ? 'is-active' : ''; ?>" href="<?php echo esc_url( add_query_arg( array( 'q' => $search, 'per_page' => $per_page, 'acdc_paged' => $page ), $base_url ) ); ?>"><?php echo esc_html( $page ); ?></a><?php endfor; ?></div><div class="acdc-pagination-summary"><?php echo esc_html( sprintf( '%d-%d de %d', $total ? $offset + 1 : 0, min( $offset + $per_page, $total ), $total ) ); ?></div></div>
         <?php endif; ?>
       <?php endif; ?>
     </div>
@@ -6991,14 +6991,15 @@ trait ACDC_Kernel_Render_Trait {
       $this->render_proposals_list_for_need( (int) $need->id );
     }
   }  private function render_front_calendar_tab() {
-    $year = isset( $_GET['year'] ) ? absint( $_GET['year'] ) : (int) current_time( 'Y' );
-    $month = isset( $_GET['month'] ) ? absint( $_GET['month'] ) : (int) current_time( 'n' );
-    if ( $month < 1 || $month > 12 ) {
-      $month = (int) current_time( 'n' );
-    }
-    if ( $year < 2000 || $year > 2100 ) {
-      $year = (int) current_time( 'Y' );
-    }
+    /* ACDC 3.25.269 — Même correction que le calendrier des séances : `year`
+       appartient à WordPress, pas à nous. Voir ScreenQuery. */
+    $acdc_cal = \ACDC\Support\ScreenQuery::readMonth(
+      $_GET,
+      (int) current_time( 'Y' ),
+      (int) current_time( 'n' )
+    );
+    $year  = $acdc_cal['year'];
+    $month = $acdc_cal['month'];
 
     $first_day_ts = gmmktime( 12, 0, 0, $month, 1, $year );
     $days_in_month = (int) gmdate( 't', $first_day_ts );
@@ -7022,9 +7023,15 @@ trait ACDC_Kernel_Render_Trait {
 
     $prev_ts = strtotime( '-1 month', $first_day_ts );
     $next_ts = strtotime( '+1 month', $first_day_ts );
-    $prev_url = is_admin() ? admin_url( 'admin.php?page=acdc-of-calendar&month=' . gmdate( 'n', $prev_ts ) . '&year=' . gmdate( 'Y', $prev_ts ) ) : $this->portal_page_url( array( 'tab' => 'calendar', 'month' => gmdate( 'n', $prev_ts ), 'year' => gmdate( 'Y', $prev_ts ) ) );
-    $next_url = is_admin() ? admin_url( 'admin.php?page=acdc-of-calendar&month=' . gmdate( 'n', $next_ts ) . '&year=' . gmdate( 'Y', $next_ts ) ) : $this->portal_page_url( array( 'tab' => 'calendar', 'month' => gmdate( 'n', $next_ts ), 'year' => gmdate( 'Y', $next_ts ) ) );
-    $today_url = is_admin() ? admin_url( 'admin.php?page=acdc-of-calendar&month=' . current_time( 'n' ) . '&year=' . current_time( 'Y' ) ) : $this->portal_page_url( array( 'tab' => 'calendar', 'month' => current_time( 'n' ), 'year' => current_time( 'Y' ) ) );
+    $acdc_rdv_url = function( $ts ) {
+      $param = \ACDC\Support\ScreenQuery::monthParam( gmdate( 'Y', $ts ), gmdate( 'n', $ts ) );
+      return is_admin()
+        ? admin_url( 'admin.php?page=acdc-of-calendar&acdc_month=' . rawurlencode( $param ) )
+        : $this->portal_page_url( array( 'tab' => 'calendar', 'acdc_month' => $param ) );
+    };
+    $prev_url  = $acdc_rdv_url( $prev_ts );
+    $next_url  = $acdc_rdv_url( $next_ts );
+    $today_url = $acdc_rdv_url( (int) current_time( 'timestamp' ) );
     $prospects_url = is_admin() ? admin_url( 'admin.php?page=acdc-of-prospects' ) : $this->portal_page_url( array( 'tab' => 'prospects' ) );
     ?>
     <section class="acdc-section-head acdc-calendar-head">
@@ -11579,7 +11586,7 @@ trait ACDC_Kernel_Render_Trait {
     if ( ! in_array( $per_page, array( 25, 50, 100 ), true ) ) {
       $per_page = 25;
     }
-    $paged = isset( $_GET['paged'] ) ? max( 1, absint( $_GET['paged'] ) ) : 1;
+    $paged = \ACDC\Support\ScreenQuery::readPaged( $_GET );
     $base_tab = 'training_programs';
     $base_url = is_admin() ? $this->admin_tab_url( $base_tab ) : $this->portal_page_url( array( 'tab' => $base_tab ) );
 
@@ -11719,7 +11726,7 @@ trait ACDC_Kernel_Render_Trait {
             ?>
             <div class="acdc-pagination">
               <?php for ( $page = 1; $page <= $total_pages; $page++ ) : ?>
-                <a class="<?php echo $page === $paged ? 'is-active' : ''; ?>" href="<?php echo esc_url( add_query_arg( array_merge( $page_args, array( 'paged' => $page ) ), $base_url ) ); ?>"><?php echo esc_html( $page ); ?></a>
+                <a class="<?php echo $page === $paged ? 'is-active' : ''; ?>" href="<?php echo esc_url( add_query_arg( array_merge( $page_args, array( 'acdc_paged' => $page ) ), $base_url ) ); ?>"><?php echo esc_html( $page ); ?></a>
               <?php endfor; ?>
             </div>
             <div class="acdc-pagination-summary"><?php echo esc_html( ( $offset + 1 ) . '-' . min( $offset + count( $items ), $total ) . ' de ' . $total ); ?></div>
@@ -11766,7 +11773,7 @@ trait ACDC_Kernel_Render_Trait {
     if ( ! in_array( $per_page, array( 25, 50, 100 ), true ) ) {
       $per_page = 25;
     }
-    $paged = isset( $_GET['paged'] ) ? max( 1, absint( $_GET['paged'] ) ) : 1;
+    $paged = \ACDC\Support\ScreenQuery::readPaged( $_GET );
     $base_tab = 'needs_documents';
     $base_url = is_admin() ? $this->admin_tab_url( $base_tab ) : $this->portal_page_url( array( 'tab' => $base_tab ) );
 
@@ -11808,7 +11815,7 @@ trait ACDC_Kernel_Render_Trait {
             </tbody></table></div>
         <?php if ( $total_pages > 1 ) : ?>
           <?php $page_args = array(); if ( '' !== $search ) { $page_args['q'] = $search; } if ( 25 !== $per_page ) { $page_args['per_page'] = $per_page; } ?>
-          <div class="acdc-pagination-wrap"><div class="acdc-pagination"><?php for ( $page = 1; $page <= $total_pages; $page++ ) : ?><a class="<?php echo $page === $paged ? 'is-active' : ''; ?>" href="<?php echo esc_url( add_query_arg( array_merge( $page_args, array( 'paged' => $page ) ), $base_url ) ); ?>"><?php echo esc_html( $page ); ?></a><?php endfor; ?></div><div class="acdc-pagination-summary"><?php echo esc_html( ( $offset + 1 ) . '-' . min( $offset + count( $items ), $total ) . ' de ' . $total ); ?></div></div>
+          <div class="acdc-pagination-wrap"><div class="acdc-pagination"><?php for ( $page = 1; $page <= $total_pages; $page++ ) : ?><a class="<?php echo $page === $paged ? 'is-active' : ''; ?>" href="<?php echo esc_url( add_query_arg( array_merge( $page_args, array( 'acdc_paged' => $page ) ), $base_url ) ); ?>"><?php echo esc_html( $page ); ?></a><?php endfor; ?></div><div class="acdc-pagination-summary"><?php echo esc_html( ( $offset + 1 ) . '-' . min( $offset + count( $items ), $total ) . ' de ' . $total ); ?></div></div>
         <?php endif; ?>
       <?php endif; ?>
     </div>
@@ -12067,7 +12074,7 @@ trait ACDC_Kernel_Render_Trait {
     if ( ! in_array( $per_page, array( 25, 50, 100 ), true ) ) {
       $per_page = 25;
     }
-    $paged = isset( $_GET['paged'] ) ? max( 1, absint( $_GET['paged'] ) ) : 1;
+    $paged = \ACDC\Support\ScreenQuery::readPaged( $_GET );
     $offset = ( $paged - 1 ) * $per_page;
 
     $base_url = is_admin() ? $this->admin_tab_url( 'completed_quizzes' ) : $this->portal_page_url( array( 'tab' => 'completed_quizzes' ) );
@@ -12150,8 +12157,8 @@ trait ACDC_Kernel_Render_Trait {
           <div class="acdc-inline-wrap" style="justify-content:space-between;margin-top:14px;">
             <div style="color:#1E4777;font-size:12px;"><?php echo esc_html( $offset + 1 ); ?>-<?php echo esc_html( min( $offset + $per_page, $total ) ); ?> de <?php echo esc_html( $total ); ?></div>
             <div class="acdc-inline-wrap">
-              <?php if ( $paged > 1 ) : ?><a class="acdc-button acdc-button-soft" href="<?php echo esc_url( add_query_arg( array( 'q' => $search, 'per_page' => $per_page, 'paged' => $paged - 1 ), $base_url ) ); ?>">Précédent</a><?php endif; ?>
-              <?php if ( $paged < $total_pages ) : ?><a class="acdc-button acdc-button-soft" href="<?php echo esc_url( add_query_arg( array( 'q' => $search, 'per_page' => $per_page, 'paged' => $paged + 1 ), $base_url ) ); ?>">Suivant</a><?php endif; ?>
+              <?php if ( $paged > 1 ) : ?><a class="acdc-button acdc-button-soft" href="<?php echo esc_url( add_query_arg( array( 'q' => $search, 'per_page' => $per_page, 'acdc_paged' => $paged - 1 ), $base_url ) ); ?>">Précédent</a><?php endif; ?>
+              <?php if ( $paged < $total_pages ) : ?><a class="acdc-button acdc-button-soft" href="<?php echo esc_url( add_query_arg( array( 'q' => $search, 'per_page' => $per_page, 'acdc_paged' => $paged + 1 ), $base_url ) ); ?>">Suivant</a><?php endif; ?>
             </div>
           </div>
         <?php endif; ?>
@@ -12186,7 +12193,7 @@ trait ACDC_Kernel_Render_Trait {
     if ( ! in_array( $per_page, array( 25, 50, 100 ), true ) ) {
       $per_page = 25;
     }
-    $paged = isset( $_GET['paged'] ) ? max( 1, absint( $_GET['paged'] ) ) : 1;
+    $paged = \ACDC\Support\ScreenQuery::readPaged( $_GET );
     $base_tab = 'positioning_results';
     $base_url = is_admin() ? $this->admin_tab_url( $base_tab ) : $this->portal_page_url( array( 'tab' => $base_tab ) );
     $rows = $this->get_positioning_result_rows( $search );
@@ -12291,7 +12298,7 @@ trait ACDC_Kernel_Render_Trait {
           </table>
         </div>
         <?php if ( $total_pages > 1 ) : ?>
-          <div class="acdc-pagination-wrap"><div class="acdc-pagination"><?php for ( $page = 1; $page <= $total_pages; $page++ ) : ?><a class="<?php echo $page === $paged ? 'is-active' : ''; ?>" href="<?php echo esc_url( add_query_arg( array( 'q' => $search, 'per_page' => $per_page, 'paged' => $page ), $base_url ) ); ?>"><?php echo esc_html( $page ); ?></a><?php endfor; ?></div><div class="acdc-pagination-summary"><?php echo esc_html( sprintf( '%d-%d de %d', $total ? $offset + 1 : 0, min( $offset + $per_page, $total ), $total ) ); ?></div></div>
+          <div class="acdc-pagination-wrap"><div class="acdc-pagination"><?php for ( $page = 1; $page <= $total_pages; $page++ ) : ?><a class="<?php echo $page === $paged ? 'is-active' : ''; ?>" href="<?php echo esc_url( add_query_arg( array( 'q' => $search, 'per_page' => $per_page, 'acdc_paged' => $page ), $base_url ) ); ?>"><?php echo esc_html( $page ); ?></a><?php endfor; ?></div><div class="acdc-pagination-summary"><?php echo esc_html( sprintf( '%d-%d de %d', $total ? $offset + 1 : 0, min( $offset + $per_page, $total ), $total ) ); ?></div></div>
         <?php endif; ?>
       <?php endif; ?>
     </div>
@@ -12671,7 +12678,7 @@ Nb de questions réussies / Nb de questions : <?php echo esc_html( (int) $contex
     if ( ! in_array( $c_per_page, array( 25, 50, 100 ), true ) ) { $c_per_page = 25; }
     $c_total     = (int) $this->get_companies( array( 'search' => $c_search, 'count' => true ) );
     $c_total_pg  = max( 1, (int) ceil( $c_total / $c_per_page ) );
-    $c_paged     = isset( $_GET['paged'] ) ? max( 1, absint( wp_unslash( $_GET['paged'] ) ) ) : 1;
+    $c_paged     = \ACDC\Support\ScreenQuery::readPaged( $_GET );
     if ( $c_paged > $c_total_pg ) { $c_paged = $c_total_pg; }
     $c_offset    = ( $c_paged - 1 ) * $c_per_page;
     $c_base_url  = is_admin() ? $this->admin_tab_url( 'companies' ) : $this->portal_page_url( array( 'tab' => 'companies' ) );
@@ -12784,7 +12791,7 @@ Nb de questions réussies / Nb de questions : <?php echo esc_html( (int) $contex
         <?php if ( $c_total_pg > 1 ) : ?>
         <div class="acdc-pagination">
           <?php for ( $c_page = 1; $c_page <= $c_total_pg; $c_page++ ) : ?>
-            <a class="<?php echo $c_page === $c_paged ? 'is-active' : ''; ?>" href="<?php echo esc_url( add_query_arg( array( 'q' => $c_search, 'per_page' => $c_per_page, 'paged' => $c_page ), $c_base_url ) ); ?>"><?php echo esc_html( $c_page ); ?></a>
+            <a class="<?php echo $c_page === $c_paged ? 'is-active' : ''; ?>" href="<?php echo esc_url( add_query_arg( array( 'q' => $c_search, 'per_page' => $c_per_page, 'acdc_paged' => $c_page ), $c_base_url ) ); ?>"><?php echo esc_html( $c_page ); ?></a>
           <?php endfor; ?>
         </div>
         <?php endif; ?>
@@ -13186,7 +13193,7 @@ Nb de questions réussies / Nb de questions : <?php echo esc_html( (int) $contex
   if ( ! in_array( $per_page, array( 25, 50, 100 ), true ) ) {
     $per_page = 25;
   }
-  $paged = isset( $_GET['paged'] ) ? max( 1, absint( $_GET['paged'] ) ) : 1;
+  $paged = \ACDC\Support\ScreenQuery::readPaged( $_GET );
   $base_tab = 'completion_certificates';
   $base_url = is_admin() ? $this->admin_tab_url( $base_tab ) : $this->portal_page_url( array( 'tab' => $base_tab ) );
   $rows = $this->get_completion_certificate_rows( $search );
@@ -13282,7 +13289,7 @@ Nb de questions réussies / Nb de questions : <?php echo esc_html( (int) $contex
         </table>
       </div>
       <?php if ( $total_pages > 1 ) : ?>
-        <div class="acdc-pagination-wrap"><div class="acdc-pagination"><?php for ( $page = 1; $page <= $total_pages; $page++ ) : ?><a class="<?php echo $page === $paged ? 'is-active' : ''; ?>" href="<?php echo esc_url( add_query_arg( array( 'q' => $search, 'per_page' => $per_page, 'paged' => $page ), $base_url ) ); ?>"><?php echo esc_html( $page ); ?></a><?php endfor; ?></div><div class="acdc-pagination-summary"><?php echo esc_html( sprintf( '%d-%d de %d', $total ? $offset + 1 : 0, min( $offset + $per_page, $total ), $total ) ); ?></div></div>
+        <div class="acdc-pagination-wrap"><div class="acdc-pagination"><?php for ( $page = 1; $page <= $total_pages; $page++ ) : ?><a class="<?php echo $page === $paged ? 'is-active' : ''; ?>" href="<?php echo esc_url( add_query_arg( array( 'q' => $search, 'per_page' => $per_page, 'acdc_paged' => $page ), $base_url ) ); ?>"><?php echo esc_html( $page ); ?></a><?php endfor; ?></div><div class="acdc-pagination-summary"><?php echo esc_html( sprintf( '%d-%d de %d', $total ? $offset + 1 : 0, min( $offset + $per_page, $total ), $total ) ); ?></div></div>
       <?php endif; ?>
     <?php endif; ?>
   </div>

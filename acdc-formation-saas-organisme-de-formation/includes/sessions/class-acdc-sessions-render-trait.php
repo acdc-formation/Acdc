@@ -307,14 +307,19 @@ trait ACDC_Sessions_Render_Trait {
   }
 
   private function render_front_sessions_calendar_tab() {
-    $year = isset( $_GET['year'] ) ? absint( $_GET['year'] ) : (int) current_time( 'Y' );
-    $month = isset( $_GET['month'] ) ? absint( $_GET['month'] ) : (int) current_time( 'n' );
-    if ( $month < 1 || $month > 12 ) {
-      $month = (int) current_time( 'n' );
-    }
-    if ( $year < 2000 || $year > 2100 ) {
-      $year = (int) current_time( 'Y' );
-    }
+    /* ACDC 3.25.269 — LE CALENDRIER S'ARRÊTAIT À L'ANNÉE EN COURS.
+       Il n'avait pourtant aucune borne : la faute tenait au mot `year`, que
+       WordPress s'est réservé pour les archives par date. Posé sur l'adresse
+       d'une page, il ne demande plus la page mais « la page publiée cette
+       année-là » — et la page du tableau de bord n'existe que dans son année de
+       publication. Le mois voyage désormais en un seul paramètre à nous. */
+    $acdc_cal = \ACDC\Support\ScreenQuery::readMonth(
+      $_GET,
+      (int) current_time( 'Y' ),
+      (int) current_time( 'n' )
+    );
+    $year  = $acdc_cal['year'];
+    $month = $acdc_cal['month'];
 
     $first_day_ts = gmmktime( 12, 0, 0, $month, 1, $year );
     $days_in_month = (int) gmdate( 't', $first_day_ts );
@@ -347,9 +352,15 @@ trait ACDC_Sessions_Render_Trait {
 
     $prev_ts  = strtotime( '-1 month', $first_day_ts );
     $next_ts  = strtotime( '+1 month', $first_day_ts );
-    $prev_url = is_admin() ? $this->admin_tab_url( 'sessions_calendar', array( 'month' => gmdate( 'n', $prev_ts ), 'year' => gmdate( 'Y', $prev_ts ) ) ) : $this->portal_page_url( array( 'tab' => 'sessions_calendar', 'month' => gmdate( 'n', $prev_ts ), 'year' => gmdate( 'Y', $prev_ts ) ) );
-    $next_url = is_admin() ? $this->admin_tab_url( 'sessions_calendar', array( 'month' => gmdate( 'n', $next_ts ), 'year' => gmdate( 'Y', $next_ts ) ) ) : $this->portal_page_url( array( 'tab' => 'sessions_calendar', 'month' => gmdate( 'n', $next_ts ), 'year' => gmdate( 'Y', $next_ts ) ) );
-    $today_url = is_admin() ? $this->admin_tab_url( 'sessions_calendar', array( 'month' => current_time( 'n' ), 'year' => current_time( 'Y' ) ) ) : $this->portal_page_url( array( 'tab' => 'sessions_calendar', 'month' => current_time( 'n' ), 'year' => current_time( 'Y' ) ) );
+    $acdc_cal_url = function( $ts ) {
+      $arg = array( 'acdc_month' => \ACDC\Support\ScreenQuery::monthParam( gmdate( 'Y', $ts ), gmdate( 'n', $ts ) ) );
+      return is_admin()
+        ? $this->admin_tab_url( 'sessions_calendar', $arg )
+        : $this->portal_page_url( array_merge( array( 'tab' => 'sessions_calendar' ), $arg ) );
+    };
+    $prev_url  = $acdc_cal_url( $prev_ts );
+    $next_url  = $acdc_cal_url( $next_ts );
+    $today_url = $acdc_cal_url( (int) current_time( 'timestamp' ) );
     $sessions_url = is_admin() ? $this->admin_tab_url( 'sessions' ) : $this->portal_page_url( array( 'tab' => 'sessions' ) );
     ?>
     <section class="acdc-section-head acdc-calendar-head">

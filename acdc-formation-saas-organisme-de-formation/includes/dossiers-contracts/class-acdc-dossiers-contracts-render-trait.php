@@ -2282,7 +2282,7 @@ trait ACDC_Dossiers_Contracts_Render_Trait {
     if ( ! in_array( $per_page, array( 25, 50, 100 ), true ) ) {
       $per_page = 25;
     }
-    $paged = isset( $_GET['paged'] ) ? max( 1, absint( $_GET['paged'] ) ) : 1;
+    $paged = \ACDC\Support\ScreenQuery::readPaged( $_GET );
     $base_tab = 'contracts_documents';
     $base_url = is_admin() ? $this->admin_tab_url( $base_tab ) : $this->portal_page_url( array( 'tab' => $base_tab ) );
 
@@ -2511,7 +2511,7 @@ trait ACDC_Dossiers_Contracts_Render_Trait {
           <div class="acdc-pagination-wrap">
             <div class="acdc-pagination">
               <?php for ( $page = 1; $page <= $total_pages; $page++ ) : ?>
-                <?php $url = add_query_arg( array( 'paged' => $page, 'per_page' => $per_page, 'q' => $search ), $base_url ); ?>
+                <?php $url = add_query_arg( array( 'acdc_paged' => $page, 'per_page' => $per_page, 'q' => $search ), $base_url ); ?>
                 <a href="<?php echo esc_url( $url ); ?>" class="<?php echo $page === $paged ? 'is-active' : ''; ?>"><?php echo esc_html( $page ); ?></a>
               <?php endfor; ?>
             </div>
@@ -2862,7 +2862,7 @@ public function render_admin_registration_contract_page() { $this->render_admin_
           <div class="acdc-pagination-wrap" style="margin-top:16px;">
             <div class="acdc-pagination">
               <?php for ( $page = 1; $page <= $total_pages; $page++ ) :
-                $url = add_query_arg( array( 'trf_view' => $trf_view, 'paged' => $page, 'per_page' => $per_page, 'q' => $search ), $base_url );
+                $url = add_query_arg( array( 'trf_view' => $trf_view, 'acdc_paged' => $page, 'per_page' => $per_page, 'q' => $search ), $base_url );
               ?>
                 <a href="<?php echo esc_url( $url ); ?>" class="<?php echo $page === $paged ? 'is-active' : ''; ?>"><?php echo esc_html( $page ); ?></a>
               <?php endfor; ?>

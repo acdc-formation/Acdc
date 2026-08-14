@@ -17,7 +17,7 @@ trait ACDC_Questionnaires_Render_Trait {
     if ( ! in_array( $per_page, array( 25, 50, 100 ), true ) ) {
       $per_page = 25;
     }
-    $paged = isset( $_GET['paged'] ) ? max( 1, absint( $_GET['paged'] ) ) : 1;
+    $paged = \ACDC\Support\ScreenQuery::readPaged( $_GET );
     $base_tab = 'mid_surveys_documents';
     $base_url = is_admin() ? $this->admin_tab_url( $base_tab ) : $this->portal_page_url( array( 'tab' => $base_tab ) );
     $rows = $this->get_mid_survey_rows( $search );
@@ -115,7 +115,7 @@ trait ACDC_Questionnaires_Render_Trait {
           </table>
         </div>
         <?php if ( $total_pages > 1 ) : ?>
-          <div class="acdc-pagination-wrap"><div class="acdc-pagination"><?php for ( $page = 1; $page <= $total_pages; $page++ ) : ?><a class="<?php echo $page === $paged ? 'is-active' : ''; ?>" href="<?php echo esc_url( add_query_arg( array( 'q' => $search, 'per_page' => $per_page, 'paged' => $page ), $base_url ) ); ?>"><?php echo esc_html( $page ); ?></a><?php endfor; ?></div><div class="acdc-pagination-summary"><?php echo esc_html( sprintf( '%d-%d de %d', $total ? $offset + 1 : 0, min( $offset + $per_page, $total ), $total ) ); ?></div></div>
+          <div class="acdc-pagination-wrap"><div class="acdc-pagination"><?php for ( $page = 1; $page <= $total_pages; $page++ ) : ?><a class="<?php echo $page === $paged ? 'is-active' : ''; ?>" href="<?php echo esc_url( add_query_arg( array( 'q' => $search, 'per_page' => $per_page, 'acdc_paged' => $page ), $base_url ) ); ?>"><?php echo esc_html( $page ); ?></a><?php endfor; ?></div><div class="acdc-pagination-summary"><?php echo esc_html( sprintf( '%d-%d de %d', $total ? $offset + 1 : 0, min( $offset + $per_page, $total ), $total ) ); ?></div></div>
         <?php endif; ?>
       <?php endif; ?>
     </div>
@@ -220,7 +220,7 @@ trait ACDC_Questionnaires_Render_Trait {
     if ( ! in_array( $per_page, array( 25, 50, 100 ), true ) ) {
       $per_page = 25;
     }
-    $paged = isset( $_GET['paged'] ) ? max( 1, absint( $_GET['paged'] ) ) : 1;
+    $paged = \ACDC\Support\ScreenQuery::readPaged( $_GET );
     $base_tab = 'hot_surveys_documents';
     $base_url = is_admin() ? $this->admin_tab_url( $base_tab ) : $this->portal_page_url( array( 'tab' => $base_tab ) );
     $rows = $this->get_hot_survey_rows( $search );
@@ -322,7 +322,7 @@ Fin : " . $this->format_pdf_date( $context['end_date'] ) ); ?></td>
           </table>
         </div>
         <?php if ( $total_pages > 1 ) : ?>
-          <div class="acdc-pagination-wrap"><div class="acdc-pagination"><?php for ( $page = 1; $page <= $total_pages; $page++ ) : ?><a class="<?php echo $page === $paged ? 'is-active' : ''; ?>" href="<?php echo esc_url( add_query_arg( array( 'q' => $search, 'per_page' => $per_page, 'paged' => $page ), $base_url ) ); ?>"><?php echo esc_html( $page ); ?></a><?php endfor; ?></div><div class="acdc-pagination-summary"><?php echo esc_html( sprintf( '%d-%d de %d', $total ? $offset + 1 : 0, min( $offset + $per_page, $total ), $total ) ); ?></div></div>
+          <div class="acdc-pagination-wrap"><div class="acdc-pagination"><?php for ( $page = 1; $page <= $total_pages; $page++ ) : ?><a class="<?php echo $page === $paged ? 'is-active' : ''; ?>" href="<?php echo esc_url( add_query_arg( array( 'q' => $search, 'per_page' => $per_page, 'acdc_paged' => $page ), $base_url ) ); ?>"><?php echo esc_html( $page ); ?></a><?php endfor; ?></div><div class="acdc-pagination-summary"><?php echo esc_html( sprintf( '%d-%d de %d', $total ? $offset + 1 : 0, min( $offset + $per_page, $total ), $total ) ); ?></div></div>
         <?php endif; ?>
       <?php endif; ?>
     </div>
@@ -764,7 +764,7 @@ Fin : " . $this->format_pdf_date( $context['end_date'] ) ); ?></div>
     if ( ! in_array( $per_page, array( 25, 50, 100 ), true ) ) {
       $per_page = 25;
     }
-    $paged = isset( $_GET['paged'] ) ? max( 1, absint( $_GET['paged'] ) ) : 1;
+    $paged = \ACDC\Support\ScreenQuery::readPaged( $_GET );
     $base_tab = 'cold_surveys_documents';
     $base_url = is_admin() ? $this->admin_tab_url( $base_tab ) : $this->portal_page_url( array( 'tab' => $base_tab ) );
     $rows = $this->get_cold_survey_rows( $search );
@@ -866,7 +866,7 @@ Fin : " . $this->format_pdf_date( $context['end_date'] ) ); ?></td>
           </table>
         </div>
         <?php if ( $total_pages > 1 ) : ?>
-          <div class="acdc-pagination-wrap"><div class="acdc-pagination"><?php for ( $page = 1; $page <= $total_pages; $page++ ) : ?><a class="<?php echo $page === $paged ? 'is-active' : ''; ?>" href="<?php echo esc_url( add_query_arg( array( 'q' => $search, 'per_page' => $per_page, 'paged' => $page ), $base_url ) ); ?>"><?php echo esc_html( $page ); ?></a><?php endfor; ?></div><div class="acdc-pagination-summary"><?php echo esc_html( sprintf( '%d-%d de %d', $total ? $offset + 1 : 0, min( $offset + $per_page, $total ), $total ) ); ?></div></div>
+          <div class="acdc-pagination-wrap"><div class="acdc-pagination"><?php for ( $page = 1; $page <= $total_pages; $page++ ) : ?><a class="<?php echo $page === $paged ? 'is-active' : ''; ?>" href="<?php echo esc_url( add_query_arg( array( 'q' => $search, 'per_page' => $per_page, 'acdc_paged' => $page ), $base_url ) ); ?>"><?php echo esc_html( $page ); ?></a><?php endfor; ?></div><div class="acdc-pagination-summary"><?php echo esc_html( sprintf( '%d-%d de %d', $total ? $offset + 1 : 0, min( $offset + $per_page, $total ), $total ) ); ?></div></div>
         <?php endif; ?>
       <?php endif; ?>
     </div>
