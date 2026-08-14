@@ -2736,15 +2736,37 @@ trait ACDC_Quizzes_Actions_Trait {
         $now        = current_time( 'mysql' );
         $is_late    = ( 'in_progress' === $session->status );
         $learner_id = isset( $_REQUEST['learner_id'] ) ? absint( wp_unslash( $_REQUEST['learner_id'] ) ) : 0;
-        // Vérifier que l'apprenant appartient bien à la séance (sécurité)
+        /* ACDC 3.25.266 — LE QUIZ PERDAIT L'APPRENANT EN SILENCE.
+         *
+         * Le contrôle d'appartenance interrogeait « apprenants.session_id », le
+         * rattachement DIRECT. Depuis que la convention crée les séances, cette
+         * colonne reste vide : l'apprenant n'était pas reconnu, le code posait
+         * learner_id = 0 sans un mot, et le participant était enregistré non
+         * rattaché — avec qualiopi_traceable = 0.
+         *
+         * La conséquence dépasse l'affichage : un quiz diagnostique rattaché à
+         * personne ne remonte dans aucun dossier et ne vaut rien comme preuve
+         * Qualiopi. Et rien ne le signalait, ni à l'apprenant, ni au formateur.
+         *
+         * On interroge le résolveur, qui réunit les trois rattachements —
+         * direct, groupe, convention — comme partout ailleurs depuis la
+         * 3.25.265.
+         */
         $is_traceable = 0;
         if ( $learner_id > 0 && ! empty( $session->formation_session_id ) ) {
-            $learner_check = $wpdb->get_var( $wpdb->prepare(
-                "SELECT id FROM {$this->learner_table} WHERE id = %d AND session_id = %d LIMIT 1",
-                $learner_id, (int) $session->formation_session_id
-            ) );
-            if ( ! $learner_check ) {
-                $learner_id   = 0; // Apprenant non reconnu sur cette séance
+            $formation_session = method_exists( $this, 'get_session' )
+                ? $this->get_session( (int) $session->formation_session_id )
+                : null;
+            $session_learner_ids = array();
+            if ( $formation_session && method_exists( $this, 'acdc_session_learners' ) ) {
+                foreach ( (array) $this->acdc_session_learners( $formation_session ) as $sl ) {
+                    if ( ! empty( $sl->id ) ) {
+                        $session_learner_ids[] = (int) $sl->id;
+                    }
+                }
+            }
+            if ( ! in_array( $learner_id, $session_learner_ids, true ) ) {
+                $learner_id = 0; // Apprenant non reconnu sur cette séance
             } else {
                 $is_traceable = 1;
             }
@@ -3337,14 +3359,29 @@ trait ACDC_Quizzes_Actions_Trait {
      * Construit le mapping des URLs des illustrations podium pour le JS.
      */
     private function get_qz_podium_assets_map() {
+        /* ACDC 3.25.266 — LE PODIUM NE DÉPEND PLUS DE LA MÉDIATHÈQUE.
+         *
+         * Les sept illustrations étaient appelées par des URL écrites en dur sur
+         * acdcformation.com/wp-content/uploads/2026/04/. Le jour où l'un de ces
+         * fichiers a été déplacé, renommé ou purgé, le podium a disparu : le
+         * navigateur affichait « Podium », le texte alternatif de l'image, et
+         * les noms des trois premiers — positionnés en absolu par-dessus le
+         * décor — se sont dispersés sur la page.
+         *
+         * Or le plugin EMBARQUE ces sept images depuis toujours, dans
+         * assets/images/podium/. Il allait les chercher ailleurs alors qu'il les
+         * avait sous la main. Un décor de fin de quiz ne doit dépendre d'aucun
+         * fichier qu'une manipulation de médiathèque peut faire disparaître.
+         */
+        $base_url = trailingslashit( ACDC_OF_SAAS_URL ) . 'assets/images/podium/';
         return array(
-            'base'    => 'https://acdcformation.com/wp-content/uploads/2026/04/Podium.png',
-            '1-femme' => 'https://acdcformation.com/wp-content/uploads/2026/04/femme-1.png',
-            '2-femme' => 'https://acdcformation.com/wp-content/uploads/2026/04/femme-2.png',
-            '3-femme' => 'https://acdcformation.com/wp-content/uploads/2026/04/femme-3.png',
-            '1-homme' => 'https://acdcformation.com/wp-content/uploads/2026/04/Homme-1.png',
-            '2-homme' => 'https://acdcformation.com/wp-content/uploads/2026/04/Homme-2.png',
-            '3-homme' => 'https://acdcformation.com/wp-content/uploads/2026/04/Homme-3.png',
+            'base'    => $base_url . 'podium-base.png',
+            '1-femme' => $base_url . '1ere-femme.png',
+            '2-femme' => $base_url . '2eme-femme.png',
+            '3-femme' => $base_url . '3eme-femme.png',
+            '1-homme' => $base_url . '1ere-homme.png',
+            '2-homme' => $base_url . '2eme-homme.png',
+            '3-homme' => $base_url . '3eme-homme.png',
         );
     }
 
