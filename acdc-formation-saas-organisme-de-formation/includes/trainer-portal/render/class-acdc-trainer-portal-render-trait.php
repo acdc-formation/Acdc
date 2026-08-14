@@ -979,7 +979,6 @@ trait ACDC_Trainer_Portal_Render_Trait {
     $rows = $wpdb->get_results( $wpdb->prepare(
       "SELECT s.*, f.title AS formation_title, f.duration AS formation_duration,
               c.name AS company_name,
-              ( SELECT COUNT(*) FROM {$this->learner_table} l WHERE l.session_id = s.id ) AS learner_count
        FROM {$this->session_table} s
        LEFT JOIN {$this->formation_table} f ON f.id = s.formation_id
        LEFT JOIN {$this->company_table} c ON c.id = s.company_id
@@ -1085,7 +1084,13 @@ trait ACDC_Trainer_Portal_Render_Trait {
           <?php if ( $period ) : ?><?php echo esc_html( $period ); ?><?php endif; ?>
           <?php if ( ! empty( $row->location ) ) : ?> · <?php echo esc_html( $row->location ); ?><?php endif; ?>
           <?php if ( ! empty( $row->company_name ) ) : ?><br><?php echo esc_html( $row->company_name ); ?><?php endif; ?>
-          <?php if ( (int) $row->learner_count > 0 ) : ?> · <?php echo (int) $row->learner_count; ?> apprenant<?php echo $row->learner_count > 1 ? 's' : ''; ?><?php endif; ?>
+          <?php
+          /* ACDC 3.25.265 — Le formateur voyait « 0 apprenant » sur ses propres
+             séances : le comptage ignorait les conventions, par lesquelles
+             arrivent presque tous les inscrits. */
+          $row_learner_count = count( (array) $this->acdc_session_learners( $row ) );
+          ?>
+          <?php if ( $row_learner_count > 0 ) : ?> · <?php echo (int) $row_learner_count; ?> apprenant<?php echo $row_learner_count > 1 ? 's' : ''; ?><?php endif; ?>
         </span>
       </div>
       <div class="acdc-session-card-actions">

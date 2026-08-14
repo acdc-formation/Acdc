@@ -279,7 +279,6 @@ trait ACDC_Export_CSV_Trait {
 			"SELECT s.*,
 			        f.title AS formation_title,
 			        t.first_name AS trainer_first, t.last_name AS trainer_last,
-			        ( SELECT COUNT(*) FROM {$this->learner_table} l WHERE l.session_id = s.id ) AS nb_apprenants
 			 FROM {$this->session_table} s
 			 LEFT JOIN {$this->formation_table} f ON f.id = s.formation_id
 			 LEFT JOIN {$this->trainer_table} t ON t.id = s.trainer_id
@@ -316,7 +315,11 @@ trait ACDC_Export_CSV_Trait {
 				$lieu,
 				$r->status,
 				$r->max_learners,
-				$r->nb_apprenants,
+				/* ACDC 3.25.265 — Les trois rattachements : direct, groupe, convention.
+				   La sous-requête d'origine ne voyait que le premier et exportait
+				   « 0 apprenant » sur toute séance née d'une convention — dans un
+				   fichier destiné à un financeur. */
+				count( (array) $this->acdc_session_learners( $r ) ),
 				$formateur,
 				$r->notes,
 				$this->acdc_csv_date( $r->created_at, 'd/m/Y H:i' ),

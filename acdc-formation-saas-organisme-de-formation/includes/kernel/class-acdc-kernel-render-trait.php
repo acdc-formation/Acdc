@@ -3782,8 +3782,7 @@ trait ACDC_Kernel_Render_Trait {
     $upcoming_sessions = array();
     if ( ! empty( $this->session_table ) ) {
       $upcoming_sessions = (array) $wpdb->get_results( $wpdb->prepare(
-        "SELECT s.*, f.title AS formation_title, f.duration AS formation_duration,
-                (SELECT COUNT(*) FROM {$this->learner_table} l WHERE l.session_id = s.id) AS learner_count
+        "SELECT s.*, f.title AS formation_title, f.duration AS formation_duration
          FROM {$this->session_table} s
          LEFT JOIN {$this->formation_table} f ON f.id = s.formation_id
          WHERE s.start_date >= %s
@@ -4279,7 +4278,20 @@ trait ACDC_Kernel_Render_Trait {
                 $day   = $sd ? mysql2date( 'j',   $sd ) : '—';
                 $month = $sd ? mysql2date( 'M',   $sd ) : '';
                 $sname = ! empty( $sess->formation_title ) ? (string) $sess->formation_title : ( ! empty( $sess->title ) ? (string) $sess->title : 'Session #' . $sess->id );
-                $lcount = isset( $sess->learner_count ) ? (int) $sess->learner_count : 0;
+                /* ACDC 3.25.265 — CE COMPTEUR AFFICHAIT ZÉRO SUR TOUTES LES
+                   SÉANCES NÉES D'UNE CONVENTION.
+                   Il comptait « les apprenants dont la colonne session_id vaut
+                   cette séance » — UN SEUL des trois rattachements possibles,
+                   et justement pas celui des conventions, qui laissent cette
+                   colonne vide. La fiche de la séance, elle, appelle
+                   acdc_session_learners(), qui réunit le lien direct, les
+                   groupes ET les conventions : elle affichait trois apprenants
+                   quand le tableau de bord en annonçait zéro.
+                   Deux comptages de la même chose, dont l'un réécrit l'autre en
+                   moins bien. On demande au résolveur, comme la fiche. */
+                $lcount = method_exists( $this, 'acdc_session_learners' )
+                  ? count( (array) $this->acdc_session_learners( $sess ) )
+                  : 0;
                 $fmt   = ! empty( $sess->format ) ? ucfirst( (string) $sess->format ) : '';
               ?>
               <div class="acdc-db21-sess">

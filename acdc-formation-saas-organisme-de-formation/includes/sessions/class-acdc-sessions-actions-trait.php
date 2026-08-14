@@ -326,7 +326,14 @@ trait ACDC_Sessions_Actions_Trait {
     $this->verify_nonce_or_die( 'acdc_delete_session_' . $session_id );
 
     global $wpdb;
-    $learner_count = (int) $wpdb->get_var( $wpdb->prepare( "SELECT COUNT(*) FROM {$this->learner_table} WHERE session_id = %d", $session_id ) );
+    /* ACDC 3.25.265 — CE GARDE-FOU LAISSAIT SUPPRIMER DES SÉANCES PEUPLÉES.
+       Il ne comptait que le rattachement direct (apprenant.session_id) et
+       ignorait les groupes comme les CONVENTIONS — c'est-à-dire précisément le
+       chemin par lequel arrivent les apprenants depuis que la convention crée
+       les séances. Une séance suivie par trois personnes se supprimait donc
+       sans un mot, et c'est la pièce à laquelle sont accrochés les émargements. */
+    $session_for_count = $this->get_session( $session_id );
+    $learner_count     = $session_for_count ? count( (array) $this->acdc_session_learners( $session_for_count ) ) : 0;
     if ( $learner_count ) {
       $this->redirect_to_portal( $return_tab, 'Suppression impossible : cette session est liée à des apprenants.', 'error' );
       exit;

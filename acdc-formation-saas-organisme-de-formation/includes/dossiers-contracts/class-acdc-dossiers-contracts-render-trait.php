@@ -2830,7 +2830,9 @@ public function render_admin_registration_contract_page() { $this->render_admin_
                 } elseif ( 'formation' === $entity_type ) {
                   $nb_inscriptions = (int) $wpdb->get_var( $wpdb->prepare( "SELECT COUNT(*) FROM {$this->training_registration_table} WHERE formation_id = %d", $row_id ) );
                 } elseif ( 'session' === $entity_type ) {
-                  $nb_inscriptions = (int) $wpdb->get_var( $wpdb->prepare( "SELECT COUNT(*) FROM {$this->learner_table} WHERE session_id = %d", $row_id ) );
+                  /* ACDC 3.25.265 — Les trois rattachements, pas le seul direct. */
+                  $sess_for_count  = $this->get_session( (int) $row_id );
+                  $nb_inscriptions = $sess_for_count ? count( (array) $this->acdc_session_learners( $sess_for_count ) ) : 0;
                 } else {
                   $nb_inscriptions = 0;
                 }
@@ -3199,7 +3201,8 @@ public function render_admin_registration_contract_page() { $this->render_admin_
         $s = $this->get_session( $sid );
         if ( $s ) {
           $f_s = ! empty( $s->formation_id ) ? $this->get_formation( (int)$s->formation_id ) : null;
-          $nb_l = (int)$wpdb->get_var( $wpdb->prepare( "SELECT COUNT(*) FROM {$this->learner_table} WHERE session_id = %d", $sid ) );
+          /* ACDC 3.25.265 — Les trois rattachements, pas le seul direct. */
+          $nb_l = count( (array) $this->acdc_session_learners( $s ) );
           $sessions_data[] = array( 'session' => $s, 'formation' => $f_s, 'nb_learners' => $nb_l );
         }
       }
