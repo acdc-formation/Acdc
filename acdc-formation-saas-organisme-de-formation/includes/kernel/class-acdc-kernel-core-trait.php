@@ -9791,8 +9791,7 @@ dbDelta( $sql_companies );
   }
   $profile = $this->get_company_profile_options();
   $logo = $this->prepare_pdf_jpeg_image( $this->acdc_resolve_pdf_logo_url(), 160, 58 );
-  $stamp_source = ! empty( $profile['stamp_only_url'] ) ? $profile['stamp_only_url'] : ( ! empty( $profile['stamp_url'] ) ? $profile['stamp_url'] : '' );
-  $stamp = ! empty( $stamp_source ) ? $this->prepare_pdf_jpeg_image( $stamp_source, 180, 65 ) : null;
+  /* Le cachet passe par la charte (acdc_pdf_charte_stamp), plus bas. */
   $navy = '#0C2D52';
   $gold = '#C5A253';
   $gold_soft = '#E8D8B1';
@@ -9856,8 +9855,16 @@ dbDelta( $sql_companies );
   $page[] = array( 'text' => 'Le : ' . date_i18n( 'd/m/Y' ), 'x' => 610, 'y' => 78, 'size' => 9.5, 'font' => 'Helvetica', 'color' => '#475569' );
   $page[] = array( 'text' => 'ACDC-Formation', 'x' => 610, 'y' => 53, 'size' => 10.5, 'font' => 'Helvetica-Bold', 'color' => $navy );
   $page[] = array( 'text' => 'Organisme de formation', 'x' => 610, 'y' => 40, 'size' => 9.5, 'font' => 'Helvetica', 'color' => '#475569' );
-  if ( $stamp ) {
-    $page[] = array( 'type' => 'image', 'image_key' => $stamp['key'], 'image_data' => $stamp['data'], 'image_width' => $stamp['width'], 'image_height' => $stamp['height'], 'display_width' => $stamp['display_width'], 'display_height' => $stamp['display_height'], 'x' => 612, 'y' => 55 );
+  /* ACDC 3.25.264 — LE CACHET RECOUVRAIT LA DATE.
+     Posé en (612, 55), il montait jusqu'à y=120 et passait sur « Fait à : … »
+     et « Le : … », imprimés en 92 et 78 : sur le document livré, le tampon
+     barrait la date d'émission. Il descend sous les mentions, et sa taille
+     vient de la charte comme partout ailleurs. La forme normalisée du
+     certificat n'est pas en cause — un cachet qui masque une mention n'est
+     pas une mise en page, c'est un défaut. */
+  $stamp_line = $this->acdc_pdf_charte_stamp( 612, 8 );
+  if ( $stamp_line ) {
+    $page[] = $stamp_line;
   }
   $pages[] = $page;
   return $pages;
@@ -9909,6 +9916,13 @@ dbDelta( $sql_companies );
   $profile = $this->get_company_profile_options();
   $context['document'] = $document;
   $context['source_label'] = 'Plateforme';
+  /* ACDC 3.25.264 — Les OBJECTIFS de l'action : l'article L6353-1 les exige sur
+     l'attestation, au même titre que sa nature, sa durée et les résultats de
+     l'évaluation. Ils n'étaient nulle part dans ce contexte — le document ne
+     pouvait donc pas les porter. */
+  $context['objectives'] = ( ! empty( $context['formation'] ) && ! empty( $context['formation']->objectives ) )
+    ? (string) $context['formation']->objectives
+    : '';
   /* ACDC 3.25.220 — Le RÉSULTAT décrivait l'état du FICHIER, pas celui des
      acquis : « Complétée » signifiait « un PDF existe », et l'attestation de
      fin de formation ne lisait jamais l'évaluation qu'elle est censée
@@ -10084,113 +10098,185 @@ private function build_absence_certificate_pdf_pages( $registration, $context = 
   }
 
   return array( $page );
-}private function build_end_training_certificate_pdf_pages( $registration, $context = array() ) {
-  $context = is_array( $context ) ? $context : array();
-  if ( empty( $context ) ) {
-    $context = $this->get_end_training_certificate_context( $registration );
-  }
-  $profile = $this->get_company_profile_options();
-  $logo = $this->prepare_pdf_jpeg_image( $this->acdc_resolve_pdf_logo_url(), 180, 54 );
-  $signature_source = ! empty( $profile['signature_url'] ) ? $profile['signature_url'] : ( ! empty( $profile['stamp_url'] ) ? $profile['stamp_url'] : '' );
-  $signature = ! empty( $signature_source ) ? $this->prepare_pdf_jpeg_image( $signature_source, 180, 80 ) : null;
-  $navy = '#0C2D52';
-  $gold = '#C5A253';
-  $ink = '#1f2937';
-  $muted = '#6b7280';
-  $page = array(
-    array( 'type' => 'page_meta', 'width' => 595, 'height' => 842 ),
-    array( 'type' => 'rect', 'x' => 0, 'y' => 0, 'width' => 595, 'height' => 842, 'fill_color' => '#ffffff' ),
-    array( 'type' => 'rect', 'x' => 40, 'y' => 773, 'width' => 515, 'height' => 1.4, 'fill_color' => $gold ),
-  );
-  if ( $logo ) {
-    $page[] = array( 'type' => 'image', 'image_key' => $logo['key'], 'image_data' => $logo['data'], 'image_width' => $logo['width'], 'image_height' => $logo['height'], 'display_width' => $logo['display_width'], 'display_height' => $logo['display_height'], 'x' => 40, 'y' => 782 );
-  } else {
-    $page[] = array( 'text' => 'ACDC-Formation', 'x' => 40, 'y' => 804, 'size' => 16, 'font' => 'Helvetica-Bold', 'color' => $navy );
-    $page[] = array( 'text' => 'Azur - Compétences - Développement - Conseil', 'x' => 40, 'y' => 788, 'size' => 8.5, 'font' => 'Helvetica', 'color' => $gold );
-  }
-  $page[] = array( 'text' => 'Attestation de fin de formation', 'x' => 180, 'y' => 730, 'size' => 16, 'font' => 'Helvetica-Bold', 'color' => '#111827' );
-  $left = 42;
-  $label_x = $left;
-  $dots_x1 = 195;
-  $dots_x2 = 520;
-  $value_x = 210;
-  $y = 680;
-  $gap = 22;
-  $draw_field = function( $label, $value = '' ) use ( &$page, $label_x, $dots_x1, $dots_x2, $value_x, $ink, $muted, &$y, $gap ) {
-    $page[] = array( 'text' => $label, 'x' => $label_x, 'y' => $y, 'size' => 9.4, 'font' => 'Helvetica', 'color' => $ink );
-    $page[] = array( 'type' => 'rect', 'x' => $dots_x1, 'y' => $y - 2, 'width' => ( $dots_x2 - $dots_x1 ), 'height' => 0.5, 'fill_color' => $muted );
-    if ( '' !== trim( (string) $value ) ) {
-      $page[] = array( 'text' => (string) $value, 'x' => $value_x, 'y' => $y + 1, 'size' => 9.2, 'font' => 'Helvetica', 'color' => $ink );
+}
+
+  /**
+   * ACDC 3.25.264 — LE CADRE DU DIPLÔME.
+   *
+   * Le certificat de réalisation portait déjà cette allure — paysage, cadre
+   * navy, filet doré, « Document officiel » — et c'est elle qui a été retenue
+   * comme cible pour l'attestation de fin de formation, jusqu'ici imprimée
+   * comme un formulaire administratif à lignes pointillées : « Nom : …… »,
+   * « Adresse : …… ». Un document qu'on affiche au mur ne se remplit pas au
+   * stylo.
+   *
+   * Le cadre est ici, l'attestation le remplit. Le certificat de réalisation,
+   * lui, garde son propre code : c'est la pièce NORMALISÉE que le financeur
+   * attend, et la faire passer sur un gabarit partagé la déplacerait d'un
+   * point ou deux pour un gain nul. On ne refactorise pas un document dont la
+   * forme est le contrat.
+   *
+   * @param array $args title, subtitle, kicker, reference.
+   * @return array Les éléments de page du cadre, prêts à être complétés.
+   */
+  private function acdc_diploma_frame_elements( $args = array() ) {
+    $navy  = '#0C2D52';
+    $gold  = '#C5A253';
+    $muted = '#6b7280';
+    $paper = '#fffdf8';
+
+    $title     = (string) ( $args['title'] ?? '' );
+    $kicker    = (string) ( $args['kicker'] ?? 'Document officiel' );
+    $subtitle  = (string) ( $args['subtitle'] ?? '' );
+    $ref_label = (string) ( $args['reference_label'] ?? '' );
+    $reference = (string) ( $args['reference'] ?? '' );
+
+    /* Le titre est centré à l'œil : la police Helvetica-Bold de ce moteur PDF
+       n'expose pas ses métriques ici, on approche par la largeur moyenne. */
+    $title_size = 18;
+    $title_x    = max( 60, (int) round( ( 842 - ( strlen( $title ) * $title_size * 0.60 ) ) / 2 ) );
+    $kicker_x   = max( 60, (int) round( ( 842 - ( strlen( $kicker ) * 10 * 0.62 ) ) / 2 ) );
+    $sub_x      = max( 60, (int) round( ( 842 - ( strlen( $subtitle ) * 10 * 0.52 ) ) / 2 ) );
+
+    $elements = array(
+      array( 'type' => 'page_meta', 'width' => 842, 'height' => 595 ),
+      array( 'type' => 'rect', 'x' => 0,  'y' => 0,  'width' => 842, 'height' => 595, 'fill_color' => $paper ),
+      array( 'type' => 'rect', 'x' => 14, 'y' => 14, 'width' => 814, 'height' => 567, 'stroke_color' => $navy, 'line_width' => 14 ),
+      array( 'type' => 'rect', 'x' => 28, 'y' => 28, 'width' => 786, 'height' => 539, 'stroke_color' => $gold, 'line_width' => 2 ),
+      array( 'text' => $kicker, 'x' => $kicker_x, 'y' => 505, 'size' => 10, 'font' => 'Helvetica', 'color' => $gold ),
+      array( 'text' => $title,  'x' => $title_x,  'y' => 478, 'size' => $title_size, 'font' => 'Helvetica-Bold', 'color' => $navy ),
+    );
+    if ( '' !== $subtitle ) {
+      $elements[] = array( 'text' => $subtitle, 'x' => $sub_x, 'y' => 460, 'size' => 10, 'font' => 'Helvetica', 'color' => $muted );
     }
-    $y -= $gap;
-  };
-  $company_name = ! empty( $profile['enterprise'] ) ? (string) $profile['enterprise'] : 'ACDC-Formation';
-  $company_address = trim( implode( ' ', array_filter( array( (string) ( $profile['address'] ?? '' ), (string) ( $profile['zip'] ?? '' ), (string) ( $profile['city'] ?? '' ) ) ) ) );
-  $company_phone = ! empty( $profile['phone'] ) ? (string) $profile['phone'] : '06 78 26 91 10';
-  $learner = $context['learner'];
-  $learner_birth = '';
-  $learner_address = '';
-  if ( $learner ) {
-    $learner_birth = ! empty( $learner->birth_date ) ? $this->format_pdf_date( $learner->birth_date ) : '';
-    $learner_address = trim( implode( ' ', array_filter( array( (string) ( $learner->address ?? '' ), (string) ( $learner->zip ?? '' ), (string) ( $learner->city ?? '' ) ) ) ) );
+    if ( '' !== $ref_label ) {
+      $elements[] = array( 'text' => $ref_label, 'x' => 700, 'y' => 535, 'size' => 10, 'font' => 'Helvetica', 'color' => $muted );
+    }
+    if ( '' !== $reference ) {
+      $elements[] = array( 'text' => $reference, 'x' => 640, 'y' => 522, 'size' => 9, 'font' => 'Helvetica', 'color' => $muted );
+    }
+    return $elements;
   }
-  $page[] = array( 'text' => "Organisme d’accueil :", 'x' => $left, 'y' => $y, 'size' => 11.2, 'font' => 'Helvetica-Bold', 'color' => '#111827' );
-  $y -= 22;
-  $draw_field( 'Nom ou dénomination sociale :', $company_name );
-  $draw_field( 'Adresse :', $company_address );
-  $draw_field( 'Téléphone :', $company_phone );
-  $y -= 10;
-  $page[] = array( 'text' => 'CERTIFIE QUE :', 'x' => $left, 'y' => $y, 'size' => 10, 'font' => 'Helvetica-Bold', 'color' => '#111827' );
-  $y -= 26;
-  $page[] = array( 'text' => "L’apprenant :", 'x' => $left, 'y' => $y, 'size' => 11.2, 'font' => 'Helvetica-Bold', 'color' => '#111827' );
-  $y -= 22;
-  $first_name = $learner ? (string) ( $learner->first_name ?? '' ) : '';
-  $last_name = $learner ? (string) ( ! empty( $learner->usage_last_name ) ? $learner->usage_last_name : ( $learner->last_name ?? '' ) ) : $context['learner_name'];
-  $draw_field( 'Nom :', $last_name );
-  $draw_field( 'Prénom :', $first_name );
-  $draw_field( 'Né(e) le :', $learner_birth );
-  $draw_field( 'Adresse :', $learner_address );
-  $draw_field( 'Numéro de téléphone :', $context['phone'] );
-  $draw_field( 'Courriel :', $context['email'] );
-  $y -= 8;
-  $page[] = array( 'text' => 'A EFFECTUÉ UNE FORMATION :', 'x' => $left, 'y' => $y, 'size' => 9.8, 'font' => 'Helvetica-Bold', 'color' => '#111827' );
-  $y -= 24;
-  $page[] = array( 'text' => 'Formation :', 'x' => $left, 'y' => $y, 'size' => 11.2, 'font' => 'Helvetica-Bold', 'color' => '#111827' );
-  $y -= 22;
-  $draw_field( 'Date de la formation : du', $this->format_pdf_date( $context['start_date'] ) . ' au ' . $this->format_pdf_date( $context['end_date'] ) );
-  $draw_field( 'Soit une durée de :', $context['duration'] );
-  $draw_field( 'Type de formation :', $context['formation_title'] );
-  $y -= 6;
-  $lines = $this->pdf_wrap_text( 'Type d’action de formation conformément à l’art. L6313-1 du code du travail : Action de formation (action concourant au développement des compétences qui entre dans le champ d’application des dispositions relatives à la formation professionnelle).', 92 );
-  foreach ( $lines as $i => $line ) {
-    $page[] = array( 'text' => $line, 'x' => $left, 'y' => $y - ( $i * 11 ), 'size' => 8.8, 'font' => 'Helvetica', 'color' => $ink );
+
+  private function build_end_training_certificate_pdf_pages( $registration, $context = array() ) {
+    $context = is_array( $context ) ? $context : array();
+    if ( empty( $context ) ) {
+      $context = $this->get_end_training_certificate_context( $registration );
+    }
+    $profile = $this->get_company_profile_options();
+    $navy    = '#0C2D52';
+    $gold    = '#C5A253';
+    $muted   = '#6b7280';
+    $ink     = '#1e2a36';
+
+    /* ACDC 3.25.264 — L'ATTESTATION DEVIENT UN DIPLÔME.
+       Elle s'imprimait comme un imprimé à remplir à la main — « Nom : …… »,
+       « Adresse : …… », « Téléphone : …… » — alors que c'est la pièce que
+       l'apprenant garde, montre, et parfois affiche. Elle reprend donc le
+       langage visuel du certificat de réalisation : paysage, cadre navy,
+       filet doré.
+       Ce qui change, c'est l'ALLURE. Les mentions imposées par l'article
+       L6353-1 restent toutes : la nature et la durée de l'action, ses
+       objectifs, et les résultats de l'évaluation des acquis. Un diplôme qui
+       les perdrait ne serait plus une attestation de fin de formation.
+       Ce qui disparaît, en revanche : l'adresse postale, le téléphone et le
+       courriel de l'apprenant. Un document destiné à être montré n'a pas à
+       porter les coordonnées personnelles de celui qui le montre — et la loi
+       ne les demande pas. */
+    $page = $this->acdc_diploma_frame_elements( array(
+      'title'           => 'ATTESTATION DE FIN DE FORMATION',
+      'kicker'          => 'Document officiel',
+      'subtitle'        => 'Article L6353-1 du code du travail',
+      'reference_label' => 'Attestation',
+      'reference'       => 'Référence : AF / ' . (int) $registration->id . ' / ' . date_i18n( 'Y' ),
+    ) );
+
+    $logo = $this->prepare_pdf_jpeg_image( $this->acdc_resolve_pdf_logo_url(), 160, 58 );
+    if ( $logo ) {
+      $page[] = array( 'type' => 'image', 'image_key' => $logo['key'], 'image_data' => $logo['data'], 'image_width' => $logo['width'], 'image_height' => $logo['height'], 'display_width' => $logo['display_width'], 'display_height' => $logo['display_height'], 'x' => 58, 'y' => 505 );
+    } else {
+      $page[] = array( 'text' => 'ACDC-FORMATION', 'x' => 60, 'y' => 530, 'size' => 14, 'font' => 'Helvetica-Bold', 'color' => $navy );
+    }
+
+    /* ── Le titulaire, en grand : c'est le sujet du document ──────────────── */
+    $learner_name = strtoupper( trim( (string) $context['learner_name'] ) );
+    $name_x = max( 90, (int) round( ( 842 - ( strlen( $learner_name ) * 22 * 0.62 ) ) / 2 ) );
+    $page[] = array( 'text' => 'Décernée à', 'x' => 385, 'y' => 412, 'size' => 11, 'font' => 'Helvetica', 'color' => $ink );
+    $page[] = array( 'text' => $learner_name, 'x' => $name_x, 'y' => 380, 'size' => 22, 'font' => 'Helvetica-Bold', 'color' => $navy );
+    $page[] = array( 'type' => 'rect', 'x' => 195, 'y' => 370, 'width' => 450, 'height' => 0.8, 'fill_color' => '#E8D8B1' );
+
+    $learner_birth = '';
+    if ( ! empty( $context['learner'] ) && ! empty( $context['learner']->birth_date ) ) {
+      $learner_birth = $this->format_pdf_date( $context['learner']->birth_date );
+    }
+    if ( '' !== $learner_birth ) {
+      $page[] = array( 'text' => 'né(e) le ' . $learner_birth, 'x' => 385, 'y' => 356, 'size' => 9.5, 'font' => 'Helvetica', 'color' => $muted );
+    }
+
+    /* ── L'action suivie ──────────────────────────────────────────────────── */
+    $page[] = array( 'text' => 'pour avoir suivi la formation', 'x' => 335, 'y' => 334, 'size' => 11, 'font' => 'Helvetica', 'color' => $ink );
+    $formation_title = (string) $context['formation_title'];
+    $ftitle_x = max( 90, (int) round( ( 842 - ( strlen( $formation_title ) * 14 * 0.58 ) ) / 2 ) );
+    $page[] = array( 'text' => $formation_title, 'x' => $ftitle_x, 'y' => 310, 'size' => 14, 'font' => 'Helvetica-Bold', 'color' => $navy );
+    $page[] = array( 'type' => 'rect', 'x' => 115, 'y' => 300, 'width' => 610, 'height' => 0.8, 'fill_color' => '#E8D8B1' );
+
+    /* ── Les quatre mentions légales, en boîtes ───────────────────────────── */
+    $meta_x = 88;
+    $meta_y = 225;
+    $box_w  = 155;
+    $box_h  = 58;
+    $gap    = 15;
+    $resultat = (string) $context['result_label'];
+    $meta = array(
+      array( 'Dates',    'Du ' . $this->format_pdf_date( $context['start_date'] ) . ' au ' . $this->format_pdf_date( $context['end_date'] ) ),
+      array( 'Durée',    (string) $context['duration'] ),
+      array( 'Modalité', (string) ( $context['format'] ?? '' ) ),
+      array( 'Résultat de l’évaluation', $resultat ),
+    );
+    foreach ( $meta as $idx => $item ) {
+      $x = $meta_x + ( $idx * ( $box_w + $gap ) );
+      $page[] = array( 'type' => 'rect', 'x' => $x, 'y' => $meta_y, 'width' => $box_w, 'height' => $box_h, 'stroke_color' => '#d8dee7', 'line_width' => 1 );
+      $page[] = array( 'type' => 'rect', 'x' => $x, 'y' => $meta_y + $box_h - 3, 'width' => $box_w, 'height' => 3, 'fill_color' => $gold );
+      $page[] = array( 'text' => strtoupper( $item[0] ), 'x' => $x + 12, 'y' => $meta_y + 38, 'size' => 8, 'font' => 'Helvetica', 'color' => $muted );
+      foreach ( $this->pdf_wrap_text( $item[1], 26 ) as $line_index => $line ) {
+        $page[] = array( 'text' => $line, 'x' => $x + 12, 'y' => $meta_y + 20 - ( $line_index * 12 ), 'size' => 10.5, 'font' => 'Helvetica-Bold', 'color' => $navy );
+      }
+    }
+
+    /* ── La nature de l'action et ses objectifs — exigés par L6353-1 ──────── */
+    $objectifs = '';
+    if ( ! empty( $context['objectives'] ) ) {
+      $objectifs = trim( wp_strip_all_tags( (string) $context['objectives'] ) );
+    }
+    $mentions = "Action de formation au sens de l’article L6313-1 du code du travail, concourant au développement des compétences.";
+    if ( '' !== $objectifs ) {
+      $mentions .= ' Objectifs : ' . $objectifs;
+    }
+    $page[] = array( 'type' => 'rect', 'x' => 95, 'y' => 150, 'width' => 652, 'height' => 45, 'stroke_color' => '#d8dee7', 'line_width' => 1 );
+    foreach ( array_slice( $this->pdf_wrap_text( $mentions, 118 ), 0, 4 ) as $i => $line ) {
+      $page[] = array( 'text' => $line, 'x' => 105, 'y' => 180 - ( $i * 10 ), 'size' => 8.5, 'font' => 'Helvetica', 'color' => '#5b6775' );
+    }
+
+    /* ── Pied : cachet, signature, mentions de l'organisme ───────────────── */
+    $page[] = array( 'text' => 'ACDC', 'x' => 75, 'y' => 78, 'size' => 18, 'font' => 'Helvetica-Bold', 'color' => $gold );
+    $page[] = array( 'text' => 'Formation', 'x' => 75, 'y' => 60, 'size' => 16, 'font' => 'Helvetica-Bold', 'color' => $navy );
+    $page[] = array( 'text' => 'Attestation de fin de formation', 'x' => 130, 'y' => 70, 'size' => 9, 'font' => 'Helvetica', 'color' => $muted );
+    $page[] = array( 'text' => 'Pour l’organisme de formation', 'x' => 325, 'y' => 90, 'size' => 9, 'font' => 'Helvetica', 'color' => $muted );
+    $page[] = array( 'type' => 'rect', 'x' => 300, 'y' => 80, 'width' => 180, 'height' => 0.8, 'fill_color' => $navy );
+    $page[] = array( 'text' => (string) $context['signatory_name'] . ' — ' . (string) $context['signatory_role'], 'x' => 300, 'y' => 66, 'size' => 9, 'font' => 'Helvetica', 'color' => $muted );
+    $page[] = array( 'text' => 'Fait à : ' . (string) $context['issuer_city'], 'x' => 610, 'y' => 92, 'size' => 9.5, 'font' => 'Helvetica', 'color' => '#475569' );
+    $page[] = array( 'text' => 'Le : ' . date_i18n( 'd/m/Y' ), 'x' => 610, 'y' => 78, 'size' => 9.5, 'font' => 'Helvetica', 'color' => '#475569' );
+
+    /* Le cachet est posé SOUS les mentions, pas dessus : c'est le défaut
+       constaté sur le certificat, où il recouvrait « Fait à » et la date. */
+    $stamp = $this->acdc_pdf_charte_stamp( 612, 8 );
+    if ( $stamp ) {
+      $page[] = $stamp;
+    }
+
+    return array( $page );
   }
-  $y -= 68;
-  $left_col_x = 42;
-  $right_col_x = 320;
-  $sig_y = $y;
-  $page[] = array( 'text' => 'Signature de l’apprenant', 'x' => $left_col_x, 'y' => $sig_y, 'size' => 10, 'font' => 'Helvetica-Bold', 'color' => $ink );
-  $page[] = array( 'text' => "Signature de la direction de l’organisme de formation :", 'x' => $right_col_x, 'y' => $sig_y, 'size' => 10, 'font' => 'Helvetica-Bold', 'color' => $ink );
-  $sig_y -= 22;
-  $page[] = array( 'text' => 'Signé le', 'x' => $left_col_x, 'y' => $sig_y, 'size' => 9.4, 'font' => 'Helvetica', 'color' => $ink );
-  $page[] = array( 'type' => 'rect', 'x' => $left_col_x + 46, 'y' => $sig_y - 2, 'width' => 65, 'height' => 0.6, 'fill_color' => $muted );
-  $page[] = array( 'text' => 'à', 'x' => $left_col_x + 120, 'y' => $sig_y, 'size' => 9.4, 'font' => 'Helvetica', 'color' => $ink );
-  $page[] = array( 'type' => 'rect', 'x' => $left_col_x + 132, 'y' => $sig_y - 2, 'width' => 65, 'height' => 0.6, 'fill_color' => $muted );
-  $page[] = array( 'text' => 'Signé le', 'x' => $right_col_x, 'y' => $sig_y, 'size' => 9.4, 'font' => 'Helvetica', 'color' => $ink );
-  $page[] = array( 'type' => 'rect', 'x' => $right_col_x + 46, 'y' => $sig_y - 2, 'width' => 65, 'height' => 0.6, 'fill_color' => $muted );
-  $page[] = array( 'text' => 'à', 'x' => $right_col_x + 120, 'y' => $sig_y, 'size' => 9.4, 'font' => 'Helvetica', 'color' => $ink );
-  $page[] = array( 'type' => 'rect', 'x' => $right_col_x + 132, 'y' => $sig_y - 2, 'width' => 65, 'height' => 0.6, 'fill_color' => $muted );
-  if ( $signature ) {
-    /* ACDC 3.25.260 — Deux plafonds indépendants : même règle que partout. */
-    list( $sig_box_w, $sig_box_h ) = $this->acdc_pdf_signature_box( 'signature' );
-    list( $sig_dw, $sig_dh ) = $this->acdc_pdf_scaled_size( $signature['width'], $signature['height'], $sig_box_w, $sig_box_h );
-    $page[] = array( 'type' => 'image', 'image_key' => $signature['key'], 'image_data' => $signature['data'], 'image_width' => $signature['width'], 'image_height' => $signature['height'], 'display_width' => $sig_dw, 'display_height' => $sig_dh, 'x' => $right_col_x, 'y' => $sig_y - 64 );
-  }
-  $page[] = array( 'type' => 'rect', 'x' => 40, 'y' => 48, 'width' => 515, 'height' => 0.6, 'fill_color' => '#d1d5db' );
-  $page[] = array( 'text' => '7 avenue Paul Cézanne - 83310 Cogolin - France - Siret : 405109901 00042 - NDA : 93 83 08347 83', 'x' => 75, 'y' => 34, 'size' => 7.8, 'font' => 'Helvetica', 'color' => '#374151' );
-  $page[] = array( 'text' => 'e-mail : contact@acdc-formation.com - Tél : 06 78 26 91 10 - site web : acdc-formation.com', 'x' => 70, 'y' => 22, 'size' => 7.8, 'font' => 'Helvetica', 'color' => '#374151' );
-  return array( $page );
-}  private function get_allowed_mimes_for_upload_key( $file_key ) {
+  private function get_allowed_mimes_for_upload_key( $file_key ) {
     $image_mimes = array(
       'jpg|jpeg' => 'image/jpeg',
       'png'      => 'image/png',
@@ -12256,8 +12342,16 @@ private function acdc_pdf_asset_is_readable( $url ) {
     $criteria[] = array( 'label' => 'Évaluation diagnostique',  'ok' => $doc( $registration, 'mid_survey_document' ),                  'points' => 5 );
     $criteria[] = array( 'label' => 'Évaluation des acquis',    'ok' => $doc( $registration, 'evaluation_result_document' ),           'points' => 10 );
     $criteria[] = array( 'label' => 'Enquête à chaud',          'ok' => $doc( $registration, 'hot_survey_document' ),                  'points' => 10 );
-    $criteria[] = array( 'label' => 'Attestation de formation', 'ok' => $doc( $registration, 'completion_certificate_document' ),      'points' => 10 );
-    $criteria[] = array( 'label' => 'Certificat de formation',  'ok' => $doc( $registration, 'end_training_certificate_document' ),    'points' => 5 );
+    /* ACDC 3.25.264 — CES DEUX LIGNES ÉTAIENT INVERSÉES.
+       « Attestation de formation » cochait la présence du CERTIFICAT DE
+       RÉALISATION, et « Certificat de formation » celle de l'ATTESTATION —
+       et aucun de ces deux libellés n'est un nom légal. Deux documents
+       différents, deux destinataires différents (le financeur, l'apprenant),
+       deux valeurs de points différentes : le score de complétude était
+       attribué au mauvais document, sur l'écran qu'on regarde tous les jours.
+       Ce sont désormais les noms que la loi leur donne. */
+    $criteria[] = array( 'label' => 'Certificat de réalisation',       'ok' => $doc( $registration, 'completion_certificate_document' ),   'points' => 10 );
+    $criteria[] = array( 'label' => 'Attestation de fin de formation', 'ok' => $doc( $registration, 'end_training_certificate_document' ), 'points' => 5 );
     $criteria[] = array( 'label' => 'Enquête à froid',          'ok' => $doc( $registration, 'cold_survey_document' ),                 'points' => 5 );
 
     $total  = 0;

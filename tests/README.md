@@ -38,6 +38,7 @@ lancent sans WordPress, en quelques secondes.
     php tests/scan-parcours-prospect.php # devis sans prospect, pastilles et filtre divergents
     php tests/scan-accueil-analyse.php # l'analyse du besoin salue toujours le même destinataire
     php tests/scan-images-deformees.php # image plafonnée en largeur ET en hauteur
+    php tests/scan-noms-documents.php # certificat de réalisation et attestation ne s'échangent pas
 
 Le dernier balaie tout le plugin et signale les fonctions qui utilisent `$wpdb`
 sans l'avoir importé — la faute qui a produit l'erreur fatale de la 3.25.236.

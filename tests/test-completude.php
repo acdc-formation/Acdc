@@ -23,8 +23,13 @@ function completude( array $etat ) {
     $criteria[] = array( 'Évaluation diagnostique',  $etat['diagnostique'] ?? false, 5 );
     $criteria[] = array( 'Évaluation des acquis',    $etat['acquis']       ?? false, 10 );
     $criteria[] = array( 'Enquête à chaud',          $etat['chaud']        ?? false, 10 );
-    $criteria[] = array( 'Attestation de formation', $etat['attestation']  ?? false, 10 );
-    $criteria[] = array( 'Certificat de formation',  $etat['certificat']   ?? false, 5 );
+    /* ACDC 3.25.264 — Ces deux lignes portaient des libellés INVERSÉS : la
+       première cochait le certificat de réalisation sous le nom d'attestation,
+       la seconde l'attestation sous le nom de certificat. Deux documents, deux
+       destinataires — le financeur et l'apprenant — et deux poids différents :
+       le score allait au mauvais document. Les noms sont ceux de la loi. */
+    $criteria[] = array( 'Certificat de réalisation',       $etat['certificat_realisation'] ?? false, 10 );
+    $criteria[] = array( 'Attestation de fin de formation', $etat['attestation_fin']        ?? false, 5 );
     $criteria[] = array( 'Enquête à froid',          $etat['froid']        ?? false, 5 );
 
     $total = 0; $earned = 0; $labels = array();
@@ -68,7 +73,7 @@ if ( $sans <= $avec ) { $ko++; printf("ÉCHEC  le positionnement non exigé plom
 /* Un dossier vierge vaut 0, un dossier complet vaut 100. */
 $check('dossier vierge', completude(array())['percent'], 0);
 $tout = array_fill_keys( array('apprenant','formation','convention','convocation','intranet',
-  'emargement','diagnostique','acquis','chaud','attestation','certificat','froid'), true );
+  'emargement','diagnostique','acquis','chaud','certificat_realisation','attestation_fin','froid'), true );
 $check('dossier complet', completude($tout)['percent'], 100);
 
 /* La convocation compte pour de bon. */
