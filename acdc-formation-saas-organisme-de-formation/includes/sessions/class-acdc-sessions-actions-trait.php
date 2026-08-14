@@ -44,6 +44,34 @@ trait ACDC_Sessions_Actions_Trait {
       ? $wpdb->get_row( $wpdb->prepare( "SELECT * FROM {$this->session_table} WHERE id = %d", $session_id ) )
       : null;
 
+    /* ACDC 3.25.268 — LE BROUILLON NE SE LÈVE PLUS PAR INADVERTANCE.
+       Ce formulaire ne transmet pas `is_draft`, et son menu Statut ne propose
+       pas « Brouillon » : ouvrir une séance en brouillon et l'enregistrer, même
+       sans rien changer, la validait donc silencieusement — statut « Planifiée »
+       compris. C'était sans conséquence tant que le brouillon n'était qu'une
+       étagère. Depuis cette version il retient la convocation : le lever d'un
+       enregistrement distrait ferait partir une convocation annonçant un
+       formateur que personne n'a désigné.
+       On applique donc ici la règle déjà écrite en 3.25.190 — un champ absent du
+       formulaire n'est pas un champ vidé — et la validation devient un GESTE :
+       le bouton « Valider la séance ». Il exige un formateur, parce qu'une
+       séance validée est une séance dont on sait qui l'anime. */
+    $acdc_etait_brouillon = $acdc_existing_session
+      && \ACDC\Support\SessionDraftGate::isDraft( $acdc_existing_session );
+    $acdc_veut_valider    = ! empty( $_POST['validate_session'] );
+
+    if ( $acdc_etait_brouillon && $acdc_veut_valider && null === $trainer_id_session ) {
+      $this->acdc_store_form_state( 'session', $_POST );
+      $this->redirect_to_portal(
+        'sessions',
+        'Désignez le formateur avant de valider : la convocation annonce un intervenant, et un apprenant convoqué sans formateur se présente pour rien.',
+        'error',
+        array( 'action' => 'edit', 'item_id' => $session_id )
+      );
+    }
+
+    $acdc_reste_brouillon = $acdc_etait_brouillon && ! $acdc_veut_valider;
+
     $data = array(
       'formation_id' => isset( $_POST['formation_id'] ) && absint( wp_unslash( $_POST['formation_id'] ) ) ? absint( wp_unslash( $_POST['formation_id'] ) ) : null,
       'company_id'  => isset( $_POST['company_id'] ) && absint( wp_unslash( $_POST['company_id'] ) ) ? absint( wp_unslash( $_POST['company_id'] ) ) : null,
@@ -65,9 +93,11 @@ trait ACDC_Sessions_Actions_Trait {
       'end_date'   => isset( $_POST['end_date'] ) ? sanitize_text_field( wp_unslash( $_POST['end_date'] ) ) : null,
       'location'   => isset( $_POST['location'] ) ? sanitize_text_field( wp_unslash( $_POST['location'] ) ) : '',
       'remote_link' => isset( $_POST['remote_link'] ) ? esc_url_raw( wp_unslash( $_POST['remote_link'] ) ) : '',
-      'status'    => isset( $_POST['status'] ) ? sanitize_text_field( wp_unslash( $_POST['status'] ) ) : 'Planifiée',
+      'status'    => $acdc_reste_brouillon
+        ? \ACDC\Support\SessionDraftGate::STATUT_BROUILLON
+        : ( isset( $_POST['status'] ) ? sanitize_text_field( wp_unslash( $_POST['status'] ) ) : 'Planifiée' ),
       'max_learners' => isset( $_POST['max_learners'] ) ? absint( wp_unslash( $_POST['max_learners'] ) ) : 0,
-      'is_draft'  => isset( $_POST['is_draft'] ) ? absint( wp_unslash( $_POST['is_draft'] ) ) : 0,
+      'is_draft'  => isset( $_POST['is_draft'] ) ? absint( wp_unslash( $_POST['is_draft'] ) ) : ( $acdc_reste_brouillon ? 1 : 0 ),
       /* ACDC 3.25.188 — Le planning détaillé n'est pas envoyé par le formulaire de
          modification : l'écraser par NULL détruisait les demi-journées d'une
          séance née d'une proposition. On ne remplace que ce qui est transmis. */
@@ -85,6 +115,11 @@ trait ACDC_Sessions_Actions_Trait {
         $this->redirect_to_portal( 'sessions', 'Erreur lors de la mise à jour. Veuillez réessayer.', 'error', array( 'action' => 'edit', 'item_id' => $session_id ) );
       }
       $message = 'Session mise à jour.';
+      if ( $acdc_etait_brouillon && $acdc_veut_valider ) {
+        $message = 'Séance validée : elle rejoint le calendrier des séances, et la convocation retenue partira d’elle-même.';
+      } elseif ( $acdc_reste_brouillon ) {
+        $message = 'Séance enregistrée, toujours en brouillon. Cliquez « Valider la séance » quand elle est complète.';
+      }
     } else {
       $data['created_at'] = $this->now_mysql();
       $result = $wpdb->insert( $this->session_table, $data );

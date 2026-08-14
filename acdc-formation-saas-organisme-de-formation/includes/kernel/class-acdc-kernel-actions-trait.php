@@ -548,6 +548,32 @@ trait ACDC_Kernel_Actions_Trait {
       $this->redirect_to_portal( 'training_convocations', 'Aucune adresse e-mail sur la fiche apprenant : rien n’a été envoyé.', 'error' );
     }
 
+    /* ACDC 3.25.268 — LA MÊME PORTE, DEPUIS CE BOUTON AUSSI.
+       Une règle qui ne vaut que sur un chemin n'est pas une règle. Le moteur
+       retient la convocation tant que la séance est en brouillon ; ce bouton-ci
+       l'aurait envoyée quand même — et pire qu'ailleurs, car le contexte écarte
+       les brouillons : faute de séance, il retombe sur la date de création du
+       dossier et annonce à l'apprenant une journée qui n'a jamais été
+       planifiée. Un refus qui nomme le geste manquant vaut mieux qu'un envoi
+       qui invente une date. */
+    $acdc_seances_liees = $this->get_training_file_linked_sessions( $registration );
+    $acdc_a_une_validee = false;
+    $acdc_a_un_brouillon = false;
+    foreach ( (array) $acdc_seances_liees as $acdc_seance ) {
+      if ( \ACDC\Support\SessionDraftGate::isDraft( $acdc_seance ) ) {
+        $acdc_a_un_brouillon = true;
+      } elseif ( 'Annulée' !== (string) ( $acdc_seance->status ?? '' ) ) {
+        $acdc_a_une_validee = true;
+      }
+    }
+    if ( $acdc_a_un_brouillon && ! $acdc_a_une_validee ) {
+      $this->redirect_to_portal(
+        'training_convocations',
+        'Convocation retenue : la séance de ce dossier est encore en brouillon. Désignez son formateur et validez-la — la convocation annonce un intervenant, et un apprenant convoqué sans formateur se présente pour rien.',
+        'error'
+      );
+    }
+
     /* ACDC 3.25.252 — Récapitulatif, corps et pièce jointe : composés une seule
        fois, pour les trois chemins d'envoi. Cet e-mail-ci annonçait « Durée » et
        « Format » quand les deux autres annonçaient les horaires et le lieu ;

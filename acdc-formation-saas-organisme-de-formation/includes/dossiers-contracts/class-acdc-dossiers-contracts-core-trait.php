@@ -1301,11 +1301,41 @@ trait ACDC_Dossiers_Contracts_Core_Trait {
               $trainer_id,
               (int) $exists
             ) );
+            /* ACDC 3.25.268 — DÉSIGNER LE FORMATEUR REFERME LA QUESTION.
+               La séance était en brouillon parce qu'on ne savait pas qui
+               l'animait. La réponse vient d'arriver : la retenir plus longtemps
+               n'ajouterait qu'un clic à une application dont David dit déjà
+               qu'elle en demande trop. On ne libère que les séances qui
+               attendaient CE renseignement — jamais un brouillon posé
+               délibérément par un humain sur une séance déjà pourvue. */
+            $wpdb->query( $wpdb->prepare(
+              "UPDATE {$this->session_table}
+                  SET is_draft = 0, status = %s, updated_at = %s
+                WHERE id = %d
+                  AND trainer_id = %d
+                  AND ( COALESCE(is_draft,0) = 1 OR COALESCE(status,'') = %s )",
+              \ACDC\Support\SessionDraftGate::STATUT_PLANIFIEE,
+              $now_s,
+              (int) $exists,
+              $trainer_id,
+              \ACDC\Support\SessionDraftGate::STATUT_BROUILLON
+            ) );
           }
           $created_session_ids[] = (int) $exists;
           continue;
         }
         $session_title = 'Séance J' . ( $idx + 1 ) . ( $formation_title ? ' — ' . $formation_title : '' );
+        /* ACDC 3.25.268 — UNE SÉANCE SANS FORMATEUR NAÎT EN BROUILLON.
+           La convention ne permet pas toujours de désigner l'intervenant : c'est
+           souvent ce qui se décide en dernier. La séance naissait pourtant
+           « Planifiée », complète aux yeux de l'application, et le moteur
+           expédiait la veille à 17 h une convocation annonçant une journée dont
+           le formateur n'existait pas. Le brouillon pose la question — qui
+           anime ? — et retient la seule chose qui ment sans réponse : la
+           convocation. L'extranet apprenant, lui, s'ouvre : l'apprenant est
+           engagé, son espace lui revient, et rien de ce qu'il y trouve ne dépend
+           du formateur. */
+        $porte = \ACDC\Support\SessionDraftGate::forNewSession( $trainer_id );
         $wpdb->insert( $this->session_table, array(
           'formation_id'   => $formation_id,
           'company_id'     => $company_id ?: null,
@@ -1321,14 +1351,14 @@ trait ACDC_Dossiers_Contracts_Core_Trait {
             array( 'start_date' => $sdate, 'start_at' => $sdate . ' ' . $d_am_s, 'end_at' => $sdate . ' ' . $d_am_e, 'half' => 'am' ),
             array( 'start_date' => $sdate, 'start_at' => $sdate . ' ' . $d_pm_s, 'end_at' => $sdate . ' ' . $d_pm_e, 'half' => 'pm' ),
           ) ),
-          'status'         => 'Planifiée',
+          'status'         => $porte['status'],
           'trainer_id'     => $trainer_id ?: null,
           'location'       => $d_location,
           'remote_link'    => $d_remote ? $ct_remote_link : '',
           'session_format' => $d_format,
           'session_type'      => $session_type,
           'attendance_method' => $ct_attendance,
-          'is_draft'       => 0,
+          'is_draft'       => $porte['is_draft'],
           'created_at'     => $now_s,
           'updated_at'     => $now_s,
         ) );

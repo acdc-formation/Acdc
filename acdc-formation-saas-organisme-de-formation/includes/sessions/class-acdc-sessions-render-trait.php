@@ -1045,7 +1045,28 @@ trait ACDC_Sessions_Render_Trait {
           </div>
           <p><label>Lien visio</label><input type="url" name="remote_link" value="<?php echo esc_attr( $session_value( 'remote_link' ) ); ?>"></p>
           <p><label>Notes</label><textarea name="notes" rows="4"><?php echo esc_textarea( $session_value( 'notes' ) ); ?></textarea></p>
-          <p><button type="submit" class="acdc-button acdc-button-primary"><?php echo $session ? 'Modifier' : 'Enregistrer'; ?></button></p>
+          <?php
+          /* ACDC 3.25.268 — LA VALIDATION EST UN GESTE, PAS UN EFFET DE BORD.
+             Une séance née d'une convention sans formateur attend ici qu'on
+             dise qui l'anime. Le bouton n'apparaît que dans ce cas, il valide
+             ET enregistre en un seul clic — désigner le formateur puis valider
+             ne doit pas coûter deux allers-retours — et le moteur refuse la
+             validation tant que le formateur manque. */
+          $acdc_session_brouillon = $session
+            && \ACDC\Support\SessionDraftGate::isDraft( $session );
+          ?>
+          <?php if ( $acdc_session_brouillon ) : ?>
+            <div class="acdc-panel-soft" style="margin:14px 0;padding:12px 14px;border-left:3px solid #C0392B;background:rgba(192,57,43,0.05);">
+              <strong>Séance en brouillon — <?php echo esc_html( \ACDC\Support\SessionDraftGate::reason( $session ) ); ?>.</strong>
+              <p style="margin:6px 0 0;">La convocation des apprenants est retenue tant que cette séance n’est pas validée : elle annonce un intervenant. L’extranet apprenant, lui, est déjà ouvert. Désignez le formateur ci-dessus, puis validez — la convocation partira d’elle-même.</p>
+            </div>
+          <?php endif; ?>
+          <p>
+            <button type="submit" class="acdc-button <?php echo $acdc_session_brouillon ? 'acdc-button-soft' : 'acdc-button-primary'; ?>"><?php echo $session ? 'Modifier' : 'Enregistrer'; ?></button>
+            <?php if ( $acdc_session_brouillon ) : ?>
+              <button type="submit" name="validate_session" value="1" class="acdc-button acdc-button-primary">Valider la séance</button>
+            <?php endif; ?>
+          </p>
         </form>
       </div>
     <?php endif; ?>
@@ -1184,6 +1205,10 @@ trait ACDC_Sessions_Render_Trait {
                 <th>Dates personnalisées</th>
                 <th>Méthode d’émargement</th>
                 <th>Format</th>
+                <?php /* ACDC 3.25.268 — La pastille du menu compte les séances
+                   à compléter : cette colonne dit CE QUI manque, sinon le
+                   chiffre envoie sur un écran qui ne l'explique pas. */ ?>
+                <th>Formateur</th>
                 <th>Statut</th>
                 <th>Actions</th>
               </tr>
@@ -1200,6 +1225,16 @@ trait ACDC_Sessions_Render_Trait {
                 <td><?php echo esc_html( $this->get_session_datetime_label( $entry ) ); ?></td>
                 <td><?php echo esc_html( ! empty( $entry->attendance_method ) ? $entry->attendance_method : '—' ); ?></td>
                 <td><?php echo esc_html( ! empty( $entry->session_format ) ? $entry->session_format : '—' ); ?></td>
+                <td>
+                  <?php
+                  $acdc_pending_trainer = ! empty( $entry->trainer_id ) ? $this->get_trainer( (int) $entry->trainer_id ) : null;
+                  if ( $acdc_pending_trainer ) {
+                    echo esc_html( trim( (string) $acdc_pending_trainer->first_name . ' ' . (string) $acdc_pending_trainer->last_name ) );
+                  } else {
+                    echo '<span style="color:#C0392B;font-weight:600;">À désigner</span>';
+                  }
+                  ?>
+                </td>
                 <td><?php echo esc_html( $this->get_session_status_badge_label( $entry ) ); ?></td>
                 <td class="acdc-actions-cell-icons acdc-sessions-actions-cell">
                   <div class="acdc-sessions-actions-inline">

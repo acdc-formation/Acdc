@@ -1147,6 +1147,16 @@ trait ACDC_Workflow_Engine_Trait {
    * la fenêtre de dates de la convention — sans quoi le dossier d'un client
    * ramasserait les séances d'un autre sur la même formation.
    */
+  /* ACDC 3.25.268 — LE BROUILLON NE DOIT PAS FAIRE DISPARAÎTRE LA SÉANCE.
+     Depuis cette version, une séance née d'une convention sans formateur naît
+     en brouillon. Si ce moteur continuait de les écarter, le parcours perdrait
+     d'un coup ses séances, ses dates, son formateur et ses rappels
+     d'émargement, et afficherait « Rattacher une séance au dossier » alors que
+     les séances sont là — le contraire de ce qu'on cherche. Une porte ne se
+     ferme pas en effaçant ce qu'elle garde.
+     Le moteur VOIT donc les brouillons, planifie tout normalement, et une seule
+     étape est retenue à l'exécution : la convocation, qui est la seule à
+     annoncer un intervenant. C'est écrit dans acdc_wf_handle_convocation(). */
   private function acdc_wf_resolve_sessions( $formation_id, $company_id, $contract ) {
     global $wpdb;
 
@@ -1156,7 +1166,7 @@ trait ACDC_Workflow_Engine_Trait {
     }
 
     $sql = "SELECT * FROM {$this->session_table}
-             WHERE formation_id = %d AND is_draft = 0
+             WHERE formation_id = %d
                AND COALESCE(status,'') NOT IN ('Annulée','Annulee')";
     $values = array( $formation_id );
 
@@ -1212,7 +1222,7 @@ trait ACDC_Workflow_Engine_Trait {
     }
 
     $sql = "SELECT * FROM {$this->session_table}
-             WHERE formation_id = %d AND is_draft = 0
+             WHERE formation_id = %d
                AND COALESCE(status,'') NOT IN ('Annulée','Annulee')";
     $values = array( $formation_id );
     if ( $company_id > 0 ) {
@@ -1877,6 +1887,31 @@ trait ACDC_Workflow_Engine_Trait {
 
     try {
       $result = $this->{$handler}( $step );
+
+      /* ACDC 3.25.268 — TROISIÈME ISSUE : RETENUE.
+         Le moteur ne connaissait que « faite » et « en échec ». Or une étape
+         peut être légitimement empêchée par un état du dossier qui va se
+         résoudre tout seul — une séance encore en brouillon, par exemple. La
+         déclarer en échec obligerait quelqu'un à la rejouer à la main une fois
+         le blocage levé, et une étape rouge dans un journal d'audit se lit
+         comme un incident : deux mensonges pour un état parfaitement normal.
+         L'étape reste donc PENDING, avec son motif écrit. Le prochain passage
+         du moteur la reprend, et elle part d'elle-même quand la condition est
+         remplie. On n'incrémente pas les tentatives : rien n'a été tenté. */
+      if ( ! empty( $result['hold'] ) ) {
+        $wpdb->update(
+          $this->workflow_step_table,
+          array(
+            'status'      => 'pending',
+            'result_note' => isset( $result['note'] ) ? (string) $result['note'] : 'Étape retenue.',
+            'last_error'  => '',
+            'updated_at'  => $now,
+          ),
+          array( 'id' => (int) $step->id )
+        );
+        return;
+      }
+
       $ok     = ! empty( $result['success'] );
       $wpdb->update(
         $this->workflow_step_table,

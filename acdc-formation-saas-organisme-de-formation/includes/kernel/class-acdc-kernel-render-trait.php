@@ -1502,14 +1502,25 @@ trait ACDC_Kernel_Render_Trait {
    */
   private function acdc_nav_badge_html( $tab ) {
     $count = 0;
+    $title = '';
     if ( 'trainers' === $tab && method_exists( $this, 'acdc_trainer_contract_todo_counts' ) ) {
       $counts = $this->acdc_trainer_contract_todo_counts();
       $count  = (int) $counts['total'];
+      $title  = $count . ' contrat(s) formateur à établir ou à faire signer';
+    }
+    /* ACDC 3.25.268 — LA SÉANCE QUI ATTEND SON FORMATEUR.
+       Une convention signée crée ses séances ; quand elle ne désigne personne
+       pour les animer, elles naissent en brouillon et retiennent la convocation
+       des apprenants. Sans ce compteur, cette attente n'existerait que pour qui
+       ouvre déjà le bon écran — or c'est justement ce qu'on oublie. */
+    if ( 'sessions_pending' === $tab && method_exists( $this, 'acdc_pending_sessions_count' ) ) {
+      $count = (int) $this->acdc_pending_sessions_count();
+      $title = $count . ' séance(s) en brouillon : la convocation des apprenants attend leur validation';
     }
     if ( $count < 1 ) {
       return '';
     }
-    return '<span class="acdc-nav-badge" title="' . esc_attr( $count . ' contrat(s) formateur à établir ou à faire signer' ) . '">'
+    return '<span class="acdc-nav-badge" title="' . esc_attr( $title ) . '">'
       . esc_html( $count > 99 ? '99+' : (string) $count )
       . '</span>';
   }

@@ -331,6 +331,24 @@ trait ACDC_Workflow_Handlers_Trait {
     }
 
     $session   = $pieces['session'];
+
+    /* ACDC 3.25.268 — UNE CONVOCATION RETENUE, PAS UNE CONVOCATION EN ÉCHEC.
+       La convocation annonce un lieu, des horaires et un intervenant. Tant que
+       la séance est en brouillon — c'est-à-dire tant que personne n'anime —
+       l'envoyer reviendrait à convoquer des apprenants pour une journée que
+       l'organisme ne sait pas encore tenir.
+       Elle n'échoue pas pour autant : une étape en échec est un dossier à
+       rattraper à la main, et personne ne rattrape ce qu'il n'a pas vu échouer.
+       Elle reste EN ATTENTE, motif écrit, et repart d'elle-même dès que la
+       séance est validée — y compris si l'heure d'envoi est déjà passée. */
+    if ( \ACDC\Support\SessionDraftGate::holdsConvocation( $session ) ) {
+      return array(
+        'hold' => true,
+        'note' => 'Convocation retenue : la séance n°' . (int) $session->id . ' est encore en brouillon ('
+          . \ACDC\Support\SessionDraftGate::reason( $session )
+          . '). Elle partira dès la validation de la séance, sans autre geste.',
+      );
+    }
     $dates     = $this->acdc_wf_resolve_dates( $pieces );
     $formation = $this->acdc_wf_formation_title( $pieces );
 

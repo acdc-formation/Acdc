@@ -27,7 +27,7 @@ trait ACDC_Sessions_Core_Trait {
   private function get_pending_sessions( $search = '' ) {
     global $wpdb;
 
-    $where = "WHERE ( COALESCE(s.is_draft,0) = 1 OR COALESCE(s.status,'') = 'Brouillon' )";
+    $where = 'WHERE ' . $this->acdc_pending_sessions_where();
     if ( '' !== trim( (string) $search ) ) {
       $like = '%' . $wpdb->esc_like( trim( (string) $search ) ) . '%';
       $where .= $wpdb->prepare( " AND ( s.title LIKE %s OR f.title LIKE %s OR e.name LIKE %s OR s.session_type LIKE %s OR s.session_format LIKE %s )", $like, $like, $like, $like, $like );
@@ -41,6 +41,36 @@ trait ACDC_Sessions_Core_Trait {
       ORDER BY COALESCE(s.start_at, CONCAT(s.start_date,' 00:00:00'), s.created_at) DESC, s.id DESC";
 
     return $wpdb->get_results( $sql );
+  }
+
+  /**
+   * ACDC 3.25.268 — Combien de séances attendent d'être validées.
+   *
+   * Le même « où » que la liste, pour que la pastille du menu et l'écran ne
+   * puissent pas se contredire — deux comptages de la même vérité finissent
+   * toujours par diverger.
+   *
+   * @return int
+   */
+  private function acdc_pending_sessions_count() {
+    global $wpdb;
+    return (int) $wpdb->get_var(
+      "SELECT COUNT(*) FROM {$this->session_table} s WHERE " . $this->acdc_pending_sessions_where()
+    );
+  }
+
+  /**
+   * Le « où » unique des séances en attente de validation.
+   *
+   * Une séance annulée n'attend rien : elle sortait pourtant de la liste par
+   * hasard, faute d'y être nommée. Elle est écartée ici, une fois, pour les
+   * deux lectures.
+   *
+   * @return string
+   */
+  private function acdc_pending_sessions_where() {
+    return "( COALESCE(s.is_draft,0) = 1 OR COALESCE(s.status,'') = 'Brouillon' )"
+      . " AND COALESCE(s.status,'') NOT IN ('Annulée','Annulee')";
   }
 
   private function get_validated_sessions( $filters = array() ) {
