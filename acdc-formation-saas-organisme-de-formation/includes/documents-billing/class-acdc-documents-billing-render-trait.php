@@ -1015,6 +1015,69 @@ trait ACDC_Documents_Billing_Render_Trait {
       <div>Adresse livraison</div><div><?php echo esc_html( trim( ( $row['delivery_address'] ?? '' ) . ' ' . ( $row['delivery_postal_code'] ?? '' ) . ' ' . ( $row['delivery_city'] ?? '' ) ) ); ?></div>
       <div>Financeur</div><div><?php echo esc_html( $row['financeur'] ); ?></div>
     </div></div>
+
+    <?php
+    /* ACDC 3.25.258 — À QUI CETTE FACTURE EST-ELLE ADRESSÉE ?
+       L'écran le disait nulle part : on ne pouvait le savoir qu'en ouvrant le
+       document. C'est pourtant l'information qui décide de qui paie. */
+    $billed_to_funder = ( 'funder' === (string) ( $row['billed_to'] ?? 'client' ) );
+    ?>
+    <div class="acdc-panel acdc-profile-section"><h3>Destinataire de la facture</h3><div class="acdc-details-grid">
+      <div>Adressée à</div>
+      <div<?php echo $billed_to_funder ? ' style="color:#C5A253;font-weight:700;"' : ''; ?>>
+        <?php echo esc_html( $billed_to_funder ? 'Financeur — ' . (string) ( $row['addressee_name'] ?? $row['financeur'] ) : 'Client — ' . (string) ( $row['addressee_name'] ?? $row['commanditaire_name'] ) ); ?>
+      </div>
+      <?php if ( $billed_to_funder ) : ?>
+        <div>Bénéficiaire</div><div><?php echo esc_html( (string) ( $row['beneficiary_label'] ?: $row['commanditaire_name'] ) ); ?></div>
+        <div>Accord de prise en charge</div><div><?php echo esc_html( (string) ( $row['pec_reference'] ?: '—' ) ); ?></div>
+        <div>Subrogation de paiement</div><div><?php echo ! empty( $row['pec_subrogation'] ) ? 'Oui — règlement direct par le financeur' : 'Non'; ?></div>
+      <?php endif; ?>
+      <?php if ( ! empty( $row['sibling_invoice_id'] ) ) :
+        $sibling = $this->get_invoice( (int) $row['sibling_invoice_id'] );
+        $sib_url = add_query_arg( array( 'tab' => 'invoices_credit_notes', 'scope' => $scope, 'invoice_action' => 'view', 'invoice_id' => (int) $row['sibling_invoice_id'] ), $base_url );
+      ?>
+        <div>Facture liée</div>
+        <div>
+          <a href="<?php echo esc_url( $sib_url ); ?>"><?php echo esc_html( $sibling ? (string) $sibling->number : '#' . (int) $row['sibling_invoice_id'] ); ?></a>
+          <span style="color:#4b5d76;"> — prise en charge partielle : les deux factures se partagent
+            <?php echo esc_html( number_format( (float) ( $row['pec_total_ht'] ?? 0 ), 2, ',', ' ' ) ); ?> € HT.</span>
+        </div>
+      <?php endif; ?>
+    </div>
+    <?php if ( ! $is_demo ) : ?>
+      <form method="post" action="<?php echo esc_url( admin_url( 'admin-post.php' ) ); ?>" style="margin-top:14px;border-top:1px dashed #dfe5ee;padding-top:14px;">
+        <?php wp_nonce_field( 'acdc_set_invoice_recipient_' . (int) $row['id'] ); ?>
+        <input type="hidden" name="action" value="acdc_set_invoice_recipient">
+        <input type="hidden" name="invoice_id" value="<?php echo esc_attr( (int) $row['id'] ); ?>">
+        <div class="acdc-grid-2cols">
+          <p><label>Adresser cette facture à</label>
+            <select name="billed_to">
+              <option value="client" <?php selected( ! $billed_to_funder ); ?>>Le client</option>
+              <option value="funder" <?php selected( $billed_to_funder ); ?>>Le financeur</option>
+            </select>
+          </p>
+          <p><label>Financeur</label>
+            <select name="funder_id">
+              <option value="0">— Choisir un financeur —</option>
+              <?php foreach ( (array) $this->get_funders() as $f ) : ?>
+                <option value="<?php echo esc_attr( (int) $f->id ); ?>" <?php selected( (int) ( $row['funder_id'] ?? 0 ), (int) $f->id ); ?>><?php echo esc_html( (string) $f->name ); ?></option>
+              <?php endforeach; ?>
+            </select>
+          </p>
+          <p><label>Référence de l’accord de prise en charge</label>
+            <input type="text" name="pec_reference" value="<?php echo esc_attr( (string) ( $row['pec_reference'] ?? '' ) ); ?>" placeholder="Ex : Accord n° 2026-004512"></p>
+          <p style="align-self:end;">
+            <label class="acdc-checkbox-line"><input type="checkbox" name="pec_subrogation" value="1" <?php checked( ! empty( $row['pec_subrogation'] ) ); ?>> Subrogation de paiement</label>
+          </p>
+        </div>
+        <p class="acdc-help">
+          L’adresse du financeur est lue sur sa fiche : la corriger là-bas corrige toutes ses factures.
+          Le montant de la facture n’est pas modifié ici — c’est la convention qui répartit la prise en charge.
+        </p>
+        <p class="acdc-actions-end"><button type="submit" class="acdc-button acdc-button-primary">Enregistrer le destinataire</button></p>
+      </form>
+    <?php endif; ?>
+    </div>
     <div class="acdc-panel acdc-profile-section"><h3>Formation</h3><div class="acdc-details-grid">
       <div>Formation</div><div><strong style="color:#C5A253;"><?php echo esc_html( $row['formation_full'] ); ?></strong></div>
       <div>Durée</div><div><?php echo esc_html( $row['duration'] ); ?></div>
@@ -1072,7 +1135,18 @@ trait ACDC_Documents_Billing_Render_Trait {
     <?php endif; ?>
     <?php
       // ACDC 3.25.116 — modales réelles rendues avec le contexte facture courant.
-      $this->render_invoice_email_modal( (int) $row['id'], $scope, (string) ( $row['apprenant_email'] ?? '' ) );
+      /* ACDC 3.25.258 — Une facture adressée au financeur se propose à
+         l'adresse de son interlocuteur dédié, pas à celle de l'apprenant. Ce
+         n'est qu'une proposition : la modale reste à valider, et l'adresse
+         reste modifiable. */
+      $email_par_defaut = (string) ( $row['apprenant_email'] ?? '' );
+      if ( 'funder' === (string) ( $row['billed_to'] ?? 'client' ) && ! empty( $row['funder_id'] ) ) {
+        $funder_dest = $this->get_funder( (int) $row['funder_id'] );
+        if ( $funder_dest ) {
+          $email_par_defaut = (string) ( $funder_dest->contact_email ?: $funder_dest->email ?: $email_par_defaut );
+        }
+      }
+      $this->render_invoice_email_modal( (int) $row['id'], $scope, $email_par_defaut );
       $this->render_invoice_status_modal( (int) $row['id'], $scope, (string) $row['status'] );
     ?>
     <?php endif; ?>

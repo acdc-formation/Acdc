@@ -465,18 +465,40 @@ trait ACDC_Documents_Billing_Actions_Trait {
       wp_safe_redirect( add_query_arg( array( 'notice' => rawurlencode( 'Une facture existe déjà pour ce devis.' ), 'notice_type' => 'info' ), $redirect ) );
       exit;
     }
-    $invoice_id = $this->convert_quote_to_invoice( $quote_id );
-    if ( ! $invoice_id ) {
-      $quote = $this->get_quote( $quote_id );
-      $scope = $quote ? (string) $quote->scope : 'action';
+    /* ACDC 3.25.258 — La conversion rend désormais UNE OU DEUX factures selon
+       la prise en charge inscrite sur la convention, ou un refus explicite si
+       le montant pris en charge dépasse la prestation. */
+    $created = $this->convert_quote_to_invoice( $quote_id );
+    $quote   = $this->get_quote( $quote_id );
+    $scope   = $quote ? (string) $quote->scope : 'action';
+
+    if ( isset( $created['error'] ) ) {
+      $redirect = $this->portal_page_url( array( 'tab' => 'quotes', 'scope' => $scope, 'quote_action' => 'view', 'quote_id' => $quote_id ) );
+      wp_safe_redirect( add_query_arg( array( 'notice' => rawurlencode( (string) $created['error'] ), 'notice_type' => 'error' ), $redirect ) );
+      exit;
+    }
+    if ( empty( $created ) ) {
       $redirect = $this->portal_page_url( array( 'tab' => 'quotes', 'scope' => $scope, 'quote_action' => 'view', 'quote_id' => $quote_id ) );
       wp_safe_redirect( add_query_arg( array( 'notice' => rawurlencode( 'Impossible de créer la facture.' ), 'notice_type' => 'error' ), $redirect ) );
       exit;
     }
-    $inv   = $this->get_invoice( $invoice_id );
-    $scope = $inv ? (string) $inv->scope : 'action';
+
+    $invoice_id = (int) $created[0];
+    $inv        = $this->get_invoice( $invoice_id );
+    $scope      = $inv ? (string) $inv->scope : $scope;
+    $message    = 'Facture créée depuis le devis.';
+    if ( count( $created ) > 1 ) {
+      $second   = $this->get_invoice( (int) $created[1] );
+      $message  = sprintf(
+        'Prise en charge partielle : deux factures créées — %s au financeur, %s au client (reste à charge calculé).',
+        $inv ? (string) $inv->number : '',
+        $second ? (string) $second->number : ''
+      );
+    } elseif ( $inv && 'funder' === (string) $inv->billed_to ) {
+      $message = 'Facture créée au nom du financeur ' . (string) $inv->financeur . '.';
+    }
     $redirect = $this->portal_page_url( array( 'tab' => 'invoices_credit_notes', 'scope' => $scope, 'invoice_action' => 'view', 'invoice_id' => $invoice_id ) );
-    wp_safe_redirect( add_query_arg( array( 'notice' => rawurlencode( 'Facture créée depuis le devis.' ), 'notice_type' => 'success' ), $redirect ) );
+    wp_safe_redirect( add_query_arg( array( 'notice' => rawurlencode( $message ), 'notice_type' => 'success' ), $redirect ) );
     exit;
   }
 
@@ -539,9 +561,95 @@ trait ACDC_Documents_Billing_Actions_Trait {
       'financeur'               => sanitize_text_field( $input['financeur'] ?? '' ),
       'status'                  => in_array( $input['status'] ?? '', array_keys( $this->get_invoice_status_labels() ), true ) ? $input['status'] : 'emise',
     );
+
+    /* ACDC 3.25.258 — LA FACTURE A LE DERNIER MOT SUR SON DESTINATAIRE.
+       La convention propose, la facture dispose : un accord de prise en charge
+       peut tomber, ou arriver, après la signature. Le choix se fait donc ici
+       aussi. En revanche les COORDONNÉES du financeur ne se retapent pas :
+       elles viennent de sa fiche. Une adresse recopiée à la main est une
+       seconde vérité qui vieillit mal — et une facture d'OPCO envoyée à une
+       adresse périmée n'est jamais payée. */
+    $billed_to = ( isset( $input['billed_to'] ) && 'funder' === (string) $input['billed_to'] ) ? 'funder' : 'client';
+    $funder_id = isset( $input['funder_id'] ) ? absint( $input['funder_id'] ) : 0;
+    if ( 'funder' === $billed_to && ! $funder_id ) {
+      /* Adresser au financeur sans dire lequel n'a pas de sens : on retombe
+         sur le client plutôt que d'émettre une facture sans destinataire. */
+      $billed_to = 'client';
+    }
+    $data['billed_to']         = $billed_to;
+    $data['funder_id']         = $funder_id ?: null;
+    $data['pec_reference']     = sanitize_text_field( $input['pec_reference'] ?? '' );
+    $data['pec_subrogation']   = ! empty( $input['pec_subrogation'] ) ? 1 : 0;
+    $data['beneficiary_label'] = sanitize_text_field( $input['beneficiary_label'] ?? '' );
+
+    if ( 'funder' === $billed_to ) {
+      $funder = $this->get_funder( $funder_id );
+      if ( $funder ) {
+        $data['financeur'] = (string) $funder->name;
+      }
+      if ( '' === trim( (string) $data['beneficiary_label'] ) ) {
+        $data['beneficiary_label'] = (string) ( $data['client_company'] ?: $data['apprenant_name'] );
+      }
+    }
+
     $new_id = $this->save_invoice( $data );
     $redirect = $this->portal_page_url( array( 'tab' => 'invoices_credit_notes', 'scope' => $scope, 'invoice_action' => 'view', 'invoice_id' => $new_id ) );
     wp_safe_redirect( add_query_arg( array( 'notice' => rawurlencode( 'Facture enregistrée.' ), 'notice_type' => 'success' ), $redirect ) );
+    exit;
+  }
+
+  /* ---------------------------------------------------------------
+   * ACDC 3.25.258 — CHANGER LE DESTINATAIRE D'UNE FACTURE
+   *
+   * « C'est la facture qui a le dernier mot. » La convention propose, la
+   * facture dispose : un accord de prise en charge peut tomber, ou arriver,
+   * après la signature.
+   *
+   * Ce gestionnaire n'écrit que les quatre champs du destinataire. Il ne passe
+   * PAS par le formulaire complet de la facture : un formulaire partiel envoyé
+   * à un gestionnaire qui réécrit tout viderait les champs absents — c'est une
+   * perte de données silencieuse, et sur une facture elle se découvre chez le
+   * client.
+   * --------------------------------------------------------------- */
+  public function handle_set_invoice_recipient() {
+    if ( ! current_user_can( 'manage_options' ) ) { wp_die( 'Accès refusé.' ); }
+    $invoice_id = isset( $_POST['invoice_id'] ) ? absint( $_POST['invoice_id'] ) : 0;
+    if ( ! $invoice_id || ! check_admin_referer( 'acdc_set_invoice_recipient_' . $invoice_id ) ) { wp_die( 'Action invalide.' ); }
+
+    $inv = $this->get_invoice( $invoice_id );
+    if ( ! $inv ) { $this->redirect_to_portal( 'invoices_credit_notes', 'Facture introuvable.', 'error' ); }
+
+    $billed_to = ( isset( $_POST['billed_to'] ) && 'funder' === (string) $_POST['billed_to'] ) ? 'funder' : 'client';
+    $funder_id = isset( $_POST['funder_id'] ) ? absint( $_POST['funder_id'] ) : 0;
+    $funder    = $funder_id ? $this->get_funder( $funder_id ) : null;
+
+    /* Adresser au financeur sans dire lequel n'a pas de sens. */
+    if ( 'funder' === $billed_to && ! $funder ) {
+      $redirect = $this->portal_page_url( array( 'tab' => 'invoices_credit_notes', 'scope' => (string) $inv->scope, 'invoice_action' => 'view', 'invoice_id' => $invoice_id ) );
+      wp_safe_redirect( add_query_arg( array( 'notice' => rawurlencode( 'Choisissez le financeur destinataire : une facture sans destinataire ne peut pas être émise.' ), 'notice_type' => 'error' ), $redirect ) );
+      exit;
+    }
+
+    $data = array(
+      'id'              => $invoice_id,
+      'billed_to'       => $billed_to,
+      'funder_id'       => ( 'funder' === $billed_to ) ? $funder_id : null,
+      'pec_reference'   => sanitize_text_field( wp_unslash( $_POST['pec_reference'] ?? '' ) ),
+      'pec_subrogation' => ! empty( $_POST['pec_subrogation'] ) ? 1 : 0,
+    );
+    if ( 'funder' === $billed_to ) {
+      $data['financeur'] = (string) $funder->name;
+      if ( empty( $inv->beneficiary_label ) ) {
+        $data['beneficiary_label'] = (string) ( $inv->client_company ?: $inv->apprenant_name );
+      }
+    }
+    $this->save_invoice( $data );
+
+    $message  = ( 'funder' === $billed_to )
+      ? 'Facture adressée à ' . (string) $funder->name . '.'
+      : 'Facture adressée au client.';
+    $redirect = $this->portal_page_url( array( 'tab' => 'invoices_credit_notes', 'scope' => (string) $inv->scope, 'invoice_action' => 'view', 'invoice_id' => $invoice_id ) );
+    wp_safe_redirect( add_query_arg( array( 'notice' => rawurlencode( $message ), 'notice_type' => 'success' ), $redirect ) );
     exit;
   }
 
@@ -1424,6 +1532,9 @@ trait ACDC_Documents_Billing_Actions_Trait {
     $data = array(
       'title'              => sanitize_text_field( $title ),
       'generate_mode'      => 'devis_signe',
+      /* ACDC 3.25.258 — Le devis d'origine. Sans lui, la facture ne sait pas
+         quelle convention consulter pour connaître son destinataire. */
+      'quote_id'           => $quote_id,
       'commanditaire_type' => ! empty( $quote->client_company ) ? 'Entreprise' : sanitize_text_field( (string) ( $quote->commanditaire_type ?? 'Particulier' ) ),
       'source_prospect_id' => ! empty( $quote->source_prospect_id ) ? (int) $quote->source_prospect_id : null,
       'company_id'         => $company_id > 0 ? $company_id : null,

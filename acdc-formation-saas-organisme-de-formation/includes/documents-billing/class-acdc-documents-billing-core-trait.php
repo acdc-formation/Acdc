@@ -598,8 +598,13 @@ trait ACDC_Documents_Billing_Core_Trait {
         'vat'     => $vat,
         'country' => 'FR',
       ),
+      /* ACDC 3.25.258 — L'acheteur au sens de la facture électronique est
+         celui qui la reçoit et la paie. Quand elle est adressée au financeur,
+         le XML doit nommer le financeur : un Factur-X qui désigne le client
+         alors que le papier désigne l'OPCO, ce sont deux vérités dans un même
+         document, et c'est le XML qui fait foi dans les échanges. */
       'buyer'       => array(
-        'name' => $inv->client_company ?: $inv->apprenant_name,
+        'name' => $this->acdc_invoice_addressee( $inv )['name'],
       ),
       'tax_basis'   => $totals['ht'],
       'tax_total'   => $totals['tva'],
@@ -678,6 +683,55 @@ trait ACDC_Documents_Billing_Core_Trait {
     }
   }
 
+  /**
+   * ACDC 3.25.258 — À QUI CETTE FACTURE EST-ELLE ADRESSÉE ?
+   *
+   * Une seule fonction répond, et tout le monde lui demande : l'écran, le
+   * document, l'e-mail. La facture ne recopie jamais les coordonnées du
+   * financeur — elle le DÉSIGNE, et son adresse est lue sur sa fiche au moment
+   * d'imprimer. Corriger l'adresse d'un OPCO corrige donc toutes ses factures,
+   * au lieu d'en laisser dix figées sur une adresse périmée.
+   *
+   * Un financeur désigné mais introuvable (fiche supprimée) ne fait pas
+   * disparaître le destinataire : on retombe sur le nom conservé dans la
+   * colonne « financeur », puis sur le client. Une facture sans destinataire
+   * n'est pas une facture.
+   */
+  private function acdc_invoice_addressee( $inv ) {
+    $client_name  = (string) ( $inv->client_company ?: $inv->apprenant_name );
+    $client_addr  = trim( (string) $inv->client_address . ( ! empty( $inv->client_address_complement ) ? ' ' . $inv->client_address_complement : '' ) );
+    $client_ville = trim( (string) $inv->client_postal_code . ' ' . (string) $inv->client_city );
+    $vers_client  = array(
+      'billed_to'    => 'client',
+      'name'         => $client_name,
+      'address_full' => $client_addr,
+      'postal_city'  => $client_ville,
+    );
+
+    if ( 'funder' !== (string) ( $inv->billed_to ?? 'client' ) ) {
+      return $vers_client;
+    }
+
+    $funder = ! empty( $inv->funder_id ) ? $this->get_funder( (int) $inv->funder_id ) : null;
+    if ( $funder && ! empty( $funder->name ) ) {
+      return array(
+        'billed_to'    => 'funder',
+        'name'         => (string) $funder->name,
+        'address_full' => trim( (string) ( $funder->address ?? '' ) ),
+        'postal_city'  => trim( (string) ( $funder->postal_code ?? '' ) . ' ' . (string) ( $funder->city ?? '' ) ),
+      );
+    }
+    if ( ! empty( $inv->financeur ) ) {
+      return array(
+        'billed_to'    => 'funder',
+        'name'         => (string) $inv->financeur,
+        'address_full' => '',
+        'postal_city'  => '',
+      );
+    }
+    return $vers_client;
+  }
+
   private function build_invoice_row_from_record( $inv ) {
     if ( ! $inv ) return array();
     $branding  = $this->get_branding_options();
@@ -698,6 +752,7 @@ trait ACDC_Documents_Billing_Core_Trait {
     $tva_amount    = $__totals['tva'];
     $total_ttc     = $__totals['ttc'];
     $status_labels = $this->get_invoice_status_labels();
+    $addressee     = $this->acdc_invoice_addressee( $inv );
     return array(
       'id'                  => (int) $inv->id,
       'scope'               => (string) $inv->scope,
@@ -758,6 +813,18 @@ trait ACDC_Documents_Billing_Core_Trait {
       'status_label'        => $status_labels[ $inv->status ] ?? ucfirst( (string) $inv->status ),
       'status_key'          => $this->get_invoice_status_key( (string) $inv->status ),
       'financeur'           => (string) $inv->financeur,
+      /* ACDC 3.25.258 — Le financement, tel qu'il a été décidé sur la convention. */
+      'billed_to'           => $addressee['billed_to'],
+      'addressee_name'      => $addressee['name'],
+      'addressee_address_full' => $addressee['address_full'],
+      'addressee_postal_city'  => $addressee['postal_city'],
+      'funder_id'           => isset( $inv->funder_id ) ? (int) $inv->funder_id : 0,
+      'pec_reference'       => isset( $inv->pec_reference ) ? (string) $inv->pec_reference : '',
+      'pec_subrogation'     => ! empty( $inv->pec_subrogation ) ? 1 : 0,
+      'pec_total_ht'        => isset( $inv->pec_total_ht ) ? (float) $inv->pec_total_ht : 0.0,
+      'sibling_invoice_id'  => isset( $inv->sibling_invoice_id ) ? (int) $inv->sibling_invoice_id : 0,
+      'beneficiary_label'   => isset( $inv->beneficiary_label ) ? (string) $inv->beneficiary_label : '',
+      'contract_id'         => isset( $inv->contract_id ) ? (int) $inv->contract_id : 0,
       'relance_date'        => $inv->last_relance_at ? mysql2date( 'j F Y H:i', $inv->last_relance_at ) : 'Aucune relance',
       'relance_count'       => (int) $inv->relance_count,
       'paid_at'             => $inv->paid_at ? mysql2date( 'd/m/Y H:i', $inv->paid_at ) : '',
@@ -769,9 +836,70 @@ trait ACDC_Documents_Billing_Core_Trait {
     );
   }
 
+  /**
+   * ACDC 3.25.258 — LA CONVENTION QUI DÉCIDE DU DESTINATAIRE DE LA FACTURE.
+   *
+   * Elle est retrouvée par le devis dont elle est née. Les conventions créées
+   * avant cette version ne portent pas cette référence : on retombe alors sur
+   * le rapprochement par commanditaire et formation, la même paire que celle
+   * qui a servi à la créer. À défaut, on ne devine pas — sans convention, la
+   * facture va au client, ce qui est le cas ordinaire.
+   */
+  private function acdc_find_contract_for_quote( $quote ) {
+    global $wpdb;
+    if ( empty( $quote->id ) ) {
+      return null;
+    }
+    $t   = $this->registration_contract_table;
+    $row = $wpdb->get_row( $wpdb->prepare( "SELECT * FROM {$t} WHERE quote_id = %d ORDER BY id DESC LIMIT 1", (int) $quote->id ) );
+    if ( $row ) {
+      return $row;
+    }
+    if ( ! empty( $quote->company_id ) && ! empty( $quote->formation_id ) ) {
+      return $wpdb->get_row( $wpdb->prepare(
+        "SELECT * FROM {$t} WHERE company_id = %d AND formation_id = %d ORDER BY id DESC LIMIT 1",
+        (int) $quote->company_id,
+        (int) $quote->formation_id
+      ) );
+    }
+    return null;
+  }
+
+  /** Le total HT réellement facturable d'un devis : tarif, frais et lignes. */
+  private function acdc_quote_total_ht( $quote ) {
+    $extra = 0;
+    if ( ! empty( $quote->extra_lines_json ) ) {
+      $decoded = json_decode( (string) $quote->extra_lines_json, true );
+      $extra   = \ACDC\Support\Money::extraLinesTotal( is_array( $decoded ) ? $decoded : array() );
+    }
+    $totals = \ACDC\Support\Money::invoiceTotals(
+      (float) $quote->tarif_ht,
+      (float) ( ! empty( $quote->transport_fees_enabled ) ? $quote->transport_fees_ht : 0 ),
+      (float) ( ! empty( $quote->meal_fees_enabled ) ? $quote->meal_fees_ht : 0 ),
+      (float) $extra,
+      (float) $quote->vat_rate
+    );
+    return (float) $totals['ht'];
+  }
+
+  /**
+   * ACDC 3.25.258 — TRANSFORMER UN DEVIS EN FACTURE, OPCO COMPRIS.
+   *
+   * Trois issues, décidées une seule fois dans ACDC\Support\FundingSplit :
+   * pas de prise en charge → une facture au client ; prise en charge totale →
+   * une facture au financeur, qui nomme le bénéficiaire ; prise en charge
+   * partielle → deux factures liées, la part accordée et le RESTE, calculé.
+   *
+   * Dans le cas partiel, chaque facture porte une ligne unique : additionner
+   * deux fois les frais annexes ferait un total supérieur à la prestation. Le
+   * détail reste sur le devis et sur la convention, et la désignation dit d'où
+   * vient le montant.
+   *
+   * @return array Identifiants des factures créées, dans l'ordre d'émission.
+   */
   private function convert_quote_to_invoice( $quote_id ) {
     $quote = $this->get_quote( $quote_id );
-    if ( ! $quote ) return 0;
+    if ( ! $quote ) return array();
     $billing = $this->get_billing_settings_options();
     $number  = $this->get_invoice_next_number();
     $now_date = wp_date( 'Y-m-d' );
@@ -826,7 +954,115 @@ trait ACDC_Documents_Billing_Core_Trait {
       'status'                 => 'emise',
       'financeur'              => '',
     );
-    return $this->save_invoice( $data );
+
+    /* ── Qui paie, et pour quelle part ─────────────────────────────────── */
+    $contract = $this->acdc_find_contract_for_quote( $quote );
+    $total_ht = $this->acdc_quote_total_ht( $quote );
+    $plan     = $this->acdc_contract_funding_context( $contract, $total_ht );
+
+    $beneficiaire = trim( (string) ( $quote->client_company ?: $quote->apprenant_name ) );
+    $data['contract_id']       = $contract ? (int) $contract->id : null;
+    $data['beneficiary_label'] = $beneficiaire;
+    $data['pec_total_ht']      = (float) $total_ht;
+
+    /* Une prise en charge impossible ne fabrique aucune facture. Le refus
+       remonte à l'écran plutôt que d'émettre un document faux. */
+    if ( empty( $plan['ok'] ) ) {
+      return array( 'error' => \ACDC\Support\FundingSplit::errorMessage( $plan['error'], $plan['total_ht'] ) );
+    }
+
+    /* Cas ordinaire : personne d'autre que le client. La facture est celle
+       d'avant cette version, au détail près. */
+    if ( \ACDC\Support\FundingSplit::CLIENT_SEUL === $plan['case'] ) {
+      $id = $this->save_invoice( $data );
+      return $id ? array( $id ) : array();
+    }
+
+    $funder_row  = $plan['funder_id'] ? $this->get_funder( (int) $plan['funder_id'] ) : null;
+    $funder_name = $funder_row && ! empty( $funder_row->name ) ? (string) $funder_row->name : (string) $plan['funder_label'];
+    $reference   = (string) ( $plan['reference'] ?? '' );
+    $subrogation = ! empty( $plan['subrogation'] ) ? 1 : 0;
+
+    /* Le destinataire est DÉSIGNÉ, jamais recopié. Les colonnes client_*
+       gardent le client ; l'adresse du financeur reste dans sa fiche et n'est
+       lue qu'au moment d'imprimer. Deux bénéfices : basculer d'un destinataire
+       à l'autre ne perd rien, et corriger une adresse d'OPCO sur sa fiche
+       corrige toutes ses factures — plutôt que d'en laisser dix figées sur une
+       adresse périmée. */
+    $vers_financeur = function ( $base ) use ( $funder_name, $reference, $subrogation, $plan, $beneficiaire ) {
+      $base['billed_to']         = 'funder';
+      $base['funder_id']         = $plan['funder_id'] ?: null;
+      $base['financeur']         = $funder_name;
+      $base['pec_reference']     = $reference;
+      $base['pec_subrogation']   = $subrogation;
+      $base['beneficiary_label'] = $beneficiaire;
+      return $base;
+    };
+
+    if ( \ACDC\Support\FundingSplit::FINANCEUR_SEUL === $plan['case'] ) {
+      $id = $this->save_invoice( $vers_financeur( $data ) );
+      return $id ? array( $id ) : array();
+    }
+
+    /* ── Prise en charge partielle : deux factures liées ────────────────── */
+    $part_financeur = (float) $plan['funder_ht'];
+    $reste          = (float) $plan['client_ht'];
+    $intitule       = (string) ( $quote->formation_title ?: 'Prestation de formation' );
+
+    $facture_financeur = $vers_financeur( $data );
+    $facture_financeur['tarif_ht']               = $part_financeur;
+    $facture_financeur['quantity']               = '1,00';
+    $facture_financeur['transport_fees_enabled'] = 0;
+    $facture_financeur['transport_fees_ht']      = 0;
+    $facture_financeur['meal_fees_enabled']      = 0;
+    $facture_financeur['meal_fees_ht']           = 0;
+    $facture_financeur['extra_lines_json']       = '';
+    $facture_financeur['designation']            = sprintf(
+      "%s — part prise en charge par %s%s.\nTotal de la prestation : %s € HT. Reste à la charge du bénéficiaire : %s € HT (facturé séparément).",
+      $intitule,
+      $funder_name,
+      '' !== $reference ? ' (accord ' . $reference . ')' : '',
+      number_format( (float) $plan['total_ht'], 2, ',', ' ' ),
+      number_format( $reste, 2, ',', ' ' )
+    );
+
+    $id_financeur = $this->save_invoice( $facture_financeur );
+    if ( ! $id_financeur ) {
+      return array();
+    }
+
+    $facture_client = $data;
+    $facture_client['billed_to']               = 'client';
+    $facture_client['funder_id']               = $plan['funder_id'] ?: null;
+    $facture_client['financeur']               = $funder_name;
+    $facture_client['pec_reference']           = $reference;
+    $facture_client['pec_subrogation']         = $subrogation;
+    $facture_client['sibling_invoice_id']      = $id_financeur;
+    $facture_client['tarif_ht']                = $reste;
+    $facture_client['quantity']                = '1,00';
+    $facture_client['transport_fees_enabled']  = 0;
+    $facture_client['transport_fees_ht']       = 0;
+    $facture_client['meal_fees_enabled']       = 0;
+    $facture_client['meal_fees_ht']            = 0;
+    $facture_client['extra_lines_json']        = '';
+    $facture_client['number']                  = $this->get_invoice_next_number();
+    $facture_client['designation']             = sprintf(
+      "%s — reste à charge après prise en charge de %s € HT par %s%s.\nTotal de la prestation : %s € HT.",
+      $intitule,
+      number_format( $part_financeur, 2, ',', ' ' ),
+      $funder_name,
+      '' !== $reference ? ' (accord ' . $reference . ')' : '',
+      number_format( (float) $plan['total_ht'], 2, ',', ' ' )
+    );
+
+    $id_client = $this->save_invoice( $facture_client );
+    if ( $id_client ) {
+      /* Le lien va dans les deux sens : depuis n'importe laquelle des deux
+         factures, on retrouve l'autre. */
+      $this->save_invoice( array( 'id' => $id_financeur, 'sibling_invoice_id' => $id_client ) );
+      return array( $id_financeur, $id_client );
+    }
+    return array( $id_financeur );
   }
 
   private function get_documents() {
@@ -1658,6 +1894,28 @@ trait ACDC_Documents_Billing_Core_Trait {
     $date_end_value = $is_credit ? ( $row['credit_note']['due_date'] ?? '' ) : ( $row['due_date'] ?? '' );
     $client_name = ! empty( $row['client_company'] ) ? $row['client_company'] : $row['commanditaire_name'];
     $client_contact = ! empty( $row['client_contact'] ) ? $row['client_contact'] : $row['apprenant'];
+
+    /* ACDC 3.25.258 — QUAND LA FACTURE EST ADRESSÉE AU FINANCEUR.
+       Le pavé du haut porte alors le nom et l'adresse du financeur — c'est lui
+       qui paie et lui qui la reçoit. Mais une facture d'OPCO qui ne nomme pas
+       le bénéficiaire est inexploitable : l'organisme paie POUR quelqu'un, au
+       titre d'un accord. Le bénéficiaire, la référence de prise en charge et
+       la subrogation sont donc écrits, et le pavé s'intitule « Financeur »
+       plutôt que « Client » — un pavé qui ment sur ce qu'il contient est pire
+       qu'un pavé vide. */
+    $billed_to_funder = ( ! $is_credit && 'funder' === (string) ( $row['billed_to'] ?? 'client' ) );
+    $addressee_title  = $billed_to_funder ? 'Financeur' : 'Client';
+    $addressee_name   = ! empty( $row['addressee_name'] ) ? (string) $row['addressee_name'] : $client_name;
+    $addressee_addr   = isset( $row['addressee_address_full'] ) ? (string) $row['addressee_address_full'] : (string) ( $row['client_address_full'] ?? '' );
+    $addressee_city   = isset( $row['addressee_postal_city'] ) ? (string) $row['addressee_postal_city'] : (string) ( $row['client_postal_city'] ?? '' );
+    $beneficiary      = (string) ( $row['beneficiary_label'] ?? '' );
+    if ( $billed_to_funder && '' === $beneficiary ) {
+      $beneficiary = $client_name;
+    }
+    $pec_reference    = (string) ( $row['pec_reference'] ?? '' );
+    if ( $billed_to_funder && '' !== $pec_reference && empty( $row['reference'] ) ) {
+      $row['reference'] = $pec_reference;
+    }
     $designation = $is_credit ? ( $row['credit_note']['designation'] ?? '' ) : ( $row['designation'] ?? '' );
     $formation = ! empty( $row['formation_full'] ) ? $row['formation_full'] : $row['formation'];
     $tot_ht = $is_credit ? $this->normalize_price_number( $row['credit_note']['tarif_ht_value'] ?? '0' ) : ( $row['tarif_ht_number'] ?? $this->normalize_price_number( $row['tarif_ht_value'] ?? '0' ) );
@@ -1692,13 +1950,18 @@ trait ACDC_Documents_Billing_Core_Trait {
       <div class="company"><strong>ACDC-Formation</strong><br />7 avenue Paul Cézanne<br />83310 Cogolin - France<br />Siret : 405109901 00042<br />NDA : 93 83 08347 83</div>
     </div>
     <div class="top-grid">
-      <div class="box"><div class="box-title">Client</div><div class="client-lines">Nom / Société : <?php echo esc_html( $client_name ); ?><br />Adresse : <?php echo esc_html( $row['client_address_full'] ?? '' ); ?><br />Code postal / Ville : <?php echo esc_html( $row['client_postal_city'] ?? '' ); ?><br />Contact : <?php echo esc_html( $client_contact ); ?></div></div>
+      <div class="box"><div class="box-title"><?php echo esc_html( $addressee_title ); ?></div><div class="client-lines">Nom / Société : <?php echo esc_html( $addressee_name ); ?><br />Adresse : <?php echo esc_html( $addressee_addr ); ?><br />Code postal / Ville : <?php echo esc_html( $addressee_city ); ?><br /><?php if ( $billed_to_funder ) : ?>Bénéficiaire : <?php echo esc_html( $beneficiary ); ?><?php else : ?>Contact : <?php echo esc_html( $client_contact ); ?><?php endif; ?></div></div>
       <div class="box"><div class="box-title"><?php echo esc_html( $doc_label ); ?></div><div class="quote-lines"><?php echo esc_html( $prefix_label ); ?> : <?php echo esc_html( $number ); ?><br />Date d’émission : <?php echo esc_html( $is_credit ? ( $row['credit_note']['emission_date'] ?? '' ) : ( $row['emission_date'] ?? '' ) ); ?><br /><?php echo esc_html( $date_end_label ); ?> : <?php echo esc_html( $date_end_value ); ?></div></div>
     </div>
     <h1><?php echo esc_html( $doc_label ); ?></h1>
     <div class="details">
       <div class="detail"><strong>Formation :</strong><span><?php echo esc_html( $formation ); ?></span></div>
-      <div class="detail"><strong>Commanditaire :</strong><span><?php echo esc_html( $client_name ); ?></span></div>
+      <div class="detail"><strong>Commanditaire :</strong><span><?php echo esc_html( $billed_to_funder ? $beneficiary : $client_name ); ?></span></div>
+      <?php if ( $billed_to_funder ) : ?>
+      <div class="detail"><strong>Facturé au financeur :</strong><span><?php echo esc_html( $addressee_name ); ?></span></div>
+      <?php if ( '' !== $pec_reference ) : ?><div class="detail"><strong>Accord de prise en charge :</strong><span><?php echo esc_html( $pec_reference ); ?></span></div><?php endif; ?>
+      <div class="detail"><strong>Subrogation de paiement :</strong><span><?php echo ! empty( $row['pec_subrogation'] ) ? 'Oui — règlement direct par le financeur' : 'Non'; ?></span></div>
+      <?php endif; ?>
       <div class="detail"><strong>Dates de la prestation :</strong><span><?php echo esc_html( trim( ( $row['start_date'] ?? '' ) . ' - ' . ( $row['end_date'] ?? '' ) ) ); ?></span></div>
       <div class="detail"><strong>Durée :</strong><span><?php echo esc_html( $row['duration'] ?? '' ); ?></span></div>
       <div class="detail"><strong>Format :</strong><span><?php echo esc_html( $row['format'] ?? '' ); ?></span></div>

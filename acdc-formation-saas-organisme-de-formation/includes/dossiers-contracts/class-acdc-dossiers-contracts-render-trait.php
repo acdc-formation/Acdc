@@ -1841,6 +1841,41 @@ trait ACDC_Dossiers_Contracts_Render_Trait {
                 style="margin-top:8px;<?php echo ( 'Autre' === $saved_opco ) ? '' : 'display:none;'; ?>"
                 <?php echo $readonly ? ' readonly' : ''; ?>>
               <?php endif; ?>
+
+              <?php
+              /* ACDC 3.25.258 — CE QUI DÉCIDE DU DESTINATAIRE DE LA FACTURE.
+                 Ces trois champs ne sont pas décoratifs : ils commandent la
+                 transformation du devis en facture. Le montant est donc
+                 accompagné, ici même, de la conséquence qu'il produit — un
+                 réglage dont on ne voit pas l'effet finit par être rempli au
+                 hasard. */
+              $sub_on      = ! empty( $contract->funding_subrogation );
+              $pec_ref     = isset( $contract->funding_pec_reference ) ? (string) $contract->funding_pec_reference : '';
+              $pec_amount  = isset( $contract->funding_pec_amount_ht ) ? (string) $contract->funding_pec_amount_ht : '';
+              ?>
+              <div style="margin-top:14px;padding-top:12px;border-top:1px dashed #dfe5ee;">
+                <div class="acdc-contract-label" style="margin-bottom:4px;">Subrogation de paiement</div>
+                <label class="acdc-switch">
+                  <input type="checkbox" name="registration_contract[funding_subrogation]" value="1" <?php checked( $sub_on ); ?><?php echo $readonly ? ' disabled' : ''; ?>>
+                  <span class="acdc-switch-slider"></span>
+                </label>
+                <span class="acdc-help" style="display:block;margin-top:4px;">Le financeur règle directement l’organisme. Sans subrogation, le client paie et se fait rembourser.</span>
+
+                <div class="acdc-contract-label" style="margin:12px 0 4px;">Référence de l’accord de prise en charge</div>
+                <input type="text" name="registration_contract[funding_pec_reference]"
+                  value="<?php echo esc_attr( $pec_ref ); ?>"
+                  placeholder="Ex : Accord n° 2026-004512"<?php echo $readonly ? ' readonly' : ''; ?>>
+                <span class="acdc-help" style="display:block;margin-top:4px;">Reportée sur la facture adressée au financeur.</span>
+
+                <div class="acdc-contract-label" style="margin:12px 0 4px;">Montant pris en charge (€ HT)</div>
+                <input type="text" name="registration_contract[funding_pec_amount_ht]"
+                  value="<?php echo esc_attr( $pec_amount ); ?>"
+                  placeholder="Laisser vide si le client paie tout"<?php echo $readonly ? ' readonly' : ''; ?>>
+                <span class="acdc-help" style="display:block;margin-top:4px;">
+                  Vide ou 0 → une facture au client. Montant égal au total → une facture au financeur.
+                  Montant inférieur au total → deux factures liées, le reste à charge étant <strong>calculé</strong>, jamais saisi.
+                </span>
+              </div>
             </div>
           </div>
         </div>

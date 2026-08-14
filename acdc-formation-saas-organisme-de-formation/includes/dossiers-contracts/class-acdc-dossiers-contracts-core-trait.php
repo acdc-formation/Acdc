@@ -14,6 +14,138 @@ if ( ! defined( 'ABSPATH' ) ) {
 
 trait ACDC_Dossiers_Contracts_Core_Trait {
 
+  /* =====================================================================
+   * ACDC 3.25.258 — LE FINANCEMENT DE LA CONVENTION
+   *
+   * La convention ne retenait qu'un NOM de financeur, choisi dans une liste
+   * qui mêlait le répertoire et quinze valeurs en dur. Un nom ne permet pas
+   * d'adresser une facture : on rattache la fiche, et l'on retient à côté ce
+   * qui décide de la facturation — subrogation, référence d'accord, montant.
+   *
+   * Ces deux fonctions sont le passage obligé. La première lit un formulaire,
+   * la seconde une convention enregistrée ; toutes deux rendent la MÊME
+   * décision, prise au même endroit (ACDC\Support\FundingSplit). C'est ce qui
+   * empêche l'écran de saisie et l'écran de facturation de diverger — la
+   * panne que ce plugin a déjà connue plusieurs fois.
+   * ===================================================================== */
+
+  /** Le total HT d'une prestation : le tarif ET les frais qui s'y ajoutent. */
+  private function acdc_funding_total_ht( $price_ht, $transport_on, $transport_ht, $meal_on, $meal_ht ) {
+    $cents  = \ACDC\Support\FundingSplit::toCents( $price_ht );
+    $cents += ! empty( $transport_on ) ? \ACDC\Support\FundingSplit::toCents( $transport_ht ) : 0;
+    $cents += ! empty( $meal_on ) ? \ACDC\Support\FundingSplit::toCents( $meal_ht ) : 0;
+    return \ACDC\Support\FundingSplit::toEuros( $cents );
+  }
+
+  /**
+   * Retrouve la fiche du répertoire derrière un nom de financeur.
+   *
+   * La liste de la convention propose d'abord les fiches, puis quinze OPCO
+   * nationaux en repli. Un nom repris de ce repli n'a pas de fiche : on rend 0
+   * plutôt que d'inventer un rattachement.
+   */
+  private function acdc_funder_id_from_name( $name ) {
+    $name = trim( (string) $name );
+    if ( '' === $name ) {
+      return 0;
+    }
+    global $wpdb;
+    return (int) $wpdb->get_var( $wpdb->prepare(
+      "SELECT id FROM {$this->funder_table} WHERE name = %s ORDER BY id ASC LIMIT 1",
+      $name
+    ) );
+  }
+
+  /** Le nom du financeur d'une convention : la fiche d'abord, la saisie ensuite. */
+  private function acdc_contract_funder_label( $contract ) {
+    if ( ! $contract ) {
+      return '';
+    }
+    if ( ! empty( $contract->funder_id ) ) {
+      $funder = $this->get_funder( (int) $contract->funder_id );
+      if ( $funder && ! empty( $funder->name ) ) {
+        return (string) $funder->name;
+      }
+    }
+    $name = isset( $contract->public_funding_name ) ? trim( (string) $contract->public_funding_name ) : '';
+    if ( 'Autre' === $name || '' === $name ) {
+      $custom = isset( $contract->public_funding_name_custom ) ? trim( (string) $contract->public_funding_name_custom ) : '';
+      return '' !== $custom ? $custom : $name;
+    }
+    return $name;
+  }
+
+  /**
+   * La répartition telle que le formulaire de convention la décrit.
+   *
+   * @param array $input Le tableau registration_contract[] posté.
+   * @return array La décision de FundingSplit, augmentée de 'funder_id'.
+   */
+  private function acdc_contract_funding_plan( $input ) {
+    $funding_on = isset( $input['public_funding'] ) && 'Oui' === (string) $input['public_funding'];
+    $name       = isset( $input['public_funding_name'] ) ? (string) $input['public_funding_name'] : '';
+    if ( 'Autre' === $name || '' === $name ) {
+      $name = isset( $input['public_funding_name_custom'] ) ? (string) $input['public_funding_name_custom'] : $name;
+    }
+    $funder_id = $funding_on ? $this->acdc_funder_id_from_name( $name ) : 0;
+
+    $total_ht = $this->acdc_funding_total_ht(
+      isset( $input['price_ht'] ) ? $input['price_ht'] : '',
+      ! empty( $input['transport_fees_enabled'] ),
+      isset( $input['transport_fees_amount_ht'] ) ? $input['transport_fees_amount_ht'] : '',
+      ! empty( $input['meal_fees_enabled'] ),
+      isset( $input['meal_fees_amount_ht'] ) ? $input['meal_fees_amount_ht'] : ''
+    );
+
+    /* Un financement public annoncé « Oui » sans fiche du répertoire reste un
+       financement : le nom libre suffit à porter l'accord. Ce qui compte pour
+       la répartition, c'est qu'un financeur soit désigné. */
+    $has_funder = $funding_on && ( $funder_id > 0 || '' !== trim( $name ) );
+
+    $plan = \ACDC\Support\FundingSplit::plan(
+      $total_ht,
+      isset( $input['funding_pec_amount_ht'] ) ? $input['funding_pec_amount_ht'] : '',
+      $has_funder
+    );
+    $plan['funder_id']    = $funder_id;
+    $plan['funder_label'] = trim( $name );
+    return $plan;
+  }
+
+  /**
+   * La même répartition, lue depuis une convention enregistrée.
+   *
+   * @param object $contract La convention.
+   * @param mixed  $total_ht Total HT de référence ; null = celui de la convention.
+   */
+  private function acdc_contract_funding_context( $contract, $total_ht = null ) {
+    if ( ! $contract ) {
+      return \ACDC\Support\FundingSplit::plan( $total_ht, '', false ) + array( 'funder_id' => 0, 'funder_label' => '', 'reference' => '', 'subrogation' => 0 );
+    }
+    if ( null === $total_ht ) {
+      $total_ht = $this->acdc_funding_total_ht(
+        isset( $contract->price_ht ) ? $contract->price_ht : '',
+        ! empty( $contract->transport_fees_enabled ),
+        isset( $contract->transport_fees_amount_ht ) ? $contract->transport_fees_amount_ht : '',
+        ! empty( $contract->meal_fees_enabled ),
+        isset( $contract->meal_fees_amount_ht ) ? $contract->meal_fees_amount_ht : ''
+      );
+    }
+    $label      = $this->acdc_contract_funder_label( $contract );
+    $funding_on = isset( $contract->public_funding ) && 'Oui' === (string) $contract->public_funding;
+    $has_funder = $funding_on && '' !== $label;
+
+    $plan = \ACDC\Support\FundingSplit::plan(
+      $total_ht,
+      isset( $contract->funding_pec_amount_ht ) ? $contract->funding_pec_amount_ht : '',
+      $has_funder
+    );
+    $plan['funder_id']    = ! empty( $contract->funder_id ) ? (int) $contract->funder_id : 0;
+    $plan['funder_label'] = $label;
+    $plan['reference']    = isset( $contract->funding_pec_reference ) ? (string) $contract->funding_pec_reference : '';
+    $plan['subrogation']  = ! empty( $contract->funding_subrogation ) ? 1 : 0;
+    return $plan;
+  }
 
   private function get_contract_params_defaults() {
     /* B8 — Textes par défaut des clauses obligatoires. Ils étaient vides, obligeant à tout
@@ -3142,7 +3274,26 @@ private function build_contract_pdf_pages( $context ) {
   $add_box( $page2, $cursor, "Article 2 - Nature et caractéristiques de l'action de formation", array( $article2_objectifs, $article2_programme, $article2_modalites ) );
   $add_box( $page2, $cursor, 'Article 3 - Engagement de participation', array( $article3 ) );
   $add_box( $page2, $cursor, 'Article 4 - Effectif formé', array( "Nombre d'apprenants : " . $apprenants_count, 'Apprenant(s) : ' . $apprenants_list ), array( 'min_height' => 64 ) );
-  $add_box( $page2, $cursor, 'Article 5 - Dispositions financières', array( $article5_intro, 'Frais pédagogiques : ' . $price_ht . ' €', 'Taux de TVA : ' . $vat_rate . ' %', 'Prix total TTC : ' . $price_ttc . ' €', 'TOTAL GÉNÉRAL : ' . $total_general . ' €', $article5_tail ) );
+  /* ACDC 3.25.258 — LE FINANCEMENT ÉCRIT DANS LA CONVENTION.
+     La convention retenait le nom du financeur sans jamais l'imprimer : le
+     document signé ne disait pas qui payait, ni à quel titre, ni si la
+     subrogation avait été accordée. Or c'est cette convention qui justifie,
+     devant le financeur, la facture qu'on lui adresse ensuite. */
+  $article5_lines = array( $article5_intro, 'Frais pédagogiques : ' . $price_ht . ' €', 'Taux de TVA : ' . $vat_rate . ' %', 'Prix total TTC : ' . $price_ttc . ' €', 'TOTAL GÉNÉRAL : ' . $total_general . ' €' );
+  $funding_ctx    = method_exists( $this, 'acdc_contract_funding_context' ) ? $this->acdc_contract_funding_context( $contract ) : array();
+  if ( ! empty( $funding_ctx['funder_label'] ) ) {
+    $article5_lines[] = 'Financeur : ' . $funding_ctx['funder_label'] . ( ! empty( $funding_ctx['reference'] ) ? ' — accord de prise en charge ' . $funding_ctx['reference'] : '' );
+    if ( ! empty( $funding_ctx['ok'] ) && ! empty( $funding_ctx['funder_ht'] ) ) {
+      $pec_txt = 'Montant pris en charge : ' . number_format( (float) $funding_ctx['funder_ht'], 2, ',', ' ' ) . ' € HT';
+      if ( ! empty( $funding_ctx['client_ht'] ) ) {
+        $pec_txt .= ' — reste à la charge du commanditaire : ' . number_format( (float) $funding_ctx['client_ht'], 2, ',', ' ' ) . ' € HT';
+      }
+      $article5_lines[] = $pec_txt;
+    }
+    $article5_lines[] = 'Subrogation de paiement : ' . ( ! empty( $funding_ctx['subrogation'] ) ? "Oui — l'organisme facture directement le financeur." : "Non — le commanditaire règle l'organisme et se fait rembourser." );
+  }
+  $article5_lines[] = $article5_tail;
+  $add_box( $page2, $cursor, 'Article 5 - Dispositions financières', $article5_lines );
   $add_footer( $page2 );
   $pages[] = $page2;
 

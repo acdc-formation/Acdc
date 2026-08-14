@@ -445,6 +445,25 @@ public function handle_save_registration_contract() {
     exit;
   }
 
+  /* ACDC 3.25.258 — LA PRISE EN CHARGE NE PEUT PAS DÉPASSER LA PRESTATION.
+     C'est la seule saisie de ce lot qui puisse rendre la facturation
+     impossible : un montant supérieur au total produirait un reste à charge
+     négatif, c'est-à-dire un avoir déguisé. On refuse avant d'enregistrer,
+     avec le total en toutes lettres — un refus qui ne dit pas contre quoi il
+     compare est un refus qu'on ne sait pas corriger. */
+  $pec_plan = $this->acdc_contract_funding_plan( $input );
+  if ( ! $pec_plan['ok'] ) {
+    $this->acdc_store_form_state( 'registration_contract', $input, array( 'funding_pec_amount_ht' ) );
+    $message    = \ACDC\Support\FundingSplit::errorMessage( $pec_plan['error'], $pec_plan['total_ht'] );
+    $error_args = array( 'action' => $contract_id ? 'edit' : 'new', 'item_id' => $contract_id );
+    if ( $source_prospect_id ) {
+      $error_args['prospect_id'] = $source_prospect_id;
+    }
+    $target = $is_admin_page ? $this->admin_page_url( 'acdc-of-registration-contract', $this->acdc_append_notice_args( $error_args, $message, 'error' ) ) : $this->portal_page_url( $this->acdc_append_notice_args( array_merge( array( 'tab' => 'registration_contract' ), $error_args ), $message, 'error' ) );
+    wp_safe_redirect( $target );
+    exit;
+  }
+
   $formation = $this->get_formation( $formation_id );
   $formation_title = $formation && ! empty( $formation->title ) ? (string) $formation->title : '';
   $title = $this->get_registration_contract_title( $commanditaire_type, $formation_title, $start_date );
@@ -492,6 +511,11 @@ public function handle_save_registration_contract() {
     'public_funding'             => isset( $input['public_funding'] ) ? sanitize_text_field( $input['public_funding'] ) : '',
     'public_funding_name'        => isset( $input['public_funding_name'] ) ? sanitize_text_field( $input['public_funding_name'] ) : '',
     'public_funding_name_custom' => isset( $input['public_funding_name_custom'] ) ? sanitize_text_field( $input['public_funding_name_custom'] ) : '',
+    /* ACDC 3.25.258 — Le financement, rattaché à la fiche et non à un nom. */
+    'funder_id'             => $pec_plan['funder_id'] ?: null,
+    'funding_subrogation'   => ! empty( $input['funding_subrogation'] ) ? 1 : 0,
+    'funding_pec_reference' => isset( $input['funding_pec_reference'] ) ? sanitize_text_field( $input['funding_pec_reference'] ) : '',
+    'funding_pec_amount_ht' => isset( $input['funding_pec_amount_ht'] ) ? sanitize_text_field( $input['funding_pec_amount_ht'] ) : '',
     // ACDC 3.21.17 — Délai envoi analyses du besoin
     'nad_send_delay_days' => isset( $input['nad_send_delay_days'] ) ? min( 365, absint( $input['nad_send_delay_days'] ) ) : 0,
     'transport_fees_enabled' => ! empty( $input['transport_fees_enabled'] ) ? 1 : 0,

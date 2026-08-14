@@ -2324,6 +2324,37 @@ dbDelta( $sql_companies );
     $this->maybe_add_table_column( $this->registration_contract_table, 'commanditaire_signer_first_name',   "VARCHAR(120) DEFAULT ''" );
     $this->maybe_add_table_column( $this->registration_contract_table, 'public_funding_name',        "VARCHAR(120) DEFAULT ''" );
     $this->maybe_add_table_column( $this->registration_contract_table, 'public_funding_name_custom', "VARCHAR(190) DEFAULT ''" );
+    /* ACDC 3.25.258 — LA CONVENTION PORTE LA DÉCISION DE FINANCEMENT.
+       Jusqu'ici elle ne retenait qu'un NOM de financeur, choisi dans une liste
+       qui mêlait le répertoire et quinze valeurs écrites en dur. Un nom ne
+       permet ni d'adresser une facture, ni de retrouver l'interlocuteur : on
+       rattache donc la fiche elle-même. S'y ajoutent les deux informations qui
+       décident de la facturation — la subrogation de paiement, et le montant
+       accordé avec sa référence d'accord. */
+    $this->maybe_add_table_column( $this->registration_contract_table, 'funder_id',             'BIGINT UNSIGNED DEFAULT NULL' );
+    $this->maybe_add_table_column( $this->registration_contract_table, 'funding_subrogation',   'TINYINT(1) NOT NULL DEFAULT 0' );
+    $this->maybe_add_table_column( $this->registration_contract_table, 'funding_pec_reference', "VARCHAR(120) DEFAULT ''" );
+    $this->maybe_add_table_column( $this->registration_contract_table, 'funding_pec_amount_ht', "VARCHAR(50) DEFAULT ''" );
+    /* Le devis d'origine : sans lui, la facture ne peut pas retrouver la
+       convention qui décide de son destinataire. */
+    $this->maybe_add_table_column( $this->registration_contract_table, 'quote_id',              'BIGINT UNSIGNED DEFAULT NULL' );
+    $this->maybe_add_table_index( $this->registration_contract_table, 'quote_id',  'INDEX quote_id (quote_id)' );
+    $this->maybe_add_table_index( $this->registration_contract_table, 'funder_id', 'INDEX funder_id (funder_id)' );
+
+    /* ACDC 3.25.258 — LA FACTURE DIT À QUI ELLE S'ADRESSE.
+       Elle ne portait qu'un « financeur » en texte libre, jamais renseigné par
+       la conversion. Ces colonnes disent, sans interprétation possible : à qui
+       elle est adressée, pour quelle part, au titre de quel accord, et quelle
+       est la facture jumelle en cas de prise en charge partielle. */
+    $this->maybe_add_table_column( $this->invoice_table, 'funder_id',           'BIGINT UNSIGNED DEFAULT NULL' );
+    $this->maybe_add_table_column( $this->invoice_table, 'billed_to',           "VARCHAR(10) NOT NULL DEFAULT 'client'" );
+    $this->maybe_add_table_column( $this->invoice_table, 'pec_reference',       "VARCHAR(120) DEFAULT ''" );
+    $this->maybe_add_table_column( $this->invoice_table, 'pec_subrogation',     'TINYINT(1) NOT NULL DEFAULT 0' );
+    $this->maybe_add_table_column( $this->invoice_table, 'pec_total_ht',        'DECIMAL(12,2) NOT NULL DEFAULT 0' );
+    $this->maybe_add_table_column( $this->invoice_table, 'sibling_invoice_id',  'BIGINT UNSIGNED DEFAULT NULL' );
+    $this->maybe_add_table_column( $this->invoice_table, 'beneficiary_label',   "VARCHAR(190) DEFAULT ''" );
+    $this->maybe_add_table_column( $this->invoice_table, 'contract_id',         'BIGINT UNSIGNED DEFAULT NULL' );
+    $this->maybe_add_table_index( $this->invoice_table, 'funder_id', 'INDEX funder_id (funder_id)' );
     // ACDC 3.21.17 — Délai envoi analyses du besoin sur les conventions.
     $this->maybe_add_table_column( $this->registration_contract_table, 'nad_send_delay_days', 'SMALLINT UNSIGNED DEFAULT 0' );
     $this->maybe_add_table_column( $this->registration_contract_table, 'seances_dates', 'TEXT NULL' );
