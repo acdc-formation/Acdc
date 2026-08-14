@@ -2711,7 +2711,7 @@ trait ACDC_Kernel_Actions_Trait {
        seule dès qu'elle mordait : un cachet de 1600 × 1200 devenait 255 × 160
        au lieu de 255 × 191, et un cachet rond devient alors un ovale. La charte
        calcule un SEUL rapport de réduction pour les deux dimensions. */
-    $stamp_line = $this->acdc_pdf_charte_stamp( $left, 0, 255, 191 );
+    $stamp_line = $this->acdc_pdf_charte_stamp( $left, 0 );
     if ( $stamp_line ) {
       $stamp_line['y'] = max( 42, $sig_img_y - (float) $stamp_line['display_height'] );
       $p2[] = $stamp_line;
@@ -2721,8 +2721,16 @@ trait ACDC_Kernel_Actions_Trait {
     // Signature manuscrite formateur (droite) — coordonnées calibrées
     $tr_sig_x = 332.57;
     if ( $handwritten_image ) {
-      $hw_dw = min( 200, max( 1, (float) $handwritten_image['display_width'] * 1.2 ) );
-      $hw_dh = min( 100, max( 1, (float) $handwritten_image['display_height'] * 1.2 ) );
+      /* ACDC 3.25.260 — Deux plafonds indépendants, plus un facteur 1,2 :
+         la signature du formateur pouvait sortir déformée comme celle du
+         bénéficiaire sur la convention. La charte décide seule de la taille. */
+      list( $hw_box_w, $hw_box_h ) = $this->acdc_pdf_signature_box( 'signature' );
+      list( $hw_dw, $hw_dh ) = $this->acdc_pdf_scaled_size(
+        $handwritten_image['width'],
+        $handwritten_image['height'],
+        $hw_box_w,
+        $hw_box_h
+      );
       $p2[] = array(
         'type'           => 'image',
         'image_key'      => $handwritten_image['key'],
@@ -4222,7 +4230,12 @@ private function acdc_build_need_pdf_pages( $need, $source_prospect_id = 0, $cli
     return $current_y;
   };
 
-  $draw_header = function( &$page, $title ) use ( $add_text, $add_rect, $navy, $gold, $logo ) {
+  /* ACDC 3.25.260 — Le logo était plafonné en largeur ET en hauteur, chacune
+     de son côté : un logo non carré en serait sorti déformé. */
+  list( $logo_dw, $logo_dh ) = $logo
+    ? $this->acdc_pdf_scaled_size( $logo['width'], $logo['height'], 71, 71 )
+    : array( 71, 71 );
+  $draw_header = function( &$page, $title ) use ( $add_text, $add_rect, $navy, $gold, $logo, $logo_dw, $logo_dh ) {
     if ( $logo ) {
       $page[] = array(
         'type' => 'image',
@@ -4230,8 +4243,8 @@ private function acdc_build_need_pdf_pages( $need, $source_prospect_id = 0, $cli
         'image_data' => $logo['data'],
         'image_width' => $logo['width'],
         'image_height' => $logo['height'],
-        'display_width' => min( 71, $logo['display_width'] ),
-        'display_height' => min( 71, $logo['display_height'] ),
+        'display_width' => $logo_dw,
+        'display_height' => $logo_dh,
         'x' => 35,
         'y' => 767,
       );

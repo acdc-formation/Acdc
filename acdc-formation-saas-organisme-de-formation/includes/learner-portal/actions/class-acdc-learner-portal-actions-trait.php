@@ -457,7 +457,9 @@ trait ACDC_Learner_Portal_Actions_Trait {
         $this->learner_portal_log_event( $account_id, 'admin_sent_reset_email' );
         break;
       case 'send_activation':
-        $this->learner_portal_send_activation_email( $account );
+        /* ACDC 3.25.260 — Renvoi demandé explicitement : il force le verrou
+           anti-doublon, c'est exactement ce qu'on lui demande. */
+        $this->learner_portal_send_activation_email( $account, '', true );
         $message = 'E-mail d’ouverture d’accès envoyé.';
         $this->learner_portal_log_event( $account_id, 'admin_sent_activation_email' );
         break;

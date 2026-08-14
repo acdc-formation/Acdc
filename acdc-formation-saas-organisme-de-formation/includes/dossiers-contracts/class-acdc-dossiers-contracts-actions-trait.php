@@ -1148,8 +1148,10 @@ public function handle_update_registration_contract_document() {
       exit;
     }
 
+    /* ACDC 3.25.260 — « Renvoyer » veut dire renvoyer : le verrou anti-doublon
+       ne s'applique pas à une demande explicite du gestionnaire. */
     $sent = method_exists( $this, 'learner_portal_send_activation_email' )
-      ? $this->learner_portal_send_activation_email( $account )
+      ? $this->learner_portal_send_activation_email( $account, '', true )
       : false;
 
     if ( $sent ) {

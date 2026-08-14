@@ -3323,8 +3323,17 @@ private function build_contract_pdf_pages( $context ) {
   $page4[] = array( 'text' => 'Signature du bénéficiaire', 'x' => $left + 42, 'y' => $sign_top - 14, 'size' => 7.9, 'font' => 'Helvetica', 'color' => '#4b5563' );
   // ACDC 3.21.08 — Signature manuscrite du commanditaire dans la boîte gauche
   if ( $handwritten_image ) {
-    $hw_dw = min( 180, max( 1, (float) $handwritten_image['display_width'] ) );
-    $hw_dh = min( 60,  max( 1, (float) $handwritten_image['display_height'] ) );
+    /* ACDC 3.25.260 — La signature du bénéficiaire subissait deux plafonds
+       indépendants : 894 × 480 sortait en 180 × 60, écrasée de 38 % en
+       hauteur. Même règle que le cachet — un seul rapport, depuis les
+       dimensions natives. */
+    list( $hw_box_w, $hw_box_h ) = $this->acdc_pdf_signature_box( 'signature' );
+    list( $hw_dw, $hw_dh ) = $this->acdc_pdf_scaled_size(
+      $handwritten_image['width'],
+      $handwritten_image['height'],
+      $hw_box_w,
+      $hw_box_h
+    );
     $page4[] = array(
       'type'           => 'image',
       'image_key'      => $handwritten_image['key'],
@@ -3341,7 +3350,10 @@ private function build_contract_pdf_pages( $context ) {
   /* ACDC 3.25.254 — Même calcul d'échelle que partout : un seul rapport, jamais
      deux plafonds. Le rendu ne change pas ici — la convention était déjà juste —
      mais la règle n'a plus qu'un seul endroit où être vraie. */
-  $stamp_line = $this->acdc_pdf_charte_stamp( 0, 78, 390, 255 );
+  /* ACDC 3.25.260 — Le cachet sortait ici en 340 × 255 pt, soit 12 × 9 cm :
+     le tiers de la page. Les plafonds ne sont plus écrits document par
+     document, ils viennent de la charte. */
+  $stamp_line = $this->acdc_pdf_charte_stamp( 0, 78 );
   if ( $stamp_line ) {
     $stamp_line['x'] = $page_w - $right - (float) $stamp_line['display_width'] - 18;
     $page4[] = $stamp_line;

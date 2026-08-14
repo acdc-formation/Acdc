@@ -567,6 +567,18 @@ trait ACDC_Workflow_Handlers_Trait {
 
     $ok = $this->learner_portal_send_activation_email( $account );
 
+    /* ACDC 3.25.260 — La synchronisation ci-dessus envoie elle-même l'e-mail
+       quand elle vient de créer le compte : cette étape en produisait alors un
+       second, identique, à la même minute. Le doublon est désormais écarté à
+       la porte — et l'étape le DIT, plutôt que d'annoncer un envoi qu'elle n'a
+       pas fait. */
+    if ( 'skipped' === $ok ) {
+      return array(
+        'success' => true,
+        'note'    => 'Ouverture d’extranet déjà envoyée à ' . $learner['name'] . ' <' . $email . '> à l’instant, à l’ouverture du compte : doublon évité.',
+      );
+    }
+
     return $ok
       ? array( 'success' => true, 'note' => 'Ouverture d’extranet envoyée à ' . $learner['name'] . ' <' . $email . '>.' )
       : array( 'success' => false, 'error' => 'L’e-mail d’ouverture à ' . $email . ' n’a pas pu être envoyé.' );

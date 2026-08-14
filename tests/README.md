@@ -34,6 +34,7 @@ lancent sans WordPress, en quelques secondes.
     php tests/scan-secrets-en-page.php # secret (clé API, mot de passe) imprimé dans le HTML
     php tests/scan-reste-a-charge.php # reste à charge saisi au lieu d'être calculé
     php tests/scan-parcours-prospect.php # devis sans prospect, pastilles et filtre divergents
+    php tests/scan-images-deformees.php # image plafonnée en largeur ET en hauteur
 
 Le dernier balaie tout le plugin et signale les fonctions qui utilisent `$wpdb`
 sans l'avoir importé — la faute qui a produit l'erreur fatale de la 3.25.236.

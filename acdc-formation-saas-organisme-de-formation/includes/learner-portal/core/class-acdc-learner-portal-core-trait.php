@@ -257,9 +257,35 @@ trait ACDC_Learner_Portal_Core_Trait {
     return $this->learner_portal_login_url( array( 'view' => 'activate', 'token' => rawurlencode( $token ) ) );
   }
 
-  private function learner_portal_send_activation_email( $account, $activation_url = '' ) {
+  /**
+   * ACDC 3.25.260 — L'APPRENANT RECEVAIT DEUX FOIS LE MÊME E-MAIL.
+   *
+   * Deux envois, à la même minute, avec le même objet « Ouverture de votre
+   * accès extranet apprenant ». La cause est structurelle, pas accidentelle :
+   * la synchronisation des comptes envoie elle-même l'e-mail quand elle CRÉE
+   * un compte, et l'étape « ouverture d'extranet » du workflow commence par
+   * appeler cette synchronisation, puis envoie l'e-mail à son tour. Deux
+   * chemins qui font chacun leur travail, et un apprenant qui reçoit deux
+   * fois la même chose.
+   *
+   * Le verrou est posé à la porte, pas chez les appelants : il y en a quatre,
+   * et le prochain qui s'ajoutera n'aura pas à connaître les trois autres.
+   * Un renvoi explicite — le bouton « Renvoyer l'e-mail » du gestionnaire, ou
+   * l'action d'administration — force le passage : c'est justement ce qu'on
+   * lui demande.
+   *
+   * @param object $account
+   * @param string $activation_url
+   * @param bool   $force Renvoi demandé explicitement par un gestionnaire.
+   * @return string|false 'sent', 'skipped' (doublon évité), ou false.
+   */
+  private function learner_portal_send_activation_email( $account, $activation_url = '', $force = false ) {
     if ( ! $account ) {
       return false;
+    }
+
+    if ( ! $force && $this->learner_portal_activation_email_just_sent( $account ) ) {
+      return 'skipped';
     }
 
     if ( '' === $activation_url ) {
@@ -291,7 +317,47 @@ trait ACDC_Learner_Portal_Core_Trait {
     }
     $body .= '<p>Si vous rencontrez une difficulté, vous pouvez nous contacter à ' . esc_html( $this->learner_portal_contact_email() ) . '.</p>';
 
-    return $this->learner_portal_send_email( $account->email, 'Ouverture de votre accès extranet apprenant', $body, $display_name );
+    $sent = $this->learner_portal_send_email( $account->email, 'Ouverture de votre accès extranet apprenant', $body, $display_name );
+    if ( $sent ) {
+      $this->learner_portal_mark_activation_email_sent( $account );
+    }
+    return $sent ? 'sent' : false;
+  }
+
+  /**
+   * Un e-mail d'ouverture vient-il d'être envoyé pour ce compte ?
+   *
+   * Dix minutes : largement au-delà des quelques secondes qui séparent les
+   * deux chemins d'envoi, et bien en deçà du délai après lequel un renvoi
+   * devient une demande légitime — laquelle passe de toute façon par $force.
+   */
+  private function learner_portal_activation_email_just_sent( $account ) {
+    if ( empty( $account->last_activation_email_at ) ) {
+      return false;
+    }
+    $last = $this->learner_portal_parse_mysql_time( (string) $account->last_activation_email_at );
+    if ( ! $last ) {
+      return false;
+    }
+    return ( current_time( 'timestamp' ) - $last ) < ( 10 * MINUTE_IN_SECONDS );
+  }
+
+  private function learner_portal_mark_activation_email_sent( $account ) {
+    if ( empty( $account->id ) ) {
+      return;
+    }
+    global $wpdb;
+    $now = $this->learner_portal_now_mysql();
+    $wpdb->update(
+      $this->learner_portal_account_table,
+      array( 'last_activation_email_at' => $now ),
+      array( 'id' => (int) $account->id ),
+      array( '%s' ),
+      array( '%d' )
+    );
+    /* L'objet en mémoire porte la même vérité que la base : un second appel
+       dans la même requête doit voir l'envoi qui vient d'avoir lieu. */
+    $account->last_activation_email_at = $now;
   }
 
   private function learner_portal_send_reset_email( $account ) {

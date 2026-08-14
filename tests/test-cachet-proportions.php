@@ -75,5 +75,48 @@ list( $cw, $ch ) = echelle_rapport_unique( 1000, 1000, 255, 191 );
 $t( 'un carré reste carré', $cw === $ch ? 'oui' : 'non', 'oui' );
 $t( 'et tient dans la hauteur disponible', $ch, 191 );
 
-printf( "12 contrôles, %d échec(s)\n", $ko );
+/* ══════════════════════════════════════════════════════════════════════════
+   ACDC 3.25.260 — CE QUE LA CONVENTION LIVRÉE CONTENAIT VRAIMENT.
+
+   Mesuré dans le PDF lui-même, sur les matrices de placement des images :
+   le cachet 1600 × 1200 était dessiné en 340 × 255 points, soit 12 × 9 cm —
+   le tiers d'une page A4. Et la signature du bénéficiaire, 894 × 480, sortait
+   en 180 × 60 : deux plafonds indépendants, 38 % d'écrasement.
+
+   La charte fixe désormais deux boîtes, et une seule pour tous les documents.
+   ══════════════════════════════════════════════════════════════════════════ */
+$boite_cachet    = array( 170, 128 );   // 6 × 4,5 cm
+$boite_signature = array( 150, 55 );    // 5,3 × 1,9 cm
+
+/* Le cachet d'ACDC dans la boîte de la charte. */
+list( $cw, $ch ) = echelle_rapport_unique( 1600, 1200, $boite_cachet[0], $boite_cachet[1] );
+$t( 'le cachet tient dans la boîte de la charte (largeur)', $cw, 170 );
+$t( 'et sa hauteur suit le même rapport',                   $ch, 127.5 );
+$t( 'sans déformation', deformation( 1600, 1200, $cw, $ch ) <= 0.5 ? 'juste' : 'déformé', 'juste' );
+
+/* Il était trois fois plus grand : la surface valait sept fois celle-ci. */
+$t( 'il était bien plus grand qu’aujourd’hui',
+    ( 340 * 255 ) > ( $cw * $ch * 3 ) ? 'oui' : 'non', 'oui' );
+
+/* La signature du bénéficiaire, telle qu'elle sortait et telle qu'elle sort. */
+list( $old_sw, $old_sh ) = echelle_deux_plafonds( 894, 480, 180, 60, 1 );
+$t( 'l’ancienne signature était déformée',
+    deformation( 894, 480, $old_sw, $old_sh ) > 30 ? 'déformée' : 'juste', 'déformée' );
+
+list( $sw2, $sh2 ) = echelle_rapport_unique( 894, 480, $boite_signature[0], $boite_signature[1] );
+$t( 'la signature est bornée par sa hauteur', $sh2, 55 );
+$t( 'et sa largeur suit le rapport',          $sw2, 102.44 );
+$t( 'sans déformation', deformation( 894, 480, $sw2, $sh2 ) <= 0.5 ? 'juste' : 'déformé', 'juste' );
+
+/* Une seule boîte pour toute la charte : le même cachet doit sortir identique
+   sur la convention, le contrat formateur et l'attestation. Trois tailles pour
+   une seule charte, c'était le défaut d'origine. */
+$rendus = array();
+foreach ( array( 'convention', 'contrat formateur', 'attestation' ) as $doc ) {
+    $rendus[ $doc ] = implode( '×', echelle_rapport_unique( 1600, 1200, $boite_cachet[0], $boite_cachet[1] ) );
+}
+$t( 'le cachet est identique sur tous les documents de la charte',
+    count( array_unique( $rendus ) ), 1 );
+
+printf( "%d contrôles, %d échec(s)\n", 22, $ko );
 exit( 0 === $ko ? 0 : 1 );

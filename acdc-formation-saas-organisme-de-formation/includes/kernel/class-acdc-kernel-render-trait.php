@@ -5902,10 +5902,20 @@ trait ACDC_Kernel_Render_Trait {
     $branding = $this->acdc_get_transactional_email_branding();
     $form_title = ! empty( $analysis->title ) ? (string) $analysis->title : 'Analyse du besoin';
     $prenom = ! empty( $analysis->repondant_prenom ) ? (string) $analysis->repondant_prenom : '';
-    // ACDC 3.21.29-hotfix4b — Pour les profils entreprise/indépendant, l'entité est la destinataire, pas la personne.
+    /* ACDC 3.21.29-hotfix4b — Pour les profils entreprise/indépendant, l'entité
+       est la destinataire, pas la personne.
+       ACDC 3.25.260 — La règle était bonne, sa SOURCE ne l'était pas : elle ne
+       lisait que `entreprise.name` du préremplissage, vide dès que l'analyse
+       vient d'un prospect — le cas ordinaire. L'accueil affichait alors
+       « Bonjour Valeriano 👋 », le prénom de l'interlocuteur, au lieu de
+       « Bonjour Skill Conseil 👋 », le commanditaire. On interroge la même
+       cascade que les e-mails : fiche entreprise, prospect, dossier. */
     $greeting_name = $prenom;
     if ( 'entreprise' === $profil_analyse || 'independant' === $profil_analyse ) {
       $entreprise_name = ! empty( $prefill['entreprise.name'] ) ? (string) $prefill['entreprise.name'] : '';
+      if ( '' === $entreprise_name ) {
+        $entreprise_name = $this->nad_analysis_company_name( $analysis );
+      }
       if ( $entreprise_name ) {
         $greeting_name = $entreprise_name;
       }

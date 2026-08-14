@@ -2879,6 +2879,10 @@ dbDelta( $sql_companies );
     $this->maybe_add_table_column( $this->learner_portal_account_table, 'last_access_notice_key', 'VARCHAR(40) NULL' );
     $this->maybe_add_table_column( $this->learner_portal_account_table, 'last_access_notice_at', 'DATETIME NULL' );
     $this->maybe_add_table_column( $this->learner_portal_account_table, 'last_access_notice_expiry_at', 'DATETIME NULL' );
+    /* ACDC 3.25.260 — Date du dernier e-mail d'ouverture d'accès. Sans elle,
+       rien n'empêchait deux chemins d'envoi de faire chacun le sien : les
+       apprenants recevaient deux fois le même message. */
+    $this->maybe_add_table_column( $this->learner_portal_account_table, 'last_activation_email_at', 'DATETIME NULL' );
 
     $this->maybe_add_table_index( $this->learner_portal_account_table, 'status', 'INDEX status (status)' );
     $this->maybe_add_table_index( $this->learner_portal_account_table, 'access_expires_at', 'INDEX access_expires_at (access_expires_at)' );
@@ -6842,13 +6846,9 @@ dbDelta( $sql_companies );
   private function nad_analysis_display_label( $analysis ) {
     $person = trim( (string) ( $analysis->repondant_prenom ?? '' ) . ' ' . (string) ( $analysis->repondant_nom ?? '' ) );
 
-    $company = '';
-    if ( ! empty( $analysis->entreprise_id ) ) {
-      $row = $this->get_company( (int) $analysis->entreprise_id );
-      if ( $row && ! empty( $row->name ) ) {
-        $company = trim( (string) $row->name );
-      }
-    }
+    /* ACDC 3.25.260 — Même cascade que le courrier et le formulaire : l'écran
+       ne peut pas nommer l'entreprise moins bien que l'e-mail. */
+    $company = $this->nad_analysis_company_name( $analysis );
 
     $profil = strtolower( (string) ( $analysis->profil ?? '' ) );
     $role   = ( 'entreprise' === $profil || 'independant' === $profil ) ? 'commanditaire' : 'apprenant';
@@ -6880,8 +6880,28 @@ dbDelta( $sql_companies );
    * @return array{0:string,1:string} Le préfixe d'objet, et la mention
    *                                  « à l'attention de » quand elle a un sens.
    */
-  private function nad_email_identity( $analysis ) {
+  /**
+   * ACDC 3.25.260 — LA RAISON SOCIALE D'UNE ANALYSE, EN UN SEUL ENDROIT.
+   *
+   * Cette cascade existait, écrite au fil de trois versions, mais À
+   * L'INTÉRIEUR de la composition des e-mails. Le formulaire, lui, ne lisait
+   * que `entreprise.name` du préremplissage — vide dès que l'analyse vient
+   * d'un prospect, puisqu'une analyse issue d'un prospect ne porte pas
+   * d'entreprise_id. D'où l'accueil « Bonjour Valeriano 👋 » au lieu de
+   * « Bonjour Skill Conseil 👋 » : l'écran retombait sur le prénom du
+   * répondant faute d'avoir cherché plus loin que la première source.
+   *
+   * Trois sources, dans l'ordre où elles font autorité : la fiche entreprise
+   * rattachée, le prospect d'origine, le dossier d'inscription. La fonction
+   * rend une chaîne vide quand aucune ne répond — pas un nom inventé.
+   */
+  private function nad_analysis_company_name( $analysis ) {
+    if ( ! $analysis ) {
+      return '';
+    }
+    global $wpdb;
     $company = '';
+
     if ( ! empty( $analysis->entreprise_id ) ) {
       $row = $this->get_company( (int) $analysis->entreprise_id );
       if ( $row && ! empty( $row->name ) ) {
@@ -6889,14 +6909,10 @@ dbDelta( $sql_companies );
       }
     }
 
-    /* ACDC 3.25.226 — La recette a infirmé le point 3.25.224 : l'objet des
-       relances ne nommait toujours pas l'entreprise. La cause n'était pas dans
-       la composition du message mais dans sa SOURCE : une analyse issue d'un
-       PROSPECT ne porte pas d'`entreprise_id`, seulement un `source_id`. La
-       fonction rendait donc un préfixe vide et repartait, sans que rien ne le
-       signale. On interroge le prospect avant de renoncer. */
+    /* ACDC 3.25.226 — Une analyse issue d'un PROSPECT ne porte pas
+       d'`entreprise_id`, seulement un `source_id`. On interroge le prospect
+       avant de renoncer. */
     if ( '' === $company && ! empty( $analysis->source_id ) && 'prospect' === (string) ( $analysis->source_type ?? '' ) ) {
-      global $wpdb;
       $prospect = $wpdb->get_row( $wpdb->prepare(
         "SELECT company_name FROM {$this->prospect_table} WHERE id = %d",
         (int) $analysis->source_id
@@ -6908,7 +6924,6 @@ dbDelta( $sql_companies );
 
     /* Dernier recours : le dossier d'inscription qui a déclenché l'analyse. */
     if ( '' === $company && ! empty( $analysis->dossier_id ) ) {
-      global $wpdb;
       $contract = $wpdb->get_row( $wpdb->prepare(
         "SELECT company_id FROM {$this->registration_contract_table} WHERE id = %d",
         (int) $analysis->dossier_id
@@ -6920,6 +6935,12 @@ dbDelta( $sql_companies );
         }
       }
     }
+
+    return $company;
+  }
+
+  private function nad_email_identity( $analysis ) {
+    $company = $this->nad_analysis_company_name( $analysis );
 
     if ( '' === $company ) {
       return array( '', '', '' );
@@ -8022,6 +8043,16 @@ dbDelta( $sql_companies );
       $ent = $this->nad_get_entreprise_data( $entreprise_id );
       foreach ( $ent as $k => $v ) {
         $values[ 'entreprise.' . $k ] = $v;
+      }
+    }
+    /* ACDC 3.25.260 — Une analyse issue d'un prospect n'a pas d'entreprise_id :
+       la raison sociale existe pourtant, sur le prospect ou sur le dossier.
+       Sans ce repli, le formulaire accueillait le commanditaire par le prénom
+       de son interlocuteur. */
+    if ( empty( $values['entreprise.name'] ) ) {
+      $company_fallback = $this->nad_analysis_company_name( $analysis );
+      if ( '' !== $company_fallback ) {
+        $values['entreprise.name'] = $company_fallback;
       }
     }
 
@@ -10108,7 +10139,10 @@ private function build_absence_certificate_pdf_pages( $registration, $context = 
   $page[] = array( 'text' => 'à', 'x' => $right_col_x + 120, 'y' => $sig_y, 'size' => 9.4, 'font' => 'Helvetica', 'color' => $ink );
   $page[] = array( 'type' => 'rect', 'x' => $right_col_x + 132, 'y' => $sig_y - 2, 'width' => 65, 'height' => 0.6, 'fill_color' => $muted );
   if ( $signature ) {
-    $page[] = array( 'type' => 'image', 'image_key' => $signature['key'], 'image_data' => $signature['data'], 'image_width' => $signature['width'], 'image_height' => $signature['height'], 'display_width' => min( 145, $signature['display_width'] ), 'display_height' => min( 60, $signature['display_height'] ), 'x' => $right_col_x, 'y' => $sig_y - 64 );
+    /* ACDC 3.25.260 — Deux plafonds indépendants : même règle que partout. */
+    list( $sig_box_w, $sig_box_h ) = $this->acdc_pdf_signature_box( 'signature' );
+    list( $sig_dw, $sig_dh ) = $this->acdc_pdf_scaled_size( $signature['width'], $signature['height'], $sig_box_w, $sig_box_h );
+    $page[] = array( 'type' => 'image', 'image_key' => $signature['key'], 'image_data' => $signature['data'], 'image_width' => $signature['width'], 'image_height' => $signature['height'], 'display_width' => $sig_dw, 'display_height' => $sig_dh, 'x' => $right_col_x, 'y' => $sig_y - 64 );
   }
   $page[] = array( 'type' => 'rect', 'x' => 40, 'y' => 48, 'width' => 515, 'height' => 0.6, 'fill_color' => '#d1d5db' );
   $page[] = array( 'text' => '7 avenue Paul Cézanne - 83310 Cogolin - France - Siret : 405109901 00042 - NDA : 93 83 08347 83', 'x' => 75, 'y' => 34, 'size' => 7.8, 'font' => 'Helvetica', 'color' => '#374151' );
@@ -11648,7 +11682,56 @@ private function acdc_pdf_asset_is_readable( $url ) {
    *
    * @return array|null Ligne image prête à poser, ou null si aucun cachet.
    */
-  private function acdc_pdf_charte_stamp( $x, $y, $max_w = 255, $max_h = 191 ) {
+  /**
+   * ACDC 3.25.260 — UN SEUL RAPPORT DE RÉDUCTION, POUR TOUTE IMAGE.
+   *
+   * Deux plafonds indépendants déforment : dès que l'un mord et pas l'autre,
+   * l'image est écrasée. La 3.25.254 l'avait corrigé sur le cachet de
+   * l'organisme ; la faute survivait sur les signatures manuscrites des
+   * signataires — la convention livrait une signature de 894 × 480 dessinée en
+   * 180 × 60, soit 38 % d'écrasement en hauteur. Le calcul n'a désormais
+   * qu'un seul endroit où être vrai, et un balayage refuse qu'on le refasse
+   * ailleurs.
+   *
+   * On part TOUJOURS des dimensions natives : mettre à l'échelle une taille
+   * déjà mise à l'échelle cumule deux arrondis.
+   *
+   * @return array{0:float,1:float} Largeur et hauteur d'affichage.
+   */
+  private function acdc_pdf_scaled_size( $width, $height, $max_w, $max_h ) {
+    $width  = (float) $width;
+    $height = (float) $height;
+    if ( $width <= 0 || $height <= 0 ) {
+      return array( max( 1.0, (float) $max_w ), max( 1.0, (float) $max_h ) );
+    }
+    /* Le 1 empêche l'agrandissement : une petite image étirée devient floue. */
+    $ratio = min( (float) $max_w / $width, (float) $max_h / $height, 1 );
+    return array(
+      max( 1.0, round( $width * $ratio, 2 ) ),
+      max( 1.0, round( $height * $ratio, 2 ) ),
+    );
+  }
+
+  /**
+   * ACDC 3.25.260 — LA TAILLE DES IMAGES DE SIGNATURE, UNE SEULE FOIS.
+   *
+   * Le même cachet sortait en 390 × 255 sur la convention, 255 × 191 sur le
+   * contrat formateur et 170 × 128 ailleurs : trois tailles pour une seule
+   * charte. Sur la convention, cela donnait un cachet de 12 × 9 cm — le tiers
+   * de la page.
+   *
+   * @param string $kind 'stamp' (cachet + signature de l'organisme) ou 'signature'.
+   * @return array{0:float,1:float} Plafonds en points PDF.
+   */
+  private function acdc_pdf_signature_box( $kind = 'stamp' ) {
+    /* 170 × 128 pt = 6 × 4,5 cm ; 150 × 55 pt = 5,3 × 1,9 cm. */
+    return ( 'signature' === $kind ) ? array( 150.0, 55.0 ) : array( 170.0, 128.0 );
+  }
+
+  private function acdc_pdf_charte_stamp( $x, $y, $max_w = null, $max_h = null ) {
+    if ( null === $max_w || null === $max_h ) {
+      list( $max_w, $max_h ) = $this->acdc_pdf_signature_box( 'stamp' );
+    }
     $profile = $this->get_company_profile_options();
     $candidates = array_values( array_filter( array(
       (string) ( $profile['stamp_url'] ?? '' ),
@@ -11672,15 +11755,15 @@ private function acdc_pdf_asset_is_readable( $url ) {
       return null;
     }
 
-    $ratio = min( $max_w / (float) $image['width'], $max_h / (float) $image['height'], 1 );
+    list( $display_w, $display_h ) = $this->acdc_pdf_scaled_size( $image['width'], $image['height'], $max_w, $max_h );
     return array(
       'type'           => 'image',
       'image_key'      => $image['key'],
       'image_data'     => $image['data'],
       'image_width'    => $image['width'],
       'image_height'   => $image['height'],
-      'display_width'  => max( 1.0, round( (float) $image['width'] * $ratio, 2 ) ),
-      'display_height' => max( 1.0, round( (float) $image['height'] * $ratio, 2 ) ),
+      'display_width'  => $display_w,
+      'display_height' => $display_h,
       'x'              => $x,
       'y'              => $y,
     );
