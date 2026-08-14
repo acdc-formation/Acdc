@@ -127,6 +127,10 @@ class ACDC_Sig_Public {
                 $error = '❌ Code incorrect. Vérifiez le code reçu par e-mail et réessayez.';
             } elseif ( 'expired' === $_GET['otp_error'] ) {
                 $error = '⏳ Ce code a expiré. Cliquez sur « Renvoyer un code » pour en recevoir un nouveau.';
+            } elseif ( 'securite' === $_GET['otp_error'] ) {
+                $error = '🔄 Cette page avait expiré. Elle vient d’être rechargée : saisissez à nouveau votre code.';
+            } elseif ( 'ratelimited' === $_GET['otp_error'] ) {
+                $error = '⏱ Trop de tentatives. Patientez quelques minutes avant de réessayer.';
             }
         }
 
@@ -321,6 +325,30 @@ class ACDC_Sig_Public {
             </div>
             <div class="sig-body">
                 <div class="sig-info">Bonjour <strong><?php echo esc_html( $request->signer_name ); ?></strong>, veuillez lire attentivement le document ci-dessous avant de le signer.</div>
+
+                <?php
+                /* ACDC 3.25.255 — CET ÉCRAN RECEVAIT DES MESSAGES D'ERREUR ET N'EN
+                   AFFICHAIT AUCUN. Cinq redirections lui passaient un sig_error —
+                   jeton invalide, trop de tentatives, signature vide, identité non
+                   vérifiée — et le signataire revenait sur un formulaire identique,
+                   sans un mot. Il recommençait le même geste, et échouait pareil. */
+                $sig_error_code = isset( $_GET['sig_error'] ) ? sanitize_key( wp_unslash( $_GET['sig_error'] ) ) : '';
+                $sig_error_msg  = '';
+                if ( 'securite' === $sig_error_code ) {
+                    $sig_error_msg = '🔄 Cette page avait expiré. Elle vient d’être rechargée : signez à nouveau, votre document n’a pas été modifié.';
+                } elseif ( 'vide' === $sig_error_code ) {
+                    $sig_error_msg = '✍️ Aucune signature n’a été enregistrée. Tracez votre signature dans le cadre, puis validez.';
+                } elseif ( 'flood' === $sig_error_code ) {
+                    $sig_error_msg = '⏱ Trop de tentatives rapprochées. Patientez quelques minutes avant de réessayer.';
+                } elseif ( 'otp' === $sig_error_code ) {
+                    $sig_error_msg = '🔒 Votre identité n’a pas encore été vérifiée. Saisissez d’abord le code reçu par e-mail.';
+                } elseif ( 'token' === $sig_error_code ) {
+                    $sig_error_msg = '🔗 Ce lien de signature n’est plus valable. Demandez-nous un nouvel envoi.';
+                }
+                ?>
+                <?php if ( '' !== $sig_error_msg ) : ?>
+                <div class="sig-notice" style="background:#f8d7da;border-color:#f5c6cb;color:#721c24;"><?php echo esc_html( $sig_error_msg ); ?></div>
+                <?php endif; ?>
 
                 <?php if ( $is_renforce ) : ?>
                 <div class="sig-notice">🔒 Ce document requiert une <strong>signature renforcée</strong> : votre identité a été vérifiée par code e-mail (double authentification).</div>
@@ -530,7 +558,13 @@ class ACDC_Sig_Public {
             exit;
         }
 
-        check_admin_referer( 'acdc_sig_submit_' . $token );
+        /* La signature elle-même : même traitement, et pour la même raison — un
+           signataire bloqué au dernier geste est le pire moment pour l'être. Le
+           contrôle n'est pas retiré, son échec cesse d'être une impasse. */
+        if ( ! wp_verify_nonce( sanitize_text_field( wp_unslash( $_POST['_wpnonce'] ?? '' ) ), 'acdc_sig_submit_' . $token ) ) {
+            wp_safe_redirect( add_query_arg( array( 'sig' => urlencode( $token ), 'sig_error' => 'securite' ), $this->core->get_signature_page_url() ) );
+            exit;
+        }
 
         $ip = sanitize_text_field( $_SERVER['REMOTE_ADDR'] ?? '' );
 
@@ -665,7 +699,20 @@ class ACDC_Sig_Public {
             exit;
         }
 
-        check_admin_referer( 'acdc_sig_otp_verify_' . $token );
+        /* ACDC 3.25.255 — UN SIGNATAIRE NE DOIT JAMAIS FINIR SUR UNE PAGE
+           D'ERREUR WORDPRESS. check_admin_referer() tue la requête : le
+           signataire voit un écran blanc « Action non autorisée » et n'a aucun
+           moyen de repartir. Or le jeton de sécurité d'un formulaire public
+           expire au bout de vingt-quatre heures, et il expire aussi quand une
+           page est servie depuis un cache. On vérifie donc le jeton, et en cas
+           d'échec on renvoie le signataire sur SA page avec un message clair :
+           il rouvre son lien et recommence.
+           Ce qui prouve son identité reste inchangé : le jeton secret reçu par
+           e-mail, le code à usage unique, et la limitation du nombre d'essais. */
+        if ( ! wp_verify_nonce( sanitize_text_field( wp_unslash( $_POST['_wpnonce'] ?? '' ) ), 'acdc_sig_otp_verify_' . $token ) ) {
+            wp_safe_redirect( add_query_arg( array( 'sig' => urlencode( $token ), 'otp_error' => 'securite' ), $this->core->get_signature_page_url() ) );
+            exit;
+        }
 
         global $wpdb;
         $request = $wpdb->get_row(
@@ -811,7 +858,12 @@ class ACDC_Sig_Public {
             exit;
         }
 
-        check_admin_referer( 'acdc_sig_otp_resend_' . $token );
+        /* Même règle que pour la saisie du code : pas de page d'erreur pour un
+           signataire, un retour sur sa page avec un message. */
+        if ( ! wp_verify_nonce( sanitize_text_field( wp_unslash( $_POST['_wpnonce'] ?? '' ) ), 'acdc_sig_otp_resend_' . $token ) ) {
+            wp_safe_redirect( add_query_arg( array( 'sig' => urlencode( $token ), 'otp_error' => 'securite' ), $this->core->get_signature_page_url() ) );
+            exit;
+        }
 
         global $wpdb;
         $request = $wpdb->get_row(

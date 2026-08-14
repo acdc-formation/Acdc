@@ -577,11 +577,14 @@ class ACDC_Formation_SAAS_Plugin {
     add_action( 'admin_post_acdc_delete_need_analysis', array( $this, 'handle_delete_need_analysis' ) );
     add_action( 'admin_post_acdc_create_need_analysis_from_model', array( $this, 'handle_create_need_analysis_from_model' ) );
     /* ACDC 3.21.17 — Cron envoi/relance analyses du besoin. */
-    add_action( 'admin_post_acdc_nad_manual_relance',        array( $this, 'handle_nad_manual_relance' ) );
-    add_action( 'admin_post_nopriv_acdc_nad_manual_relance', array( $this, 'handle_nad_manual_relance' ) );
+    /* ACDC 3.25.255 — Ces deux relances étaient déclarées PUBLIQUES alors que
+       leur gestionnaire exige manage_options dès sa première ligne : la
+       déclaration était fausse. Un visiteur non connecté n'obtenait de toute
+       façon qu'un « Accès refusé ». On retire la déclaration publique plutôt
+       que d'ouvrir la porte — depuis cette version, c'est elle qui fait foi. */
+    add_action( 'admin_post_acdc_nad_manual_relance', array( $this, 'handle_nad_manual_relance' ) );
     // ACDC 3.21.29-hotfix4 — Renvoi manuel depuis la liste principale.
-    add_action( 'admin_post_acdc_nad_resend',        array( $this, 'handle_nad_resend' ) );
-    add_action( 'admin_post_nopriv_acdc_nad_resend', array( $this, 'handle_nad_resend' ) );
+    add_action( 'admin_post_acdc_nad_resend', array( $this, 'handle_nad_resend' ) );
 
     /* ACDC 3.21.17 — Cron envoi/relance analyses du besoin — hook d'exécution uniquement. */
     add_action( 'acdc_nad_cron_send_and_relance', array( $this, 'cron_nad_send_and_relance' ) );

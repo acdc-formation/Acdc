@@ -3500,6 +3500,11 @@ dbDelta( $sql_companies );
     return true;
   }
 
+  /**
+   * Les actions publiques qui ne passent PAS par un gestionnaire
+   * `admin_post_nopriv_` — routes front, formulaires publics interceptés
+   * ailleurs. La liste ne sert plus qu'à ces cas-là.
+   */
   private function get_public_plugin_admin_post_actions() {
     return array(
       'acdc_catalog_register',
@@ -3514,6 +3519,33 @@ dbDelta( $sql_companies );
     );
   }
 
+  /**
+   * ACDC 3.25.255 — DEUX LISTES DE CE QUI EST PUBLIC, ET ELLES AVAIENT DIVERGÉ.
+   *
+   * Cette garde exige `manage_options` pour toute action « acdc_ » passant par
+   * admin-post.php, sauf celles inscrites ici. La liste en comptait NEUF. Le
+   * plugin déclare TRENTE-ET-UNE actions publiques, par
+   * `add_action( 'admin_post_nopriv_acdc_…' )`. Vingt-deux étaient donc refusées
+   * à tout visiteur non connecté, avec « Action non autorisée. » — et invisibles
+   * pour un administrateur, qui passe la garde sans la voir.
+   *
+   * Conséquences observées : aucun signataire extérieur ne pouvait valider son
+   * code de vérification, ni consulter le document à signer, ni demander un
+   * nouveau code ; aucun formateur ne pouvait activer son accès, déposer un
+   * document de séance ou réinitialiser son mot de passe ; le PDF de proposition
+   * envoyé au prospect était refusé. Le portail apprenant, lui, fonctionnait :
+   * la règle de préfixe ci-dessous l'autorisait en bloc.
+   *
+   * La liste était une SECONDE source de vérité. Or enregistrer un gestionnaire
+   * `admin_post_nopriv_x`, c'est déjà déclarer que x est public : c'est la
+   * déclaration qui fait foi. On la lit directement, et la dérive devient
+   * impossible.
+   *
+   * Ce que la garde protège reste protégé : chaque gestionnaire public refait
+   * son propre contrôle — jeton de signature à usage unique, nonce lié au
+   * jeton, session du portail formateur ou apprenant. La garde n'était pas leur
+   * protection, elle était leur obstacle.
+   */
   private function is_public_plugin_admin_post_action( $action ) {
     $action = sanitize_key( (string) $action );
     if ( '' === $action ) {
@@ -3521,6 +3553,12 @@ dbDelta( $sql_companies );
     }
 
     if ( 0 === strpos( $action, 'acdc_learner_' ) ) {
+      return true;
+    }
+
+    /* La déclaration fait foi : un gestionnaire public existe pour cette
+       action, donc l'action est publique. */
+    if ( has_action( 'admin_post_nopriv_' . $action ) ) {
       return true;
     }
 
