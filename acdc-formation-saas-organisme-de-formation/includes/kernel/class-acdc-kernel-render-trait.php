@@ -5973,12 +5973,17 @@ trait ACDC_Kernel_Render_Trait {
   }
 
   private function render_nad_public_done( $analysis ) {
-    $prenom = ! empty( $analysis->repondant_prenom ) ? (string) $analysis->repondant_prenom : '';
+    /* ACDC 3.25.263 — Le même nom qu'en haut de page : pour un commanditaire
+       entreprise, on remercie l'entité, pas la personne qui tenait le clavier.
+       La variable ne s'appelle plus « prenom » : elle ne portait déjà plus un
+       prénom, et un nom de variable qui ment finit par tromper le lecteur
+       suivant — c'est ainsi que cet écran avait divergé de l'en-tête. */
+    $greeting_name = $this->nad_greeting_name( $analysis );
     ?>
     <div style="min-height:60vh;display:flex;align-items:center;justify-content:center;font-family:'Helvetica Neue',Arial,sans-serif;background:linear-gradient(135deg,#fef6e4 0%,#fbf8f7 100%);">
       <div style="max-width:560px;text-align:center;padding:60px 24px;">
         <div style="width:80px;height:80px;background:#d6a353;border-radius:50%;display:flex;align-items:center;justify-content:center;margin:0 auto 24px;font-size:36px;">✓</div>
-        <h2 style="color:#0f2c52;font-weight:800;font-size:28px;margin:0 0 12px;">Merci<?php echo $prenom ? ', ' . esc_html( $prenom ) : ''; ?> !</h2>
+        <h2 style="color:#0f2c52;font-weight:800;font-size:28px;margin:0 0 12px;">Merci<?php echo $greeting_name ? ', ' . esc_html( $greeting_name ) : ''; ?> !</h2>
         <p style="color:#4b5d76;font-size:16px;line-height:1.6;">Votre analyse du besoin a bien été enregistrée.<br>Votre organisme de formation en prendra connaissance et adaptera votre parcours.</p>
       </div>
     </div>
@@ -6085,7 +6090,6 @@ trait ACDC_Kernel_Render_Trait {
     $total_sections = count( $sections );
     $branding = $this->acdc_get_transactional_email_branding();
     $form_title = ! empty( $analysis->title ) ? (string) $analysis->title : 'Analyse du besoin';
-    $prenom = ! empty( $analysis->repondant_prenom ) ? (string) $analysis->repondant_prenom : '';
     /* ACDC 3.21.29-hotfix4b — Pour les profils entreprise/indépendant, l'entité
        est la destinataire, pas la personne.
        ACDC 3.25.260 — La règle était bonne, sa SOURCE ne l'était pas : elle ne
@@ -6094,16 +6098,7 @@ trait ACDC_Kernel_Render_Trait {
        « Bonjour Valeriano 👋 », le prénom de l'interlocuteur, au lieu de
        « Bonjour Skill Conseil 👋 », le commanditaire. On interroge la même
        cascade que les e-mails : fiche entreprise, prospect, dossier. */
-    $greeting_name = $prenom;
-    if ( 'entreprise' === $profil_analyse || 'independant' === $profil_analyse ) {
-      $entreprise_name = ! empty( $prefill['entreprise.name'] ) ? (string) $prefill['entreprise.name'] : '';
-      if ( '' === $entreprise_name ) {
-        $entreprise_name = $this->nad_analysis_company_name( $analysis );
-      }
-      if ( $entreprise_name ) {
-        $greeting_name = $entreprise_name;
-      }
-    }
+    $greeting_name = $this->nad_greeting_name( $analysis, $prefill );
     ?>
     <!DOCTYPE html>
     <html lang="fr">
@@ -6443,7 +6438,7 @@ trait ACDC_Kernel_Render_Trait {
       .then(function(r){ return r.json(); })
       .then(function(res) {
         if (res.success) {
-          form.closest('.nad-body').innerHTML = '<div class="nad-success"><div class="nad-success-icon">✓</div><h3>Merci <?php echo esc_js( $prenom ); ?> !</h3><p>Votre analyse du besoin a bien été enregistrée.<br>Votre organisme de formation en prendra connaissance et personnalisera votre parcours.</p></div>';
+          form.closest('.nad-body').innerHTML = '<div class="nad-success"><div class="nad-success-icon">✓</div><h3>Merci <?php echo esc_js( $greeting_name ); ?> !</h3><p>Votre analyse du besoin a bien été enregistrée.<br>Votre organisme de formation en prendra connaissance et personnalisera votre parcours.</p></div>';
         } else {
           errBox.textContent = res.data ? res.data.message : 'Une erreur est survenue.';
           errBox.style.display = 'block';

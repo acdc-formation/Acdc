@@ -6939,6 +6939,48 @@ dbDelta( $sql_companies );
     return $company;
   }
 
+  /**
+   * ACDC 3.25.263 — QUI L'ANALYSE DU BESOIN SALUE-T-ELLE ?
+   *
+   * La règle est celle de la 3.21.29 : pour un commanditaire entreprise, c'est
+   * l'ENTITÉ qui est destinataire, pas la personne qui tient le clavier. La
+   * 3.25.260 a corrigé sa source — une analyse issue d'un prospect n'a pas
+   * d'entreprise_id, il faut aller chercher plus loin — mais elle ne l'a
+   * corrigée QU'À UN ENDROIT : l'en-tête du formulaire.
+   *
+   * Les deux écrans de remerciement, eux, lisaient encore le prénom du
+   * répondant. D'où « Bonjour Skill Conseil 👋 » en haut de page et « Merci
+   * Valeriano ! » à la fin — deux réponses différentes à la même question,
+   * dans le même document. C'est la panne la plus fréquente de ce plugin, et
+   * elle se reproduit chaque fois qu'une règle est recopiée au lieu d'être
+   * appelée.
+   *
+   * Un seul endroit, désormais, pour trois écrans.
+   *
+   * @param object     $analysis L'analyse du besoin.
+   * @param array|null $prefill  Valeurs de préremplissage déjà calculées, si on les a.
+   * @return string Le nom à saluer ; le prénom du répondant à défaut.
+   */
+  private function nad_greeting_name( $analysis, $prefill = null ) {
+    if ( ! $analysis ) {
+      return '';
+    }
+    $prenom = ! empty( $analysis->repondant_prenom ) ? trim( (string) $analysis->repondant_prenom ) : '';
+    $profil = strtolower( (string) ( $analysis->profil ?? '' ) );
+
+    if ( 'entreprise' !== $profil && 'independant' !== $profil ) {
+      return $prenom;
+    }
+
+    $entreprise = ( is_array( $prefill ) && ! empty( $prefill['entreprise.name'] ) )
+      ? trim( (string) $prefill['entreprise.name'] )
+      : '';
+    if ( '' === $entreprise ) {
+      $entreprise = $this->nad_analysis_company_name( $analysis );
+    }
+    return '' !== $entreprise ? $entreprise : $prenom;
+  }
+
   private function nad_email_identity( $analysis ) {
     $company = $this->nad_analysis_company_name( $analysis );
 
