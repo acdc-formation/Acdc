@@ -312,6 +312,8 @@ class ACDC_Formation_SAAS_Plugin {
     add_action( 'wp_ajax_acdc_store_programme_pdf', array( $this, 'ajax_store_programme_pdf' ) );
     /* ACDC 3.25.257 — Révélation du mot de passe d'un espace financeur. */
     add_action( 'wp_ajax_acdc_reveal_funder_password', array( $this, 'ajax_reveal_funder_password' ) );
+    /* ACDC 3.25.261 — « Plus tard » sur le rappel de contrat formateur. */
+    add_action( 'wp_ajax_acdc_snooze_trainer_contract_popup', array( $this, 'ajax_snooze_trainer_contract_popup' ) );
 
     add_action( 'admin_post_nopriv_acdc_front_login', array( $this, 'handle_front_login' ) );
     add_action( 'admin_post_nopriv_acdc_learner_login', array( $this, 'handle_learner_portal_login' ) );

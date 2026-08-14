@@ -147,6 +147,145 @@ trait ACDC_Dossiers_Contracts_Core_Trait {
     return $plan;
   }
 
+  /* =====================================================================
+   * ACDC 3.25.261 — « À CHAQUE FOIS J'OUBLIE LE CONTRAT DU FORMATEUR. »
+   *
+   * Une convention signée engage une intervention ; l'intervention suppose un
+   * formateur ; le formateur suppose un contrat. Le troisième maillon est le
+   * seul que rien ne réclamait : la convention partait signée, la session se
+   * planifiait, les convocations partaient — et le contrat manquait, sans
+   * qu'aucun écran ne s'en émeuve.
+   *
+   * Ce n'est pas une case à cocher : le rappel se DÉDUIT des données, comme le
+   * reste du moteur. Il s'éteint tout seul le jour où le contrat existe, et
+   * personne n'a à se souvenir de l'éteindre.
+   *
+   * Trois états, deux niveaux :
+   *   formateur non désigné   → rouge, on ne peut même pas commencer ;
+   *   aucun contrat           → rouge, c'est l'oubli visé ;
+   *   contrat non signé       → orange, la pièce existe, elle attend.
+   *
+   * Deux bornes pour que le rappel reste un rappel et non un fond d'écran :
+   * on ne regarde que les conventions dont la formation n'est pas terminée
+   * depuis plus de trente jours, et on s'arrête aux cinquante plus récentes.
+   * ===================================================================== */
+
+  /** Une convention est-elle signée ? La colonne, ou le document signé. */
+  private function acdc_contract_is_signed_sql() {
+    return "( signature_status = 'completed' OR ( signed_document_url IS NOT NULL AND signed_document_url <> '' ) )";
+  }
+
+  /**
+   * Les conventions signées dont le contrat formateur manque encore.
+   *
+   * @return array Liste d'items : contract_id, title, formation_title,
+   *               trainer_id, trainer_name, reason, level, url, dates.
+   */
+  private function acdc_trainer_contract_todo() {
+    static $cache = null;
+    if ( null !== $cache ) {
+      return $cache;
+    }
+    global $wpdb;
+    $cache = array();
+
+    $floor = wp_date( 'Y-m-d', strtotime( '-30 days' ) );
+    $signed = $this->acdc_contract_is_signed_sql();
+    $rows = $wpdb->get_results( $wpdb->prepare(
+      "SELECT id, title, formation_id, formation_title, start_date, end_date
+         FROM {$this->registration_contract_table}
+        WHERE {$signed}
+          AND formation_id IS NOT NULL AND formation_id > 0
+          AND ( end_date IS NULL OR end_date >= %s )
+        ORDER BY COALESCE(start_date, created_at) DESC
+        LIMIT 50",
+      $floor
+    ) );
+
+    foreach ( (array) $rows as $row ) {
+      $formation_id = (int) $row->formation_id;
+      $start        = ! empty( $row->start_date ) ? (string) $row->start_date : '';
+      $end          = ! empty( $row->end_date ) ? (string) $row->end_date : $start;
+
+      /* Le formateur n'est pas sur la convention : il est sur les séances
+         qu'elle a fait naître. On prend celui de la première séance de la
+         période — c'est lui qui intervient. */
+      $trainer_id = (int) $wpdb->get_var( $wpdb->prepare(
+        "SELECT trainer_id FROM {$this->session_table}
+          WHERE formation_id = %d AND trainer_id IS NOT NULL AND trainer_id > 0
+            AND ( %s = '' OR start_date IS NULL OR start_date >= %s )
+            AND ( %s = '' OR start_date IS NULL OR start_date <= %s )
+          ORDER BY start_date ASC, id ASC LIMIT 1",
+        $formation_id,
+        $start, $start,
+        $end, $end
+      ) );
+
+      $item = array(
+        'contract_id'     => (int) $row->id,
+        'title'           => (string) $row->title,
+        'formation_id'    => $formation_id,
+        'formation_title' => (string) $row->formation_title,
+        'start_date'      => $start,
+        'end_date'        => $end,
+        'trainer_id'      => $trainer_id,
+        'trainer_name'    => '',
+      );
+
+      if ( ! $trainer_id ) {
+        $cache[] = array_merge(
+          $item,
+          \ACDC\Support\TrainerContractReminder::evaluate( 0, false, false ),
+          array( 'url' => $this->portal_page_url( array( 'tab' => 'sessions' ) ) )
+        );
+        continue;
+      }
+
+      $trainer = $wpdb->get_row( $wpdb->prepare(
+        "SELECT id, first_name, last_name FROM {$this->trainer_table} WHERE id = %d",
+        $trainer_id
+      ) );
+      $item['trainer_name'] = $trainer ? trim( (string) $trainer->first_name . ' ' . (string) $trainer->last_name ) : ( 'Formateur #' . $trainer_id );
+      $item['url'] = $this->portal_page_url( array( 'tab' => 'trainers', 'action' => 'edit', 'item_id' => $trainer_id ) );
+
+      /* Un contrat qui couvre cette formation et chevauche cette période. */
+      $tc = $wpdb->get_row( $wpdb->prepare(
+        "SELECT id, signature_status, signed_document_url FROM {$this->trainer_contract_table}
+          WHERE trainer_id = %d AND formation_id = %d
+            AND ( %s = '' OR date_start IS NULL OR date_start <= %s )
+            AND ( %s = '' OR date_end IS NULL OR date_end >= %s )
+            AND archived_at IS NULL
+          ORDER BY id DESC LIMIT 1",
+        $trainer_id,
+        $formation_id,
+        $end, $end,
+        $start, $start
+      ) );
+
+      $tc_signed = $tc && ( 'completed' === (string) $tc->signature_status || ! empty( $tc->signed_document_url ) );
+      $verdict   = \ACDC\Support\TrainerContractReminder::evaluate( $trainer_id, (bool) $tc, $tc_signed );
+      if ( \ACDC\Support\TrainerContractReminder::RIEN === $verdict['reason'] ) {
+        continue;
+      }
+      if ( $tc ) {
+        $item['trainer_contract_id'] = (int) $tc->id;
+      }
+      $cache[] = array_merge( $item, $verdict );
+    }
+
+    return $cache;
+  }
+
+  /** Les compteurs des deux niveaux, pour le tableau de bord et la pastille. */
+  private function acdc_trainer_contract_todo_counts() {
+    $counts = array( 'crit' => 0, 'warn' => 0, 'total' => 0 );
+    foreach ( $this->acdc_trainer_contract_todo() as $item ) {
+      $counts[ $item['level'] ]++;
+      $counts['total']++;
+    }
+    return $counts;
+  }
+
   private function get_contract_params_defaults() {
     /* B8 — Textes par défaut des clauses obligatoires. Ils étaient vides, obligeant à tout
        ressaisir à la main sur chaque convention. Ces valeurs génériques (alignées Qualiopi)

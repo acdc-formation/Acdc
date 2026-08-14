@@ -366,3 +366,28 @@
 .acdc-color-display{display:flex;align-items:center;gap:14px;flex-wrap:wrap}
 .acdc-color-swatch{display:inline-block;width:84px;height:34px;border:2px solid rgba(12,45,82,.35);border-radius:8px;background:#fff;box-shadow:inset 0 0 0 1px rgba(255,255,255,.35)}
 .acdc-color-display code{background:#f5f7fb;border:1px solid var(--acdc-border);padding:6px 10px;border-radius:8px;font-size:13px;color:var(--acdc-text)}
+
+/* ACDC 3.25.261 — La pastille rouge du menu.
+   Elle compte ce que l'onglet permet de régler : aujourd'hui les contrats
+   formateur qui manquent derrière une convention signée. Un chiffre qui ne
+   mène nulle part finirait par ne plus rien vouloir dire. */
+.acdc-nav-badge {
+    flex: 0 0 auto;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    min-width: 20px;
+    height: 20px;
+    padding: 0 6px;
+    border-radius: 999px;
+    background: #dd2627;
+    color: #ffffff;
+    font-size: 11px;
+    font-weight: 700;
+    line-height: 1;
+}
+
+.acdc-nav-group-summary .acdc-nav-badge {
+    margin-left: auto;
+    margin-right: 6px;
+}

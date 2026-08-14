@@ -4651,6 +4651,27 @@ public function handle_delete_need() {
     wp_send_json_success( array( 'password' => $plain ) );
   }
 
+  /**
+   * ACDC 3.25.261 — « PLUS TARD » NE VEUT PAS DIRE « PLUS JAMAIS ».
+   *
+   * Le rappel du contrat formateur se repousse d'une journée, par utilisateur.
+   * Il n'existe volontairement aucun moyen de le fermer définitivement : c'est
+   * l'oubli lui-même qu'on essaie d'empêcher, et un rappel qu'on peut éteindre
+   * s'éteint le premier jour où il dérange. Il disparaît de lui-même quand le
+   * contrat existe.
+   */
+  public function ajax_snooze_trainer_contract_popup() {
+    if ( ! is_user_logged_in() ) {
+      wp_send_json_error( array( 'message' => 'Accès refusé.' ) );
+    }
+    $nonce = isset( $_POST['nonce'] ) ? sanitize_text_field( wp_unslash( $_POST['nonce'] ) ) : '';
+    if ( ! wp_verify_nonce( $nonce, 'acdc_snooze_trainer_contract_popup' ) ) {
+      wp_send_json_error( array( 'message' => 'Lien expiré.' ) );
+    }
+    update_user_meta( get_current_user_id(), 'acdc_of_tc_popup_snoozed_until', wp_date( 'Y-m-d' ) );
+    wp_send_json_success( array( 'snoozed_until' => wp_date( 'Y-m-d' ) ) );
+  }
+
   public function handle_save_funder() {
   if ( ! current_user_can( 'manage_options' ) ) {
     wp_die( esc_html( 'Accès refusé.' ) );

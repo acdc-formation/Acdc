@@ -20,6 +20,7 @@ lancent sans WordPress, en quelques secondes.
     php tests/test-secret-financeur.php # un champ mot de passe vide n'efface jamais
     php tests/test-facturation-opco.php # qui reçoit la facture, et pour quel montant
     php tests/test-jalons-prospect.php  # étapes franchies comptées par le suivi commercial
+    php tests/test-rappel-contrat-formateur.php # rappel du contrat formateur après signature
     node tests/test-signature-trace.js # continuité du tracé des signatures
     php tests/scan-global-wpdb.php acdc-formation-saas-organisme-de-formation
     php tests/scan-envois-email.php  # e-mails qui contournent la porte commune

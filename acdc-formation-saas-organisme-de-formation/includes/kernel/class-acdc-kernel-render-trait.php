@@ -558,6 +558,8 @@ trait ACDC_Kernel_Render_Trait {
 
           <?php $this->render_front_notice(); ?>
 
+          <?php $this->render_trainer_contract_reminder_popup(); ?>
+
           <?php
           try {
           switch ( $tab ) {
@@ -1308,12 +1310,22 @@ trait ACDC_Kernel_Render_Trait {
       $group_tabs = wp_list_pluck( $group['items'], 'tab' );
       $is_open  = in_array( $current_tab, $group_tabs, true );
 
+      /* ACDC 3.25.261 — Un groupe replié cacherait sa pastille : on la remonte
+         sur l'en-tête, sinon l'alerte n'existe que pour qui ouvre déjà le bon
+         tiroir. */
+      $group_badge = '';
+      foreach ( $group_tabs as $group_tab ) {
+        $group_badge = $this->acdc_nav_badge_html( $group_tab );
+        if ( '' !== $group_badge ) { break; }
+      }
+
       echo '<details class="acdc-nav-group acdc-nav-group-extranet"' . ( $is_open ? ' open' : '' ) . '>';
       echo '<summary class="acdc-nav-group-summary">';
       echo '<span class="acdc-nav-item-left">';
       echo $this->render_nav_icon( $group['icon'] );
       echo '<span class="acdc-nav-text">' . esc_html( $group['label'] ) . '</span>';
       echo '</span>';
+      echo $group_badge;
       echo $this->render_nav_icon( 'chevron-down', 'acdc-nav-chevron acdc-nav-summary-chevron' );
       echo '</summary>';
 
@@ -1357,6 +1369,7 @@ trait ACDC_Kernel_Render_Trait {
         echo $this->render_nav_icon( $item['icon'] );
         echo '<span class="acdc-nav-text">' . esc_html( $item['label'] ) . '</span>';
         echo '</span>';
+        echo $this->acdc_nav_badge_html( $item['tab'] );
         echo '</a>';
 
         if ( ! empty( $item['children'] ) && is_array( $item['children'] ) ) {
@@ -1385,7 +1398,123 @@ trait ACDC_Kernel_Render_Trait {
     }
 
     echo '</nav>';
-  }  private function render_nav_icon( $icon, $class = 'acdc-nav-icon' ) {
+  }
+
+  /**
+   * ACDC 3.25.261 — LE RAPPEL QUI S'IMPOSE À L'ARRIVÉE.
+   *
+   * « À chaque fois j'oublie. » Une pastille et une ligne de tableau de bord se
+   * regardent ; un rappel qui s'ouvre se lit. Il s'affiche une fois par jour
+   * tant que le contrat manque, il nomme les conventions concernées, et son
+   * bouton mène là où l'on agit — pas vers un écran de plus.
+   *
+   * « Plus tard » repousse d'une journée, jamais définitivement : l'oubli est
+   * précisément ce qu'on essaie d'empêcher. La pastille et le tableau de bord,
+   * eux, restent visibles pendant ce temps.
+   */
+  private function render_trainer_contract_reminder_popup() {
+    if ( ! method_exists( $this, 'acdc_trainer_contract_todo' ) ) {
+      return;
+    }
+    $items = $this->acdc_trainer_contract_todo();
+    if ( empty( $items ) ) {
+      return;
+    }
+    $today   = wp_date( 'Y-m-d' );
+    $snoozed = (string) get_user_meta( get_current_user_id(), 'acdc_of_tc_popup_snoozed_until', true );
+    if ( '' !== $snoozed && $snoozed >= $today ) {
+      return;
+    }
+    $shown = array_slice( $items, 0, 3 );
+    $reste = count( $items ) - count( $shown );
+    ?>
+    <div class="acdc-tc-popup" data-acdc-tc-popup="1" role="dialog" aria-modal="true" aria-labelledby="acdc-tc-popup-title">
+      <div class="acdc-tc-popup__box">
+        <div class="acdc-tc-popup__head">
+          <span class="acdc-tc-popup__dot"></span>
+          <strong id="acdc-tc-popup-title">Contrat formateur à établir</strong>
+        </div>
+        <p class="acdc-tc-popup__lead">
+          <?php echo count( $items ) > 1
+            ? esc_html( count( $items ) . ' conventions signées attendent encore leur contrat formateur.' )
+            : 'Une convention signée attend encore son contrat formateur.'; ?>
+        </p>
+        <ul class="acdc-tc-popup__list">
+          <?php foreach ( $shown as $tct ) : ?>
+            <li>
+              <strong><?php echo esc_html( $tct['formation_title'] ?: $tct['title'] ); ?></strong>
+              <span><?php echo esc_html( $tct['label'] ); ?><?php echo ! empty( $tct['trainer_name'] ) ? ' · ' . esc_html( $tct['trainer_name'] ) : ''; ?></span>
+            </li>
+          <?php endforeach; ?>
+        </ul>
+        <?php if ( $reste > 0 ) : ?>
+          <p class="acdc-tc-popup__more">et <?php echo (int) $reste; ?> autre(s).</p>
+        <?php endif; ?>
+        <div class="acdc-tc-popup__actions">
+          <button type="button" class="acdc-button acdc-button-soft" data-acdc-tc-later="1">Plus tard</button>
+          <a class="acdc-button acdc-button-primary" href="<?php echo esc_url( $shown[0]['url'] ); ?>">
+            <?php echo 'no_trainer' === $shown[0]['reason'] ? 'Désigner le formateur' : 'Créer le contrat'; ?>
+          </a>
+        </div>
+      </div>
+    </div>
+    <style>
+      .acdc-tc-popup{position:fixed;inset:0;z-index:99999;background:rgba(12,45,82,.42);display:flex;align-items:center;justify-content:center;padding:20px;}
+      .acdc-tc-popup__box{background:#fff;border-radius:16px;max-width:520px;width:100%;padding:22px 24px;box-shadow:0 24px 60px rgba(12,45,82,.28);}
+      .acdc-tc-popup__head{display:flex;align-items:center;gap:10px;font-size:16px;color:#0f2c52;margin-bottom:8px;}
+      .acdc-tc-popup__dot{width:10px;height:10px;border-radius:50%;background:#dd2627;flex:0 0 auto;}
+      .acdc-tc-popup__lead{margin:0 0 14px;font-size:13px;color:#4b5d76;}
+      .acdc-tc-popup__list{list-style:none;margin:0 0 12px;padding:0;display:flex;flex-direction:column;gap:10px;}
+      .acdc-tc-popup__list li{border-left:3px solid #E9C77C;padding-left:10px;}
+      .acdc-tc-popup__list strong{display:block;font-size:13px;color:#0f2c52;}
+      .acdc-tc-popup__list span{display:block;font-size:12px;color:#4b5d76;margin-top:2px;}
+      .acdc-tc-popup__more{margin:0 0 12px;font-size:12px;color:#8b5b23;}
+      .acdc-tc-popup__actions{display:flex;justify-content:flex-end;gap:10px;}
+    </style>
+    <script>
+    (function(){
+      var pop = document.querySelector('[data-acdc-tc-popup]');
+      if(!pop){return;}
+      var later = pop.querySelector('[data-acdc-tc-later]');
+      if(!later){return;}
+      later.addEventListener('click', function(){
+        pop.style.display = 'none';
+        var fd = new FormData();
+        fd.append('action','acdc_snooze_trainer_contract_popup');
+        fd.append('nonce','<?php echo esc_js( wp_create_nonce( 'acdc_snooze_trainer_contract_popup' ) ); ?>');
+        fetch('<?php echo esc_url( admin_url( 'admin-ajax.php' ) ); ?>', { method:'POST', body: fd, credentials:'same-origin' });
+      });
+    })();
+    </script>
+    <?php
+  }
+
+  /**
+   * ACDC 3.25.261 — LA PASTILLE ROUGE DU MENU.
+   *
+   * Le menu ne portait aucun compteur : une alerte du tableau de bord n'était
+   * visible que sur le tableau de bord. Or l'oubli du contrat formateur se
+   * produit justement quand on travaille ailleurs.
+   *
+   * Une seule règle : la pastille compte ce que l'onglet permet de RÉGLER.
+   * Un chiffre qui ne mène nulle part est un décor — et un décor rouge finit
+   * par ne plus rien vouloir dire.
+   */
+  private function acdc_nav_badge_html( $tab ) {
+    $count = 0;
+    if ( 'trainers' === $tab && method_exists( $this, 'acdc_trainer_contract_todo_counts' ) ) {
+      $counts = $this->acdc_trainer_contract_todo_counts();
+      $count  = (int) $counts['total'];
+    }
+    if ( $count < 1 ) {
+      return '';
+    }
+    return '<span class="acdc-nav-badge" title="' . esc_attr( $count . ' contrat(s) formateur à établir ou à faire signer' ) . '">'
+      . esc_html( $count > 99 ? '99+' : (string) $count )
+      . '</span>';
+  }
+
+  private function render_nav_icon( $icon, $class = 'acdc-nav-icon' ) {
     return '<span class="' . esc_attr( $class ) . '" aria-hidden="true">' . $this->get_nav_icon_svg( $icon ) . '</span>';
   }
   private function render_inline_icon( $icon, $size = 18, $class = '' ) {
@@ -3614,6 +3743,9 @@ trait ACDC_Kernel_Render_Trait {
       "SELECT COUNT(*) FROM {$this->registration_contract_table} WHERE signature_status IN ($sig_statuses) AND signature_sent_at IS NOT NULL AND signature_sent_at < %s",
       date( 'Y-m-d H:i:s', strtotime( '-7 days' ) )
     ) );
+    /* ACDC 3.25.261 — Les conventions signées dont le contrat formateur manque. */
+    $trainer_contract_items = method_exists( $this, 'acdc_trainer_contract_todo' ) ? $this->acdc_trainer_contract_todo() : array();
+    $trainer_contract_todo  = method_exists( $this, 'acdc_trainer_contract_todo_counts' ) ? $this->acdc_trainer_contract_todo_counts() : array( 'crit' => 0, 'warn' => 0, 'total' => 0 );
     $prospect_overdue    = method_exists( $this, 'get_overdue_prospect_followup_count' ) ? (int) $this->get_overdue_prospect_followup_count() : 0;
     $prospect_inactive   = method_exists( $this, 'get_inactive_prospect_count' ) ? (int) $this->get_inactive_prospect_count( 10 ) : 0;
 
@@ -3712,6 +3844,21 @@ trait ACDC_Kernel_Render_Trait {
         'value'  => $sig_pending,
         'label'  => 'Conventions en attente de signature',
         'url'    => $this->portal_page_url( array( 'tab' => 'registration_contract' ) ),
+        'level'  => 'warn',
+      ),
+      /* ACDC 3.25.261 — L'oubli le plus coûteux du parcours : la convention est
+         signée, la session se planifie, les convocations partent — et le
+         contrat du formateur n'existe pas. */
+      array(
+        'value'  => (int) $trainer_contract_todo['crit'],
+        'label'  => 'Contrats formateur &#224; &#233;tablir (conventions sign&#233;es)',
+        'url'    => $this->portal_page_url( array( 'tab' => 'dashboard', 'focus' => 'trainer_contracts' ) ) . '#acdc-trainer-contract-todo',
+        'level'  => 'crit',
+      ),
+      array(
+        'value'  => (int) $trainer_contract_todo['warn'],
+        'label'  => 'Contrats formateur en attente de signature',
+        'url'    => $this->portal_page_url( array( 'tab' => 'dashboard', 'focus' => 'trainer_contracts' ) ) . '#acdc-trainer-contract-todo',
         'level'  => 'warn',
       ),
       array(
@@ -4081,6 +4228,43 @@ trait ACDC_Kernel_Render_Trait {
             </div>
           </div>
         </div>
+
+        <?php /* ACDC 3.25.261 — CONTRATS FORMATEUR À ÉTABLIR.
+                 Un compteur dans la liste d'alertes dit COMBIEN ; il ne dit pas
+                 lesquels, et n'ouvre pas la bonne fiche. Ce panneau nomme
+                 chaque convention concernée et mène directement au formateur
+                 chez qui le contrat se rédige — un rappel sur lequel on ne peut
+                 pas agir se transforme en décor au bout de trois jours. */ ?>
+        <?php if ( ! empty( $trainer_contract_items ) ) : ?>
+        <div class="acdc-db21-panel" id="acdc-trainer-contract-todo" style="border:1px solid #f1c9cd;">
+          <div class="acdc-db21-ph" style="color:#7d1d1d;">
+            Contrats formateur &#224; &#233;tablir
+            <span style="font-weight:600;color:#8b5b23;"><?php echo (int) count( $trainer_contract_items ); ?> convention(s) sign&#233;e(s)</span>
+          </div>
+          <div class="acdc-db21-pb">
+            <?php foreach ( $trainer_contract_items as $tct ) :
+              $tct_crit = ( 'crit' === $tct['level'] );
+              ?>
+              <div style="display:flex;align-items:flex-start;gap:12px;padding:10px 0;border-bottom:1px solid #f0f0ef;">
+                <span style="flex:0 0 auto;margin-top:2px;width:10px;height:10px;border-radius:50%;background:<?php echo $tct_crit ? '#dd2627' : '#d97706'; ?>;"></span>
+                <div style="flex:1 1 auto;min-width:0;">
+                  <div style="font-weight:600;color:#0f2c52;">
+                    <?php echo esc_html( $tct['formation_title'] ?: $tct['title'] ); ?>
+                  </div>
+                  <div style="font-size:12px;color:#4b5d76;margin-top:2px;">
+                    <?php echo esc_html( $tct['label'] ); ?>
+                    <?php if ( ! empty( $tct['trainer_name'] ) ) : ?> &#183; <?php echo esc_html( $tct['trainer_name'] ); ?><?php endif; ?>
+                    <?php if ( ! empty( $tct['start_date'] ) ) : ?> &#183; &#224; partir du <?php echo esc_html( mysql2date( 'd/m/Y', $tct['start_date'] ) ); ?><?php endif; ?>
+                  </div>
+                </div>
+                <a class="acdc-button acdc-button-soft" style="flex:0 0 auto;height:32px;font-size:12px;" href="<?php echo esc_url( $tct['url'] ); ?>">
+                  <?php echo 'no_trainer' === $tct['reason'] ? 'D&#233;signer le formateur' : ( 'unsigned' === $tct['reason'] ? 'Ouvrir le contrat' : 'Cr&#233;er le contrat' ); ?>
+                </a>
+              </div>
+            <?php endforeach; ?>
+          </div>
+        </div>
+        <?php endif; ?>
 
         <?php /* Prochaines sessions */ ?>
         <div class="acdc-db21-panel">
