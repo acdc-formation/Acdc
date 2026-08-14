@@ -2344,6 +2344,16 @@ dbDelta( $sql_companies );
     /* Le devis d'origine : sans lui, la facture ne peut pas retrouver la
        convention qui décide de son destinataire. */
     $this->maybe_add_table_column( $this->registration_contract_table, 'quote_id',              'BIGINT UNSIGNED DEFAULT NULL' );
+    /* ACDC 3.25.265 — LE FORMATEUR DE LA CONVENTION.
+       La convention crée les séances au moment de sa signature, et le code qui
+       les crée lisait déjà $contract->trainer_id — une colonne qui n'existait
+       pas. Toute séance née d'une convention naissait donc SANS formateur, et
+       il n'y avait aucun écran pour le désigner dans ce parcours. Trois
+       conséquences en chaîne : l'apprenant ne voyait pas son formateur
+       référent, le rappel de contrat formateur annonçait « non désigné » sans
+       recours, et la convocation ne pouvait pas le nommer. */
+    $this->maybe_add_table_column( $this->registration_contract_table, 'trainer_id',            'BIGINT UNSIGNED DEFAULT NULL' );
+    $this->maybe_add_table_index( $this->registration_contract_table, 'trainer_id', 'INDEX trainer_id (trainer_id)' );
     $this->maybe_add_table_index( $this->registration_contract_table, 'quote_id',  'INDEX quote_id (quote_id)' );
     $this->maybe_add_table_index( $this->registration_contract_table, 'funder_id', 'INDEX funder_id (funder_id)' );
 
@@ -12378,17 +12388,53 @@ private function acdc_pdf_asset_is_readable( $url ) {
    * et c'est la même que partout ailleurs dans ce plugin entre « envoyé » et
    * « fait ».
    */
+  /**
+   * ACDC 3.25.265 — CETTE PASTILLE NE POUVAIT PAS DEVENIR VERTE.
+   *
+   * Elle interrogeait « WHERE learner_id = … » sur la table des comptes
+   * extranet. Cette colonne n'existe pas : elle s'appelle primary_learner_id.
+   * La requête échouait en silence, rendait null, et « Ouverture intranet »
+   * restait grise pour TOUS les dossiers, quel que soit l'état réel du compte.
+   *
+   * Et le rattachement de fond n'est pas l'apprenant mais l'ADRESSE : un
+   * compte extranet sert toutes les inscriptions d'une même personne. On
+   * cherche donc par e-mail, avec le rattachement par identifiant en repli
+   * pour les comptes créés avant que l'e-mail ne fasse foi.
+   *
+   * Deux statuts valent « ouvert » : « active », et « password_to_change » —
+   * l'accès est ouvert, l'apprenant n'a simplement pas encore choisi son mot
+   * de passe. Le refuser reviendrait à dire que l'ouverture n'a pas eu lieu.
+   */
   private function acdc_registration_portal_is_active( $registration ) {
+    if ( empty( $this->learner_portal_account_table ) ) {
+      return false;
+    }
     $learner_id = (int) ( $registration->learner_id ?? 0 );
-    if ( $learner_id <= 0 || empty( $this->learner_portal_account_table ) ) {
+    if ( $learner_id <= 0 ) {
       return false;
     }
     global $wpdb;
-    $status = $wpdb->get_var( $wpdb->prepare(
-      "SELECT status FROM {$this->learner_portal_account_table} WHERE learner_id = %d ORDER BY id DESC LIMIT 1",
+
+    $email = (string) $wpdb->get_var( $wpdb->prepare(
+      "SELECT email FROM {$this->learner_table} WHERE id = %d LIMIT 1",
       $learner_id
     ) );
-    return ( 'active' === (string) $status );
+
+    $status = '';
+    if ( '' !== trim( $email ) ) {
+      $status = (string) $wpdb->get_var( $wpdb->prepare(
+        "SELECT status FROM {$this->learner_portal_account_table} WHERE email = %s ORDER BY id DESC LIMIT 1",
+        $email
+      ) );
+    }
+    if ( '' === $status ) {
+      $status = (string) $wpdb->get_var( $wpdb->prepare(
+        "SELECT status FROM {$this->learner_portal_account_table} WHERE primary_learner_id = %d ORDER BY id DESC LIMIT 1",
+        $learner_id
+      ) );
+    }
+
+    return in_array( $status, array( 'active', 'password_to_change' ), true );
   }
 
   /** La formation de ce dossier exige-t-elle un test de positionnement ? */

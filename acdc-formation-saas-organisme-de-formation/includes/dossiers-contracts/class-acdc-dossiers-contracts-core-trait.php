@@ -29,6 +29,44 @@ trait ACDC_Dossiers_Contracts_Core_Trait {
    * panne que ce plugin a déjà connue plusieurs fois.
    * ===================================================================== */
 
+  /**
+   * ACDC 3.25.265 — REPORTER LE FORMATEUR SUR LES SÉANCES DÉJÀ CRÉÉES.
+   *
+   * La fabrique des séances ne tourne qu'à la signature. Désigner un formateur
+   * après coup sur une convention signée n'aurait donc rien changé : les
+   * séances existaient déjà, et l'apprenant aurait continué de ne voir
+   * personne. Cette fonction ne crée rien — elle complète.
+   *
+   * Un formateur déjà en place n'est jamais remplacé : c'est une décision
+   * prise ailleurs, pas un vide à combler.
+   *
+   * @return int Nombre de séances complétées.
+   */
+  private function acdc_assign_trainer_to_contract_sessions( $contract ) {
+    if ( ! $contract || empty( $contract->trainer_id ) || empty( $contract->formation_id ) ) {
+      return 0;
+    }
+    global $wpdb;
+    $dates = array();
+    foreach ( array_filter( array_map( 'trim', explode( ',', (string) ( $contract->seances_dates ?? '' ) ) ) ) as $d ) {
+      if ( preg_match( '/^\d{4}-\d{2}-\d{2}$/', $d ) ) {
+        $dates[] = $d;
+      }
+    }
+    if ( empty( $dates ) ) {
+      return 0;
+    }
+    $placeholders = implode( ',', array_fill( 0, count( $dates ), '%s' ) );
+    $params = array_merge( array( (int) $contract->trainer_id, (int) $contract->formation_id ), $dates );
+    return (int) $wpdb->query( $wpdb->prepare(
+      "UPDATE {$this->session_table} SET trainer_id = %d
+        WHERE formation_id = %d
+          AND start_date IN ({$placeholders})
+          AND ( trainer_id IS NULL OR trainer_id = 0 )",
+      $params
+    ) );
+  }
+
   /** Le total HT d'une prestation : le tarif ET les frais qui s'y ajoutent. */
   private function acdc_funding_total_ht( $price_ht, $transport_on, $transport_ht, $meal_on, $meal_ht ) {
     $cents  = \ACDC\Support\FundingSplit::toCents( $price_ht );
@@ -1111,7 +1149,15 @@ trait ACDC_Dossiers_Contracts_Core_Trait {
     $formation_id      = (int) ( $args['formation_id'] ?? ( $contract->formation_id ?? 0 ) );
     $company_id        = (int) ( $args['company_id'] ?? ( $contract->company_id ?? 0 ) );
     $formation_title   = (string) ( $args['formation_title'] ?? ( $contract->formation_title ?? '' ) );
-    $trainer_id        = (int) ( $args['trainer_id'] ?? ( $contract->trainer_id ?? 0 ) );
+    /* ACDC 3.25.265 — L'OPÉRATEUR ?? PIÉGEAIT LE FORMATEUR DE LA CONVENTION.
+       Il retient la valeur des arguments dès qu'elle est DÉFINIE, fût-elle
+       zéro : le dossier d'inscription, qui transmet toujours la clé, effaçait
+       donc le formateur désigné sur la convention. On ne prend l'argument que
+       s'il désigne réellement quelqu'un, et la convention prend le relais. */
+    $trainer_id        = (int) ( $args['trainer_id'] ?? 0 );
+    if ( $trainer_id <= 0 ) {
+      $trainer_id = (int) ( $contract->trainer_id ?? 0 );
+    }
     $seances_dates_raw = (string) ( $args['seances_dates'] ?? ( $contract->seances_dates ?? '' ) );
     /* Le dossier en brouillon ne planifie rien : rien n'est encore engagé. */
     $is_draft          = ! empty( $args['is_draft'] );
@@ -1243,6 +1289,19 @@ trait ACDC_Dossiers_Contracts_Core_Trait {
           $formation_id, $sdate
         ) );
         if ( $exists ) {
+          /* ACDC 3.25.265 — Une séance déjà là ne se recrée pas, mais elle
+             ACCUEILLE le formateur qu'on vient de désigner sur la convention.
+             Sans cela, désigner un formateur après coup n'aurait aucun effet :
+             les séances existent déjà, et l'apprenant continuerait de ne voir
+             personne. On ne remplace jamais un formateur déjà en place — c'est
+             une décision, pas un défaut à corriger. */
+          if ( $trainer_id > 0 ) {
+            $wpdb->query( $wpdb->prepare(
+              "UPDATE {$this->session_table} SET trainer_id = %d WHERE id = %d AND ( trainer_id IS NULL OR trainer_id = 0 )",
+              $trainer_id,
+              (int) $exists
+            ) );
+          }
           $created_session_ids[] = (int) $exists;
           continue;
         }

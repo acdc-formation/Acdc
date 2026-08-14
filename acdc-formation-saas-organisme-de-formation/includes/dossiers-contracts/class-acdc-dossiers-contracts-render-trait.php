@@ -602,6 +602,7 @@ trait ACDC_Dossiers_Contracts_Render_Trait {
         <?php
         // ACDC 3.25.74 — Séances de la convention (affichage informatif)
         $contract_seances = array();
+        $linked_contract  = null;
         if ( ! empty( $registration->autofill_contract_id ) ) {
           $linked_contract = $this->get_registration_contract( (int) $registration->autofill_contract_id );
           if ( $linked_contract && ! empty( $linked_contract->seances_dates ) ) {
@@ -630,12 +631,26 @@ trait ACDC_Dossiers_Contracts_Render_Trait {
         // ACDC 3.25.72 — Formateur désigné
         $all_trainers = $this->get_trainers();
         $current_trainer_id = ! empty( $registration->trainer_id ) ? (int) $registration->trainer_id : 0;
+        /* ACDC 3.25.265 — Le formateur vient de la convention quand le dossier
+           n'en porte pas : c'est là qu'il est désormais désigné, et ce dossier
+           en est issu. Sans ce repli, l'écran affichait « — » alors que la
+           convention nommait quelqu'un. */
+        $rc_trainer_label = '';
+        if ( $current_trainer_id <= 0 && ! empty( $linked_contract->trainer_id ) ) {
+          $current_trainer_id = (int) $linked_contract->trainer_id;
+        }
+        if ( $current_trainer_id > 0 && empty( $registration->trainer_label ) ) {
+          $rc_trainer_row = $this->get_trainer( $current_trainer_id );
+          if ( $rc_trainer_row ) {
+            $rc_trainer_label = trim( (string) $rc_trainer_row->first_name . ' ' . (string) $rc_trainer_row->last_name );
+          }
+        }
         ?>
         <div class="acdc-contract-grid">
           <div class="acdc-contract-label">Formateur désigné</div>
           <div>
             <?php if ( $readonly ) : ?>
-              <p style="margin:0;padding:10px 0;font-size:14px;"><?php echo ! empty( $registration->trainer_label ) ? esc_html( $registration->trainer_label ) : '—'; ?></p>
+              <p style="margin:0;padding:10px 0;font-size:14px;"><?php echo ! empty( $registration->trainer_label ) ? esc_html( $registration->trainer_label ) : ( '' !== $rc_trainer_label ? esc_html( $rc_trainer_label ) : '—' ); ?></p>
             <?php else : ?>
               <select name="registration[trainer_id]" class="acdc-input">
                 <option value="0">— Aucun formateur désigné —</option>
@@ -1515,6 +1530,32 @@ trait ACDC_Dossiers_Contracts_Render_Trait {
               'pm_end'   => (string) ( $params['default_pm_end']   ?? '17:00' ),
             );
             ?>
+            <?php
+            /* ACDC 3.25.265 — LE FORMATEUR SE DÉSIGNE ICI.
+               La convention crée les séances au moment de sa signature ; c'est
+               donc ici, à côté des dates, que le formateur doit être choisi.
+               Il n'existait aucun écran pour le faire dans ce parcours : les
+               séances naissaient sans formateur, l'apprenant ne voyait pas son
+               référent, et le rappel de contrat formateur annonçait « non
+               désigné » sans qu'on puisse y remédier. */
+            $rc_trainers    = method_exists( $this, 'get_trainers' ) ? (array) $this->get_trainers() : array();
+            $rc_trainer_sel = isset( $contract->trainer_id ) ? (int) $contract->trainer_id : 0;
+            ?>
+            <div class="acdc-contract-label">Formateur désigné</div>
+            <div>
+              <select name="registration_contract[trainer_id]"<?php echo $readonly ? ' disabled' : ''; ?>>
+                <option value="">— À désigner plus tard —</option>
+                <?php foreach ( $rc_trainers as $rc_t ) : ?>
+                  <option value="<?php echo (int) $rc_t->id; ?>" <?php selected( $rc_trainer_sel, (int) $rc_t->id ); ?>>
+                    <?php echo esc_html( trim( (string) $rc_t->first_name . ' ' . (string) $rc_t->last_name ) ); ?>
+                  </option>
+                <?php endforeach; ?>
+              </select>
+              <span class="acdc-help" style="display:block;margin-top:4px;">
+                Il est reporté sur les séances créées par cette convention : c’est lui que l’apprenant verra comme formateur référent,
+                et c’est pour lui que le contrat de sous-traitance sera réclamé.
+              </span>
+            </div>
             <div class="acdc-contract-label">Dates des séances <span class="acdc-required">*</span></div>
             <div>
               <input type="hidden" name="registration_contract[seances_dates]" id="acdc-contract-seances-hidden" value="<?php echo esc_attr( implode( ',', $seances_arr ) ); ?>">

@@ -511,6 +511,8 @@ public function handle_save_registration_contract() {
     'public_funding'             => isset( $input['public_funding'] ) ? sanitize_text_field( $input['public_funding'] ) : '',
     'public_funding_name'        => isset( $input['public_funding_name'] ) ? sanitize_text_field( $input['public_funding_name'] ) : '',
     'public_funding_name_custom' => isset( $input['public_funding_name_custom'] ) ? sanitize_text_field( $input['public_funding_name_custom'] ) : '',
+    /* ACDC 3.25.265 — Le formateur désigné, reporté sur les séances. */
+    'trainer_id'            => isset( $input['trainer_id'] ) && absint( $input['trainer_id'] ) ? absint( $input['trainer_id'] ) : null,
     /* ACDC 3.25.258 — Le financement, rattaché à la fiche et non à un nom. */
     'funder_id'             => $pec_plan['funder_id'] ?: null,
     'funding_subrogation'   => ! empty( $input['funding_subrogation'] ) ? 1 : 0,
@@ -570,6 +572,17 @@ public function handle_save_registration_contract() {
 
   $messages = array( $message );
   $is_new_contract = empty( $_POST['contract_id'] );
+
+  /* ACDC 3.25.265 — Le formateur désigné rejoint les séances déjà créées.
+     La fabrique des séances ne tourne qu'à la signature : sans ce report, le
+     désigner après coup n'aurait servi à rien. */
+  $rc_saved = $this->get_registration_contract( $contract_id );
+  if ( $rc_saved && ! empty( $rc_saved->trainer_id ) ) {
+    $rc_assigned = $this->acdc_assign_trainer_to_contract_sessions( $rc_saved );
+    if ( $rc_assigned > 0 ) {
+      $messages[] = sprintf( 'Formateur reporté sur %d séance(s).', $rc_assigned );
+    }
+  }
 
   /* ── Cascade statut : convention créée → prospect "Converti" ── */
   if ( $is_new_contract && $source_prospect_id && false !== $result ) {

@@ -907,14 +907,28 @@ trait ACDC_Learner_Portal_Core_Trait {
   private function learner_portal_build_access_index() {
     global $wpdb;
 
-    $cache_key = 'acdc_of_learner_portal_access_index';
+    /* La clé porte une version : l'index mis en cache avant la 3.25.265 ne
+       contient pas les colonnes de documents, et il masquerait la correction
+       le temps de son expiration. */
+    $cache_key = 'acdc_of_learner_portal_access_index_v2';
     $cached = get_transient( $cache_key );
     if ( is_array( $cached ) ) {
       return $cached;
     }
 
     $learners = $wpdb->get_results( "SELECT id, email, first_name, usage_last_name, session_id FROM {$this->learner_table} WHERE email <> '' ORDER BY id DESC" );
-    $registrations = $wpdb->get_results( "SELECT id, learner_id, learner_ids, formation_id, updated_at FROM {$this->training_registration_table} WHERE extranet_access = 1 AND is_draft = 0 ORDER BY updated_at DESC, id DESC" );
+    /* ACDC 3.25.265 — L'EXTRANET APPRENANT NE CHARGEAIT AUCUN DOCUMENT.
+       Cette requête ne ramenait que cinq colonnes : id, apprenant, formation,
+       date. Le portail testait ensuite $registration->convocation_document_url,
+       $registration->evaluation_result_document_url, et une dizaine d'autres —
+       des propriétés JAMAIS LUES, donc toujours vides. Il annonçait donc
+       « Bientôt disponible » sur des pièces déjà produites, et affichait zéro
+       partout : Convocations (0), Résultats (0), Certificats (0), Conventions
+       (0). Tout ce qui vient du dossier était muet ; seul ce qui vient de la
+       formation remontait.
+       C'est un écran qui affirme sans avoir lu — et il l'affirmait à
+       l'apprenant, qui n'a aucun moyen de savoir que le document existe. */
+    $registrations = $wpdb->get_results( "SELECT * FROM {$this->training_registration_table} WHERE extranet_access = 1 AND is_draft = 0 ORDER BY updated_at DESC, id DESC" );
     $sessions = $wpdb->get_results( "SELECT id, formation_id, start_date, start_at, end_at, end_date, trainer_id FROM {$this->session_table}" );
     $formations = $wpdb->get_results( "SELECT * FROM {$this->formation_table}" );
 
@@ -992,6 +1006,11 @@ trait ACDC_Learner_Portal_Core_Trait {
   }
 
   private function learner_portal_flush_access_index_cache() {
+    /* ACDC 3.25.265 — La purge doit viser la clé RÉELLEMENT utilisée. Elle
+       effaçait l'ancienne, restée en place après le changement de version : un
+       vidage de cache qui ne vide rien est pire qu'aucun vidage, on croit
+       l'avoir fait. */
+    delete_transient( 'acdc_of_learner_portal_access_index_v2' );
     delete_transient( 'acdc_of_learner_portal_access_index' );
   }
 
@@ -1407,7 +1426,12 @@ trait ACDC_Learner_Portal_Core_Trait {
       ),
       $extra
     );
-    $url = $this->portal_page_url( $args );
+    /* ACDC 3.25.265 — CE LIEN MENAIT À L'EXTRANET DE L'ORGANISME.
+       portal_page_url() est la page du portail gestionnaire ; l'apprenant y
+       arrivait sans y avoir accès, et voyait l'écran de l'organisme au lieu de
+       son document. L'action lp_action n'est d'ailleurs interprétée que dans
+       le portail APPRENANT : le lien ne pouvait pas aboutir. */
+    $url = $this->learner_portal_page_url( 'documents', $args );
     return wp_nonce_url( $url, 'acdc_learner_download_document_' . absint( $registration_id ) . '_' . sanitize_key( $document_type ) . '_' . absint( isset( $extra['doc_index'] ) ? $extra['doc_index'] : 0 ) );
   }
 
@@ -1419,7 +1443,9 @@ trait ACDC_Learner_Portal_Core_Trait {
       'resource_index'  => absint( $resource_index ),
       'target_url'      => rawurlencode( esc_url_raw( $target_url ) ),
     );
-    $url = $this->portal_page_url( $args );
+    /* ACDC 3.25.265 — Même faute que pour les documents : la bibliothèque
+       renvoyait l'apprenant sur le portail de l'organisme. */
+    $url = $this->learner_portal_page_url( 'library', $args );
     return wp_nonce_url( $url, 'acdc_learner_open_resource_' . absint( $registration_id ) . '_' . sanitize_key( $resource_type ) . '_' . absint( $resource_index ) );
   }
 
