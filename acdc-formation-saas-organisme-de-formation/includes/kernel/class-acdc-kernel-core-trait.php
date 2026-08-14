@@ -2723,6 +2723,19 @@ dbDelta( $sql_companies );
     $this->maybe_add_table_column( $this->funder_table, 'contact_type', "VARCHAR(120) DEFAULT ''" );
     $this->maybe_add_table_column( $this->funder_table, 'has_paca_presence', "VARCHAR(10) DEFAULT ''" );
     $this->maybe_add_table_column( $this->funder_table, 'paca_contact_details', 'TEXT NULL' );
+    /* ACDC 3.25.257 — L'INTERLOCUTEUR DÉDIÉ ET L'ESPACE EN LIGNE DU FINANCEUR.
+       Un OPCO se traite avec quelqu'un, pas avec un standard, et son espace en
+       ligne demande un compte que l'organisme crée lui-même. Ces informations
+       vivaient jusqu'ici dans un carnet, hors du dossier qu'elles servent.
+       Le mot de passe est CHIFFRÉ AU REPOS (voir handle_save_funder) : une
+       sauvegarde SQL de la base ne le révèle pas. */
+    $this->maybe_add_table_column( $this->funder_table, 'contact_first_name', "VARCHAR(120) DEFAULT ''" );
+    $this->maybe_add_table_column( $this->funder_table, 'contact_last_name',  "VARCHAR(120) DEFAULT ''" );
+    $this->maybe_add_table_column( $this->funder_table, 'contact_phone',      "VARCHAR(50) DEFAULT ''" );
+    $this->maybe_add_table_column( $this->funder_table, 'contact_email',      "VARCHAR(190) DEFAULT ''" );
+    $this->maybe_add_table_column( $this->funder_table, 'portal_url',         'TEXT NULL' );
+    $this->maybe_add_table_column( $this->funder_table, 'portal_login',       "VARCHAR(190) DEFAULT ''" );
+    $this->maybe_add_table_column( $this->funder_table, 'portal_password',    'TEXT NULL' );
     $this->maybe_add_table_index( $this->funder_table, 'name', 'INDEX name (name)' );
     $this->maybe_add_table_index( $this->funder_table, 'postal_code', 'INDEX postal_code (postal_code)' );
 

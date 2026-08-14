@@ -8940,6 +8940,96 @@ trait ACDC_Kernel_Render_Trait {
           <p><label>Présence PACA</label><select name="funder[has_paca_presence]" <?php echo $read; ?>><option value="" <?php selected( (string) $value( 'has_paca_presence' ), '' ); ?>>Choisir une option</option><option value="Oui" <?php selected( (string) $value( 'has_paca_presence' ), 'Oui' ); ?>>Oui</option><option value="Non" <?php selected( (string) $value( 'has_paca_presence' ), 'Non' ); ?>>Non</option></select></p>
         </div>
         <p><label>Page contact + coordonnées PACA</label><textarea name="funder[paca_contact_details]" rows="4" <?php echo $read_only ? 'readonly' : ''; ?> placeholder="Lien(s), contact(s), coordonnées PACA"><?php echo esc_textarea( $value( 'paca_contact_details' ) ); ?></textarea></p>
+      </div>
+
+      <?php /* ACDC 3.25.257 — L'interlocuteur dédié et l'espace en ligne. */ ?>
+      <div class="acdc-panel acdc-needs-section">
+        <div class="acdc-needs-section-title">Interlocuteur dédié</div>
+        <div class="acdc-grid-2cols">
+          <p><label>Prénom</label><input type="text" name="funder[contact_first_name]" value="<?php echo esc_attr( $value( 'contact_first_name' ) ); ?>" <?php echo $read_only ? 'readonly' : ''; ?> placeholder="Prénom"></p>
+          <p><label>Nom</label><input type="text" name="funder[contact_last_name]" value="<?php echo esc_attr( $value( 'contact_last_name' ) ); ?>" <?php echo $read_only ? 'readonly' : ''; ?> placeholder="Nom"></p>
+          <p><label>Téléphone</label><input type="text" name="funder[contact_phone]" value="<?php echo esc_attr( $value( 'contact_phone' ) ); ?>" <?php echo $read_only ? 'readonly' : ''; ?> placeholder="Téléphone direct"></p>
+          <p><label>E-mail</label><input type="email" name="funder[contact_email]" value="<?php echo esc_attr( $value( 'contact_email' ) ); ?>" <?php echo $read_only ? 'readonly' : ''; ?> placeholder="prenom.nom@opco.fr"></p>
+        </div>
+      </div>
+
+      <div class="acdc-panel acdc-needs-section">
+        <div class="acdc-needs-section-title">Notre espace en ligne</div>
+        <?php
+        $portal_url_val = (string) $value( 'portal_url' );
+        $has_password   = ( $funder && ! empty( $funder->portal_password ) );
+        ?>
+        <div class="acdc-grid-2cols">
+          <p>
+            <label>Adresse de connexion</label>
+            <input type="url" name="funder[portal_url]" value="<?php echo esc_attr( $portal_url_val ); ?>" <?php echo $read_only ? 'readonly' : ''; ?> placeholder="https://espace.opco.fr/connexion">
+            <?php if ( '' !== trim( $portal_url_val ) ) : ?>
+              <span class="acdc-help">➜ <a href="<?php echo esc_url( $portal_url_val ); ?>" target="_blank" rel="noopener noreferrer">Ouvrir l’espace <?php echo esc_html( $value( 'name' ) ); ?></a></span>
+            <?php endif; ?>
+          </p>
+          <p><label>Identifiant</label><input type="text" name="funder[portal_login]" value="<?php echo esc_attr( $value( 'portal_login' ) ); ?>" <?php echo $read_only ? 'readonly' : ''; ?> autocomplete="off" placeholder="Identifiant de connexion"></p>
+        </div>
+        <div class="acdc-grid-2cols">
+          <?php if ( ! $read_only ) : ?>
+          <p>
+            <label>Mot de passe</label>
+            <input type="password" name="funder[portal_password]" value="" autocomplete="new-password"
+                   placeholder="<?php echo $has_password ? '•••••••• (enregistré)' : 'Aucun mot de passe enregistré'; ?>">
+            <span class="acdc-help">
+              <?php if ( $has_password ) : ?>
+                Laissez vide pour conserver le mot de passe enregistré.
+              <?php else : ?>
+                Il sera chiffré avant d’être enregistré.
+              <?php endif; ?>
+            </span>
+          </p>
+          <?php endif; ?>
+          <?php if ( $has_password ) : ?>
+          <p style="align-self:end;">
+            <?php if ( ! $read_only ) : ?>
+            <label class="acdc-checkbox-line"><input type="checkbox" name="funder[portal_password_clear]" value="1"> Effacer le mot de passe enregistré</label>
+            <?php endif; ?>
+            <span class="acdc-help">
+              <button type="button" class="acdc-button acdc-button-soft acdc-reveal-funder-password"
+                      data-funder="<?php echo (int) $funder->id; ?>"
+                      data-nonce="<?php echo esc_attr( wp_create_nonce( 'acdc_reveal_funder_password_' . (int) $funder->id ) ); ?>"
+                      style="height:32px;font-size:12px;">👁 Révéler le mot de passe</button>
+              <span class="acdc-reveal-funder-password-out" style="display:block;margin-top:6px;font-family:monospace;"></span>
+            </span>
+          </p>
+          <?php endif; ?>
+        </div>
+        <p class="acdc-help" style="margin-top:4px;">
+          Le mot de passe est chiffré dans la base : une sauvegarde SQL ne le révèle pas.
+          En revanche, toute personne administrateur de ce site peut le révéler ici.
+        </p>
+        <?php if ( $has_password ) : ?>
+        <script>
+        (function(){
+          document.querySelectorAll('.acdc-reveal-funder-password').forEach(function(btn){
+            btn.addEventListener('click', function(){
+              var out = btn.parentNode.querySelector('.acdc-reveal-funder-password-out');
+              if ( out && out.textContent ) { out.textContent = ''; btn.textContent = '👁 Révéler le mot de passe'; return; }
+              var fd = new FormData();
+              fd.append('action', 'acdc_reveal_funder_password');
+              fd.append('funder_id', btn.getAttribute('data-funder'));
+              fd.append('nonce', btn.getAttribute('data-nonce'));
+              btn.disabled = true;
+              fetch('<?php echo esc_url( admin_url( 'admin-ajax.php' ) ); ?>', { method:'POST', body: fd, credentials:'same-origin' })
+                .then(function(r){ return r.json(); })
+                .then(function(res){
+                  btn.disabled = false;
+                  if ( out ) {
+                    out.textContent = ( res && res.success ) ? res.data.password : ( res && res.data ? res.data.message : 'Erreur.' );
+                  }
+                  btn.textContent = '🙈 Masquer';
+                })
+                .catch(function(){ btn.disabled = false; if ( out ) { out.textContent = 'Erreur réseau.'; } });
+            });
+          });
+        })();
+        </script>
+        <?php endif; ?>
         <?php if ( ! $read_only ) : ?>
           <p class="acdc-actions-end-wrap">
             <a class="acdc-button" href="<?php echo esc_url( is_admin() ? admin_url( 'admin.php?page=acdc-of-funders' ) : $this->portal_page_url( array( 'tab' => 'funders' ) ) ); ?>" class="acdc-button acdc-button-soft">Annuler</a>

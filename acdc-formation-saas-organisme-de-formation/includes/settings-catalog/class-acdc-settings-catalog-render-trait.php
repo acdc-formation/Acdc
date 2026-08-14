@@ -1498,8 +1498,10 @@ Inscription : via le formulaire de contact du site ou par téléphone." );
   }
 
   private function render_front_settings_integrations_section() {
-    $opts    = get_option( 'acdc_of_integrations', array() );
-    $api_key = is_array( $opts ) && ! empty( $opts['openai_api_key'] ) ? (string) $opts['openai_api_key'] : '';
+    /* ACDC 3.25.257 — La clé n'est plus lue ici, seulement son existence :
+       l'imprimer dans l'attribut value revenait à la publier dans le code
+       source de la page, le type="password" ne masquant qu'à l'œil. */
+    $has_key = $this->has_openai_api_key();
     $saved   = isset( $_GET['saved'] ) && '1' === sanitize_text_field( wp_unslash( $_GET['saved'] ) );
     ?>
     <div class="acdc-panel">
@@ -1516,15 +1518,21 @@ Inscription : via le formulaire de contact du site ou par téléphone." );
           <label style="font-size:13px;font-weight:500;color:#0f2c52;display:block;margin-bottom:5px;">Cl&#233; API OpenAI (sk-proj-…)</label>
           <input type="password"
                  name="openai_api_key"
-                 value="<?php echo esc_attr( $api_key ); ?>"
+                 value=""
                  autocomplete="new-password"
-                 placeholder="sk-proj-…"
+                 placeholder="<?php echo $has_key ? '•••••••• (cl&#233; enregistr&#233;e)' : 'sk-proj-…'; ?>"
                  style="width:100%;max-width:520px;height:40px;border-radius:10px;border:1px solid #dfe5ee;padding:0 12px;font-size:13px;">
           <span style="display:block;font-size:11px;color:#4b5d76;margin-top:5px;">
-            Cr&#233;ez votre cl&#233; sur <a href="https://platform.openai.com/api-keys" target="_blank" rel="noopener">platform.openai.com/api-keys</a>. 
-            Elle est stock&#233;e chiffr&#233;e dans votre base de donn&#233;es et n'est jamais affich&#233;e en clair.
+            Cr&#233;ez votre cl&#233; sur <a href="https://platform.openai.com/api-keys" target="_blank" rel="noopener">platform.openai.com/api-keys</a>.
+            Elle est stock&#233;e chiffr&#233;e dans votre base de donn&#233;es et n'est jamais r&#233;affich&#233;e.
+            <?php if ( $has_key ) : ?>Laissez le champ vide pour conserver la cl&#233; enregistr&#233;e.<?php endif; ?>
           </span>
         </p>
+        <?php if ( $has_key ) : ?>
+        <p style="font-size:12px;color:#4b5d76;">
+          <label><input type="checkbox" name="openai_api_key_clear" value="1"> Effacer la cl&#233; enregistr&#233;e</label>
+        </p>
+        <?php endif; ?>
         <p><button type="submit" class="acdc-button acdc-button-primary">Enregistrer la cl&#233;</button></p>
       </form>
     </div>

@@ -347,7 +347,20 @@ trait Acdc_Proposals_Actions_Trait {
     }
     $key            = sanitize_text_field( wp_unslash( isset( $_POST['openai_api_key'] ) ? $_POST['openai_api_key'] : '' ) );
     $return_context = ( isset( $_POST['return_context'] ) && 'front' === $_POST['return_context'] ) ? 'front' : 'admin';
-    $this->save_openai_api_key( $key );
+
+    /* ACDC 3.25.257 — Le champ n'est plus prérempli : la clé n'est jamais
+       réécrite dans la page. Un champ vide veut donc dire « garde ce qui est
+       enregistré », jamais « efface » — sinon toucher à cet écran effacerait
+       la clé sans le dire. Seule la case cochée efface. */
+    $clear = ! empty( $_POST['openai_api_key_clear'] );
+    switch ( \ACDC\Support\StoredSecret::decide( $key, $clear ) ) {
+      case \ACDC\Support\StoredSecret::CLEAR:
+        $this->save_openai_api_key( '' );
+        break;
+      case \ACDC\Support\StoredSecret::SET:
+        $this->save_openai_api_key( $key );
+        break;
+    }
     if ( 'front' === $return_context ) {
       wp_safe_redirect( $this->portal_page_url( array( 'tab' => 'settings', 'section' => 'integrations', 'saved' => '1' ) ) );
     } else {

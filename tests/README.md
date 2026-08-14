@@ -17,6 +17,7 @@ lancent sans WordPress, en quelques secondes.
     php tests/test-inscription-convention.php # la convention signée crée les dossiers
     php tests/test-cachet-proportions.php # le cachet et la signature ne sont jamais déformés
     php tests/test-protection-dossiers.php # aucune protection ne remonte à la racine des uploads
+    php tests/test-secret-financeur.php # un champ mot de passe vide n'efface jamais
     node tests/test-signature-trace.js # continuité du tracé des signatures
     php tests/scan-global-wpdb.php acdc-formation-saas-organisme-de-formation
     php tests/scan-envois-email.php  # e-mails qui contournent la porte commune
@@ -28,6 +29,7 @@ lancent sans WordPress, en quelques secondes.
     php tests/scan-charte-documents.php # documents qui dessinent leur propre en-tête
     php tests/scan-actions-publiques.php # actions publiques bloquées pour les visiteurs
     php tests/scan-pdf-sans-filet.php # fabrication de PDF sans rattrapage d'erreur
+    php tests/scan-secrets-en-page.php # secret (clé API, mot de passe) imprimé dans le HTML
 
 Le dernier balaie tout le plugin et signale les fonctions qui utilisent `$wpdb`
 sans l'avoir importé — la faute qui a produit l'erreur fatale de la 3.25.236.

@@ -823,9 +823,33 @@ trait Acdc_Proposals_Core_Trait {
   /* ---------------------------------------------------------------
    * Clé API OpenAI
    * --------------------------------------------------------------- */
+  /**
+   * ACDC 3.25.257 — L'écran des intégrations annonçait « stockée chiffrée dans
+   * votre base de données et n'est jamais affichée en clair ». Les deux
+   * moitiés de la phrase étaient fausses : la clé était enregistrée en clair
+   * dans l'option, et réimprimée en clair dans l'attribut value du champ — le
+   * type="password" ne masquait qu'à l'œil. Le balayage
+   * tests/scan-secrets-en-page.php l'a mise au jour en cherchant les secrets
+   * imprimés dans une page.
+   *
+   * Même mécanisme que les clés de veille : chiffrement au repos, lecture
+   * rétro-compatible (acdc_secret_decrypt rend tel quel ce qui n'est pas
+   * préfixé, donc les clés déjà enregistrées continuent de fonctionner et se
+   * chiffrent au premier réenregistrement).
+   */
   private function get_openai_api_key() {
+    $opts   = get_option( 'acdc_of_integrations', array() );
+    $stored = ! empty( $opts['openai_api_key'] ) ? (string) $opts['openai_api_key'] : '';
+    if ( '' === $stored ) {
+      return '';
+    }
+    return method_exists( $this, 'acdc_secret_decrypt' ) ? (string) $this->acdc_secret_decrypt( $stored ) : $stored;
+  }
+
+  /** Y a-t-il une clé enregistrée ? — sans la lire, pour l'affichage du champ. */
+  private function has_openai_api_key() {
     $opts = get_option( 'acdc_of_integrations', array() );
-    return ! empty( $opts['openai_api_key'] ) ? (string) $opts['openai_api_key'] : '';
+    return is_array( $opts ) && ! empty( $opts['openai_api_key'] );
   }
 
   private function save_openai_api_key( $key ) {
@@ -833,7 +857,10 @@ trait Acdc_Proposals_Core_Trait {
     if ( ! is_array( $opts ) ) {
       $opts = array();
     }
-    $opts['openai_api_key'] = sanitize_text_field( $key );
+    $key = sanitize_text_field( $key );
+    $opts['openai_api_key'] = ( '' === $key || ! method_exists( $this, 'acdc_secret_encrypt' ) )
+      ? $key
+      : (string) $this->acdc_secret_encrypt( $key );
     update_option( 'acdc_of_integrations', $opts );
   }
 

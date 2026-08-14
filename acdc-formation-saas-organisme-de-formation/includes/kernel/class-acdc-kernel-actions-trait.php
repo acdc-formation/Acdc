@@ -4597,7 +4597,48 @@ public function handle_delete_need() {
     exit;
   }
   $this->redirect_to_portal( 'groups', 'Formation du groupe interrompue.', 'success' );
-}public function handle_save_funder() {
+}
+
+  /**
+   * ACDC 3.25.257 — RÉVÉLER LE MOT DE PASSE D'UN ESPACE FINANCEUR.
+   *
+   * Il n'est jamais écrit dans la page : l'imprimer masqué en HTML reviendrait
+   * à le publier dans le code source, et le masque ne serait qu'un décor. Il
+   * n'est déchiffré qu'ici, sur demande explicite, après vérification du droit
+   * d'administration et d'un jeton propre à cette fiche. La lecture est
+   * journalisée : qui a révélé quoi, et quand.
+   */
+  public function ajax_reveal_funder_password() {
+    if ( ! current_user_can( 'manage_options' ) ) {
+      wp_send_json_error( array( 'message' => 'Accès refusé.' ) );
+    }
+    $funder_id = isset( $_POST['funder_id'] ) ? absint( wp_unslash( $_POST['funder_id'] ) ) : 0;
+    $nonce     = isset( $_POST['nonce'] ) ? sanitize_text_field( wp_unslash( $_POST['nonce'] ) ) : '';
+    if ( ! $funder_id || ! wp_verify_nonce( $nonce, 'acdc_reveal_funder_password_' . $funder_id ) ) {
+      wp_send_json_error( array( 'message' => 'Lien expiré : rechargez la fiche.' ) );
+    }
+
+    global $wpdb;
+    $stored = (string) $wpdb->get_var( $wpdb->prepare(
+      "SELECT portal_password FROM {$this->funder_table} WHERE id = %d",
+      $funder_id
+    ) );
+    if ( '' === $stored ) {
+      wp_send_json_error( array( 'message' => 'Aucun mot de passe enregistré.' ) );
+    }
+
+    $plain = method_exists( $this, 'acdc_secret_decrypt' ) ? $this->acdc_secret_decrypt( $stored ) : $stored;
+    if ( '' === $plain ) {
+      wp_send_json_error( array( 'message' => 'Déchiffrement impossible sur ce serveur.' ) );
+    }
+
+    if ( method_exists( $this, 'log_action_event' ) ) {
+      $this->log_action_event( 'read', 'funder_portal_password', $funder_id );
+    }
+    wp_send_json_success( array( 'password' => $plain ) );
+  }
+
+  public function handle_save_funder() {
   if ( ! current_user_can( 'manage_options' ) ) {
     wp_die( esc_html( 'Accès refusé.' ) );
   }
@@ -4619,7 +4660,41 @@ public function handle_delete_need() {
     'contact_type' => isset( $input['contact_type'] ) ? sanitize_text_field( $input['contact_type'] ) : '',
     'has_paca_presence' => isset( $input['has_paca_presence'] ) ? sanitize_text_field( $input['has_paca_presence'] ) : '',
     'paca_contact_details' => isset( $input['paca_contact_details'] ) ? sanitize_textarea_field( $input['paca_contact_details'] ) : '',
+    /* ACDC 3.25.257 — L'interlocuteur dédié : c'est avec lui qu'on traite. */
+    'contact_first_name' => isset( $input['contact_first_name'] ) ? sanitize_text_field( $input['contact_first_name'] ) : '',
+    'contact_last_name'  => isset( $input['contact_last_name'] )  ? sanitize_text_field( $input['contact_last_name'] )  : '',
+    'contact_phone'      => isset( $input['contact_phone'] )      ? sanitize_text_field( $input['contact_phone'] )      : '',
+    'contact_email'      => isset( $input['contact_email'] )      ? sanitize_email( $input['contact_email'] )           : '',
+    'portal_url'         => isset( $input['portal_url'] )         ? esc_url_raw( $input['portal_url'] )                 : '',
+    'portal_login'       => isset( $input['portal_login'] )       ? sanitize_text_field( $input['portal_login'] )       : '',
   );
+
+  /* ACDC 3.25.257 — LE MOT DE PASSE DE L'ESPACE FINANCEUR, CHIFFRÉ AU REPOS.
+   *
+   * Même mécanisme que les clés API de veille depuis la 3.25.92 : AES-256, clé
+   * dérivée d'un secret qui ne vit pas dans la base (ACDC_SECRET_KEY, sinon un
+   * sel WordPress). Une sauvegarde SQL exportée ne révèle donc plus rien.
+   *
+   * Ce que cela ne protège pas, et qui doit être dit : un administrateur du
+   * site peut cliquer « révéler ». C'est inhérent — un mot de passe qu'il faut
+   * pouvoir relire ne peut pas être haché comme un mot de passe de connexion.
+   *
+   * Le champ vide ne signifie JAMAIS « efface » : le formulaire n'envoie
+   * jamais le mot de passe existant, il ne l'affiche même pas. Sans saisie, on
+   * garde ce qui est enregistré ; c'est la case « effacer » qui supprime. */
+  $password_input = isset( $input['portal_password'] ) ? (string) $input['portal_password'] : '';
+  $clear_password = ! empty( $input['portal_password_clear'] );
+  switch ( \ACDC\Support\StoredSecret::decide( $password_input, $clear_password ) ) {
+    case \ACDC\Support\StoredSecret::CLEAR:
+      $data['portal_password'] = '';
+      break;
+    case \ACDC\Support\StoredSecret::SET:
+      $data['portal_password'] = method_exists( $this, 'acdc_secret_encrypt' )
+        ? $this->acdc_secret_encrypt( $password_input )
+        : $password_input;
+      break;
+    /* KEEP : la colonne n'est pas dans $data, donc pas touchée par l'UPDATE. */
+  }
 
   $missing_fields = array();
   if ( empty( $data['name'] ) ) {
