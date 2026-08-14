@@ -89,30 +89,84 @@ trait ACDC_Compliance_Quality_Actions_Trait {
         $h_externes += (float) $tcr->total_heures;
       }
     }
-    // Total apprenants sur la période
-    $nb_apprenants_total = (int) $wpdb->get_var( $wpdb->prepare(
-      "SELECT COUNT(DISTINCT l.id) FROM {$this->learner_table} l INNER JOIN {$this->session_table} s ON s.id = l.session_id WHERE s.is_draft = 0 AND COALESCE(s.start_date, DATE(s.start_at)) BETWEEN %s AND %s",
+    /* ACDC 3.25.270 — LE BPF DÉCLARAIT ZÉRO STAGIAIRE.
+       Cinq chiffres du bilan — nombre de stagiaires, heures-stagiaires,
+       catégories socioprofessionnelles, objectifs, spécialités — étaient
+       calculés par cinq requêtes indépendantes qui comptaient toutes les
+       apprenants par `learner.session_id`. Cette colonne ne peut désigner
+       qu'UNE séance, et la convention ne la renseigne jamais puisque c'est elle
+       qui crée les séances : le bilan que l'on déclare à la DREETS ne voyait
+       donc que les inscriptions faites à l'ancienne.
+       Deux corrections en une. Le rattachement passe par le résolveur commun,
+       celui qui connaît les trois chemins. Et le périmètre — les séances de la
+       période — est lu UNE FOIS, les cinq chiffres en découlant : cinq requêtes
+       séparées sur la même vérité finissent toujours par se contredire, et un
+       bilan qui se contredit ne se corrige plus, il se refait.
+       Le périmètre lui-même ne bouge pas : mêmes séances, mêmes exclusions.
+       Seule change la façon de compter qui était là. */
+    $bpf_sessions = (array) $wpdb->get_results( $wpdb->prepare(
+      "SELECT s.id, s.formation_id, s.start_date, s.start_at,
+              COALESCE(f.duration,'') AS formation_duration,
+              COALESCE(f.service_objective,'') AS service_objective,
+              COALESCE(f.specialty,'') AS specialty,
+              COALESCE(f.include_bpf,0) AS include_bpf
+         FROM {$this->session_table} s
+         LEFT JOIN {$this->formation_table} f ON f.id = s.formation_id
+        WHERE s.is_draft = 0
+          AND COALESCE(s.start_date, DATE(s.start_at)) BETWEEN %s AND %s",
       $start_sql, $end_sql
     ) );
 
-    // ACDC 3.21.83 — Heures-stagiaires totales (nb_apprenants × durée formation)
-    $heures_stagiaires_total = 0.0;
-    $hs_rows = (array) $wpdb->get_results( $wpdb->prepare(
-      "SELECT COUNT(DISTINCT l.id) AS nb_stag, COALESCE(f.duration, '') AS formation_duration FROM {$this->learner_table} l INNER JOIN {$this->session_table} s ON s.id = l.session_id LEFT JOIN {$this->formation_table} f ON f.id = s.formation_id WHERE s.is_draft = 0 AND COALESCE(s.start_date, DATE(s.start_at)) BETWEEN %s AND %s GROUP BY s.id, f.duration",
-      $start_sql, $end_sql
-    ) );
-    foreach ( $hs_rows as $hs ) {
-      $dur_raw = (string) $hs->formation_duration;
-      $dur_h = 0.0;
-      if ( preg_match( '/(\d+(?:[.,]\d+)?)\s*(?:h(?:eure)?s?|heures?)/i', $dur_raw, $dm ) ) {
-        $dur_h = (float) str_replace( ',', '.', $dm[1] );
-      } elseif ( preg_match( '/(\d+(?:[.,]\d+)?)\s*j(?:ours?)?/i', $dur_raw, $dm ) ) {
-        $dur_h = (float) str_replace( ',', '.', $dm[1] ) * 7.0;
-      } elseif ( preg_match( '/^(\d+(?:[.,]\d+)?)$/', trim( $dur_raw ), $dm ) ) {
-        $dur_h = (float) str_replace( ',', '.', $dm[1] );
+    $bpf_duree_h = function( $raw ) {
+      $raw = (string) $raw;
+      if ( preg_match( '/(\d+(?:[.,]\d+)?)\s*(?:h(?:eure)?s?|heures?)/i', $raw, $dm ) ) {
+        return (float) str_replace( ',', '.', $dm[1] );
       }
-      $heures_stagiaires_total += (int) $hs->nb_stag * $dur_h;
+      if ( preg_match( '/(\d+(?:[.,]\d+)?)\s*j(?:ours?)?/i', $raw, $dm ) ) {
+        return (float) str_replace( ',', '.', $dm[1] ) * 7.0;
+      }
+      if ( preg_match( '/^(\d+(?:[.,]\d+)?)$/', trim( $raw ), $dm ) ) {
+        return (float) str_replace( ',', '.', $dm[1] );
+      }
+      return 0.0;
+    };
+
+    $bpf_learner_ids         = array();   // Tous les stagiaires de la période.
+    $heures_stagiaires_total = 0.0;
+    $bpf_par_objectif        = array();   // service_objective => [ id => true ]
+    $bpf_par_specialite      = array();   // specialty => [ 'learners' => [], 'sessions' => 0 ]
+
+    foreach ( $bpf_sessions as $bs ) {
+      $ids = $this->acdc_session_learner_ids( $bs );
+      if ( empty( $ids ) ) {
+        continue;
+      }
+      foreach ( $ids as $lid ) {
+        $bpf_learner_ids[ (int) $lid ] = true;
+      }
+
+      /* Heures-stagiaires : ce que les apprenants ont consommé sur CETTE
+         séance. La durée est celle de la formation, comme avant. */
+      $heures_stagiaires_total += count( $ids ) * $bpf_duree_h( $bs->formation_duration );
+
+      /* Les cadres F3 et F4 ne portent que sur les formations déclarées. */
+      if ( 1 !== (int) $bs->include_bpf ) {
+        continue;
+      }
+      $obj = (string) $bs->service_objective;
+      if ( ! isset( $bpf_par_objectif[ $obj ] ) ) { $bpf_par_objectif[ $obj ] = array(); }
+      $spe = (string) $bs->specialty;
+      if ( ! isset( $bpf_par_specialite[ $spe ] ) ) {
+        $bpf_par_specialite[ $spe ] = array( 'learners' => array(), 'sessions' => 0 );
+      }
+      $bpf_par_specialite[ $spe ]['sessions']++;
+      foreach ( $ids as $lid ) {
+        $bpf_par_objectif[ $obj ][ (int) $lid ]                = true;
+        $bpf_par_specialite[ $spe ]['learners'][ (int) $lid ]  = true;
+      }
     }
+
+    $nb_apprenants_total = count( $bpf_learner_ids );
 
     // ACDC 3.21.75 — Agréger les prestations extérieures (formateur indépendant)
     $ext_summary = method_exists( $this, 'get_external_missions_bpf_summary' )
@@ -166,10 +220,17 @@ trait ACDC_Compliance_Quality_Actions_Trait {
     $d_total_val = $d_salaires_val + $d_achats_val;
 
     // ── Cadre F1 — Types de stagiaires ────────────────────────────────────
-    $learners_period = (array) $wpdb->get_results( $wpdb->prepare(
-      "SELECT l.socio_category, l.is_france_travail FROM {$this->learner_table} l INNER JOIN {$this->session_table} s ON s.id = l.session_id WHERE s.is_draft = 0 AND COALESCE(s.start_date, DATE(s.start_at)) BETWEEN %s AND %s",
-      $start_sql, $end_sql
-    ) );
+    /* Les mêmes stagiaires que ci-dessus, relus pour leur catégorie : le total
+       du cadre F1 ne peut donc pas différer du nombre déclaré plus haut. */
+    $learners_period = array();
+    if ( ! empty( $bpf_learner_ids ) ) {
+      $f1_ids = array_keys( $bpf_learner_ids );
+      $f1_ph  = implode( ',', array_fill( 0, count( $f1_ids ), '%d' ) );
+      $learners_period = (array) $wpdb->get_results( $wpdb->prepare(
+        "SELECT socio_category, is_france_travail FROM {$this->learner_table} WHERE id IN ({$f1_ph})",
+        $f1_ids
+      ) );
+    }
 
     $f1_salaries = 0; $f1_apprentis = 0; $f1_demandeurs = 0; $f1_independants = 0; $f1_particuliers = 0; $f1_autres = 0;
     foreach ( $learners_period as $l ) {
@@ -199,22 +260,25 @@ trait ACDC_Compliance_Quality_Actions_Trait {
       'bilan_competences'  => 'Bilan de compétences',
       'vae'                => 'Validation des acquis (VAE)',
     );
-    $f3_rows = (array) $wpdb->get_results( $wpdb->prepare(
-      "SELECT f.service_objective, COUNT(DISTINCT l.id) AS nb_apprenants FROM {$this->learner_table} l INNER JOIN {$this->session_table} s ON s.id = l.session_id INNER JOIN {$this->formation_table} f ON f.id = s.formation_id WHERE s.is_draft = 0 AND f.include_bpf = 1 AND COALESCE(s.start_date, DATE(s.start_at)) BETWEEN %s AND %s GROUP BY f.service_objective",
-      $start_sql, $end_sql
-    ) );
     $f3_data = array();
-    foreach ( $f3_rows as $r ) {
-      $key = sanitize_key( (string) $r->service_objective );
+    foreach ( $bpf_par_objectif as $objectif => $learner_set ) {
+      $key = sanitize_key( (string) $objectif );
       $label = isset( $obj_map[ $key ] ) ? $obj_map[ $key ] : ( '' !== $key ? ucfirst( $key ) : 'Non renseigné' );
-      $f3_data[ $label ] = (int) $r->nb_apprenants;
+      $f3_data[ $label ] = isset( $f3_data[ $label ] ) ? $f3_data[ $label ] + count( $learner_set ) : count( $learner_set );
     }
 
     // ── Cadre F4 — Spécialités NSF ────────────────────────────────────────
-    $f4_rows = (array) $wpdb->get_results( $wpdb->prepare(
-      "SELECT f.specialty, COUNT(DISTINCT l.id) AS nb_apprenants, COUNT(DISTINCT s.id) AS nb_sessions FROM {$this->learner_table} l INNER JOIN {$this->session_table} s ON s.id = l.session_id INNER JOIN {$this->formation_table} f ON f.id = s.formation_id WHERE s.is_draft = 0 AND f.include_bpf = 1 AND COALESCE(s.start_date, DATE(s.start_at)) BETWEEN %s AND %s GROUP BY f.specialty ORDER BY nb_apprenants DESC",
-      $start_sql, $end_sql
-    ) );
+    $f4_rows = array();
+    foreach ( $bpf_par_specialite as $specialite => $bloc ) {
+      $f4_rows[] = (object) array(
+        'specialty'     => (string) $specialite,
+        'nb_apprenants' => count( $bloc['learners'] ),
+        'nb_sessions'   => (int) $bloc['sessions'],
+      );
+    }
+    usort( $f4_rows, static function( $a, $b ) {
+      return (int) $b->nb_apprenants <=> (int) $a->nb_apprenants;
+    } );
 
     // ── Génération PDF récapitulatif ───────────────────────────────────────
     if ( method_exists( $this, '_build_simple_pdf_string' ) ) {

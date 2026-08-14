@@ -2760,7 +2760,12 @@ public function render_admin_registration_contract_page() { $this->render_admin_
              s.status
            FROM {$this->session_table} s
            LEFT JOIN {$this->formation_table} f ON f.id = s.formation_id
-           INNER JOIN {$this->learner_table} l ON l.session_id = s.id
+           /* ACDC 3.25.270 — Cette liste de choix n'offrait que les séances
+              ayant un apprenant rattaché par `learner.session_id`. Comme la
+              convention ne renseigne jamais cette colonne, la liste était vide
+              sur un site qui a des séances pleines : on ne pouvait plus rien
+              choisir. Une séance se propose parce qu'elle existe, pas parce
+              qu'on a réussi à lui prouver une inscription. */
            ORDER BY s.start_date DESC
            LIMIT 500"
         );

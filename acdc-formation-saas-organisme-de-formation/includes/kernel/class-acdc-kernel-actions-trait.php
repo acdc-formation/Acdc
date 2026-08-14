@@ -6715,23 +6715,73 @@ public function handle_purge_plugin_data() {
     }
 
     $total_formations  = (int) $wpdb->get_var( "SELECT COUNT(*) FROM {$this->formation_table} WHERE is_active = 1 AND status = 'VALIDÉE'" );
-    $total_apprenants  = (int) $wpdb->get_var( "SELECT COUNT(DISTINCT l.id) FROM {$this->learner_table} l INNER JOIN {$this->session_table} s ON s.id = l.session_id INNER JOIN {$this->formation_table} f ON f.id = s.formation_id WHERE f.is_active = 1" );
 
-    // Heures : SUM(duration en minutes × nb séances réalisées) → converti en heures
-    $heures_raw = (float) $wpdb->get_var( "SELECT SUM(TIMESTAMPDIFF(MINUTE, s.start_at, s.end_at)) FROM {$this->session_table} s INNER JOIN {$this->formation_table} f ON f.id = s.formation_id WHERE f.is_active = 1 AND s.status NOT IN ('Annulée','Brouillon') AND s.start_at IS NOT NULL AND s.end_at IS NOT NULL" );
-    $total_heures = round( $heures_raw / 60, 1 );
+    /* ACDC 3.25.270 — LA PAGE D'ACCUEIL ANNONÇAIT 2 APPRENANTS ET 16 HEURES.
+       Le compte des apprenants passait par `learner.session_id` — la colonne
+       que la convention ne renseigne jamais — et les trois taux étaient la
+       moyenne arithmétique de valeurs SAISIES À LA MAIN sur les fiches
+       formation. Un site commercial affichait donc « 97 % de satisfaction »
+       que rien n'étayait, et un effectif que rien ne mesurait.
+       Tout est désormais calculé sur les mêmes compteurs que les indicateurs
+       par formation, réunis une seule fois. La pondération va de soi puisqu'on
+       additionne des notes et non des pourcentages : une formation notée par
+       cinquante personnes pèse cinquante fois celle notée par une. */
+    $actives = array_map( 'intval', (array) $wpdb->get_col(
+      "SELECT id FROM {$this->formation_table} WHERE is_active = 1"
+    ) );
 
-    $taux_sat_row  = $wpdb->get_row( "SELECT AVG(taux_satisfaction) AS v, COUNT(*) AS n FROM {$this->formation_table} WHERE is_active = 1 AND taux_satisfaction > 0" );
-    $taux_reu_row  = $wpdb->get_row( "SELECT AVG(taux_reussite) AS v, COUNT(*) AS n FROM {$this->formation_table} WHERE is_active = 1 AND taux_reussite > 0" );
-    $taux_rec_row  = $wpdb->get_row( "SELECT AVG(taux_recommandation) AS v, COUNT(*) AS n FROM {$this->formation_table} WHERE is_active = 1 AND taux_recommandation > 0" );
+    $counters_global = $this->acdc_formation_counters( $actives );
+    $mesures_global  = \ACDC\Support\Indicators::rates( $counters_global );
+
+    $total_apprenants = (int) $mesures_global['nb_apprenants'];
+
+    /* Heures dispensées : les créneaux réellement planifiés, séance par séance,
+       comme les compte déjà l'écran des statistiques pédagogiques. La somme
+       start_at → end_at ne voyait que les séances portant ces deux colonnes. */
+    $total_heures = 0.0;
+    if ( ! empty( $actives ) && method_exists( $this, 'acdc_completion_planned_time' ) ) {
+      $ph_actives  = implode( ',', array_fill( 0, count( $actives ), '%d' ) );
+      $session_ids = array_map( 'intval', (array) $wpdb->get_col( $wpdb->prepare(
+        "SELECT id FROM {$this->session_table}
+          WHERE formation_id IN ({$ph_actives})
+            AND COALESCE(is_draft,0) = 0
+            AND COALESCE(status,'') NOT IN ('Annulée','Annulee','Brouillon')",
+        $actives
+      ) ) );
+      $planned      = $this->acdc_completion_planned_time( $session_ids );
+      $total_heures = round( ( (int) $planned['minutes'] ) / 60, 1 );
+    }
+
+    /* Le repli déclaré ne s'applique qu'en l'absence totale de mesure : sans
+       lui, le site passerait de « 97 % » à rien du jour au lendemain. */
+    $moy_declaree = function( $colonne ) use ( $wpdb ) {
+      $row = $wpdb->get_row( "SELECT AVG({$colonne}) AS v, COUNT(*) AS n FROM {$this->formation_table} WHERE is_active = 1 AND {$colonne} > 0" );
+      return ( $row && (int) $row->n > 0 ) ? (int) round( (float) $row->v ) : 0;
+    };
+
+    $g_satisfaction  = \ACDC\Support\Indicators::publish( $mesures_global['taux_satisfaction'], $moy_declaree( 'taux_satisfaction' ) );
+    $g_reussite      = \ACDC\Support\Indicators::publish( $mesures_global['taux_reussite'], $moy_declaree( 'taux_reussite' ) );
+    $g_recommandation = \ACDC\Support\Indicators::publish( $mesures_global['taux_recommandation'], $moy_declaree( 'taux_recommandation' ) );
 
     $data = array(
       'total_formations'        => $total_formations,
       'total_apprenants'        => $total_apprenants,
       'total_heures'            => $total_heures,
-      'taux_satisfaction_moyen' => $taux_sat_row && $taux_sat_row->n > 0 ? (int) round( (float) $taux_sat_row->v ) : 0,
-      'taux_reussite_moyen'     => $taux_reu_row && $taux_reu_row->n > 0 ? (int) round( (float) $taux_reu_row->v ) : 0,
-      'taux_recommandation_moyen' => $taux_rec_row && $taux_rec_row->n > 0 ? (int) round( (float) $taux_rec_row->v ) : 0,
+      'taux_satisfaction_moyen'   => (int) $g_satisfaction['value'],
+      'taux_reussite_moyen'       => (int) $g_reussite['value'],
+      'taux_recommandation_moyen' => (int) $g_recommandation['value'],
+      /* Combien de réponses derrière chaque taux : c'est ce qu'un auditeur
+         demande en premier, et c'est ce qui manquait pour les défendre. */
+      'mesures'                 => array(
+        'reponses_satisfaction'   => (int) $counters_global['notes_count'],
+        'reponses_recommandation' => (int) $counters_global['reco_count'],
+        'evaluations'             => (int) $counters_global['eval_total'],
+        'sources'                 => array(
+          'taux_satisfaction'   => $g_satisfaction['source'],
+          'taux_reussite'       => $g_reussite['source'],
+          'taux_recommandation' => $g_recommandation['source'],
+        ),
+      ),
       'generated_at'            => current_time( 'c' ),
     );
 
@@ -6759,22 +6809,170 @@ public function handle_purge_plugin_data() {
       return new \WP_REST_Response( array( 'success' => false, 'message' => 'Formation introuvable.' ), 404 );
     }
 
-    $nb_apprenants = (int) $wpdb->get_var( $wpdb->prepare( "SELECT COUNT(DISTINCT l.id) FROM {$this->learner_table} l INNER JOIN {$this->session_table} s ON s.id = l.session_id WHERE s.formation_id = %d", (int) $formation->id ) );
+    /* ACDC 3.25.270 — Mêmes chiffres que le push, calculés au même endroit :
+       deux lectures de la même vérité finissent toujours par diverger, et
+       celle-ci est publique. */
+    $freres     = $this->acdc_formation_siblings( (int) $formation->id );
+    $counters   = $this->acdc_formation_counters( $freres );
+    $mesures    = \ACDC\Support\Indicators::rates( $counters );
+    $reussite   = \ACDC\Support\Indicators::publish( $mesures['taux_reussite'], $formation->taux_reussite ?? 0 );
+    $satisfait  = \ACDC\Support\Indicators::publish( $mesures['taux_satisfaction'], $formation->taux_satisfaction ?? 0 );
+    $recommande = \ACDC\Support\Indicators::publish( $mesures['taux_recommandation'], $formation->taux_recommandation ?? 0 );
 
     $data = array(
       'manager_formation_id' => $manager_id,
       'saas_formation_id'    => (int) $formation->id,
+      'saas_formation_ids'   => $freres,
       'title'                => (string) $formation->title,
-      'taux_reussite'        => (int) ( isset( $formation->taux_reussite ) ? $formation->taux_reussite : 0 ),
-      'taux_satisfaction'    => (int) ( isset( $formation->taux_satisfaction ) ? $formation->taux_satisfaction : 0 ),
-      'taux_recommandation'  => (int) ( isset( $formation->taux_recommandation ) ? $formation->taux_recommandation : 0 ),
-      'nb_apprenants'        => $nb_apprenants,
+      'taux_reussite'        => (int) $reussite['value'],
+      'taux_satisfaction'    => (int) $satisfait['value'],
+      'taux_recommandation'  => (int) $recommande['value'],
+      'nb_apprenants'        => (int) $mesures['nb_apprenants'],
+      /* Ce que vaut chaque chiffre. Un auditeur Qualiopi a le droit de savoir
+         si le taux publié est mesuré ou déclaré. */
+      'sources'              => array(
+        'taux_reussite'       => $reussite['source'],
+        'taux_satisfaction'   => $satisfait['source'],
+        'taux_recommandation' => $recommande['source'],
+      ),
       'generated_at'         => current_time( 'c' ),
     );
 
     $response = new \WP_REST_Response( array( 'success' => true, 'data' => $data ), 200 );
     $response->header( 'Cache-Control', 'public, max-age=3600' );
     return $response;
+  }
+
+  /**
+   * ACDC 3.25.270 — LES INDICATEURS PUBLIÉS SONT DÉSORMAIS MESURÉS.
+   *
+   * Ce qui partait vers le site commercial était saisi à la main sur la fiche
+   * formation — trois cases, remplies une fois, jamais revues — et le nombre
+   * d'apprenants venait de la jointure par `learner.session_id`, celle que la
+   * convention ne renseigne jamais. La page d'accueil annonçait ainsi
+   * « 2 apprenants formés » et « 16 heures » à un organisme qui en a bien
+   * davantage, à côté de trois taux que rien n'étayait. Or l'indicateur 2 du
+   * référentiel Qualiopi demande des résultats publiés ET défendables.
+   *
+   * On lit donc les enquêtes et les évaluations. Trois précautions :
+   *   — on transporte des COMPTEURS BRUTS, jamais des pourcentages, pour
+   *     pouvoir additionner sans moyenner des moyennes ;
+   *   — la recommandation se lit sur la question de notation qui la porte,
+   *     repérée par son libellé, faute d'un marqueur dédié dans le modèle ;
+   *   — sans aucune réponse, la mesure vaut null : c'est l'appelant qui décide
+   *     de se taire ou de publier la valeur déclarée, en le sachant.
+   *
+   * @param int[] $formation_ids Formations SAAS à réunir.
+   * @return array Bloc de compteurs au sens de ACDC\Support\Indicators.
+   */
+  private function acdc_formation_counters( $formation_ids ) {
+    global $wpdb;
+
+    $counters = \ACDC\Support\Indicators::emptyCounters();
+
+    $formation_ids = array_values( array_unique( array_filter( array_map( 'absint', (array) $formation_ids ) ) ) );
+    if ( empty( $formation_ids ) ) {
+      return $counters;
+    }
+    $ph = implode( ',', array_fill( 0, count( $formation_ids ), '%d' ) );
+
+    $counters['learner_ids'] = $this->acdc_learners_for_formations( $formation_ids );
+
+    /* Satisfaction : toutes les notes des enquêtes apprenant. */
+    $row = $wpdb->get_row( $wpdb->prepare(
+      "SELECT COALESCE(SUM(a.numeric_score),0) AS somme, COUNT(*) AS nb
+         FROM {$this->questionnaire_answer_table} a
+         INNER JOIN {$this->questionnaire_session_table} s ON s.id = a.session_id
+        WHERE s.formation_id IN ({$ph})
+          AND s.is_survey_session = 1
+          AND s.source_type IN ('hot_survey','mid_survey','cold_survey')
+          AND a.answer_type = 'notation'
+          AND a.numeric_score IS NOT NULL",
+      $formation_ids
+    ) );
+    if ( $row ) {
+      $counters['notes_sum']   = (float) $row->somme;
+      $counters['notes_count'] = (int) $row->nb;
+    }
+
+    /* Recommandation : la même échelle, mais la seule question qui la pose. */
+    $row = $wpdb->get_row( $wpdb->prepare(
+      "SELECT COALESCE(SUM(a.numeric_score),0) AS somme, COUNT(*) AS nb
+         FROM {$this->questionnaire_answer_table} a
+         INNER JOIN {$this->questionnaire_session_table} s ON s.id = a.session_id
+        WHERE s.formation_id IN ({$ph})
+          AND s.is_survey_session = 1
+          AND a.answer_type = 'notation'
+          AND a.numeric_score IS NOT NULL
+          AND a.question_label LIKE %s",
+      array_merge( $formation_ids, array( '%recommand%' ) )
+    ) );
+    if ( $row ) {
+      $counters['reco_sum']   = (float) $row->somme;
+      $counters['reco_count'] = (int) $row->nb;
+    }
+
+    /* Réussite : les évaluations des acquis, seuil de 70 % — le même que celui
+       de l'écran « Indicateurs de performance », pour qu'ils ne disent pas deux
+       chiffres différents de la même chose. */
+    $row = $wpdb->get_row( $wpdb->prepare(
+      "SELECT COUNT(*) AS total,
+              SUM( CASE WHEN p.final_score IS NOT NULL AND p.final_score >= 70 THEN 1 ELSE 0 END ) AS reussis
+         FROM {$this->questionnaire_participant_table} p
+         INNER JOIN {$this->questionnaire_session_table} s ON s.id = p.session_id
+        WHERE s.formation_id IN ({$ph})
+          AND s.source_type = 'evaluation'
+          AND p.responded_at IS NOT NULL",
+      $formation_ids
+    ) );
+    if ( $row ) {
+      $counters['eval_total']  = (int) $row->total;
+      $counters['eval_passed'] = (int) $row->reussis;
+    }
+
+    return $counters;
+  }
+
+  /**
+   * ACDC 3.25.270 — Les lignes SAAS qui décrivent LA MÊME formation commerciale.
+   *
+   * Le SAAS crée une ligne par couple (formation du site, modalité) : la même
+   * formation existe en présentiel ET en distanciel, avec deux identifiants
+   * internes et un seul identifiant côté site. Les indicateurs étaient poussés
+   * ligne par ligne vers ce même identifiant : le présentiel écrivait, le
+   * distanciel écrasait. La page affichait les chiffres de la dernière modalité
+   * synchronisée, jamais le total — et personne ne pouvait s'en apercevoir,
+   * puisque le nombre affiché restait plausible.
+   *
+   * « Tu additionnes les statistiques de présentiel et distanciel dès l'instant
+   * où ce sont les mêmes » : c'est exactement ce que ce regroupement fait.
+   *
+   * @param int $formation_id Une formation SAAS.
+   * @return int[] Toutes les formations SAAS qui partagent son identifiant site.
+   */
+  private function acdc_formation_siblings( $formation_id ) {
+    global $wpdb;
+
+    $formation_id = (int) $formation_id;
+    if ( $formation_id <= 0 ) {
+      return array();
+    }
+
+    $manager_id = (int) $wpdb->get_var( $wpdb->prepare(
+      "SELECT COALESCE(manager_formation_id,0) FROM {$this->formation_table} WHERE id = %d",
+      $formation_id
+    ) );
+    if ( $manager_id <= 0 ) {
+      /* Une formation qui n'existe pas sur le site n'a pas de jumelle. */
+      return array( $formation_id );
+    }
+
+    $ids = (array) $wpdb->get_col( $wpdb->prepare(
+      "SELECT id FROM {$this->formation_table} WHERE manager_formation_id = %d",
+      $manager_id
+    ) );
+
+    return array_values( array_unique( array_map( 'intval', $ids ) ) );
   }
 
   /**
@@ -6799,16 +6997,28 @@ public function handle_purge_plugin_data() {
       return; // Pas de lien Manager — silencieux
     }
 
-    $nb_apprenants_reel = (int) $wpdb->get_var( $wpdb->prepare( "SELECT COUNT(DISTINCT l.id) FROM {$this->learner_table} l INNER JOIN {$this->session_table} s ON s.id = l.session_id WHERE s.formation_id = %d", (int) $formation->id ) );
-    // Fallback : si aucun apprenant en BDD, utiliser la valeur saisie manuellement dans taux_completion
-    $nb_apprenants = $nb_apprenants_reel > 0 ? $nb_apprenants_reel : (int) ( isset( $formation->taux_completion ) ? $formation->taux_completion : 0 );
+    /* ACDC 3.25.270 — On pousse la formation COMMERCIALE, pas la ligne SAAS :
+       présentiel et distanciel sont réunis avant l'envoi, sans quoi le second
+       écrase le premier à l'arrivée. */
+    $freres   = $this->acdc_formation_siblings( (int) $formation->id );
+    $counters = $this->acdc_formation_counters( $freres );
+    $mesures  = \ACDC\Support\Indicators::rates( $counters );
+
+    /* La valeur saisie à la main reste le repli d'une formation jamais
+       évaluée — mais elle ne masque plus une mesure existante. */
+    $reussite    = \ACDC\Support\Indicators::publish( $mesures['taux_reussite'], $formation->taux_reussite ?? 0 );
+    $satisfait   = \ACDC\Support\Indicators::publish( $mesures['taux_satisfaction'], $formation->taux_satisfaction ?? 0 );
+    $recommande  = \ACDC\Support\Indicators::publish( $mesures['taux_recommandation'], $formation->taux_recommandation ?? 0 );
+    $nb_apprenants = $mesures['nb_apprenants'] > 0
+      ? $mesures['nb_apprenants']
+      : (int) ( isset( $formation->taux_completion ) ? $formation->taux_completion : 0 );
 
     $endpoint = rtrim( $manager_url, '/' ) . '/wp-json/acdc-fm/v1/update-indicators';
     $payload   = array(
       'manager_formation_id' => (int) $formation->manager_formation_id,
-      'taux_reussite'        => (int) ( isset( $formation->taux_reussite ) ? $formation->taux_reussite : 0 ),
-      'taux_satisfaction'    => (int) ( isset( $formation->taux_satisfaction ) ? $formation->taux_satisfaction : 0 ),
-      'taux_recommandation'  => (int) ( isset( $formation->taux_recommandation ) ? $formation->taux_recommandation : 0 ),
+      'taux_reussite'        => (int) $reussite['value'],
+      'taux_satisfaction'    => (int) $satisfait['value'],
+      'taux_recommandation'  => (int) $recommande['value'],
       'nb_apprenants'        => $nb_apprenants,
     );
 
@@ -6839,7 +7049,14 @@ public function handle_purge_plugin_data() {
       return;
     }
 
-    $formations = $wpdb->get_results( "SELECT id FROM {$this->formation_table} WHERE is_active = 1 AND manager_formation_id IS NOT NULL AND manager_formation_id > 0" );
+    /* ACDC 3.25.270 — Une formation commerciale, un envoi. Les modalités sont
+       réunies avant le calcul : les pousser une par une referait le même travail
+       plusieurs fois pour écrire la même valeur. */
+    $formations = $wpdb->get_results(
+      "SELECT MIN(id) AS id FROM {$this->formation_table}
+        WHERE is_active = 1 AND manager_formation_id IS NOT NULL AND manager_formation_id > 0
+        GROUP BY manager_formation_id"
+    );
     foreach ( $formations as $row ) {
       $this->push_indicators_to_manager( (int) $row->id );
     }

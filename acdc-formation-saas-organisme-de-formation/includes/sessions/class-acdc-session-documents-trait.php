@@ -286,7 +286,25 @@ trait ACDC_Session_Documents_Trait {
     ) );
   }
 
-  private function acdc_session_learners( $session ) {
+  /**
+   * ACDC 3.25.270 — Les IDENTIFIANTS des apprenants d'une séance.
+   *
+   * Le résolveur ne rendait que sept colonnes — celles qu'il faut pour écrire
+   * une convocation. Les statistiques, elles, ont besoin d'autre chose :
+   * catégorie socioprofessionnelle et France Travail pour le BPF, genre pour la
+   * répartition. Faute de pouvoir les demander, chaque écran de statistiques
+   * refaisait sa propre jointure — par `learner.session_id`, la colonne que la
+   * convention ne renseigne jamais. C'est ainsi que le bilan pédagogique et
+   * financier a fini par déclarer zéro stagiaire.
+   *
+   * On sépare donc le RATTACHEMENT — les trois chemins, la règle — de ce qu'on
+   * lit ensuite sur chaque apprenant. Une seule règle, autant de lectures
+   * qu'on veut.
+   *
+   * @param object $session Séance.
+   * @return int[] Identifiants, sans doublon.
+   */
+  private function acdc_session_learner_ids( $session ) {
     global $wpdb;
 
     if ( empty( $session->id ) ) {
@@ -347,7 +365,13 @@ trait ACDC_Session_Documents_Trait {
       }
     }
 
-    $ids = array_keys( $ids );
+    return array_map( 'intval', array_keys( $ids ) );
+  }
+
+  private function acdc_session_learners( $session ) {
+    global $wpdb;
+
+    $ids = $this->acdc_session_learner_ids( $session );
     if ( empty( $ids ) ) {
       return array();
     }
@@ -360,6 +384,61 @@ trait ACDC_Session_Documents_Trait {
         ORDER BY last_name ASC, first_name ASC, id ASC",
       $ids
     ) );
+  }
+
+  /**
+   * ACDC 3.25.270 — Les apprenants d'une ou plusieurs FORMATIONS.
+   *
+   * Le pendant du résolveur de séance, à l'échelle d'une formation : c'est ce
+   * dont ont besoin le catalogue, les indicateurs publics et le site
+   * commercial. Deux sources, réunies :
+   *
+   *   — les DOSSIERS d'inscription, qui connaissent leur formation sans passer
+   *     par une séance. C'est la source la plus sûre depuis que la convention
+   *     signée les crée ;
+   *   — les SÉANCES de ces formations, résolues par les trois chemins. Elles
+   *     rattrapent les apprenants inscrits avant que les dossiers existent.
+   *
+   * @param int[]  $formation_ids Formations concernées.
+   * @param string $start_sql     Début de période (AAAA-MM-JJ), facultatif.
+   * @param string $end_sql       Fin de période, facultatif.
+   * @return int[] Identifiants d'apprenants, sans doublon.
+   */
+  private function acdc_learners_for_formations( $formation_ids, $start_sql = '', $end_sql = '' ) {
+    global $wpdb;
+
+    $formation_ids = array_values( array_unique( array_filter( array_map( 'absint', (array) $formation_ids ) ) ) );
+    if ( empty( $formation_ids ) ) {
+      return array();
+    }
+    $ph  = implode( ',', array_fill( 0, count( $formation_ids ), '%d' ) );
+    $ids = array();
+
+    /* 1. Les dossiers. */
+    $sql    = "SELECT DISTINCT learner_id FROM {$this->training_registration_table}
+                WHERE formation_id IN ({$ph}) AND is_draft = 0 AND learner_id > 0";
+    $params = $formation_ids;
+    foreach ( (array) $wpdb->get_col( $wpdb->prepare( $sql, $params ) ) as $id ) {
+      $ids[ (int) $id ] = true;
+    }
+
+    /* 2. Les séances, résolues par les trois chemins. */
+    $sql    = "SELECT id, formation_id, start_date, start_at FROM {$this->session_table}
+                WHERE formation_id IN ({$ph})
+                  AND COALESCE(status,'') NOT IN ('Annulée','Annulee')";
+    $params = $formation_ids;
+    if ( '' !== $start_sql && '' !== $end_sql ) {
+      $sql     .= ' AND COALESCE(start_date, DATE(start_at)) BETWEEN %s AND %s';
+      $params[] = $start_sql;
+      $params[] = $end_sql;
+    }
+    foreach ( (array) $wpdb->get_results( $wpdb->prepare( $sql, $params ) ) as $session ) {
+      foreach ( $this->acdc_session_learner_ids( $session ) as $id ) {
+        $ids[ (int) $id ] = true;
+      }
+    }
+
+    return array_map( 'intval', array_keys( $ids ) );
   }
 
   /**

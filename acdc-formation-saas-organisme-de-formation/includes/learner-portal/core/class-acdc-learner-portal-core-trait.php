@@ -842,7 +842,21 @@ trait ACDC_Learner_Portal_Core_Trait {
                 f.title AS formation_title, f.description_text AS formation_description, f.objectives, f.duration, f.program_file_url, f.shared_docs, f.shared_links, f.address AS formation_address, f.city AS formation_city, f.postal_code AS formation_postal_code, f.notes AS formation_notes, f.modality
          FROM {$this->learner_table} l
          LEFT JOIN {$this->company_table} c ON c.id = l.company_id
-         LEFT JOIN {$this->session_table} s ON s.id = l.session_id
+         /* ACDC 3.25.270 — L'EXTRANET DE L'APPRENANT NE TROUVAIT PAS SA SÉANCE.
+            Il la cherchait par `learner.session_id`, la colonne que la
+            convention ne renseigne jamais : dates, lieu, lien visio et titre de
+            la séance restaient vides pour tous les apprenants inscrits par une
+            convention — c'est-à-dire pour presque tous. On garde le lien direct
+            quand il existe, et l'on retombe sur la première séance de la
+            formation portée par son dossier. */
+         LEFT JOIN ( SELECT r2.learner_id, MIN(s2.id) AS session_id
+                       FROM {$this->training_registration_table} r2
+                       INNER JOIN {$this->session_table} s2 ON s2.formation_id = r2.formation_id
+                      WHERE r2.is_draft = 0 AND r2.learner_id > 0
+                        AND COALESCE(s2.is_draft,0) = 0
+                        AND COALESCE(s2.status,'') NOT IN ('Annulée','Annulee')
+                      GROUP BY r2.learner_id ) lk ON lk.learner_id = l.id
+         LEFT JOIN {$this->session_table} s ON s.id = COALESCE( NULLIF(l.session_id,0), lk.session_id )
          LEFT JOIN {$this->formation_table} f ON f.id = s.formation_id
          WHERE l.email = %s
          ORDER BY l.updated_at DESC, l.id DESC",

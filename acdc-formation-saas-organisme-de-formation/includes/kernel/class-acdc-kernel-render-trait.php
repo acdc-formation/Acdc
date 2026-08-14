@@ -10344,7 +10344,6 @@ trait ACDC_Kernel_Render_Trait {
     $prospect_view_base = $this->portal_page_url( array( 'tab' => 'prospects' ) );
     ?>
     <section class="acdc-section-head"><div><h2>Statistiques commerciales</h2></div></section>
-    <div class="acdc-panel acdc-mb-18"><div class="acdc-inline-wrap" style="justify-content:space-between;align-items:center;gap:16px;"><input type="search" placeholder="Rechercher" style="max-width:420px;"><div class="acdc-inline-wrap" style="gap:10px;"><button type="button" class="acdc-icon-button"><?php echo $this->render_inline_icon( 'settings', 16 ); ?></button><button type="button" class="acdc-icon-button"><?php echo $this->render_inline_icon( 'filter', 16 ); ?></button><button type="button" class="acdc-icon-button"><?php echo $this->render_inline_icon( 'chevron-down', 16 ); ?></button></div></div></div>
 
     <style>
       .acdc-stat-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:18px;margin-bottom:18px}.acdc-stat-panel{position:relative;min-height:114px}.acdc-stat-panel h3{margin:0 0 10px;font-size:16px;color:#1E4777}.acdc-stat-total{position:absolute;top:0;right:0;font-size:12px;color:#3C3C3C}.acdc-stat-list{margin:0;padding-left:18px;font-size:13px;line-height:1.6}.acdc-stat-list li{margin:0 0 3px}.acdc-ring{position:absolute;right:18px;bottom:18px;width:58px;height:58px;border-radius:50%;background:conic-gradient(#ef6b57 0 33%,#f0c038 33% 66%,#3cb371 66% 100%)}.acdc-ring:after{content:'';position:absolute;inset:8px;border-radius:50%;background:#fff}.acdc-kpis{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:18px;margin-bottom:18px}.acdc-kpi-card{padding:18px;position:relative}.acdc-kpi-card h4{margin:0 0 12px;font-size:15px;color:#1E4777}.acdc-kpi-value{font-size:22px;font-weight:700;color:#667085}.acdc-kpi-sub{font-size:13px;color:#3C3C3C}.acdc-kpi-progress{height:10px;border-radius:999px;background:#DCE4EC;overflow:hidden;margin-top:18px}.acdc-kpi-progress span{display:block;height:100%;border-radius:999px}.acdc-filter-box{padding:0;overflow:hidden;margin-bottom:14px}.acdc-filter-head{display:flex;justify-content:flex-end;background:#DCE4EC;padding:10px 12px;color:#64748b;font-size:12px;text-transform:uppercase;letter-spacing:.03em}.acdc-filter-grid{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:16px;padding:16px}.acdc-filter-grid label{display:block;font-size:12px;color:#1E4777;text-transform:uppercase;margin-bottom:6px}.acdc-table-prospects td small{display:block;color:#7b8798}.acdc-eye-col{text-align:right}.acdc-help-dot{position:absolute;right:10px;bottom:10px;width:20px;height:20px;border-radius:50%;background:#E9C77C;color:#0B0706;font-size:12px;display:flex;align-items:center;justify-content:center}.acdc-count-icon{display:flex;align-items:center;gap:14px}.acdc-count-icon .box{width:40px;height:40px;border-radius:10px;background:#C5A253;color:#0B0706;display:flex;align-items:center;justify-content:center}.acdc-stat-empty{color:#3C3C3C;font-size:13px}@media (max-width:1200px){.acdc-kpis,.acdc-filter-grid,.acdc-stat-grid{grid-template-columns:1fr 1fr}}@media (max-width:782px){.acdc-kpis,.acdc-filter-grid,.acdc-stat-grid{grid-template-columns:1fr}}</style>
@@ -10382,19 +10381,6 @@ trait ACDC_Kernel_Render_Trait {
       <?php endforeach; ?>
     </div>
 
-    <div class="acdc-panel acdc-filter-box">
-      <div class="acdc-filter-head">Filtres</div>
-      <div class="acdc-filter-grid">
-        <div><label>Date d’ajout</label><input type="text" value=""></div>
-        <div><label>Commanditaire</label><select><option>—</option><option>Particulier</option><option>Entreprise</option></select></div>
-        <div><label>Statut</label><select><option>—</option><?php foreach ( array_keys( $status_counts ) as $status_label ) : ?><option><?php echo esc_html( $status_label ); ?></option><?php endforeach; ?></select></div>
-        <div><label>Statut RDV</label><select><option>—</option><?php foreach ( array_keys( $rdv_status_counts ) as $label ) : ?><option><?php echo esc_html( $label ); ?></option><?php endforeach; ?></select></div>
-        <div><label>Assigné à</label><select><option>—</option><?php foreach ( array_keys( $assigned_counts ) as $label ) : ?><option><?php echo esc_html( $label ); ?></option><?php endforeach; ?></select></div>
-        <div><label>Source</label><select><option>—</option><?php foreach ( array_keys( $source_counts ) as $label ) : ?><option><?php echo esc_html( $label ); ?></option><?php endforeach; ?></select></div>
-        <div><label>Relancés</label><select><option>—</option><option>Oui</option><option>Non</option></select></div>
-        <div><label>Formations</label><input type="text" placeholder="Rechercher une formation..."></div>
-      </div>
-    </div>
 
     <div class="acdc-panel">
       <div class="acdc-table-wrap"><table class="acdc-table acdc-table-prospects"><thead><tr><th>Profil</th><th>Prénom/Nom</th><th>Téléphone</th><th>E-mail</th><th>Formation souhaitée</th><th>Session</th><th>Statut</th><th>RDV</th><th>Dernière relance</th><th>Assigné à</th><th>Source</th><th>Ajouté le</th><th></th></tr></thead><tbody>
@@ -10421,8 +10407,49 @@ trait ACDC_Kernel_Render_Trait {
   }  private function render_front_statistics_pedagogical_tab() {
     global $wpdb;
 
+    /* ACDC 3.25.270 — CET ÉCRAN PASSAIT PAR LA SÉANCE POUR TOUT SAVOIR.
+       Il joignait l'apprenant à sa séance par `learner.session_id`, puis en
+       déduisait formation, dates, groupe et formateur. Comme la convention ne
+       renseigne jamais cette colonne — c'est elle qui crée les séances — la
+       plupart des lignes tombaient dans « — » : formation inconnue, dates
+       inconnues, commanditaire réputé « Particulier ». Et la jointure sur les
+       groupes pouvait dupliquer un apprenant, ce qui gonflait au passage les
+       répartitions par genre et par statut.
+       On part désormais du DOSSIER d'inscription, qui connaît sa formation, son
+       commanditaire et son groupe sans passer par une séance — c'est déjà la
+       source retenue pour « les formations les plus populaires » en 3.25.231 et
+       pour les heures en 3.25.225. Les dates et le nombre de séances se lisent
+       sur les séances de la formation, agrégées une fois. Une ligne par
+       apprenant, et plus aucune ne dépend d'une colonne vide. */
     $learners = $wpdb->get_results(
-      "SELECT l.*, s.start_date, s.end_date, s.schedule_json, s.status AS session_status,\n              f.title AS formation_title, f.duration AS formation_duration,\n              g.name AS group_name, g.trainer_name AS group_trainer_name\n       FROM {$this->learner_table} l\n       LEFT JOIN {$this->session_table} s ON s.id = l.session_id\n       LEFT JOIN {$this->formation_table} f ON f.id = s.formation_id\n       LEFT JOIN {$this->group_table} g ON g.session_id = s.id\n       ORDER BY l.id DESC"
+      "SELECT l.*,
+              COALESCE(NULLIF(r.formation_title,''), f.title, '') AS formation_title,
+              COALESCE(f.duration,'') AS formation_duration,
+              COALESCE(NULLIF(r.company_label,''), c.name, '') AS company_name,
+              COALESCE(r.group_label,'') AS group_name,
+              COALESCE(sx.start_date,'') AS start_date,
+              COALESCE(sx.end_date,'') AS end_date,
+              COALESCE(sx.nb_seances,0) AS seance_count,
+              COALESCE(sx.trainer_name,'') AS group_trainer_name
+         FROM {$this->learner_table} l
+         LEFT JOIN ( SELECT learner_id, MAX(id) AS rid
+                       FROM {$this->training_registration_table}
+                      WHERE is_draft = 0 AND learner_id IS NOT NULL AND learner_id > 0
+                      GROUP BY learner_id ) rr ON rr.learner_id = l.id
+         LEFT JOIN {$this->training_registration_table} r ON r.id = rr.rid
+         LEFT JOIN {$this->formation_table} f ON f.id = r.formation_id
+         LEFT JOIN {$this->company_table} c ON c.id = r.company_id
+         LEFT JOIN ( SELECT s.formation_id,
+                            MIN(COALESCE(s.start_date, DATE(s.start_at))) AS start_date,
+                            MAX(COALESCE(s.end_date, DATE(s.end_at))) AS end_date,
+                            COUNT(*) AS nb_seances,
+                            MAX(TRIM(CONCAT_WS(' ', t.first_name, t.last_name))) AS trainer_name
+                       FROM {$this->session_table} s
+                       LEFT JOIN {$this->trainer_table} t ON t.id = s.trainer_id
+                      WHERE COALESCE(s.is_draft,0) = 0
+                        AND COALESCE(s.status,'') NOT IN ('Annulée','Annulee')
+                      GROUP BY s.formation_id ) sx ON sx.formation_id = r.formation_id
+        ORDER BY l.id DESC"
     );
 
     $total_learners = is_array( $learners ) ? count( $learners ) : 0;
@@ -10546,7 +10573,6 @@ trait ACDC_Kernel_Render_Trait {
     $learner_view_base = $this->portal_page_url( array( 'tab' => 'learners' ) );
     ?>
     <section class="acdc-section-head"><div><h2>Statistiques pédagogiques</h2></div></section>
-    <div class="acdc-panel acdc-mb-18"><div class="acdc-inline-wrap" style="justify-content:space-between;align-items:center;gap:16px;"><input type="search" placeholder="Rechercher" style="max-width:420px;"><div class="acdc-inline-wrap" style="gap:10px;"><button type="button" class="acdc-icon-button"><?php echo $this->render_inline_icon( 'settings', 16 ); ?></button><button type="button" class="acdc-icon-button"><?php echo $this->render_inline_icon( 'filter', 16 ); ?></button><button type="button" class="acdc-icon-button"><?php echo $this->render_inline_icon( 'chevron-down', 16 ); ?></button></div></div></div>
 
     <style>
       .acdc-ped-top{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:18px;margin-bottom:18px}.acdc-ped-card{position:relative;min-height:100px;padding:16px}.acdc-ped-card h3{margin:0 0 10px;font-size:15px;color:#1E4777}.acdc-ped-range{position:absolute;top:10px;right:12px}.acdc-ped-icon-line{display:flex;align-items:center;gap:14px;margin-top:10px}.acdc-ped-icon-box{width:40px;height:40px;border-radius:10px;background:#C5A253;color:#0B0706;display:flex;align-items:center;justify-content:center}.acdc-ped-main-value{font-size:22px;font-weight:700;color:#667085}.acdc-ped-list{margin:0;padding-left:18px;font-size:13px;line-height:1.55}.acdc-ped-ring{position:absolute;right:18px;top:38px;width:60px;height:60px;border-radius:50%;background:conic-gradient(#ef6b57 0 50%,#f0c038 50% 100%)}.acdc-ped-ring:after{content:'';position:absolute;inset:8px;border-radius:50%;background:#fff}.acdc-ped-total{position:absolute;top:10px;right:12px;font-size:12px;color:#3C3C3C}.acdc-ped-filter-box{padding:0;overflow:hidden;margin-bottom:18px}.acdc-ped-filter-head{display:flex;justify-content:flex-end;background:#DCE4EC;padding:10px 12px;color:#64748b;font-size:12px;text-transform:uppercase;letter-spacing:.03em}.acdc-ped-filter-grid{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:14px;padding:16px}.acdc-ped-filter-grid label{display:block;font-size:12px;color:#1E4777;text-transform:uppercase;margin-bottom:6px}.acdc-ped-help-dot{position:absolute;right:10px;bottom:10px;width:20px;height:20px;border-radius:50%;background:#E9C77C;color:#0B0706;font-size:12px;display:flex;align-items:center;justify-content:center}@media (max-width:1200px){.acdc-ped-top,.acdc-ped-filter-grid{grid-template-columns:1fr 1fr}}@media (max-width:782px){.acdc-ped-top,.acdc-ped-filter-grid{grid-template-columns:1fr}}</style>
@@ -10577,26 +10603,8 @@ trait ACDC_Kernel_Render_Trait {
       </div>
     </div>
 
-    <div class="acdc-panel acdc-ped-filter-box">
-      <div class="acdc-ped-filter-head">Filtres</div>
-      <div class="acdc-ped-filter-grid">
-        <div><label>Date / période début de formation</label><input type="text" value=""></div>
-        <div><label>Date / période fin de formation</label><input type="text" value=""></div>
-        <div><label>Genre</label><select><option>—</option><?php foreach ( array_keys( $genre_counts ) as $label ) : ?><option><?php echo esc_html( $label ); ?></option><?php endforeach; ?></select></div>
-        <div><label>Inscrit à France Travail</label><select><option>—</option><option>Oui</option><option>Non</option></select></div>
-        <div><label>Commanditaire</label><select><option>—</option><option>Particulier</option><option>Entreprise</option></select></div>
-        <div><label>Sous-traitance</label><select><option>—</option><option>Oui</option><option>Non</option></select></div>
-        <div><label>Type d’apprenant</label><select><option>—</option><option>Particulier</option><option>Entreprise</option></select></div>
-        <div><label>Catégorie socioprofessionnelle</label><select><option>—</option><option>Employé</option><option>Cadre</option><option>Indépendant</option></select></div>
-        <div><label>Niveau d’études</label><select><option>—</option><option>Niveau 3</option><option>Niveau 4</option><option>Niveau 5</option><option>Niveau 6+</option></select></div>
-        <div><label>Objectif de la prestation dispensée</label><select><option>Sélectionner...</option><?php foreach ( $objective_options as $label ) : ?><option><?php echo esc_html( $label ); ?></option><?php endforeach; ?></select></div>
-        <div><label>État dossier</label><select><option>—</option><?php foreach ( array_keys( $status_counts ) as $label ) : ?><option><?php echo esc_html( $label ); ?></option><?php endforeach; ?></select></div>
-        <div><label>Formations</label><input type="text" placeholder="Rechercher une formation..."></div>
-      </div>
-    </div>
 
     <section class="acdc-section-head"><div><h2>Statistiques pédagogiques</h2></div></section>
-    <div class="acdc-panel acdc-mb-18"><div class="acdc-inline-wrap" style="justify-content:space-between;align-items:center;gap:16px;"><input type="search" placeholder="Rechercher" style="max-width:420px;"><div class="acdc-inline-wrap" style="gap:10px;"><button type="button" class="acdc-icon-button"><?php echo $this->render_inline_icon( 'settings', 16 ); ?></button><button type="button" class="acdc-icon-button"><?php echo $this->render_inline_icon( 'filter', 16 ); ?></button><button type="button" class="acdc-icon-button"><?php echo $this->render_inline_icon( 'chevron-down', 16 ); ?></button></div></div></div>
 
     <div class="acdc-panel">
       <div class="acdc-table-wrap">
@@ -10630,12 +10638,9 @@ trait ACDC_Kernel_Render_Trait {
                   $dates .= '<br><small>Fin : ' . mysql2date( 'd/m/Y', $entry->end_date ) . '</small>';
                 }
               }
-              $schedule_count = 0;
-              if ( ! empty( $entry->schedule_json ) ) {
-                $schedule = json_decode( $entry->schedule_json, true );
-                if ( is_array( $schedule ) ) { $schedule_count = count( $schedule ); }
-              }
-              if ( $schedule_count < 1 && ! empty( $entry->session_id ) ) { $schedule_count = 1; }
+              /* Le nombre de séances vient des séances de la formation, comptées
+                 une fois ci-dessus — plus du planning d'une seule d'entre elles. */
+              $schedule_count = isset( $entry->seance_count ) ? (int) $entry->seance_count : 0;
               $seances_label = $schedule_count ? sprintf( '%d séance%s de formation', $schedule_count, $schedule_count > 1 ? 's' : '' ) : '—';
               $progress = '—';
               if ( ! empty( $entry->formation_duration ) ) {
@@ -10709,18 +10714,33 @@ trait ACDC_Kernel_Render_Trait {
     );
 
     foreach ( $items as $item ) {
-      if ( ! empty( $item->group_trainer_name ) ) {
-        $trainer_names[ $item->group_trainer_name ] = $item->group_trainer_name;
-        $unique_trainers[ $item->group_trainer_name ] = true;
+      /* ACDC 3.25.270 — CET ÉCRAN NE VOYAIT AUCUN FORMATEUR.
+         Il ne lisait que `group_trainer_name` — le nom porté par le GROUPE. Or
+         le formateur est désigné sur la SÉANCE depuis longtemps, et c'est là
+         que la convention le pose : le compteur de formateurs, la liste du
+         filtre et le décompte d'apprenants uniques restaient vides sur un site
+         qui a des séances, des formateurs et des apprenants.
+         Le plus frustrant est que la bonne valeur était déjà sur la ligne :
+         `trainer_display_name` et `learner_count` sont résolus depuis la
+         3.25.212. L'écran lisait les champs d'à côté. */
+      $stat_trainer = ! empty( $item->trainer_display_name ) ? (string) $item->trainer_display_name : '';
+      if ( '' === $stat_trainer && ! empty( $item->group_trainer_name ) ) {
+        $stat_trainer = (string) $item->group_trainer_name;
+      }
+      /* « Formateur non rattaché » est une absence, pas un formateur : le
+         compter gonflerait l'effectif d'une personne qui n'existe pas. */
+      if ( '' !== $stat_trainer && false === stripos( $stat_trainer, 'non rattach' ) && '—' !== $stat_trainer ) {
+        $trainer_names[ $stat_trainer ] = $stat_trainer;
+        $unique_trainers[ $stat_trainer ] = true;
       }
       if ( ! empty( $item->formation_title ) ) {
         $formation_names[ $item->formation_title ] = $item->formation_title;
       }
-      if ( ! empty( $item->learner_first_name ) || ! empty( $item->learner_last_name ) || ! empty( $item->learner_usage_last_name ) ) {
-        $learner_name = trim( implode( ' ', array_filter( array( $item->learner_first_name, $item->learner_usage_last_name ? $item->learner_usage_last_name : $item->learner_last_name ) ) ) );
-        if ( '' !== $learner_name ) {
-          $unique_learners[ $learner_name ] = true;
-        }
+      /* Les apprenants se comptent par le résolveur, pas par le nom rapporté
+         par la jointure : celle-ci ne remonte qu'UN nom par séance, et aucun
+         quand la séance est née d'une convention. */
+      foreach ( $this->acdc_session_learner_ids( $item ) as $stat_lid ) {
+        $unique_learners[ 'id:' . (int) $stat_lid ] = true;
       }
       $start = ! empty( $item->start_at ) ? strtotime( (string) $item->start_at ) : false;
       $end = ! empty( $item->end_at ) ? strtotime( (string) $item->end_at ) : false;
@@ -10750,7 +10770,6 @@ trait ACDC_Kernel_Render_Trait {
     $view_base = $this->portal_page_url( array( 'tab' => 'attendance_sheets' ) );
     ?>
     <section class="acdc-section-head"><div><h2>Statistiques formateurs</h2></div></section>
-    <div class="acdc-panel acdc-mb-18"><div class="acdc-inline-wrap" style="justify-content:space-between;align-items:center;gap:16px;"><input type="search" placeholder="Rechercher" style="max-width:420px;"><div class="acdc-inline-wrap" style="gap:10px;"><button type="button" class="acdc-icon-button"><?php echo $this->render_inline_icon( 'settings', 16 ); ?></button><button type="button" class="acdc-icon-button"><?php echo $this->render_inline_icon( 'filter', 16 ); ?></button><button type="button" class="acdc-icon-button"><?php echo $this->render_inline_icon( 'chevron-down', 16 ); ?></button></div></div></div>
 
     <style>
       .acdc-trainer-top{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:18px;margin-bottom:18px}.acdc-trainer-card{position:relative;min-height:110px;padding:16px}.acdc-trainer-card h3{margin:0 0 10px;font-size:15px;color:#1E4777}.acdc-trainer-range{position:absolute;top:10px;right:12px}.acdc-trainer-icon-line{display:flex;align-items:center;gap:14px;margin-top:10px}.acdc-trainer-icon-box{width:40px;height:40px;border-radius:10px;background:#C5A253;color:#0B0706;display:flex;align-items:center;justify-content:center}.acdc-trainer-main-value{font-size:22px;font-weight:700;color:#667085}.acdc-trainer-list{margin:0;padding-left:18px;font-size:13px;line-height:1.55}.acdc-trainer-ring{position:absolute;right:18px;top:34px;width:60px;height:60px;border-radius:50%;background:conic-gradient(#33c35f 0 100%,#ef4444 0 100%)}.acdc-trainer-ring:after{content:'';position:absolute;inset:8px;border-radius:50%;background:#fff}.acdc-trainer-total{position:absolute;top:10px;right:12px;font-size:12px;color:#3C3C3C}.acdc-trainer-filter-box{padding:0;overflow:hidden;margin-bottom:18px}.acdc-trainer-filter-head{display:flex;justify-content:flex-end;background:#DCE4EC;padding:10px 12px;color:#64748b;font-size:12px;text-transform:uppercase;letter-spacing:.03em}.acdc-trainer-filter-grid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:14px;padding:16px}.acdc-trainer-filter-grid label{display:block;font-size:12px;color:#1E4777;text-transform:uppercase;margin-bottom:6px}.acdc-trainer-help-dot{position:absolute;right:10px;bottom:10px;width:20px;height:20px;border-radius:50%;background:#E9C77C;color:#0B0706;font-size:12px;display:flex;align-items:center;justify-content:center}.acdc-trainer-sign-link{color:#1E4777;text-decoration:none;display:inline-flex;align-items:center;gap:4px}.acdc-trainer-eye-col{text-align:right}@media (max-width:1200px){.acdc-trainer-top,.acdc-trainer-filter-grid{grid-template-columns:1fr 1fr}}@media (max-width:782px){.acdc-trainer-top,.acdc-trainer-filter-grid{grid-template-columns:1fr}}</style>
@@ -10758,19 +10777,19 @@ trait ACDC_Kernel_Render_Trait {
     <div class="acdc-trainer-top">
       <div class="acdc-panel acdc-trainer-card">
         <h3>Formateurs</h3>
-        <div class="acdc-trainer-range"><select><option>Depuis le début</option></select></div>
+        <div class="acdc-trainer-range"><span class="acdc-perf-sub">Depuis le début</span></div>
         <div class="acdc-trainer-icon-line"><span class="acdc-trainer-icon-box"><?php echo $this->render_inline_icon( 'trainers', 18 ); ?></span><div class="acdc-trainer-main-value"><?php echo (int) $total_trainers; ?></div></div>
         <span class="acdc-trainer-help-dot">?</span>
       </div>
       <div class="acdc-panel acdc-trainer-card">
         <h3>Apprenants formés</h3>
-        <div class="acdc-trainer-range"><select><option>Depuis le début</option></select></div>
+        <div class="acdc-trainer-range"><span class="acdc-perf-sub">Depuis le début</span></div>
         <div class="acdc-trainer-icon-line"><span class="acdc-trainer-icon-box"><?php echo $this->render_inline_icon( 'learners', 18 ); ?></span><div class="acdc-trainer-main-value"><?php echo (int) $total_learners; ?></div></div>
         <span class="acdc-trainer-help-dot">?</span>
       </div>
       <div class="acdc-panel acdc-trainer-card">
         <h3>Heures de formation dispensées</h3>
-        <div class="acdc-trainer-range"><select><option>Depuis le début</option></select></div>
+        <div class="acdc-trainer-range"><span class="acdc-perf-sub">Depuis le début</span></div>
         <div class="acdc-trainer-icon-line"><span class="acdc-trainer-icon-box"><?php echo $this->render_inline_icon( 'calendar', 18 ); ?></span><div class="acdc-trainer-main-value"><?php echo esc_html( $duration_label ); ?></div></div>
         <span class="acdc-trainer-help-dot">?</span>
       </div>
@@ -10798,7 +10817,6 @@ trait ACDC_Kernel_Render_Trait {
     </form>
 
     <section class="acdc-section-head"><div><h2>Statistiques formateurs</h2></div></section>
-    <div class="acdc-panel acdc-mb-18"><div class="acdc-inline-wrap" style="justify-content:space-between;align-items:center;gap:16px;"><input type="search" placeholder="Rechercher" style="max-width:420px;"><div class="acdc-inline-wrap" style="gap:10px;"><button type="button" class="acdc-icon-button"><?php echo $this->render_inline_icon( 'settings', 16 ); ?></button><button type="button" class="acdc-icon-button"><?php echo $this->render_inline_icon( 'filter', 16 ); ?></button><button type="button" class="acdc-icon-button"><?php echo $this->render_inline_icon( 'chevron-down', 16 ); ?></button></div></div></div>
 
     <div class="acdc-panel"><div class="acdc-table-wrap"><table class="acdc-table"><thead><tr><th>Apprenant/Groupe</th><th>Formation</th><th>Formateur</th><th>Type</th><th>Format</th><th>Méthode d’émargement</th><th>Date et heures de la séance</th><th>Lieu</th><th>Signature formateur</th><th>Présence(s) apprenant(s)</th><th></th></tr></thead><tbody>
       <?php
@@ -11027,9 +11045,9 @@ trait ACDC_Kernel_Render_Trait {
   }  private function render_front_statistics_performance_scope( $scope ) {
     global $wpdb;
 
-    $learners = $wpdb->get_results(
-      "SELECT l.*, s.start_date, s.end_date, f.title AS formation_title, f.duration AS formation_duration, s.format AS session_format\n       FROM {$this->learner_table} l\n       LEFT JOIN {$this->session_table} s ON s.id = l.session_id\n       LEFT JOIN {$this->formation_table} f ON f.id = s.formation_id\n       ORDER BY l.id DESC"
-    );
+    /* ACDC 3.25.270 — Une requête que personne ne lisait, sur la jointure
+       cassée. Elle coûtait une lecture complète du répertoire à chaque
+       affichage et n'alimentait aucun chiffre : supprimée. */
 
     $base_url = is_admin() ? admin_url( 'admin.php?page=acdc-of-dashboard' ) : $this->portal_page_url( array( 'tab' => 'statistics_performance' ) );
     $format_input = function( $date ) {
@@ -11060,12 +11078,24 @@ trait ACDC_Kernel_Render_Trait {
                 qp.id AS participant_id, qp.apprenant_id, qp.responded_at, qp.final_score,
                 l.first_name, l.last_name, l.usage_last_name,
                 f.title AS formation_title, f.duration AS formation_duration,
-                s.start_date, s.end_date, s.format AS session_format
+                sx.start_date, sx.end_date, sx.session_format
          FROM {$this->questionnaire_session_table} qs
          INNER JOIN {$this->questionnaire_participant_table} qp ON qp.session_id = qs.id
          LEFT JOIN {$this->learner_table} l ON l.id = qp.apprenant_id
          LEFT JOIN {$this->formation_table} f ON f.id = qs.formation_id
-         LEFT JOIN {$this->session_table} s ON s.id = l.session_id
+         /* ACDC 3.25.270 — Les dates de formation venaient de la séance
+            rattachée à l'apprenant par `learner.session_id`, vide dès que la
+            convention crée les séances : la colonne « Dates de formation »
+            affichait « Début : » suivi de rien. On lit les séances de la
+            FORMATION, une fois, comme partout ailleurs depuis cette version. */
+         LEFT JOIN ( SELECT formation_id,
+                            MIN(COALESCE(start_date, DATE(start_at))) AS start_date,
+                            MAX(COALESCE(end_date, DATE(end_at))) AS end_date,
+                            MAX(session_format) AS session_format
+                       FROM {$this->session_table}
+                      WHERE COALESCE(is_draft,0) = 0
+                        AND COALESCE(status,'') NOT IN ('Annulée','Annulee')
+                      GROUP BY formation_id ) sx ON sx.formation_id = qs.formation_id
          WHERE qs.source_type IN ('positioning_test', 'evaluation')
            AND qp.responded_at IS NOT NULL
          ORDER BY qp.responded_at DESC, qp.id DESC"
@@ -11227,11 +11257,9 @@ trait ACDC_Kernel_Render_Trait {
       <div class="acdc-perf-cards">
         <div class="acdc-panel acdc-perf-card"><h3>Taux de bonnes réponses : Tests de positionnement</h3><div style="position:absolute;top:10px;right:12px;color:#3C3C3C;font-size:12px;"><?php echo esc_html( number_format_i18n( $positioning_average, 1 ) ); ?> %</div><div class="acdc-perf-value"><?php echo esc_html( number_format_i18n( $positioning_average, 1 ) ); ?>%</div><div class="acdc-perf-progress"><span style="width:<?php echo esc_attr( max( 0, min( 100, $positioning_average ) ) ); ?>%;background:#22c55e"></span></div><span class="acdc-perf-help">?</span></div>
         <div class="acdc-panel acdc-perf-card"><h3>Taux de bonnes réponses : Évaluations des acquis</h3><div style="position:absolute;top:10px;right:12px;color:#3C3C3C;font-size:12px;"><?php echo esc_html( number_format_i18n( $evaluation_average, 1 ) ); ?> %</div><div class="acdc-perf-value"><?php echo esc_html( number_format_i18n( $evaluation_average, 1 ) ); ?>%</div><div class="acdc-perf-progress"><span style="width:<?php echo esc_attr( max( 0, min( 100, $evaluation_average ) ) ); ?>%;background:#22c55e"></span></div><span class="acdc-perf-help">?</span></div>
-        <div class="acdc-panel acdc-perf-card"><h3>Taux de progression : Test de positionnement -> Évaluation des acquis</h3><div class="acdc-perf-range"><select><option>Depuis le début</option></select></div><div class="acdc-perf-statline"><span class="acdc-perf-iconbox"><?php echo $this->render_inline_icon( 'statistics', 18 ); ?></span><div><div class="acdc-perf-value"><?php echo esc_html( number_format_i18n( $progress_average, 1 ) ); ?> <small style="font-size:16px;">%</small></div><div class="acdc-perf-sub"><?php echo esc_html( $progress_subtitle ); ?></div></div></div><div class="acdc-perf-progress" style="margin-top:14px;"><span style="width:<?php echo esc_attr( $progress_bar_width ); ?>%;background:<?php echo esc_attr( $progress_average >= 0 ? '#22c55e' : '#f97316' ); ?>"></span></div><span class="acdc-perf-help">?</span></div>
+        <div class="acdc-panel acdc-perf-card"><h3>Taux de progression : Test de positionnement -> Évaluation des acquis</h3><div class="acdc-perf-range"><span class="acdc-perf-sub">Depuis le début</span></div><div class="acdc-perf-statline"><span class="acdc-perf-iconbox"><?php echo $this->render_inline_icon( 'statistics', 18 ); ?></span><div><div class="acdc-perf-value"><?php echo esc_html( number_format_i18n( $progress_average, 1 ) ); ?> <small style="font-size:16px;">%</small></div><div class="acdc-perf-sub"><?php echo esc_html( $progress_subtitle ); ?></div></div></div><div class="acdc-perf-progress" style="margin-top:14px;"><span style="width:<?php echo esc_attr( $progress_bar_width ); ?>%;background:<?php echo esc_attr( $progress_average >= 0 ? '#22c55e' : '#f97316' ); ?>"></span></div><span class="acdc-perf-help">?</span></div>
       </div>
-      <div class="acdc-panel acdc-perf-filter-box"><div class="acdc-perf-filter-head">Filtres</div><div class="acdc-perf-filter-grid"><div><label>Date / période début de formation</label><input type="text" value=""></div><div><label>Date / période fin de formation</label><input type="text" value=""></div><div><label>Formations</label><input type="text" placeholder="Rechercher une formation..."></div><div><label>Commanditaires</label><input type="text" placeholder="Rechercher un commanditaire..."></div></div></div>
       <section class="acdc-section-head"><div><h2>Statistiques taux de progression</h2></div></section>
-      <div class="acdc-panel acdc-perf-search"><div class="acdc-inline-wrap" style="justify-content:space-between;align-items:center;gap:16px;"><input type="search" placeholder="Rechercher"><div class="acdc-inline-wrap" style="gap:10px;"><button type="button" class="acdc-icon-button"><?php echo $this->render_inline_icon( 'settings', 16 ); ?></button><button type="button" class="acdc-icon-button"><?php echo $this->render_inline_icon( 'filter', 16 ); ?></button><button type="button" class="acdc-icon-button"><?php echo $this->render_inline_icon( 'chevron-down', 16 ); ?></button></div></div></div>
       <div class="acdc-panel"><div class="acdc-table-wrap"><table class="acdc-table"><thead><tr><th>ID</th><th>Apprenant</th><th>Test</th><th>Type de correction</th><th>Date ajout/passage</th><th>Résultats</th><th>Formation</th><th>Dates de formation</th><th>Durée (H)</th><th>Format</th><th>Score</th><th>Taux</th></tr></thead><tbody><?php if ( ! empty( $rows ) ) : foreach ( $rows as $row ) : ?><tr><td><?php echo (int) $row['id']; ?></td><td><?php echo esc_html( $row['apprenant'] ); ?></td><td><?php echo esc_html( $row['test'] ); ?><br><small><?php echo esc_html( $row['source'] ); ?></small><br><small><?php echo esc_html( $row['formation'] ); ?></small></td><td>Correction automatique</td><td><?php echo esc_html( $row['added'] ); ?></td><td><?php echo esc_html( $row['result'] ); ?></td><td><?php echo esc_html( $row['formation'] ); ?></td><td><?php echo wp_kses_post( $row['dates'] ); ?></td><td><?php echo esc_html( $row['duree'] ); ?></td><td><?php echo esc_html( $row['format'] ); ?></td><td><?php echo esc_html( $row['score'] ); ?></td><td><?php echo esc_html( $row['percentage'] ); ?></td></tr><?php endforeach; else : ?><tr><td colspan="12">Aucune donnée ne correspond aux critères demandés.</td></tr><?php endif; ?></tbody></table></div></div>
       <?php
       return;
@@ -11286,7 +11314,6 @@ trait ACDC_Kernel_Render_Trait {
           <span class="acdc-perf-help">?</span>
         </div>
       </div>
-      <div class="acdc-panel acdc-perf-filter-box"><div class="acdc-perf-filter-head">Filtres</div><div class="acdc-perf-filter-grid"><div><label>Type d'enquete</label><select><option>--</option></select></div><div><label>Formations</label><input type="text" placeholder="Rechercher une formation..."></div></div></div>
       <section class="acdc-section-head"><div><h2><?php echo esc_html( $table_title ); ?></h2></div></section>
       <div class="acdc-panel"><div class="acdc-table-wrap"><table class="acdc-table"><thead><tr><th>Enquete</th><th>Type</th><th>Formation</th><th>Date cloture</th><th>Repondants</th><th>Note moyenne</th></tr></thead><tbody>
       <?php if ( ! empty( $sat_rows ) ) : foreach ( $sat_rows as $sr ) : $type_key = isset( $sr->source_type ) ? (string) $sr->source_type : ''; $type_lbl = isset( $type_labels[ $type_key ] ) ? $type_labels[ $type_key ] : $type_key; $note_val = isset( $sr->avg_score ) && null !== $sr->avg_score ? round( (float) $sr->avg_score, 2 ) : null; ?>
@@ -11340,7 +11367,6 @@ trait ACDC_Kernel_Render_Trait {
         <span class="acdc-perf-help">?</span>
       </div>
     </div>
-    <div class="acdc-panel acdc-perf-filter-box"><div class="acdc-perf-filter-head">Filtres</div><div class="acdc-perf-filter-grid"><div><label>Formations</label><input type="text" placeholder="Rechercher une formation..."></div><div><label>Resultat</label><select><option>--</option><option>Reussi</option><option>En progression</option><option>Non acquis</option></select></div></div></div>
     <section class="acdc-section-head"><div><h2>Statistiques taux de reussite</h2></div></section>
     <div class="acdc-panel"><div class="acdc-table-wrap"><table class="acdc-table"><thead><tr><th>Apprenant</th><th>Formation</th><th>Evaluation</th><th>Date passage</th><th>Score final</th><th>Resultat</th></tr></thead><tbody>
     <?php if ( ! empty( $success_rows ) ) : foreach ( $success_rows as $sr ) :
@@ -11473,23 +11499,11 @@ trait ACDC_Kernel_Render_Trait {
       <section class="acdc-section-head"><div><h2>Statistiques financières</h2></div></section>
       <div class="acdc-panel acdc-fin-card">
         <h3 style="margin:0 0 12px;font-size:15px;color:#1E4777;"><?php echo esc_html( $title ); ?></h3>
-        <div class="acdc-fin-range"><select><option>Depuis le début</option></select></div>
+        <div class="acdc-fin-range"><span class="acdc-fin-sub">Depuis le début</span></div>
         <div class="acdc-fin-topline"><span class="acdc-fin-icon-box"><?php echo $this->render_inline_icon( 'billing', 18 ); ?></span><div><div class="acdc-fin-main-value"><?php echo esc_html( $format_eur( $total ) ); ?></div></div></div>
         <span class="acdc-fin-help-dot">?</span>
       </div>
-      <div class="acdc-panel acdc-fin-filter-box">
-        <div class="acdc-fin-filter-head">Filtres</div>
-        <div class="acdc-fin-filter-grid">
-          <div><label>Date / période début de formation</label><input type="text" value=""></div>
-          <div><label>Date / période fin de formation</label><input type="text" value=""></div>
-          <div><label>Commanditaire</label><select><option>—</option><option>Particulier</option><option>Entreprise</option></select></div>
-          <div><label>Sous-traitance</label><select><option>—</option><option>Oui</option><option>Non</option></select></div>
-          <div><label>Mode de financement</label><select><option>Sélectionner...</option></select></div>
-          <div><label>Formations</label><input type="text" placeholder="Rechercher une formation..."></div>
-        </div>
-      </div>
       <section class="acdc-section-head"><div><h2><?php echo esc_html( $table_title ); ?></h2></div></section>
-      <div class="acdc-panel acdc-fin-searchbar"><div class="acdc-inline-wrap" style="justify-content:space-between;align-items:center;gap:16px;"><input type="search" placeholder="Rechercher"><div class="acdc-inline-wrap" style="gap:10px;"><button type="button" class="acdc-icon-button"><?php echo $this->render_inline_icon( 'settings', 16 ); ?></button><button type="button" class="acdc-icon-button"><?php echo $this->render_inline_icon( 'filter', 16 ); ?></button><button type="button" class="acdc-icon-button"><?php echo $this->render_inline_icon( 'chevron-down', 16 ); ?></button></div></div></div>
       <div class="acdc-panel"><div class="acdc-table-wrap"><table class="acdc-table acdc-fin-table"><thead><tr><th>ID</th><th>Apprenant</th><th>Commanditaire</th><th>Formation</th><th>Tarif (€ HT)</th><th>Dates de formation</th><th>Séances de formation</th><th>Groupe</th><th>Progression</th><th>Formateur attitré</th><th>État dossier</th><th>Accès extranet</th><th></th></tr></thead><tbody>
       <?php if ( ! empty( $rows ) ) : foreach ( $rows as $entry ) :
         $name = trim( implode( ' ', array_filter( array( $entry->first_name, ! empty( $entry->usage_last_name ) ? $entry->usage_last_name : $entry->last_name ) ) ) );
@@ -11543,33 +11557,11 @@ trait ACDC_Kernel_Render_Trait {
     <section class="acdc-section-head"><div><h2>Statistiques financières</h2></div></section>
     <div class="acdc-panel acdc-fin-card">
       <h3 style="margin:0 0 12px;font-size:15px;color:#1E4777;"><?php echo esc_html( $title ); ?></h3>
-      <div class="acdc-fin-range"><select><option>Depuis le début</option></select></div>
+      <div class="acdc-fin-range"><span class="acdc-fin-sub">Depuis le début</span></div>
       <div class="acdc-fin-topline"><span class="acdc-fin-icon-box"><?php echo $this->render_inline_icon( 'billing', 18 ); ?></span><div><div class="acdc-fin-main-value"><?php echo esc_html( $format_eur( $total ) ); ?></div><?php if ( $total <= 0 ) : ?><div class="acdc-fin-sub">Pas de donnée</div><?php endif; ?></div></div>
       <span class="acdc-fin-help-dot">?</span>
     </div>
-    <div class="acdc-panel acdc-fin-filter-box">
-      <div class="acdc-fin-filter-head">Filtres</div>
-      <div class="acdc-fin-filter-grid">
-        <?php if ( 'action' === $scope ) : ?>
-          <div><label>Date / période début de formation</label><input type="text" value=""></div>
-          <div><label>Date / période fin de formation</label><input type="text" value=""></div>
-          <div><label>Date / période d'émission</label><input type="text" value=""></div>
-          <div><label>Commanditaire</label><select><option>—</option><option>Particulier</option><option>Entreprise</option></select></div>
-          <div><label>Sous-traitance</label><select><option>—</option><option>Oui</option><option>Non</option></select></div>
-          <div><label>Mode de financement</label><select><option>Sélectionner...</option></select></div>
-          <div><label>Type</label><select><option>—</option><option>Facture</option><option>Avoir</option></select></div>
-          <div><label>Statut</label><select><option>—</option><option>PAYÉE</option><option>EN RETARD DE PAIEMENT</option></select></div>
-          <div><label>Formations</label><input type="text" placeholder="Rechercher une formation..."></div>
-        <?php else : ?>
-          <div><label>Date d'émission</label><input type="text" value=""></div>
-          <div><label>Commanditaire</label><select><option>—</option><option>Particulier</option><option>Entreprise</option></select></div>
-          <div><label>Type</label><select><option>—</option><option>Facture</option><option>Avoir</option></select></div>
-          <div><label>Statut</label><select><option>—</option><option>PAYÉE</option><option>EN RETARD DE PAIEMENT</option></select></div>
-        <?php endif; ?>
-      </div>
-    </div>
     <section class="acdc-section-head"><div><h2><?php echo esc_html( $table_title ); ?></h2></div></section>
-    <div class="acdc-panel acdc-fin-searchbar"><div class="acdc-inline-wrap" style="justify-content:space-between;align-items:center;gap:16px;"><input type="search" placeholder="Rechercher"><div class="acdc-inline-wrap" style="gap:10px;"><button type="button" class="acdc-icon-button"><?php echo $this->render_inline_icon( 'settings', 16 ); ?></button><button type="button" class="acdc-icon-button"><?php echo $this->render_inline_icon( 'filter', 16 ); ?></button><button type="button" class="acdc-icon-button"><?php echo $this->render_inline_icon( 'chevron-down', 16 ); ?></button></div></div></div>
     <div class="acdc-panel"><div class="acdc-table-wrap"><table class="acdc-table"><thead>
       <?php if ( 'action' === $scope ) : ?>
         <tr><th>Numéro</th><th>Type</th><th>Commanditaire</th><th>Financeur</th><th>Statut</th><th>Dernière relance</th><th>Formation</th><th>Dates de formation</th><th>Apprenant(s)</th><th>Date d'émission</th><th>Date d'échéance</th><th>Quantité</th><th>Tarif HT</th><th>Montant TVA</th><th>Tarif TTC</th><th>Avoir sur facture</th><th></th></tr>
