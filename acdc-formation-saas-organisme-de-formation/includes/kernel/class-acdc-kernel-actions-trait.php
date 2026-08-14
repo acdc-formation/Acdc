@@ -1712,10 +1712,24 @@ trait ACDC_Kernel_Actions_Trait {
       return;
     }
     check_admin_referer( 'acdc_save_trainer_contract_' . $trainer_id );
-    $nb_heures  = isset( $_POST['nb_heures'] ) ? (float) wp_unslash( $_POST['nb_heures'] ) : 0.0;
-    $taux_ht    = isset( $_POST['taux_ht'] )   ? (float) wp_unslash( $_POST['taux_ht'] )   : 0.0;
-    $montant_saisi = isset( $_POST['montant_ht'] ) ? (float) wp_unslash( $_POST['montant_ht'] ) : 0.0;
-    $montant_ht = ( $montant_saisi > 0 ) ? round( $montant_saisi, 2 ) : round( $nb_heures * $taux_ht, 2 );
+    /* ACDC 3.25.262 — LE CALCUL VA DANS LES DEUX SENS, Y COMPRIS ICI.
+       L'écran déduisait le montant des heures et du taux, jamais l'inverse ; le
+       serveur, lui, gardait le montant saisi mais laissait le taux à zéro. Une
+       mission négociée au forfait — « 800 € pour deux jours », le cas courant —
+       s'enregistrait donc avec « 0,00 €/H », et c'est ce que le contrat de
+       sous-traitance imprimait.
+       La règle est la même des deux côtés, et elle vit dans une seule classe :
+       le montant saisi fait foi, le taux s'en déduit. Le serveur l'applique
+       quoi qu'il arrive — un formulaire sans JavaScript ne doit pas produire
+       une pièce contractuelle fausse. */
+    $__mission = \ACDC\Support\MissionAmount::reconcile(
+      isset( $_POST['nb_heures'] )  ? wp_unslash( $_POST['nb_heures'] )  : 0,
+      isset( $_POST['taux_ht'] )    ? wp_unslash( $_POST['taux_ht'] )    : 0,
+      isset( $_POST['montant_ht'] ) ? wp_unslash( $_POST['montant_ht'] ) : 0
+    );
+    $nb_heures  = $__mission['hours'];
+    $taux_ht    = $__mission['rate'];
+    $montant_ht = $__mission['amount'];
     $date_start = isset( $_POST['date_start'] ) && '' !== sanitize_text_field( wp_unslash( $_POST['date_start'] ) ) ? sanitize_text_field( wp_unslash( $_POST['date_start'] ) ) : null;
     $date_end   = isset( $_POST['date_end'] )   && '' !== sanitize_text_field( wp_unslash( $_POST['date_end'] ) )   ? sanitize_text_field( wp_unslash( $_POST['date_end'] ) )   : null;
     global $wpdb;
@@ -1759,11 +1773,35 @@ trait ACDC_Kernel_Actions_Trait {
       $wpdb->insert( $this->trainer_contract_table, $data, $formats );
       $msg = 'Mission ajoutée.';
     }
+    /* ACDC 3.25.262 — ENREGISTRER ET ENVOYER, D'UN SEUL GESTE.
+       Il fallait six clics et deux rechargements pour contractualiser une
+       mission : ouvrir un formulaire déjà présent, enregistrer, rouvrir une
+       modale pour redésigner la mission qu'on venait de créer, la fabriquer en
+       PDF, rouvrir une seconde modale, la redésigner encore, envoyer. Chaque
+       bouton global rouvrait une liste pour faire redésigner ce qu'on avait
+       sous les yeux.
+       Le bouton principal enchaîne désormais les trois étapes. En cas d'échec
+       de l'envoi, la mission RESTE enregistrée et le message le dit : perdre
+       une saisie parce qu'un e-mail n'est pas parti serait le pire des deux. */
+    $notice_type = 'success';
+    if ( ! empty( $_POST['and_sign'] ) ) {
+      $saved_id = $contract_id ? $contract_id : (int) $wpdb->insert_id;
+      $trainer  = $this->get_trainer( $trainer_id );
+      $contract = $saved_id ? $wpdb->get_row( $wpdb->prepare( "SELECT * FROM {$this->trainer_contract_table} WHERE id = %d", $saved_id ) ) : null;
+      if ( $trainer && $contract ) {
+        $verdict     = $this->acdc_request_trainer_contract_signature( $trainer, $contract );
+        $msg         = $msg . ' ' . $verdict['message'];
+        $notice_type = $verdict['ok'] ? 'success' : 'warning';
+      }
+    }
+
+    /* Le retour se fait SUR LA SECTION DES MISSIONS, pas en haut de la fiche :
+       une page qui remonte à chaque enregistrement fait perdre le fil. */
     $is_admin_ctx = isset( $_POST['page'] ) && 'acdc-of-trainers' === $_POST['page'];
     $redirect = $is_admin_ctx
-      ? admin_url( 'admin.php?page=acdc-of-trainers&action=edit&item_id=' . $trainer_id . '&notice=' . rawurlencode( $msg ) . '&notice_type=success' )
-      : $this->portal_page_url( array( 'tab' => 'trainers', 'action' => 'edit', 'item_id' => $trainer_id, 'notice' => rawurlencode( $msg ), 'notice_type' => 'success' ) );
-    wp_safe_redirect( $redirect );
+      ? admin_url( 'admin.php?page=acdc-of-trainers&action=edit&item_id=' . $trainer_id . '&notice=' . rawurlencode( $msg ) . '&notice_type=' . $notice_type )
+      : $this->portal_page_url( array( 'tab' => 'trainers', 'action' => 'edit', 'item_id' => $trainer_id, 'notice' => rawurlencode( $msg ), 'notice_type' => $notice_type ) );
+    wp_safe_redirect( $redirect . '#acdc-tc-section' );
     exit;
   }
 
@@ -1826,6 +1864,128 @@ trait ACDC_Kernel_Actions_Trait {
    * Lit les clauses depuis get_subcontract_params_options().
    * Stocke l'URL générée dans acdc_of_trainer_contracts.contract_pdf_url.
    */
+  /**
+   * ACDC 3.25.262 — FABRIQUER LE PDF DU CONTRAT, UNE SEULE FOIS DANS LE CODE.
+   *
+   * Trois chemins en avaient besoin — le bouton « Générer », l'envoi en
+   * signature, et depuis cette version l'enregistrement d'une mission. La
+   * fabrication vivait dans le premier ; les deux autres la refaisaient à leur
+   * façon. Une pièce contractuelle produite par trois codes différents finit
+   * par exister en trois versions.
+   *
+   * @return string L'URL du PDF écrit, ou '' en cas d'échec.
+   */
+  private function acdc_store_trainer_contract_pdf( $trainer, $contract ) {
+    global $wpdb;
+    if ( ! $trainer || ! $contract || empty( $contract->id ) ) {
+      return '';
+    }
+    $pages = $this->build_trainer_contract_pdf_pages( $trainer, $contract );
+    if ( empty( $pages ) ) {
+      return '';
+    }
+    $pdf_content = '';
+    if ( class_exists( 'ACDC_Sig_Core' ) && class_exists( 'ACDC_Sig_PDF' ) ) {
+      $sig_core = new ACDC_Sig_Core();
+      $sig_core->init_tables();
+      $sig_pdf  = new ACDC_Sig_PDF( $sig_core );
+      $ref      = new ReflectionClass( $sig_pdf );
+      $method   = $ref->getMethod( 'render_to_string' );
+      $method->setAccessible( true );
+      $pdf_content = $method->invoke( $sig_pdf, $pages );
+    }
+    if ( ( ! is_string( $pdf_content ) || '' === $pdf_content ) && method_exists( $this, '_build_simple_pdf_string' ) ) {
+      $pdf_content = $this->_build_simple_pdf_string( $pages );
+    }
+    if ( ! is_string( $pdf_content ) || '' === $pdf_content ) {
+      return '';
+    }
+
+    $contract_id = (int) $contract->id;
+    $upload_dir  = wp_upload_dir();
+    $safe_name   = $this->acdc_trainer_contract_filename( (int) $contract->trainer_id, $contract_id );
+    $dir_path    = trailingslashit( $upload_dir['basedir'] ) . 'acdc-of-contracts/' . $contract_id . '/';
+    $file_path   = $dir_path . $safe_name;
+    $file_url    = trailingslashit( $upload_dir['baseurl'] ) . 'acdc-of-contracts/' . $contract_id . '/' . $safe_name;
+    /* ACDC 3.25.148 — F11 : dossier créé PROTÉGÉ (.htaccess + index.php). */
+    $this->acdc_protect_contracts_dir( $dir_path );
+    file_put_contents( $file_path, $pdf_content ); // phpcs:ignore WordPress.WP.AlternativeFunctions.file_system_operations_file_put_contents
+    $wpdb->update( $this->trainer_contract_table, array( 'contract_pdf_url' => esc_url_raw( $file_url ) ), array( 'id' => $contract_id ), array( '%s' ), array( '%d' ) );
+    $contract->contract_pdf_url = $file_url;
+
+    $this->log_action_event( 'generate', 'trainer_contract_pdf', $contract_id, 'success', array( 'file' => $safe_name, 'bytes' => strlen( $pdf_content ) ) );
+    return $file_url;
+  }
+
+  /**
+   * ACDC 3.25.262 — DEMANDER LA SIGNATURE DU CONTRAT AU FORMATEUR.
+   *
+   * Même raison que ci-dessus : le bouton dédié et l'enregistrement d'une
+   * mission mènent tous deux ici. Elle rend un verdict au lieu de rediriger,
+   * pour que l'appelant compose son message — une fonction qui redirige ne
+   * peut pas être appelée au milieu d'un autre traitement.
+   *
+   * @return array{ok:bool,message:string}
+   */
+  private function acdc_request_trainer_contract_signature( $trainer, $contract ) {
+    global $wpdb;
+    if ( ! $trainer || ! $contract ) {
+      return array( 'ok' => false, 'message' => 'Contrat ou formateur introuvable.' );
+    }
+    $tr_email = sanitize_email( (string) $trainer->email );
+    if ( '' === $tr_email || ! is_email( $tr_email ) ) {
+      return array( 'ok' => false, 'message' => "Le formateur n'a pas d'adresse e-mail valide : le contrat est enregistré, mais rien n'a été envoyé." );
+    }
+    if ( ! class_exists( 'ACDC_Sig_Core' ) || ! class_exists( 'ACDC_Sig_Email' ) ) {
+      return array( 'ok' => false, 'message' => "Le module de signature électronique n'est pas disponible : le contrat est enregistré, mais rien n'a été envoyé." );
+    }
+
+    /* Le PDF doit exister sur le disque : c'est lui qu'on fait signer. */
+    $upload_dir = wp_upload_dir();
+    $doc_url    = esc_url_raw( (string) $contract->contract_pdf_url );
+    $doc_path   = '' !== $doc_url ? str_replace( trailingslashit( $upload_dir['baseurl'] ), trailingslashit( $upload_dir['basedir'] ), $doc_url ) : '';
+    if ( '' === $doc_path || ! file_exists( $doc_path ) ) {
+      $doc_url = $this->acdc_store_trainer_contract_pdf( $trainer, $contract );
+      if ( '' === $doc_url ) {
+        return array( 'ok' => false, 'message' => "Le PDF du contrat n'a pas pu être fabriqué : rien n'a été envoyé." );
+      }
+      $doc_path = str_replace( trailingslashit( $upload_dir['baseurl'] ), trailingslashit( $upload_dir['basedir'] ), $doc_url );
+    }
+
+    $sig_core = new ACDC_Sig_Core();
+    $sig_core->init_tables();
+    $tr_name    = trim( (string) $trainer->first_name . ' ' . (string) $trainer->last_name );
+    $request_id = $sig_core->create_signature_request( array(
+      'signer_name'  => $tr_name,
+      'signer_email' => $tr_email,
+      'signer_role'  => 'Formateur — contrat de sous-traitance',
+      'doc_type'     => 'contrat_formateur',
+      'sig_level'    => ACDC_Sig_Core::LEVEL_RENFORCE,
+      'doc_url'      => $doc_url,
+      'doc_path'     => $doc_path,
+      'notes'        => wp_json_encode( array(
+        'entity_type'           => 'trainer_contract',
+        'trainer_contract_id'   => (int) $contract->id,
+        'trainer_id'            => (int) $contract->trainer_id,
+        'signed_delivery_email' => sanitize_email( (string) get_option( 'admin_email' ) ),
+      ) ),
+    ) );
+    if ( ! $request_id ) {
+      return array( 'ok' => false, 'message' => "La demande de signature n'a pas pu être créée." );
+    }
+
+    $sig_email = new ACDC_Sig_Email( $sig_core );
+    $sig_email->send_signature_email( $request_id );
+    $wpdb->update(
+      $this->trainer_contract_table,
+      array( 'signature_request_id' => (int) $request_id, 'signature_status' => 'envoyée' ),
+      array( 'id' => (int) $contract->id ),
+      array( '%d', '%s' ),
+      array( '%d' )
+    );
+    return array( 'ok' => true, 'message' => 'Demande de signature envoyée à ' . $tr_email . '.' );
+  }
+
   public function handle_generate_trainer_contract_pdf() {
     if ( ! current_user_can( 'manage_options' ) ) {
       wp_die( esc_html( 'Accès refusé.' ) );
@@ -1842,41 +2002,12 @@ trait ACDC_Kernel_Actions_Trait {
     if ( ! $trainer || ! $contract ) {
       wp_die( esc_html( 'Données introuvables.' ) );
     }
-    $pages = $this->build_trainer_contract_pdf_pages( $trainer, $contract );
-    if ( empty( $pages ) ) {
-      wp_die( esc_html( 'Impossible de construire le PDF.' ) );
-    }
-    // Moteur PDF — ACDC_Sig_PDF (même que la convention), fallback _build_simple_pdf_string
-    $pdf_content = '';
-    if ( class_exists( 'ACDC_Sig_Core' ) && class_exists( 'ACDC_Sig_PDF' ) ) {
-      $sig_core = new ACDC_Sig_Core();
-      $sig_core->init_tables();
-      $sig_pdf  = new ACDC_Sig_PDF( $sig_core );
-      $ref      = new ReflectionClass( $sig_pdf );
-      $method   = $ref->getMethod( 'render_to_string' );
-      $method->setAccessible( true );
-      $pdf_content = $method->invoke( $sig_pdf, $pages );
-    }
-    if ( ! is_string( $pdf_content ) || '' === $pdf_content ) {
-      if ( method_exists( $this, '_build_simple_pdf_string' ) ) {
-        $pdf_content = $this->_build_simple_pdf_string( $pages );
-      }
-    }
-    if ( '' === $pdf_content ) {
+    /* ACDC 3.25.262 — La fabrication vit dans acdc_store_trainer_contract_pdf :
+       trois chemins en ont besoin, un seul code la produit. */
+    $file_url = $this->acdc_store_trainer_contract_pdf( $trainer, $contract );
+    if ( '' === $file_url ) {
       wp_die( esc_html( 'Génération PDF échouée.' ) );
     }
-    $upload_dir = wp_upload_dir();
-    $safe_name  = $this->acdc_trainer_contract_filename( $trainer_id, $contract_id );
-    $dir_path   = trailingslashit( $upload_dir['basedir'] ) . 'acdc-of-contracts/' . $contract_id . '/';
-    $file_path  = $dir_path . $safe_name;
-    $file_url   = trailingslashit( $upload_dir['baseurl'] ) . 'acdc-of-contracts/' . $contract_id . '/' . $safe_name;
-    /* ACDC 3.25.148 — F11 : le dossier est créé PROTÉGÉ (.htaccess + index.php).
-       Auparavant un simple wp_mkdir_p() laissait les contrats de sous-traitance
-       (nom, e-mail, SIRET du formateur) accessibles publiquement, sans
-       authentification, à une URL devinable — et ils survivaient à la suppression. */
-    $this->acdc_protect_contracts_dir( $dir_path );
-    file_put_contents( $file_path, $pdf_content ); // phpcs:ignore WordPress.WP.AlternativeFunctions.file_system_operations_file_put_contents
-    $wpdb->update( $this->trainer_contract_table, array( 'contract_pdf_url' => esc_url_raw( $file_url ) ), array( 'id' => $contract_id ), array( '%s' ), array( '%d' ) );
 
     /* ACDC 3.25.148 — G4 : ce handler NE FAIT PLUS QUE TÉLÉCHARGER.
        Il envoyait auparavant le contrat par e-mail au formateur à chaque appel :
@@ -1895,14 +2026,13 @@ trait ACDC_Kernel_Actions_Trait {
        Le handler enregistre désormais et redirige avec un avis ; la consultation
        et le téléchargement passent par acdc_serve_trainer_contract, seul chemin
        dont on sait qu'il aboutit. */
-    $this->log_action_event( 'generate', 'trainer_contract_pdf', $contract_id, 'success', array( 'file' => $safe_name, 'bytes' => strlen( $pdf_content ) ) );
     wp_safe_redirect( add_query_arg(
       array(
         'notice'      => rawurlencode( 'Contrat PDF généré. Utilisez « Voir » pour le consulter ou l’enregistrer.' ),
         'notice_type' => 'success',
       ),
       $this->acdc_trainer_contract_back_url( $trainer_id )
-    ) );
+    ) . '#acdc-tc-section' );
     exit;
   }
 
@@ -2814,87 +2944,25 @@ trait ACDC_Kernel_Actions_Trait {
       $this->redirect_to_portal( 'trainers', 'Contrat ou formateur introuvable.', 'error' );
       return;
     }
-    if ( empty( $contract->contract_pdf_url ) ) {
-      $msg = 'Générez d\'abord le PDF du contrat avant d\'envoyer en signature.';
+    /* ACDC 3.25.262 — Fabrication du PDF et demande de signature vivent
+       désormais dans deux fonctions partagées : le bouton dédié et le nouvel
+       « Enregistrer et envoyer pour signature » suivent exactement le même
+       chemin. Le PDF manquant n'est plus une impasse — il se fabrique. */
+    $verdict = $this->acdc_request_trainer_contract_signature( $trainer, $contract );
+    $msg     = $verdict['message'];
+    if ( ! $verdict['ok'] ) {
       $is_admin_ctx = isset( $_POST['page'] ) && 'acdc-of-trainers' === $_POST['page'];
       $redirect = $is_admin_ctx
         ? admin_url( 'admin.php?page=acdc-of-trainers&action=edit&item_id=' . $trainer_id . '&notice=' . rawurlencode( $msg ) . '&notice_type=error' )
         : $this->portal_page_url( array( 'tab' => 'trainers', 'action' => 'edit', 'item_id' => $trainer_id, 'notice' => rawurlencode( $msg ), 'notice_type' => 'error' ) );
-      wp_safe_redirect( $redirect );
+      wp_safe_redirect( $redirect . '#acdc-tc-section' );
       exit;
     }
-    $tr_email = sanitize_email( (string) $trainer->email );
-    if ( '' === $tr_email || ! is_email( $tr_email ) ) {
-      $msg = 'Le formateur n\'a pas d\'adresse e-mail valide.';
-      $is_admin_ctx = isset( $_POST['page'] ) && 'acdc-of-trainers' === $_POST['page'];
-      $redirect = $is_admin_ctx
-        ? admin_url( 'admin.php?page=acdc-of-trainers&action=edit&item_id=' . $trainer_id . '&notice=' . rawurlencode( $msg ) . '&notice_type=error' )
-        : $this->portal_page_url( array( 'tab' => 'trainers', 'action' => 'edit', 'item_id' => $trainer_id, 'notice' => rawurlencode( $msg ), 'notice_type' => 'error' ) );
-      wp_safe_redirect( $redirect );
-      exit;
-    }
-    if ( ! class_exists( 'ACDC_Sig_Core' ) || ! class_exists( 'ACDC_Sig_Email' ) ) {
-      $msg = 'Le module de signature électronique n\'est pas disponible.';
-      $is_admin_ctx = isset( $_POST['page'] ) && 'acdc-of-trainers' === $_POST['page'];
-      $redirect = $is_admin_ctx
-        ? admin_url( 'admin.php?page=acdc-of-trainers&action=edit&item_id=' . $trainer_id . '&notice=' . rawurlencode( $msg ) . '&notice_type=error' )
-        : $this->portal_page_url( array( 'tab' => 'trainers', 'action' => 'edit', 'item_id' => $trainer_id, 'notice' => rawurlencode( $msg ), 'notice_type' => 'error' ) );
-      wp_safe_redirect( $redirect );
-      exit;
-    }
-    // Retrouver le path local depuis l'URL stockée
-    $upload_dir = wp_upload_dir();
-    $doc_url    = esc_url_raw( (string) $contract->contract_pdf_url );
-    $doc_path   = str_replace( trailingslashit( $upload_dir['baseurl'] ), trailingslashit( $upload_dir['basedir'] ), $doc_url );
-    if ( ! file_exists( $doc_path ) ) {
-      // Le PDF n'existe plus — le régénérer
-      $pages = $this->build_trainer_contract_pdf_pages( $trainer, $contract );
-      $pdf_c = '';
-      if ( class_exists( 'ACDC_Sig_PDF' ) ) {
-        $sc = new ACDC_Sig_Core(); $sc->init_tables();
-        $sp = new ACDC_Sig_PDF( $sc );
-        $rf = new ReflectionClass( $sp ); $m = $rf->getMethod( 'render_to_string' ); $m->setAccessible( true );
-        $pdf_c = $m->invoke( $sp, $pages );
-      }
-      if ( '' === $pdf_c && method_exists( $this, '_build_simple_pdf_string' ) ) { $pdf_c = $this->_build_simple_pdf_string( $pages ); }
-      if ( '' !== $pdf_c ) { wp_mkdir_p( dirname( $doc_path ) ); file_put_contents( $doc_path, $pdf_c ); }
-    }
-    $sig_core   = new ACDC_Sig_Core();
-    $sig_core->init_tables();
-    $tr_name    = trim( (string) $trainer->first_name . ' ' . (string) $trainer->last_name );
-    $request_id = $sig_core->create_signature_request( array(
-      'signer_name'  => $tr_name,
-      'signer_email' => $tr_email,
-      'signer_role'  => 'Formateur — contrat de sous-traitance',
-      'doc_type'     => 'contrat_formateur',
-      'sig_level'    => ACDC_Sig_Core::LEVEL_RENFORCE,
-      'doc_url'      => $doc_url,
-      'doc_path'     => $doc_path,
-      'notes'        => wp_json_encode( array(
-        'entity_type'           => 'trainer_contract',
-        'trainer_contract_id'   => (int) $contract->id,
-        'trainer_id'            => $trainer_id,
-        'signed_delivery_email' => sanitize_email( (string) get_option( 'admin_email' ) ),
-      ) ),
-    ) );
-    if ( ! $request_id ) {
-      $msg = 'La demande de signature n\'a pas pu être créée.';
-      $is_admin_ctx = isset( $_POST['page'] ) && 'acdc-of-trainers' === $_POST['page'];
-      $redirect = $is_admin_ctx
-        ? admin_url( 'admin.php?page=acdc-of-trainers&action=edit&item_id=' . $trainer_id . '&notice=' . rawurlencode( $msg ) . '&notice_type=error' )
-        : $this->portal_page_url( array( 'tab' => 'trainers', 'action' => 'edit', 'item_id' => $trainer_id, 'notice' => rawurlencode( $msg ), 'notice_type' => 'error' ) );
-      wp_safe_redirect( $redirect );
-      exit;
-    }
-    $sig_email = new ACDC_Sig_Email( $sig_core );
-    $sig_email->send_signature_email( $request_id );
-    $wpdb->update( $this->trainer_contract_table, array( 'signature_request_id' => (int) $request_id, 'signature_status' => 'envoyée' ), array( 'id' => (int) $contract->id ), array( '%d', '%s' ), array( '%d' ) );
-    $msg = 'Demande de signature envoyée à ' . $tr_email . '.';
     $is_admin_ctx = isset( $_POST['page'] ) && 'acdc-of-trainers' === $_POST['page'];
     $redirect = $is_admin_ctx
       ? admin_url( 'admin.php?page=acdc-of-trainers&action=edit&item_id=' . $trainer_id . '&notice=' . rawurlencode( $msg ) . '&notice_type=success' )
       : $this->portal_page_url( array( 'tab' => 'trainers', 'action' => 'edit', 'item_id' => $trainer_id, 'notice' => rawurlencode( $msg ), 'notice_type' => 'success' ) );
-    wp_safe_redirect( $redirect );
+    wp_safe_redirect( $redirect . '#acdc-tc-section' );
     exit;
   }
 

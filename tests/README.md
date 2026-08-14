@@ -21,6 +21,7 @@ lancent sans WordPress, en quelques secondes.
     php tests/test-facturation-opco.php # qui reçoit la facture, et pour quel montant
     php tests/test-jalons-prospect.php  # étapes franchies comptées par le suivi commercial
     php tests/test-rappel-contrat-formateur.php # rappel du contrat formateur après signature
+    php tests/test-montant-mission.php # heures, taux et montant : le calcul dans les deux sens
     node tests/test-signature-trace.js # continuité du tracé des signatures
     php tests/scan-global-wpdb.php acdc-formation-saas-organisme-de-formation
     php tests/scan-envois-email.php  # e-mails qui contournent la porte commune

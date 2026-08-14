@@ -8081,7 +8081,7 @@ trait ACDC_Kernel_Render_Trait {
       .acdc-tc-modal-actions{display:flex;gap:10px;justify-content:flex-end}
     </style>
 
-    <div class="acdc-panel acdc-needs-section acdc-tc-section">
+    <div class="acdc-panel acdc-needs-section acdc-tc-section" id="acdc-tc-section">
       <div class="acdc-needs-section-title" style="display:flex;align-items:center;gap:10px;">
         <span>📋 Contrats &amp; missions</span>
       </div>
@@ -8101,17 +8101,13 @@ trait ACDC_Kernel_Render_Trait {
       </p>
       <?php endif; ?>
       <?php if ( ! $read_only ) : ?>
-      <div class="acdc-tc-header" style="margin-top:12px;">
-        <button type="button" class="acdc-button acdc-button-soft" id="acdc-tc-add-btn">+ Ajouter une mission</button>
-        <?php if ( $is_externe ) : ?>
-        <button type="button" class="acdc-button acdc-button-primary" id="acdc-tc-pdf-btn" <?php echo empty( $contracts ) ? 'disabled title="Ajoutez d\'abord une mission"' : ''; ?>>
-          📄 Générer contrat PDF
-        </button>
-        <button type="button" class="acdc-button acdc-button-accent" id="acdc-tc-sig-btn" <?php echo empty( $contracts ) ? 'disabled title="Ajoutez et générez d\'abord un contrat PDF"' : ''; ?>>
-          ✍️ Envoyer pour signature
-        </button>
-        <?php endif; ?>
-      </div>
+      <?php /* ACDC 3.25.262 — LES TROIS BOUTONS DU HAUT ONT DISPARU.
+               « + Ajouter une mission » ne faisait qu'afficher un formulaire
+               déjà présent dans la page ; « Générer contrat PDF » et « Envoyer
+               pour signature » rouvraient une liste pour faire REDÉSIGNER une
+               mission qu'on avait sous les yeux. Chaque ligne du tableau porte
+               ses propres actions, et le formulaire est ouvert en permanence :
+               on remplit, on enregistre, c'est envoyé. */ ?>
       <?php endif; ?>
 
       <?php if ( ! empty( $contracts ) ) : ?>
@@ -8154,8 +8150,19 @@ trait ACDC_Kernel_Render_Trait {
               <td>
                 <?php if ( '' !== $sig_class ) : ?>
                 <span class="acdc-tc-badge <?php echo esc_attr( $sig_class ); ?>"><?php echo esc_html( $sig_label ); ?></span>
-                <?php elseif ( ! empty( $c->contract_pdf_url ) && ! $read_only ) : ?>
-                <button type="button" class="acdc-button acdc-button-soft" style="font-size:12px;height:30px;padding:0 10px;" data-acdc-sig-contract="<?php echo (int) $c->id; ?>">✍️ Signer</button>
+                <?php elseif ( ! $read_only && ! empty( $trainer->email ) && is_email( (string) $trainer->email ) ) : ?>
+                <?php /* ACDC 3.25.262 — Le bouton envoie, il n'ouvre plus une modale
+                         qui faisait redésigner la mission de la ligne où l'on
+                         venait de cliquer. Le PDF manquant n'est plus un obstacle :
+                         il se fabrique au passage. */ ?>
+                <form method="post" action="<?php echo esc_url( admin_url( 'admin-post.php' ) ); ?>" style="display:inline;">
+                  <?php wp_nonce_field( 'acdc_send_trainer_contract_signature_' . $tid ); ?>
+                  <input type="hidden" name="action" value="acdc_send_trainer_contract_signature">
+                  <input type="hidden" name="trainer_id" value="<?php echo (int) $tid; ?>">
+                  <input type="hidden" name="contract_id" value="<?php echo (int) $c->id; ?>">
+                  <?php if ( $is_admin ) : ?><input type="hidden" name="page" value="acdc-of-trainers"><?php endif; ?>
+                  <button type="submit" class="acdc-button acdc-button-soft" style="font-size:12px;height:30px;padding:0 10px;" onclick="return confirm(<?php echo esc_attr( wp_json_encode( 'Envoyer le lien de signature à ' . (string) $trainer->email . ' ?' ) ); ?>);">✍️ Signer</button>
+                </form>
                 <?php else : ?>
                 <span style="color:#9ca3af;font-size:12px;">—</span>
                 <?php endif; ?>
@@ -8182,6 +8189,27 @@ trait ACDC_Kernel_Render_Trait {
                 ?>
                 <button type="button" class="acdc-row-action-icon" title="Aperçu" data-acdc-tc-preview="<?php echo esc_attr( $preview_data ); ?>"><?php echo $this->render_inline_icon( 'eye', 25 ); ?><span class="acdc-action-hub-sr screen-reader-text">Aperçu</span></button>
                 <a href="<?php echo esc_url( $edit_url ); ?>" class="acdc-row-action-icon" title="Modifier" data-acdc-iconized="1"><?php echo $this->render_inline_icon( 'edit-pencil', 25 ); ?><span class="acdc-action-hub-sr screen-reader-text">Modifier</span></a>
+                <?php
+                /* ACDC 3.25.262 — LES ACTIONS REVIENNENT SUR LA LIGNE.
+                   Elles vivaient dans deux boutons globaux qui rouvraient une
+                   liste pour faire redésigner la mission qu'on regardait. Ici,
+                   la mission est déjà désignée : c'est la ligne.
+                   Le PDF s'ouvre dans un ONGLET — un téléchargement ne doit pas
+                   déplacer la page qu'on est en train de lire. */
+                if ( $is_externe ) :
+                ?>
+                <?php if ( $c_has_pdf ) : ?>
+                <a href="<?php echo esc_url( $preview_pdf ); ?>" target="_blank" rel="noopener" class="acdc-row-action-icon" title="Ouvrir le contrat PDF dans un onglet" data-acdc-iconized="1"><span aria-hidden="true" style="font-size:15px;line-height:25px;">📄</span><span class="acdc-action-hub-sr screen-reader-text">Ouvrir le contrat PDF</span></a>
+                <?php endif; ?>
+                <form method="post" action="<?php echo esc_url( admin_url( 'admin-post.php' ) ); ?>" style="display:inline;">
+                  <?php wp_nonce_field( 'acdc_generate_trainer_contract_pdf_' . $tid ); ?>
+                  <input type="hidden" name="action" value="acdc_generate_trainer_contract_pdf">
+                  <input type="hidden" name="trainer_id" value="<?php echo (int) $tid; ?>">
+                  <input type="hidden" name="contract_id" value="<?php echo (int) $c->id; ?>">
+                  <?php if ( $is_admin ) : ?><input type="hidden" name="page" value="acdc-of-trainers"><?php endif; ?>
+                  <button type="submit" class="acdc-row-action-icon" title="<?php echo $c_has_pdf ? 'Refabriquer le contrat PDF' : 'Fabriquer le contrat PDF'; ?>" style="background:none;border:0;cursor:pointer;"><span aria-hidden="true" style="font-size:15px;line-height:25px;">⚙</span><span class="acdc-action-hub-sr screen-reader-text">Fabriquer le contrat PDF</span></button>
+                </form>
+                <?php endif; ?>
                 <?php
                 /* ACDC 3.25.157 — Archivage d'un contrat SIGNÉ. C'est le seul chemin qui
                    lève la protection de suppression : sans lui, un formateur dont le
@@ -8247,7 +8275,10 @@ trait ACDC_Kernel_Render_Trait {
 
       <?php if ( ! $read_only ) : ?>
       <!-- Formulaire ajout / modification mission -->
-      <div class="acdc-tc-add-form" id="acdc-tc-form-wrap" style="<?php echo ( $edit_contract || isset( $_GET['show_contract_form'] ) ) ? '' : 'display:none;'; ?>">
+      <?php /* ACDC 3.25.262 — Le formulaire est ouvert en permanence : il était
+               déjà dans la page, seulement masqué, et son bouton d'ouverture
+               n'achetait rien qu'un clic. */ ?>
+      <div class="acdc-tc-add-form" id="acdc-tc-form-wrap">
         <strong style="display:block;margin-bottom:12px;color:var(--acdc-text,#1E4777);font-size:14px;">
           <?php echo $edit_contract ? 'Modifier la mission' : 'Ajouter une mission'; ?>
         </strong>
@@ -8313,11 +8344,11 @@ trait ACDC_Kernel_Render_Trait {
               <input type="number" step="0.5" min="0" id="acdc_tc_nh_<?php echo $tid; ?>" name="nb_heures" class="acdc-tc-calc" data-role="heures" required value="<?php echo $edit_contract ? esc_attr( $edit_contract->nb_heures ) : ''; ?>" placeholder="0">
             </div>
             <div>
-              <label for="acdc_tc_tx_<?php echo $tid; ?>">Taux horaire HT (€/H)</label>
+              <label for="acdc_tc_tx_<?php echo $tid; ?>">Taux horaire HT (€/H) <small style="font-weight:400;">(ou le montant ci-contre)</small></label>
               <input type="number" step="0.01" min="0" id="acdc_tc_tx_<?php echo $tid; ?>" name="taux_ht" class="acdc-tc-calc" data-role="taux" value="<?php echo $edit_contract ? esc_attr( $edit_contract->taux_ht ) : ''; ?>" placeholder="0.00">
             </div>
             <div>
-              <label for="acdc_tc_mh_<?php echo $tid; ?>">Montant HT (€) <small style="font-weight:400;">(calculé auto)</small></label>
+              <label for="acdc_tc_mh_<?php echo $tid; ?>">Montant HT (€) <small style="font-weight:400;">(ou saisissez-le : le taux se déduit)</small></label>
               <input type="number" step="0.01" min="0" id="acdc_tc_mh_<?php echo $tid; ?>" name="montant_ht" class="acdc-tc-calc" data-role="montant" value="<?php echo $edit_contract ? esc_attr( $edit_contract->montant_ht ) : ''; ?>" placeholder="0.00">
             </div>
           </div>
@@ -8325,106 +8356,43 @@ trait ACDC_Kernel_Render_Trait {
             <label for="acdc_tc_notes_<?php echo $tid; ?>">Notes</label>
             <textarea id="acdc_tc_notes_<?php echo $tid; ?>" name="notes" rows="2"><?php echo $edit_contract ? esc_textarea( $edit_contract->notes ) : ''; ?></textarea>
           </div>
-          <div style="display:flex;gap:10px;align-items:center;">
-            <button type="submit" class="acdc-button acdc-button-primary"><?php echo $edit_contract ? 'Mettre à jour' : 'Enregistrer la mission'; ?></button>
+          <?php
+          /* ACDC 3.25.262 — Le bouton principal enchaîne les trois étapes :
+             enregistrer, fabriquer le PDF, envoyer le lien de signature.
+             L'adresse destinataire est écrite dessous — on doit savoir où part
+             un document contractuel avant de cliquer, pas après. */
+          $tc_email = $trainer && ! empty( $trainer->email ) ? (string) $trainer->email : '';
+          $tc_can_sign = $is_externe && '' !== $tc_email && is_email( $tc_email );
+          ?>
+          <div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap;">
+            <?php if ( $tc_can_sign ) : ?>
+              <button type="submit" name="and_sign" value="1" class="acdc-button acdc-button-primary">
+                <?php echo $edit_contract ? 'Mettre à jour et envoyer pour signature' : 'Enregistrer et envoyer pour signature'; ?>
+              </button>
+              <button type="submit" class="acdc-button acdc-button-soft"><?php echo $edit_contract ? 'Mettre à jour seulement' : 'Enregistrer seulement'; ?></button>
+            <?php else : ?>
+              <button type="submit" class="acdc-button acdc-button-primary"><?php echo $edit_contract ? 'Mettre à jour' : 'Enregistrer la mission'; ?></button>
+            <?php endif; ?>
             <a href="<?php echo esc_url( $back_url ); ?>" class="acdc-button acdc-button-soft">Annuler</a>
           </div>
+          <?php if ( $tc_can_sign ) : ?>
+            <p style="margin:8px 0 0;font-size:12px;color:#5a6577;">
+              Le lien de signature partira à <strong><?php echo esc_html( $tc_email ); ?></strong>.
+            </p>
+          <?php elseif ( $is_externe ) : ?>
+            <p style="margin:8px 0 0;font-size:12px;color:#8b5b23;">
+              Ce formateur n’a pas d’adresse e-mail valide : la mission s’enregistre, mais aucun envoi en signature n’est possible.
+            </p>
+          <?php endif; ?>
         </form>
       </div>
 
-      <?php if ( $is_externe && ! empty( $contracts ) ) : ?>
-      <!-- Modale signature électronique -->
-      <div class="acdc-tc-modal-bg" id="acdc-tc-sig-modal-bg">
-        <div class="acdc-tc-modal">
-          <h4>✍️ Envoyer pour signature électronique</h4>
-          <form method="post" action="<?php echo esc_url( admin_url( 'admin-post.php' ) ); ?>">
-            <?php wp_nonce_field( 'acdc_send_trainer_contract_signature_' . $tid ); ?>
-            <input type="hidden" name="action"     value="acdc_send_trainer_contract_signature">
-            <input type="hidden" name="trainer_id" value="<?php echo $tid; ?>">
-            <?php if ( $is_admin ) : ?><input type="hidden" name="page" value="acdc-of-trainers"><?php endif; ?>
-            <?php /* ACDC 3.25.148 — G5 : ce champ était un hidden vide, renseigné par JS
-                     uniquement depuis le bouton de LIGNE. Ouvert via le bouton d'EN-TÊTE,
-                     il restait vide → « Données manquantes ». On expose donc un sélecteur
-                     de mission : le bouton d'en-tête devient utilisable, et le bouton de
-                     ligne continue de le pré-sélectionner via son id. */ ?>
-            <p style="margin:0 0 12px;">
-              <label for="acdc-tc-sig-contract-id" style="display:block;font-size:12px;font-weight:600;color:#0f2c52;margin-bottom:5px;">Mission concernée *</label>
-              <select name="contract_id" id="acdc-tc-sig-contract-id" required style="width:100%;height:38px;border-radius:8px;border:1px solid #dfe5ee;padding:0 10px;font-size:13px;">
-                <option value="">— Sélectionner une mission —</option>
-                <?php foreach ( (array) $contracts as $c_opt ) : ?>
-                  <option value="<?php echo (int) $c_opt->id; ?>"><?php echo esc_html( $c_opt->label ?: ( 'Mission #' . (int) $c_opt->id ) ); ?></option>
-                <?php endforeach; ?>
-              </select>
-            </p>
-            <p style="color:#374151;font-size:13px;margin:0 0 14px;">Un lien de signature OTP sécurisé sera envoyé à <strong><?php echo esc_html( $trainer->email ?: 'e-mail non renseigné' ); ?></strong>.</p>
-            <?php if ( empty( $trainer->email ) ) : ?>
-            <p style="color:#c62828;font-size:12px;margin:0 0 12px;">⚠️ Ce formateur n'a pas d'e-mail. Complétez sa fiche avant d'envoyer.</p>
-            <?php endif; ?>
-            <div class="acdc-tc-modal-actions">
-              <button type="button" class="acdc-button acdc-button-soft" id="acdc-tc-sig-modal-cancel">Annuler</button>
-              <button type="submit" class="acdc-button acdc-button-primary" <?php echo empty( $trainer->email ) ? 'disabled' : ''; ?>>Envoyer le lien de signature</button>
-            </div>
-          </form>
-        </div>
-      </div>
-      <!-- Modale génération contrat PDF -->
-      <div class="acdc-tc-modal-bg" id="acdc-tc-modal-bg">
-        <div class="acdc-tc-modal">
-          <h4>📄 Générer le contrat de sous-traitance</h4>
-          <form method="post" action="<?php echo esc_url( admin_url( 'admin-post.php' ) ); ?>">
-            <?php wp_nonce_field( 'acdc_generate_trainer_contract_pdf_' . $tid ); ?>
-            <input type="hidden" name="action"     value="acdc_generate_trainer_contract_pdf">
-            <input type="hidden" name="trainer_id" value="<?php echo $tid; ?>">
-            <label for="acdc-tc-select-mission">Mission à contractualiser</label>
-            <select id="acdc-tc-select-mission" name="contract_id">
-              <?php foreach ( $contracts as $c ) : ?>
-              <option value="<?php echo (int) $c->id; ?>"><?php echo esc_html( $c->label . ' (' . number_format( (float) $c->montant_ht, 2, ',', ' ' ) . ' € HT)' ); ?></option>
-              <?php endforeach; ?>
-            </select>
-            <?php
-            $params_ok = method_exists( $this, 'get_subcontract_params_options' );
-            if ( $params_ok ) {
-              $clauses_check = $this->get_subcontract_params_options();
-              $has_clauses   = ! empty( $clauses_check['article_3_trainer_obligations'] );
-            } else {
-              $has_clauses = false;
-            }
-            if ( ! $has_clauses ) : ?>
-            <p style="color:#c62828;font-size:12px;margin:0 0 12px;">⚠️ Les clauses du contrat ne sont pas configurées. <a href="<?php echo esc_url( is_admin() ? admin_url( 'admin.php?page=acdc-of-dossiers&tab=subcontract_parameters' ) : $this->portal_page_url( array( 'tab' => 'dossiers', 'subtab' => 'subcontract_parameters' ) ) ); ?>">Configurer les clauses</a></p>
-            <?php endif; ?>
-            <?php /* ACDC 3.25.148 — G4 : « Générer le PDF » ne fait plus QUE télécharger.
-                     Ce bouton envoyait auparavant AUSSI le contrat par e-mail au formateur,
-                     sans confirmation ni retour visible — d'où des doubles envois. L'envoi
-                     est désormais un bouton distinct, explicite et confirmé (ci-dessous). */ ?>
-            <p style="color:#4b5563;font-size:12px;margin:0 0 12px;">Le téléchargement n'envoie <strong>aucun e-mail</strong>.</p>
-            <div class="acdc-tc-modal-actions">
-              <button type="button" class="acdc-button acdc-button-soft" id="acdc-tc-modal-cancel">Annuler</button>
-              <button type="submit" class="acdc-button acdc-button-primary">⬇️ Télécharger le PDF</button>
-            </div>
-          </form>
-
-          <?php /* Action SÉPARÉE : envoi du contrat au formateur, avec confirmation explicite. */ ?>
-          <form method="post" action="<?php echo esc_url( admin_url( 'admin-post.php' ) ); ?>" style="margin-top:14px;border-top:1px solid #e5e7eb;padding-top:14px;">
-            <?php wp_nonce_field( 'acdc_send_trainer_contract_email_' . $tid ); ?>
-            <input type="hidden" name="action"     value="acdc_send_trainer_contract_email">
-            <input type="hidden" name="trainer_id" value="<?php echo $tid; ?>">
-            <?php if ( is_admin() ) : ?><input type="hidden" name="page" value="acdc-of-trainers"><?php endif; ?>
-            <label for="acdc-tc-send-mission" style="display:block;font-size:12px;font-weight:600;color:#0f2c52;margin-bottom:5px;">Envoyer le contrat au formateur</label>
-            <select id="acdc-tc-send-mission" name="contract_id" required style="width:100%;height:38px;border-radius:8px;border:1px solid #dfe5ee;padding:0 10px;font-size:13px;margin-bottom:10px;">
-              <option value="">— Sélectionner une mission —</option>
-              <?php foreach ( $contracts as $c_send ) : ?>
-              <option value="<?php echo (int) $c_send->id; ?>"><?php echo esc_html( $c_send->label ?: ( 'Mission #' . (int) $c_send->id ) ); ?></option>
-              <?php endforeach; ?>
-            </select>
-            <button type="submit" class="acdc-button acdc-button-soft" <?php echo empty( $trainer->email ) ? 'disabled' : ''; ?>
-              onclick="return confirm('Envoyer le contrat par e-mail à <?php echo esc_attr( $trainer->email ?: '' ); ?> ?');">✉️ Envoyer au formateur</button>
-            <?php if ( empty( $trainer->email ) ) : ?>
-            <p style="color:#c62828;font-size:12px;margin:8px 0 0;">⚠️ Ce formateur n'a pas d'e-mail.</p>
-            <?php endif; ?>
-          </form>
-        </div>
-      </div>
-      <?php endif; // fin if $is_externe && !empty($contracts) ?>
+      <?php /* ACDC 3.25.262 — LES DEUX MODALES ONT DISPARU.
+               Celle du PDF et celle de la signature faisaient REDÉSIGNER, dans
+               une liste déroulante, la mission qu'on avait sous les yeux ; leur
+               validation rechargeait la page et la ramenait tout en haut. Les
+               deux actions sont désormais sur la ligne de la mission, et le
+               bouton principal du formulaire les enchaîne à l'enregistrement. */ ?>
 
       <!-- ACDC 3.22.10 — Modale aperçu contrat (toujours rendue si !$read_only) -->
       <div class="acdc-tc-modal-bg" id="acdc-tc-preview-bg-<?php echo $tid; ?>" style="z-index:10000;">
@@ -8461,66 +8429,35 @@ trait ACDC_Kernel_Render_Trait {
 
       <script>
       (function(){
-        // Toggle formulaire ajout
-        var addBtn = document.getElementById('acdc-tc-add-btn');
-        var formWrap = document.getElementById('acdc-tc-form-wrap');
-        if (addBtn && formWrap) {
-          addBtn.addEventListener('click', function(){
-            formWrap.style.display = formWrap.style.display === 'none' ? '' : 'none';
-          });
-        }
-        // Calcul automatique montant_ht
+        /* ACDC 3.25.262 — LE CALCUL VA DANS LES DEUX SENS.
+           Il n'allait que dans un : heures × taux → montant. Personne ne lisait
+           le montant, alors qu'on connaît souvent le forfait négocié avant le
+           taux horaire — et c'est le taux qui se déduit. Le champ qu'on vient
+           de toucher commande, les deux autres suivent. */
         var nh = document.getElementById('acdc_tc_nh_<?php echo $tid; ?>');
         var tx = document.getElementById('acdc_tc_tx_<?php echo $tid; ?>');
         var mh = document.getElementById('acdc_tc_mh_<?php echo $tid; ?>');
-        function calcMontant(){
+        function acdcTcRound(v){ return Math.round(v * 100) / 100; }
+        function acdcTcFromHeuresOuTaux(){
           if (!nh || !tx || !mh) return;
           var h = parseFloat(nh.value) || 0;
           var t = parseFloat(tx.value) || 0;
-          if (h > 0 && t > 0) { mh.value = Math.round(h * t * 100) / 100; }
+          if (h > 0 && t > 0) { mh.value = acdcTcRound(h * t); return; }
+          /* Heures seules avec un montant déjà saisi : c'est le taux qui suit. */
+          var m = parseFloat(mh.value) || 0;
+          if (h > 0 && m > 0) { tx.value = acdcTcRound(m / h); }
         }
-        if (nh) nh.addEventListener('input', calcMontant);
-        if (tx) tx.addEventListener('input', calcMontant);
-        // Modale PDF
-        var pdfBtn  = document.getElementById('acdc-tc-pdf-btn');
-        var modalBg = document.getElementById('acdc-tc-modal-bg');
-        var cancelBtn = document.getElementById('acdc-tc-modal-cancel');
-        if (pdfBtn && modalBg) {
-          pdfBtn.addEventListener('click', function(){ modalBg.classList.add('is-open'); });
+        function acdcTcFromMontant(){
+          if (!nh || !tx || !mh) return;
+          var h = parseFloat(nh.value) || 0;
+          var m = parseFloat(mh.value) || 0;
+          if (h > 0 && m > 0) { tx.value = acdcTcRound(m / h); }
         }
-        if (cancelBtn && modalBg) {
-          cancelBtn.addEventListener('click', function(){ modalBg.classList.remove('is-open'); });
-        }
-        if (modalBg) {
-          modalBg.addEventListener('click', function(e){ if (e.target === modalBg) { modalBg.classList.remove('is-open'); } });
-        }
-        // Modale signature
-        var sigBtn     = document.getElementById('acdc-tc-sig-btn');
-        var sigModalBg = document.getElementById('acdc-tc-sig-modal-bg');
-        var sigCancel  = document.getElementById('acdc-tc-sig-modal-cancel');
-        var sigCid     = document.getElementById('acdc-tc-sig-contract-id');
-        // Bouton global "Envoyer pour signature" — prend la première mission avec PDF
-        if (sigBtn && sigModalBg) {
-          sigBtn.addEventListener('click', function(){
-            // Chercher le premier bouton signer dans le tableau pour prépopuler l'id
-            var firstSig = document.querySelector('[data-acdc-sig-contract]');
-            if (firstSig && sigCid) { sigCid.value = firstSig.getAttribute('data-acdc-sig-contract'); }
-            sigModalBg.classList.add('is-open');
-          });
-        }
-        // Boutons "✍️ Signer" par ligne
-        document.querySelectorAll('[data-acdc-sig-contract]').forEach(function(btn){
-          btn.addEventListener('click', function(){
-            if (sigCid) { sigCid.value = btn.getAttribute('data-acdc-sig-contract'); }
-            if (sigModalBg) { sigModalBg.classList.add('is-open'); }
-          });
-        });
-        if (sigCancel && sigModalBg) {
-          sigCancel.addEventListener('click', function(){ sigModalBg.classList.remove('is-open'); });
-        }
-        if (sigModalBg) {
-          sigModalBg.addEventListener('click', function(e){ if (e.target === sigModalBg) { sigModalBg.classList.remove('is-open'); } });
-        }
+        if (nh) nh.addEventListener('input', acdcTcFromHeuresOuTaux);
+        if (tx) tx.addEventListener('input', acdcTcFromHeuresOuTaux);
+        if (mh) mh.addEventListener('input', acdcTcFromMontant);
+        /* ACDC 3.25.262 — Le pilotage des deux modales supprimées est parti avec
+           elles : les actions sont sur la ligne, et n'ouvrent plus rien. */
         // ── Modale aperçu contrat ─────────────────────────────────────────
         var pvTid     = <?php echo $tid; ?>;
         var previewBg    = document.getElementById('acdc-tc-preview-bg-' + pvTid);
