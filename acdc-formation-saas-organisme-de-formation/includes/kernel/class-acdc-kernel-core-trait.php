@@ -736,7 +736,8 @@ private function acdc_send_transactional_email( $to, $subject, $template_args = 
       return;
     }
 
-    $installed = get_option( 'acdc_of_saas_version' );
+    $upgrade_done = false;
+    $installed    = get_option( 'acdc_of_saas_version' );
     if ( ACDC_OF_SAAS_VERSION !== $installed ) {
       $lock = $this->acdc_acquire_upgrade_lock( (string) $installed );
 
@@ -756,11 +757,43 @@ private function acdc_send_transactional_email( $to, $subject, $template_args = 
           if ( method_exists( $this, 'ensure_acdc_portal_admin_role' ) ) {
             $this->ensure_acdc_portal_admin_role( true );
           }
+          /* ACDC 3.25.279 — LES MIGRATIONS LOURDES TOURNENT ICI, SOUS LE VERROU.
+             Elles étaient plus bas, hors de toute condition, donc rejouées à
+             chaque affichage de page tant que leur drapeau n'était pas posé —
+             pendant que la mise à jour recopiait déjà la base. Deux écritures
+             concurrentes sur les mêmes tables, à l'instant le plus chargé de la
+             vie du plugin. Leur place est ici : une fois, pendant
+             l'installation, à l'abri du verrou. */
+          $this->backfill_qualiopi_toggles_default_state();
+          $this->retire_legacy_positioning_test_module();
+
           delete_option( 'acdc_of_upgrade_blocked' );
+          $upgrade_done = true;
         } finally {
           $this->acdc_release_upgrade_lock();
         }
       }
+    }
+
+    /* ACDC 3.25.279 — LE CACHE A RENDU PERMANENT UN INCIDENT D'UNE SECONDE.
+       Relevé en recette le 15 août : après la mise à jour, l'extranet affichait
+       le code brut `[acdc_of_portal …]` au lieu du tableau de bord, et l'a fait
+       jusqu'à la réinstallation du plugin. Aucune erreur fatale, aucun e-mail
+       d'alerte de WordPress, aucune trace : une page avait simplement été
+       rendue pendant que la mise à jour occupait le démarrage, et le cache du
+       serveur l'a resservie telle quelle bien après que tout soit rentré dans
+       l'ordre.
+       Une mise à jour qui vient de changer le schéma et les pages du plugin
+       doit donc jeter le cache derrière elle. */
+    if ( ! empty( $upgrade_done ) ) {
+      if ( function_exists( 'wp_cache_flush' ) ) {
+        wp_cache_flush();
+      }
+      /* LiteSpeed (l'hébergement de production) écoute cette action ; les
+         autres caches qui l'implémentent en profitent aussi. Sur un serveur
+         sans cache, elle ne fait rien. */
+      do_action( 'litespeed_purge_all' );
+      do_action( 'acdc_of_after_upgrade', ACDC_OF_SAAS_VERSION );
     }
     /* ACDC 3.20.83 — Le rôle WordPress "acdc_trainer" du 3.20.82 est abandonné au profit
        d'une auth custom (cohérence avec l'extranet apprenant). Nettoyage des artefacts. */
@@ -776,15 +809,9 @@ private function acdc_send_transactional_email( $to, $subject, $template_args = 
        Idempotent : flag d'option empêche toute re-exécution. */
     $this->backfill_is_self_trainer_from_trainer_type();
 
-    /* ACDC 3.25.278 — Les automatismes Qualiopi remis dans l'état voulu sur
-       toutes les formations existantes : une valeur par défaut ne s'applique
-       qu'aux lignes à venir. Une seule passe, flag d'option à l'appui. */
-    $this->backfill_qualiopi_toggles_default_state();
-
-    /* ACDC 3.25.278 — Retrait de l'ancien module « Tests de positionnement »,
-       dont l'envoi n'a jamais fonctionné et qui faisait double emploi avec le
-       quiz. Copie déposée dans les sauvegardes avant suppression. */
-    $this->retire_legacy_positioning_test_module();
+    /* ACDC 3.25.279 — Les deux migrations de la 3.25.278 sont remontées dans le
+       bloc de mise à jour, sous le verrou. Ici, elles étaient réexaminées à
+       chaque affichage de page. */
 
     /* ACDC 3.25.251 — Purge des adresses de programme héritées du Manager.
        Elles portent un nonce périmé : elles ne mènent nulle part et ne servent

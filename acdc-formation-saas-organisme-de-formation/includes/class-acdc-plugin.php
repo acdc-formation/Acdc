@@ -256,6 +256,26 @@ class ACDC_Formation_SAAS_Plugin {
        destinées à l'écran d'audit étaient perdues en silence. */
     $this->system_log_table    = $wpdb->prefix . 'acdc_of_system_logs';
 
+    /* ACDC 3.25.279 — LES RACCOURCIS S'ENREGISTRENT AVANT LA MISE À JOUR.
+     *
+     * Relevé en recette le 15 août : après l'installation d'une version, les
+     * pages de l'extranet ont affiché `[acdc_of_portal tab="dashboard"]` en
+     * toutes lettres au lieu du tableau de bord.
+     *
+     * L'ordre en était la cause. `maybe_upgrade` et `register_shortcodes`
+     * étaient tous deux accrochés à `init` en priorité 10, et WordPress exécute
+     * les égalités dans l'ordre d'inscription : la migration d'abord, les
+     * raccourcis ensuite. Tout ce qui retarde ou interrompt la migration —
+     * une recopie complète de la base, une écriture concurrente, un dépassement
+     * de temps — empêche donc l'enregistrement des raccourcis. WordPress, qui
+     * ne connaît alors plus `acdc_of_portal`, l'affiche tel quel.
+     *
+     * Un raccourci n'a besoin de rien : ni base à jour, ni page, ni option.
+     * Il n'y a aucune raison qu'il attende une migration, et une bonne raison
+     * qu'il ne l'attende pas — une migration qui échoue ne doit pas emporter
+     * l'application avec elle. La priorité 1 le pose donc en premier.
+     */
+    add_action( 'init', array( $this, 'register_shortcodes' ), 1 );
     add_action( 'init', array( $this, 'maybe_upgrade' ) );
     /* ACDC 3.25.157 — Les pages wp-admin du plugin sont enregistrées puis retirées
        du menu : y rediriger produit « Vous n'avez pas l'autorisation » alors que
@@ -268,7 +288,7 @@ class ACDC_Formation_SAAS_Plugin {
     add_action( 'init', array( $this, 'maybe_repair_learner_portal_runtime_state' ), 7 );
     add_action( 'init', array( $this, 'maybe_restore_internal_admin_role' ), 1 );
     add_action( 'init', array( $this, 'maybe_disable_expired_agent_audit_users' ), 2 );
-    add_action( 'init', array( $this, 'register_shortcodes' ) );
+    /* Enregistrés plus haut, en priorité 1 (ACDC 3.25.279). */
     /* ACDC 3.23.11 — Récurrences cron custom pour la veille IA. */
     add_filter( 'cron_schedules', array( $this, 'acdc_register_cron_schedules' ) );
     add_action( 'wp_enqueue_scripts', array( $this, 'enqueue_front_assets' ) );
