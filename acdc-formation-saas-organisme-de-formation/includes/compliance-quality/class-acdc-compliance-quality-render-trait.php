@@ -1036,12 +1036,46 @@ trait ACDC_Compliance_Quality_Render_Trait {
           </div>
           <div class="acdc-inline-wrap" style="margin-top:12px;">
             <button type="submit" class="acdc-button acdc-button-primary">Enregistrer</button>
-            <a class="acdc-button acdc-button-soft"
-               href="<?php echo esc_url( wp_nonce_url( add_query_arg( array( 'action' => 'acdc_generate_external_bpf' ), admin_url( 'admin-post.php' ) ), 'acdc_generate_external_bpf' ) ); ?>">
-              Générer mon BPF (Cerfa)
-            </a>
           </div>
         </form>
+
+        <?php
+        /* ACDC 3.25.284 — L'EXERCICE SE CHOISIT, ET SES BORNES S'AFFICHENT.
+           Il ne suit pas l'année civile : du 23 avril au 22 avril, « l'exercice
+           2025 » va du 23/04/2025 au 22/04/2026 et chevauche deux millésimes.
+           Un bouton qui ne dirait pas sur quelle période il travaille
+           produirait un document juste ou faux sans qu'on puisse le savoir en
+           le regardant. */
+        $ext_courant = $this->acdc_bpf_exercice_courant();
+        ?>
+        <div style="border-top:1px solid #e6ebf2;margin-top:16px;padding-top:16px;">
+          <p style="margin:0 0 10px;font-weight:600;color:#0C2D52;">Mon bilan pédagogique et financier</p>
+          <div class="acdc-inline-wrap" style="align-items:flex-end;gap:12px;flex-wrap:wrap;">
+            <?php /* L'exercice en cours d'abord, puis les deux précédents. */ ?>
+            <?php foreach ( range( $ext_courant, $ext_courant - 2 ) as $ext_an ) :
+              $ext_bornes = $this->acdc_bpf_exercice_dates( (int) $ext_an );
+              $ext_url    = wp_nonce_url(
+                add_query_arg(
+                  array( 'action' => 'acdc_generate_external_bpf', 'bpf_year' => (int) $ext_an ),
+                  admin_url( 'admin-post.php' )
+                ),
+                'acdc_generate_external_bpf'
+              );
+              ?>
+              <a class="acdc-button <?php echo (int) $ext_an === (int) $ext_courant ? 'acdc-button-primary' : 'acdc-button-soft'; ?>"
+                 href="<?php echo esc_url( $ext_url ); ?>">
+                Exercice <?php echo (int) $ext_an; ?>
+                <small style="display:block;font-weight:400;opacity:.85;">
+                  <?php echo esc_html( $ext_bornes['start'] . ' → ' . $ext_bornes['end'] ); ?>
+                </small>
+              </a>
+            <?php endforeach; ?>
+          </div>
+          <p class="acdc-help" style="margin:10px 0 0;">
+            Le Cerfa officiel, prérempli avec vos prestations de l’exercice choisi.
+            Le cadre D — vos charges — reste à compléter : il vient de votre comptabilité, pas de cette application.
+          </p>
+        </div>
       </div>
     </details>
 

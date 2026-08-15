@@ -13,22 +13,61 @@ if ( ! defined( 'ABSPATH' ) ) {
 trait ACDC_Compliance_Quality_Core_Trait {
 
 
+  /**
+   * Les bornes de l'exercice comptable, telles que la structure les a réglées.
+   *
+   * ACDC 3.25.284 — Un seul endroit sait lire « 23/04 → 22/04 ». Le BPF de
+   * l'organisme et celui des prestations extérieures l'appellent tous deux :
+   * un exercice qui ne serait pas borné pareil dans les deux documents
+   * produirait deux déclarations qui ne se recoupent pas, sans qu'aucune des
+   * deux n'ait l'air fausse.
+   *
+   * @param int $annee Millésime de l'exercice.
+   * @return array{start:string,end:string,start_sql:string,end_sql:string}
+   */
+  public function acdc_bpf_exercice_dates( $annee ) {
+    $profile = method_exists( $this, 'get_company_profile_options' ) ? (array) $this->get_company_profile_options() : array();
+    $debut   = ! empty( $profile['accounting_start'] ) ? (string) $profile['accounting_start'] : '01/01';
+    $fin     = ! empty( $profile['accounting_end'] )   ? (string) $profile['accounting_end']   : '31/12';
+
+    list( $d, $f )   = \ACDC\Support\FiscalYear::displayBounds( $debut, $fin, (int) $annee );
+    list( $ds, $fs ) = \ACDC\Support\FiscalYear::sqlBounds( $debut, $fin, (int) $annee );
+
+    return array( 'start' => $d, 'end' => $f, 'start_sql' => $ds, 'end_sql' => $fs );
+  }
+
+  /**
+   * L'exercice en cours à une date donnée — celui qu'on propose par défaut.
+   *
+   * Au 15 mars, avec un exercice ouvrant le 23 avril, on est encore dans celui
+   * de l'année précédente. Proposer l'année courante ferait générer un BPF
+   * presque vide sans que rien ne le signale.
+   *
+   * @param string $date_sql AAAA-MM-JJ ; vide vaut aujourd'hui.
+   * @return int
+   */
+  public function acdc_bpf_exercice_courant( $date_sql = '' ) {
+    $profile = method_exists( $this, 'get_company_profile_options' ) ? (array) $this->get_company_profile_options() : array();
+    $debut   = ! empty( $profile['accounting_start'] ) ? (string) $profile['accounting_start'] : '01/01';
+    $fin     = ! empty( $profile['accounting_end'] )   ? (string) $profile['accounting_end']   : '31/12';
+    $date    = '' !== $date_sql ? $date_sql : current_time( 'Y-m-d' );
+
+    return \ACDC\Support\FiscalYear::yearOf( $debut, $fin, $date );
+  }
+
   private function get_bpf_records() {
     $profile       = method_exists( $this, 'get_company_profile_options' ) ? $this->get_company_profile_options() : array();
     $acc_start_raw = ! empty( $profile['accounting_start'] ) ? rtrim( (string) $profile['accounting_start'], '/' ) : '01/01';
     $acc_end_raw   = ! empty( $profile['accounting_end'] )   ? rtrim( (string) $profile['accounting_end'],   '/' ) : '31/12';
 
-    // Construire les vraies dates d'exercice depuis le profil (format JJ/MM)
-    // Ex: start=23/04, end=22/04 => exercice 2025 = 23/04/2025 => 22/04/2026
+    /* ACDC 3.25.284 — L'arithmétique de l'exercice a quitté cette fonction pour
+       \ACDC\Support\FiscalYear. Elle n'y était pas fausse : elle y était
+       SEULE, et un second BPF — celui des prestations extérieures — a eu besoin
+       des mêmes bornes. Deux calculs de la même chose finissent toujours par
+       diverger, et celui-ci décide de ce qui entre dans une déclaration
+       administrative. */
     $build_dates = function( $year ) use ( $acc_start_raw, $acc_end_raw ) {
-      $start       = $acc_start_raw . '/' . $year;
-      $start_month = (int) substr( $acc_start_raw, 3, 2 );
-      $end_month   = (int) substr( $acc_end_raw, 3, 2 );
-      $start_day   = (int) substr( $acc_start_raw, 0, 2 );
-      $end_day     = (int) substr( $acc_end_raw, 0, 2 );
-      $end_year    = ( $end_month < $start_month || ( $end_month === $start_month && $end_day < $start_day ) ) ? $year + 1 : $year;
-      $end         = $acc_end_raw . '/' . $end_year;
-      return array( $start, $end );
+      return \ACDC\Support\FiscalYear::displayBounds( $acc_start_raw, $acc_end_raw, $year );
     };
 
     list( $start_2025, $end_2025 ) = $build_dates( 2025 );

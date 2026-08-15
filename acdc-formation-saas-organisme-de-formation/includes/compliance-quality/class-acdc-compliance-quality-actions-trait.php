@@ -1047,10 +1047,21 @@ trait ACDC_Compliance_Quality_Actions_Trait {
     if ( ! current_user_can( 'manage_options' ) ) { wp_die( esc_html( 'Accès refusé.' ) ); }
     check_admin_referer( 'acdc_generate_external_bpf' );
 
-    $annee = isset( $_REQUEST['bpf_year'] ) ? sanitize_text_field( wp_unslash( $_REQUEST['bpf_year'] ) ) : date_i18n( 'Y' );
-    $annee = preg_match( '/^\d{4}$/', $annee ) ? $annee : date_i18n( 'Y' );
-    $debut = $annee . '-01-01';
-    $fin   = $annee . '-12-31';
+    /* ACDC 3.25.284 — L'EXERCICE NE SUIT PAS TOUJOURS L'ANNÉE CIVILE.
+       Celui de la structure court du 23 avril au 22 avril : borner au 1er
+       janvier aurait fait tomber une intervention de novembre dans le bon
+       exercice par hasard, et une intervention de mars dans le mauvais. Le PDF
+       n'aurait rien signalé — dates justes en en-tête, chiffres pris ailleurs.
+       On lit donc les bornes réglées, par la même fonction que le BPF de
+       l'organisme : deux exercices bornés différemment produiraient deux
+       déclarations qui ne se recoupent pas, sans qu'aucune n'ait l'air fausse. */
+    $annee = isset( $_REQUEST['bpf_year'] ) ? sanitize_text_field( wp_unslash( $_REQUEST['bpf_year'] ) ) : '';
+    if ( ! preg_match( '/^\d{4}$/', $annee ) ) {
+      $annee = (string) $this->acdc_bpf_exercice_courant();
+    }
+    $bornes = $this->acdc_bpf_exercice_dates( (int) $annee );
+    $debut  = $bornes['start_sql'];
+    $fin    = $bornes['end_sql'];
 
     $records = \ACDC\Support\ExternalBpf::forPeriod(
       (array) get_option( 'acdc_of_external_mission_records', array() ),
@@ -1058,7 +1069,11 @@ trait ACDC_Compliance_Quality_Actions_Trait {
       $fin
     );
     if ( empty( $records ) ) {
-      $this->redirect_to_portal( 'external_missions', 'Aucune prestation sur l’exercice ' . $annee . ' : rien à déclarer.', 'error' );
+      $this->redirect_to_portal(
+        'external_missions',
+        'Aucune prestation sur l’exercice ' . $annee . ' (' . $bornes['start'] . ' au ' . $bornes['end'] . ') : rien à déclarer.',
+        'error'
+      );
       return;
     }
 
@@ -1084,8 +1099,8 @@ trait ACDC_Compliance_Quality_Actions_Trait {
         'dirigeant_qualite' => (string) ( $id['legal_form'] ?? '' ),
       ),
       'period' => array(
-        'start'           => '01/01/' . $annee,
-        'end'             => '31/12/' . $annee,
+        'start'           => $bornes['start'],
+        'end'             => $bornes['end'],
         'date_generation' => date_i18n( 'd/m/Y' ),
       ),
       'data'   => array(
