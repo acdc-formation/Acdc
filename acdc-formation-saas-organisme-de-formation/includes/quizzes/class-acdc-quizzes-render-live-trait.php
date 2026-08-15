@@ -85,9 +85,10 @@ trait ACDC_Quizzes_Render_Live_Trait {
                         <span class="acdc-qz-live-host-brand-sub">ORGANISME DE FORMATION</span>
                     <?php endif; ?>
                 </div>
-                <div class="acdc-qz-live-host-header-actions">
-                    <!-- Bouton Commencer déplacé dans la zone centrale -->
-                </div>
+                <?php /* ACDC 3.25.289 — Ce conteneur ne portait plus rien depuis que le
+                         bouton « Commencer » a rejoint la zone centrale, et aucune règle
+                         ne le décrivait. Une boîte vide sans mise en forme dans un
+                         en-tête flexible n'est pas neutre : elle occupe une place. */ ?>
             </header>
 
             <!-- MAIN -->

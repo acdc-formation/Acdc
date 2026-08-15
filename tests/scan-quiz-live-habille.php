@@ -39,8 +39,12 @@ $css = (string) file_get_contents( $css_file );
    évite qu'un balayage se rassure tout seul en lisant sa propre justification. */
 $css_net = (string) preg_replace( '#/\*.*?\*/#s', '', $css );
 
+/* Le gabarit de l'écran formateur ne vit PAS dans le même fichier que celui de
+   l'apprenant. Une première version de ce balayage ne lisait que le second et
+   se déclarait verte : elle affirmait sans avoir lu la moitié du sujet. */
 $sources = array(
     $root . '/includes/quizzes/class-acdc-quizzes-render-trait.php',
+    $root . '/includes/quizzes/class-acdc-quizzes-render-live-trait.php',
     $root . '/assets/js/quizzes-live-player.js',
     $root . '/assets/js/quizzes-live-host.js',
 );
@@ -116,6 +120,16 @@ if ( null === $grille ) {
     if ( false === strpos( $grille, 'align-content: start' ) ) {
         $hits[] = 'la grille des réponses n’a plus « align-content: start » : elle occupe toute la hauteur, donc quatre réponses s’étirent en pavés de 330 px sur un écran d’ordinateur.';
     }
+}
+
+/* La grille du formateur porte le même risque, en pire : au-dessus de 1024 px
+   responsive.css ne déverrouille pas l'écran, donc ce qui dépasse est coupé
+   sans recours. Un vidéoprojecteur en 1280×720 est au-dessus de ce seuil. */
+$grille_hote = $contrat( 'acdc-qz-host-question-answers' );
+if ( null === $grille_hote ) {
+    $hits[] = 'la grille des réponses du formateur n’a plus de règle.';
+} elseif ( false === strpos( $grille_hote, 'min-height: 0' ) || false === strpos( $grille_hote, 'overflow-y' ) ) {
+    $hits[] = 'la grille des réponses du formateur n’a plus « min-height: 0 » et « overflow-y » : sur un vidéoprojecteur en 1280×720, une question à six réponses coupe la sixième tuile ET le bouton « Réponse », sans défilement possible.';
 }
 
 /* ── 4. AUTANT DE COULEURS QUE DE LETTRES ─────────────────────────────── */
