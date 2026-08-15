@@ -79,6 +79,15 @@ trait ACDC_Trainer_Portal_Actions_Trait {
    * Déconnexion : révoque la session courante et purge le cookie.
    */
   public function handle_trainer_logout() {
+    /* ACDC 3.25.275 — La déconnexion vérifie son jeton, comme celle de
+       l'apprenant. Le lien en portait un depuis toujours — `wp_nonce_url()` —
+       mais personne ne le lisait : n'importe quelle page tierce pouvait donc
+       déconnecter un formateur d'un simple lien. Sans conséquence sur ses
+       données, mais c'est une action qu'il n'a pas demandée, et l'écart avec le
+       portail apprenant n'avait aucune raison d'être. */
+    if ( ! isset( $_GET['_wpnonce'] ) || ! wp_verify_nonce( sanitize_text_field( wp_unslash( $_GET['_wpnonce'] ) ), 'acdc_trainer_logout' ) ) {
+      $this->trainer_portal_redirect( 'login', 'Jeton de sécurité invalide.', 'error' );
+    }
     $cookie_name = $this->trainer_portal_cookie_name();
     if ( ! empty( $_COOKIE[ $cookie_name ] ) ) {
       $hash = $this->trainer_portal_hash_token( (string) $_COOKIE[ $cookie_name ] );

@@ -359,6 +359,41 @@ class ACDC_Formation_SAAS_Plugin {
     /* ACDC 3.20.90 — Calendrier annuel des disponibilités. */
     add_action( 'admin_post_acdc_trainer_update_weekly_schedule', array( $this, 'handle_trainer_update_weekly_schedule' ) );
     add_action( 'admin_post_acdc_trainer_toggle_availability', array( $this, 'handle_trainer_toggle_availability' ) );
+    /* ACDC 3.25.275 — CES ACTIONS N'ÉTAIENT JOUABLES QUE PAR UN UTILISATEUR
+       WORDPRESS, C'EST-À-DIRE PAR PERSONNE.
+       Les portails apprenant et formateur ont leur PROPRE authentification : un
+       formateur connecté à son espace est, aux yeux de WordPress, un visiteur.
+       Or `admin_post_<action>` ne se déclenche que pour un utilisateur WordPress
+       connecté ; sans le pendant `nopriv`, admin-post.php ne trouve aucun
+       gestionnaire, ne répond rien, et le navigateur reçoit une réponse vide.
+       Côté écran, cela donne « Erreur réseau. Réessayez. » — le message que
+       David a reçu en basculant une demi-journée de disponibilité, en navigation
+       privée comme en navigation normale.
+       Treize actions étaient dans ce cas : basculer une disponibilité, déposer
+       ou supprimer un document, télécharger son contrat, modifier son profil,
+       enregistrer un bilan de séance ou le cahier de texte, changer son mot de
+       passe, se déconnecter. C'est-à-dire presque tout ce qu'un formateur ou un
+       apprenant peut FAIRE dans son espace.
+       CE N'EST PAS UNE OUVERTURE : chacun de ces gestionnaires vérifie lui-même
+       le jeton ET la session de portail avant d'agir. Sans session valide, la
+       réponse reste un refus — elle arrive simplement jusqu'au gestionnaire au
+       lieu de se perdre.
+       Ce défaut est invisible pour qui développe : on est toujours connecté à
+       WordPress en même temps. */
+    add_action( 'admin_post_nopriv_acdc_learner_change_password', array( $this, 'handle_learner_portal_change_password' ) );
+    add_action( 'admin_post_nopriv_acdc_learner_logout', array( $this, 'handle_learner_portal_logout' ) );
+    add_action( 'admin_post_nopriv_acdc_learner_update_profile', array( $this, 'handle_learner_portal_update_profile' ) );
+    add_action( 'admin_post_nopriv_acdc_trainer_delete_own_document', array( $this, 'handle_trainer_delete_own_document' ) );
+    add_action( 'admin_post_nopriv_acdc_trainer_download_own_contract', array( $this, 'handle_trainer_download_own_contract' ) );
+    add_action( 'admin_post_nopriv_acdc_trainer_download_own_document', array( $this, 'handle_trainer_download_own_document' ) );
+    add_action( 'admin_post_nopriv_acdc_trainer_logout', array( $this, 'handle_trainer_logout' ) );
+    add_action( 'admin_post_nopriv_acdc_trainer_save_logbook_entry', array( $this, 'handle_trainer_save_logbook_entry' ) );
+    add_action( 'admin_post_nopriv_acdc_trainer_save_session_report', array( $this, 'handle_trainer_save_session_report' ) );
+    add_action( 'admin_post_nopriv_acdc_trainer_toggle_availability', array( $this, 'handle_trainer_toggle_availability' ) );
+    add_action( 'admin_post_nopriv_acdc_trainer_update_own_profile', array( $this, 'handle_trainer_update_own_profile' ) );
+    add_action( 'admin_post_nopriv_acdc_trainer_update_weekly_schedule', array( $this, 'handle_trainer_update_weekly_schedule' ) );
+    add_action( 'admin_post_nopriv_acdc_trainer_upload_own_document', array( $this, 'handle_trainer_upload_own_document' ) );
+
     /* ACDC 3.24.28 — M8b : Bilan post-formation + cahier de texte. */
     add_action( 'admin_post_acdc_trainer_save_session_report', array( $this, 'handle_trainer_save_session_report' ) );
     add_action( 'admin_post_acdc_trainer_save_logbook_entry', array( $this, 'handle_trainer_save_logbook_entry' ) );

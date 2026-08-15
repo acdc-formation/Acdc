@@ -52,6 +52,7 @@ lancent sans WordPress, en quelques secondes.
     php tests/scan-portee-formateur.php # un formateur ne voit que ses séances, jamais les coordonnées
     php tests/scan-email-mobile.php # le gabarit d'e-mail reste lisible sur un écran de 375 px
     php tests/scan-responsive.php # la couche d'adaptation aux écrans est en place et chargée
+    php tests/scan-portail-visiteur.php # les actions des portails sont jouables par leurs utilisateurs
 
 Le dernier balaie tout le plugin et signale les fonctions qui utilisent `$wpdb`
 sans l'avoir importé — la faute qui a produit l'erreur fatale de la 3.25.236.
