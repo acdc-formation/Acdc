@@ -79,6 +79,56 @@ table.acdc-table td {
    Modèle : iPad en portrait, 768 px.
    ═══════════════════════════════════════════════════════════════════════════ */
 
+/* =============================================================================
+   ACDC 3.25.286 — LES STYLES ÉCRITS DANS LE BALISAGE
+   =============================================================================
+
+   Le plugin possède des grilles adaptatives depuis longtemps : `.acdc-grid-3cols`
+   et `.acdc-grid-4cols` se replient déjà sur une colonne quand l'écran rétrécit.
+   Elles ne se repliaient pourtant pas, et pour une raison qu'aucune relecture de
+   feuille de style ne pouvait révéler : un `style="grid-template-columns:…"`
+   écrit à côté de la classe, dans le balisage. Un style direct l'emporte sur
+   toute feuille — la règle adaptative existait, elle était simplement
+   inatteignable.
+
+   Deux cent quinze rangées `display:flex` étaient dans le même cas, sans
+   `flex-wrap` : sur un écran étroit, leurs éléments se compriment jusqu'à
+   l'illisible au lieu de passer à la ligne, et aucune feuille ne peut le
+   corriger.
+
+   C'EST LE SEUL CAS OÙ `!important` N'EST PAS UN AVEU : il n'existe aucun autre
+   moyen de reprendre la main sur un style direct. On s'en sert donc ici, et
+   seulement ici.
+
+   LE CALENDRIER EST ÉPARGNÉ. Une semaine, ce sont sept colonnes ; les replier
+   sur deux ne rend pas le calendrier lisible, ça le détruit. Il porte une
+   classe qui le dit. */
+
+@media (max-width: 1024px) {
+    /* Une rangée qui tient ne s'enroule pas : la règle ne coûte rien là où
+       elle ne sert pas, et sauve la mise en page partout ailleurs. */
+    .acdc-portal-shell [style*="display:flex"]:not(.acdc-grid-semaine),
+    .acdc-portal-shell [style*="display: flex"]:not(.acdc-grid-semaine) {
+        flex-wrap: wrap !important;
+    }
+
+    /* Les grilles écrites dans le balisage passent à deux colonnes. */
+    .acdc-portal-shell [style*="grid-template-columns"]:not(.acdc-grid-semaine) {
+        grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
+    }
+}
+
+@media (max-width: 640px) {
+    .acdc-portal-shell [style*="grid-template-columns"]:not(.acdc-grid-semaine) {
+        grid-template-columns: 1fr !important;
+    }
+    /* La semaine reste une semaine, mais ses cases se resserrent. */
+    .acdc-portal-shell .acdc-grid-semaine {
+        gap: 3px !important;
+        font-size: 11px;
+    }
+}
+
 @media (max-width: 1024px) {
 
     /* LA CORRECTION STRUCTURELLE. Le conteneur cesse d'aligner le menu et le

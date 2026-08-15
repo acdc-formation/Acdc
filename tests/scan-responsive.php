@@ -105,6 +105,42 @@ if ( is_readable( $tables ) ) {
     }
 }
 
+/* ── UN STYLE ÉCRIT DANS LE BALISAGE ANNULE LA FEUILLE ────────────────────
+   `.acdc-grid-3cols` et `.acdc-grid-4cols` se replient déjà sur une colonne
+   quand l'écran rétrécit — la règle existe depuis longtemps dans
+   components.css. Elles ne se repliaient pourtant pas, et aucune relecture de
+   feuille de style ne pouvait le révéler : un `style="grid-template-columns:…"`
+   écrit à côté de la classe, dans le balisage, l'emporte sur toute feuille.
+   La règle adaptative était là, simplement inatteignable. */
+$hits_grilles = array();
+$rii_php = new RecursiveIteratorIterator( new RecursiveDirectoryIterator( $root . '/includes' ) );
+foreach ( $rii_php as $f ) {
+    if ( $f->isDir() || 'php' !== strtolower( $f->getExtension() ) ) { continue; }
+    $src = (string) file_get_contents( $f->getPathname() );
+    if ( preg_match_all( '/class="(acdc-grid-[34]cols[^"]*)"[^>]{0,200}?style="([^"]*grid-template-columns[^"]*)"/', $src, $m, PREG_SET_ORDER ) ) {
+        foreach ( $m as $trouve ) {
+            $hits_grilles[] = sprintf(
+                '%s : une grille porte la classe %s — qui sait déjà se replier — ET un style direct qui l’en empêche. Sur un téléphone, quatre colonnes de 80 px.',
+                preg_replace( '#^.*/includes/#', '', $f->getPathname() ),
+                trim( explode( ' ', $trouve[1] )[0] )
+            );
+        }
+    }
+}
+foreach ( array_unique( $hits_grilles ) as $h ) { $hits[] = $h; }
+
+/* La reprise en main des styles directs — le seul cas où `!important` n'est pas
+   un aveu, puisqu'il n'existe aucun autre moyen. */
+if ( is_readable( $css ) ) {
+    $src_r = (string) file_get_contents( $css );
+    if ( false === strpos( $src_r, '[style*="display:flex"]' ) ) {
+        $hits[] = 'Les rangées `display:flex` écrites dans le balisage ne sont plus forcées à s’enrouler : sur un écran étroit, leurs éléments se compriment jusqu’à l’illisible, et aucune feuille ne peut le corriger.';
+    }
+    if ( false === strpos( $src_r, 'acdc-grid-semaine' ) ) {
+        $hits[] = 'Le calendrier n’est plus épargné par le repli des grilles : une semaine repliée sur deux colonnes n’est pas un calendrier lisible, c’est un calendrier détruit.';
+    }
+}
+
 /* ── LES ÉCRANS QUE L'APPRENANT OUVRE SUR SON TÉLÉPHONE ───────────────────
    Ce sont les seuls que le développeur n'ouvre JAMAIS, et ceux qui produisent
    les mesures publiées : l'enquête de satisfaction et l'émargement. */

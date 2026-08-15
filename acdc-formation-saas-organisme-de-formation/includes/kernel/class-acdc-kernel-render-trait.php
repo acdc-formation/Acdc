@@ -7361,7 +7361,7 @@ trait ACDC_Kernel_Render_Trait {
             </div>
           </div>
 
-          <div style="display:grid;grid-template-columns:repeat(7,minmax(0,1fr));gap:8px;margin-bottom:18px;">
+          <div class="acdc-grid-semaine" style="display:grid;grid-template-columns:repeat(7,minmax(0,1fr));gap:8px;margin-bottom:18px;">
             <?php foreach ( $this->get_acdc_weekday_labels() as $wday_key => $wday_label ) :
               $base = isset( $availability_struct['weekly'][ $wday_key ] ) ? $availability_struct['weekly'][ $wday_key ] : array( 'morning' => false, 'afternoon' => false );
               $morning_class   = $this->build_availability_cell_class( ! empty( $base['morning'] ), false );
@@ -10816,7 +10816,7 @@ trait ACDC_Kernel_Render_Trait {
     $base_url = is_admin() ? admin_url( 'admin.php?page=acdc-of-dashboard' ) : $this->portal_page_url( array( 'tab' => 'statistics_performance' ) );
     ?>
     <section class="acdc-section-head" style="align-items:flex-start;"><div><h2>Statistiques indicateurs de performance</h2></div></section>
-    <div class="acdc-grid-4cols" style="gap:18px;grid-template-columns:repeat(4,minmax(0,1fr));">
+    <div class="acdc-grid-4cols" style="gap:18px;)">
       <a href="<?php echo esc_url( add_query_arg( array( 'tab' => 'statistics_performance', 'scope' => 'progress' ), $base_url ) ); ?>" class="acdc-panel" style="min-height:98px;display:flex;flex-direction:column;justify-content:center;align-items:center;text-align:center;text-decoration:none;">
         <strong style="font-size:20px;color:#C5A253;font-weight:700;display:block;">Taux de progression</strong>
         <span style="margin-top:8px;color:#1E4777;font-size:13px;font-weight:600;">Tests de positionnement / Évaluations<br>des acquis</span>
