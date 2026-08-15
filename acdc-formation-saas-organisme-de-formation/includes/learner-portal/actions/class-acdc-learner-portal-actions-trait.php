@@ -32,7 +32,7 @@ trait ACDC_Learner_Portal_Actions_Trait {
     if ( $blocked_until && $blocked_until > $now_ts ) {
       $minutes = max( 1, (int) ceil( ( $blocked_until - $now_ts ) / 60 ) );
       $this->learner_portal_log_event( $account->id, 'login_blocked_attempt', array( 'remaining_minutes' => $minutes ) );
-      $this->learner_portal_redirect( 'login', 'Compte temporairement bloqué. Temps restant : ' . $minutes . ' minute(s). Contact : contact@acdc-formation.com', 'error' );
+      $this->learner_portal_redirect( 'login', 'Compte temporairement bloqué. Temps restant : ' . $minutes . ' minute(s). Contact : ' . $this->learner_portal_contact_email(), 'error' );
     }
 
     if ( in_array( $account->status, array( 'disabled', 'expired' ), true ) ) {

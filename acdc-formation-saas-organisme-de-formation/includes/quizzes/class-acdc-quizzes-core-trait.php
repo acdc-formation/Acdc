@@ -4986,7 +4986,10 @@ trait ACDC_Quizzes_Core_Trait {
                              'y' => $header_y_top - 18, 'size' => 7.7, 'font' => 'Helvetica', 'color' => $gold );
 
             // Coordonnées organisme à droite (alignées à droite du header)
-            $company_lines = array( 'ACDC-Formation', '7 avenue Paul Cézanne', '83310 Cogolin — France', 'Siret : 405109901 00042', 'NDA : 93 83 08347 83' );
+            /* ACDC 3.25.290 — Ces cinq lignes étaient écrites dans le code : le
+               PDF remis à l'apprenant, qui sert de preuve, portait une identité
+               qu'aucun réglage ne pilotait. */
+            $company_lines = \ACDC\Support\OrgIdentity::blockLines( $this->acdc_org_identity() );
             $cy = $header_y_top - 5;
             foreach ( $company_lines as $cl ) {
                 $page[] = array( 'text' => $cl, 'x' => 400, 'y' => $cy, 'size' => 8, 'font' => 'Helvetica', 'color' => $dark );
@@ -5147,7 +5150,7 @@ trait ACDC_Quizzes_Core_Trait {
             if ( $cursor - $row_h < $min_y ) {
                 // Footer page courante
                 $pages[$pi][] = array( 'type' => 'rect', 'x' => $left, 'y' => 32, 'width' => $content_w, 'height' => 0.7, 'fill_color' => $line );
-                $pages[$pi][] = array( 'text' => '7 avenue Paul Cézanne — 83310 Cogolin — France — Siret : 405109901 00042 — NDA : 93 83 08347 83',
+                $pages[$pi][] = array( 'text' => \ACDC\Support\OrgIdentity::footerLine( $this->acdc_org_identity(), ' — ' ),
                                        'x' => $left, 'y' => 22, 'size' => 6.8, 'font' => 'Helvetica', 'color' => $muted );
                 $pi++;
                 $new_p  = $new_page();
@@ -5181,9 +5184,9 @@ trait ACDC_Quizzes_Core_Trait {
 
         // Footer dernière page
         $pages[$pi][] = array( 'type' => 'rect', 'x' => $left, 'y' => 32, 'width' => $content_w, 'height' => 0.7, 'fill_color' => $line );
-        $pages[$pi][] = array( 'text' => '7 avenue Paul Cézanne — 83310 Cogolin — France — Siret : 405109901 00042 — NDA : 93 83 08347 83',
+        $pages[$pi][] = array( 'text' => \ACDC\Support\OrgIdentity::footerLine( $this->acdc_org_identity(), ' — ' ),
                                'x' => $left, 'y' => 22, 'size' => 6.8, 'font' => 'Helvetica', 'color' => $muted );
-        $pages[$pi][] = array( 'text' => 'e-mail : contact@acdc-formation.com — Tél : 06 78 26 91 10 — acdc-formation.com',
+        $pages[$pi][] = array( 'text' => \ACDC\Support\OrgIdentity::contactLine( $this->acdc_org_identity(), ' — ' ),
                                'x' => $left, 'y' => 12, 'size' => 6.8, 'font' => 'Helvetica', 'color' => $muted );
 
         // ── Génération PDF ───────────────────────────────────────────────

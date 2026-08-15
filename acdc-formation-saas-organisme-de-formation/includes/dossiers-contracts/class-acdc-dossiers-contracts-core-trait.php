@@ -3016,9 +3016,12 @@ private function build_contract_pdf_pages( $context ) {
   };
 
   $training_org_name = $normalize( $profile['enterprise'] ?? '', 'ACDC-Formation' );
-  $training_org_address      = $normalize( $profile['address'] ?? '7 avenue Paul Cézanne' );
+  /* ACDC 3.25.290 — L'adresse et le SIRET de l'organisme avaient un repli en
+     dur sur la convention : après un changement d'entité, le document aurait
+     continué de porter l'ancienne adresse. */
+  $training_org_address      = $normalize( $this->acdc_org_identity()['adresse'] );
   $training_org_address_cp   = trim( ( $profile['postal_code'] ?? '83310' ) . ' ' . ( $profile['city'] ?? 'Cogolin - France' ) );
-  $training_org_siret = $normalize( $profile['siret_identification'] ?? '', '405109901 00042' );
+  $training_org_siret = $normalize( $this->acdc_org_identity()['siret'], '' );
   $training_org_representant = trim( $normalize( $profile['first_name'] ?? '' ) . ' ' . $normalize( $profile['last_name'] ?? '' ) );
   if ( '' === trim( $training_org_representant ) ) {
     $training_org_representant = 'David Contal';

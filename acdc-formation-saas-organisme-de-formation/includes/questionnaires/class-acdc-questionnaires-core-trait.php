@@ -3384,8 +3384,11 @@ Vos réponses nous permettront d’évaluer nos pratiques, d’identifier des ax
   private function get_questionnaire_mail_settings() {
     $defaults = array(
       'sender_name' => 'ACDC-Formation',
-      'sender_email' => 'contact@acdc-formation.com',
-      'reply_to' => 'contact@acdc-formation.com',
+      /* ACDC 3.25.290 — L'adresse d'expédition par défaut était écrite en dur :
+         un changement d'entité laissait les questionnaires partir de l'ancienne
+         boîte. À défaut de fiche renseignée, WordPress décidera. */
+      'sender_email' => '',
+      'reply_to' => '',
     );
     $settings = $this->get_marketing_store( 'settings', array() );
     $settings = is_array( $settings ) ? $settings : array();

@@ -402,7 +402,7 @@ body{font-family:'Georgia',serif;background:#2a2a2a;display:flex;height:100vh;ov
   <div style="flex:1"></div>
   <div class="ib">
     Date de la proposition&nbsp;: <?php echo esc_html( $date_prop ); ?><br>
-    Proposition réalisée par&nbsp;: <?php echo esc_html( $acdc['contact_name'] ?? 'David Contal' ); ?><br>
+    Proposition réalisée par&nbsp;: <?php echo esc_html( $acdc['contact_name'] ?? '' ); ?><br>
     Tél&nbsp;: <?php echo esc_html( $acdc['phone'] ); ?> · <?php echo esc_html( $acdc['email'] ); ?>
   </div>
   <div style="background:#f1dcc0;height:20px;flex-shrink:0;display:flex;align-items:center;justify-content:flex-end;padding-right:14px;font-size:7.5px;color:#475569">1</div>
@@ -908,7 +908,7 @@ $pg_contact     = $_pg_num++;
 
   <!-- Contenu contact -->
   <div style="padding:4px 14px;flex:1;font-family:Arial,sans-serif">
-    <p style="color:#d6a353;font-size:14px;font-weight:700;margin-bottom:12px"><?php echo esc_html( $acdc['contact_name'] ?? 'David Contal' ); ?></p>
+    <p style="color:#d6a353;font-size:14px;font-weight:700;margin-bottom:12px"><?php echo esc_html( $acdc['contact_name'] ?? '' ); ?></p>
 
     <!-- Coordonnées avec icônes SVG -->
     <div style="display:flex;flex-direction:column;gap:10px;margin-bottom:16px">

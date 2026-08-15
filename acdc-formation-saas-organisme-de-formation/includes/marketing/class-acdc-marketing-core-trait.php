@@ -18,9 +18,12 @@ trait ACDC_Marketing_Core_Trait {
   private function init_marketing_module_defaults() {
     $defaults = array(
       'settings' => array(
-        'sender_name' => 'ACDC-Formation',
-        'sender_email' => 'contact@acdc-formation.com',
-        'reply_to' => 'contact@acdc-formation.com',
+        /* ACDC 3.25.290 — Ces trois valeurs par défaut figeaient l'expéditeur
+           marketing : après un changement d'entité, les campagnes seraient
+           parties de l'ancienne boîte. À vide, la fiche entreprise décide. */
+        'sender_name' => '',
+        'sender_email' => '',
+        'reply_to' => '',
         'queue_threshold' => 20,
         'limit_per_minute' => 30,
         'limit_per_hour' => 300,
@@ -34,7 +37,7 @@ trait ACDC_Marketing_Core_Trait {
         'smtp_mode' => 'wp_mail_smtp_status_only',
         'soft_bounce_limit' => 3,
         'hard_bounce_blacklist' => 1,
-        'internal_notification_email' => 'contact@acdc-formation.com',
+        'internal_notification_email' => '',
         'scheduler_enabled' => 1,
         'scheduler_retry_lag' => 15,
         'retention_mode' => 'archive_only',

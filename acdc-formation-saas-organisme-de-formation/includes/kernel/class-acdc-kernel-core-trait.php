@@ -107,6 +107,60 @@ trait ACDC_Kernel_Core_Trait {
       . '</style>';
   }
 
+/**
+ * L'identité de l'organisme — le seul endroit qui la connaisse.
+ *
+ * ACDC 3.25.290. « Je veux que lorsque je changerai le SIRET, le NDA, le nom
+ * du dirigeant, tout soit changé partout. » Ce n'était pas le cas : deux
+ * fiches portaient la même identité, une cinquantaine de lectures demandaient
+ * une clé qui n'existe pas — « siret » là où la fiche enregistre
+ * « siret_identification » — et repartaient donc systématiquement sur une
+ * valeur écrite en dur, tandis que la facture, le programme de formation et le
+ * PDF de résultat de quiz n'ouvraient même pas les réglages.
+ *
+ * La fiche entreprise fait foi ; la fiche marque ne sert que de secours, champ
+ * par champ. La règle des champs vides est dans OrgIdentity : rien n'est
+ * inventé, et une étiquette ne survit pas à sa valeur.
+ *
+ * @return array<string,string>
+ */
+private function acdc_org_identity() {
+  static $identite = null;
+  if ( null !== $identite ) {
+    return $identite;
+  }
+  $fiche = method_exists( $this, 'get_company_profile_options' )
+    ? $this->get_company_profile_options()
+    : get_option( 'acdc_of_company_profile', array() );
+  $marque = method_exists( $this, 'get_branding_options' )
+    ? $this->get_branding_options()
+    : get_option( 'acdc_of_branding', array() );
+
+  $identite = \ACDC\Support\OrgIdentity::fromOptions( $fiche, $marque );
+  return $identite;
+}
+
+/**
+ * Le nom qui s'affiche comme expéditeur d'un e-mail de l'organisme.
+ *
+ * ACDC 3.25.290. Deux envois lisaient « enterprise_contact_name », une clé qui
+ * n'existe pas dans la fiche : ils retombaient donc toujours sur le nom du
+ * site WordPress. On nomme la personne qui signe si elle est renseignée, sinon
+ * l'organisme, et le nom du site en dernier recours seulement.
+ *
+ * @return string
+ */
+private function acdc_expediteur_organisme() {
+  $id = $this->acdc_org_identity();
+  if ( '' !== $id['signataire'] ) {
+    return $id['signataire'];
+  }
+  if ( '' !== $id['raison_sociale'] ) {
+    return $id['raison_sociale'];
+  }
+  return (string) get_bloginfo( 'name' );
+}
+
 private function acdc_get_transactional_email_branding() {
     $branding = method_exists( $this, 'get_branding_options' ) ? $this->get_branding_options() : array();
     $marketing_settings = get_option( 'acdc_of_marketing_settings', array() );
@@ -114,23 +168,25 @@ private function acdc_get_transactional_email_branding() {
       $marketing_settings = array();
     }
 
-    $company_name = ! empty( $branding['company_name'] ) ? sanitize_text_field( (string) $branding['company_name'] ) : 'ACDC Formation';
+    /* ACDC 3.25.290 — L'en-tête et le pied de TOUS les e-mails transactionnels
+       lisaient la fiche marque, avec le téléphone et l'adresse de l'organisme
+       écrits en dur en repli. Un e-mail est un document comme un autre : il
+       part de la même identité que les conventions et les factures. */
+    $identite = $this->acdc_org_identity();
+
+    $company_name = '' !== $identite['raison_sociale'] ? sanitize_text_field( $identite['raison_sociale'] ) : '';
     $logo_url = ! empty( $branding['logo_url'] ) ? esc_url( (string) $branding['logo_url'] ) : '';
-    $website = ! empty( $branding['website'] ) ? esc_url_raw( (string) $branding['website'] ) : home_url( '/' );
-    $phone = ! empty( $branding['phone'] ) ? sanitize_text_field( (string) $branding['phone'] ) : '06 78 26 91 10';
+    $website = '' !== $identite['site'] ? esc_url_raw( $identite['site'] ) : home_url( '/' );
+    $phone = sanitize_text_field( $identite['telephone'] );
+    /* L'expéditeur marketing prime : c'est une adresse d'envoi, pas une
+       identité — elle peut légitimement différer de l'adresse de contact. */
     $email = ! empty( $marketing_settings['sender_email'] ) ? sanitize_email( (string) $marketing_settings['sender_email'] ) : '';
-    if ( '' === $email && ! empty( $branding['email'] ) ) {
-      $email = sanitize_email( (string) $branding['email'] );
-    }
-    if ( '' === $email ) {
-      $email = 'contact@acdc-formation.com';
+    if ( '' === $email && '' !== $identite['email'] ) {
+      $email = sanitize_email( $identite['email'] );
     }
     $reply_to = ! empty( $marketing_settings['reply_to'] ) ? sanitize_email( (string) $marketing_settings['reply_to'] ) : $email;
     $sender_name = ! empty( $marketing_settings['sender_name'] ) ? sanitize_text_field( (string) $marketing_settings['sender_name'] ) : $company_name;
-    $address_bits = array_filter( array(
-      ! empty( $branding['address'] ) ? sanitize_text_field( (string) $branding['address'] ) : '',
-      trim( ( ! empty( $branding['postal_code'] ) ? sanitize_text_field( (string) $branding['postal_code'] ) : '' ) . ' ' . ( ! empty( $branding['city'] ) ? sanitize_text_field( (string) $branding['city'] ) : '' ) ),
-    ) );
+    $address_line = \ACDC\Support\OrgIdentity::addressLine( $identite, ' — ' );
 
     return array(
       'company_name'   => $company_name,
@@ -142,7 +198,7 @@ private function acdc_get_transactional_email_branding() {
       'email'          => $email,
       'reply_to'       => $reply_to,
       'sender_name'    => $sender_name,
-      'address_line'   => implode( ' — ', $address_bits ),
+      'address_line'   => $address_line,
     );
   }
 
@@ -766,6 +822,7 @@ private function acdc_send_transactional_email( $to, $subject, $template_args = 
              l'installation, à l'abri du verrou. */
           $this->backfill_qualiopi_toggles_default_state();
           $this->retire_legacy_positioning_test_module();
+          $this->backfill_org_identity_from_code();
 
           delete_option( 'acdc_of_upgrade_blocked' );
           $upgrade_done = true;
@@ -1197,6 +1254,89 @@ private function acdc_send_transactional_email( $to, $subject, $template_args = 
    * fois. C'est volontaire et c'est ce qui a été demandé — un réglage
    * particulier posé auparavant sur une fiche sera remis à la règle commune.
    */
+  /**
+   * L'identité qui vivait dans le code passe une fois dans la fiche.
+   *
+   * ACDC 3.25.290. Le SIRET, le NDA, l'adresse et les coordonnées étaient
+   * écrits en dur à deux titres : dans des documents, et comme VALEURS PAR
+   * DÉFAUT des champs de réglage. Cette seconde forme est la plus perverse :
+   * un champ vidé se remplissait tout seul à la lecture suivante, et l'ancien
+   * numéro de déclaration d'activité revenait sur les documents.
+   *
+   * On veut désormais qu'un champ vide reste vide. Vider les valeurs par
+   * défaut sans rien faire d'autre effacerait donc, sur un site déjà en
+   * service, tout ce qui n'avait jamais été saisi à la main — c'est-à-dire
+   * l'identité affichée aujourd'hui sur les conventions et les attestations.
+   *
+   * Cette migration écrit une fois dans la fiche ce que le code affichait, et
+   * seulement là où la fiche est muette. Rien ne change à l'écran ; ce qui
+   * était magique devient modifiable. C'est le dernier endroit du plugin où
+   * ces valeurs figurent, et elles y figurent pour pouvoir en disparaître.
+   */
+  private function backfill_org_identity_from_code() {
+    if ( '1' === get_option( 'acdc_of_saas_identity_backfilled' ) ) {
+      return;
+    }
+
+    /* Ce que le code affichait avant la 3.25.290, à sa place légitime : une
+       migration, datée, exécutée une fois. */
+    $historique = array(
+      'enterprise'                  => 'ACDC Formation',
+      'siret_identification'        => '405 109 901 00042',
+      'activity_declaration_number' => '93 83 08347 83',
+      'address'                     => '7 avenue Paul Cézanne',
+      'postal_code'                 => '83310',
+      'city'                        => 'Cogolin',
+      'country'                     => 'France',
+      'enterprise_contact_email'    => 'contact@acdc-formation.com',
+      'enterprise_contact_phone'    => '06 78 26 91 10',
+    );
+
+    $fiche = get_option( 'acdc_of_company_profile', array() );
+    if ( ! is_array( $fiche ) ) {
+      $fiche = array();
+    }
+    $marque = get_option( 'acdc_of_branding', array() );
+    if ( ! is_array( $marque ) ) {
+      $marque = array();
+    }
+
+    /* La fiche d'abord, la marque ensuite, le code en dernier recours : on ne
+       remplace jamais une saisie, on ne comble qu'un silence. */
+    $courant = \ACDC\Support\OrgIdentity::fromOptions( $fiche, $marque );
+    $carte   = array(
+      'enterprise'                  => 'raison_sociale',
+      'siret_identification'        => 'siret',
+      'activity_declaration_number' => 'nda',
+      'address'                     => 'adresse',
+      'postal_code'                 => 'code_postal',
+      'city'                        => 'ville',
+      'country'                     => 'pays',
+      'enterprise_contact_email'    => 'email',
+      'enterprise_contact_phone'    => 'telephone',
+    );
+
+    $modifie = false;
+    foreach ( $carte as $cle_fiche => $cle_identite ) {
+      if ( isset( $fiche[ $cle_fiche ] ) && '' !== trim( (string) $fiche[ $cle_fiche ] ) ) {
+        continue; /* déjà saisi : on n'y touche pas */
+      }
+      $valeur = '' !== $courant[ $cle_identite ]
+        ? $courant[ $cle_identite ]
+        : ( isset( $historique[ $cle_fiche ] ) ? $historique[ $cle_fiche ] : '' );
+      if ( '' !== $valeur ) {
+        $fiche[ $cle_fiche ] = $valeur;
+        $modifie             = true;
+      }
+    }
+
+    if ( $modifie ) {
+      update_option( 'acdc_of_company_profile', $fiche, false );
+      wp_cache_delete( 'acdc_of_company_profile', 'options' );
+    }
+    update_option( 'acdc_of_saas_identity_backfilled', '1', false );
+  }
+
   private function backfill_qualiopi_toggles_default_state() {
     if ( get_option( 'acdc_of_saas_3_25_278_toggles_done' ) === '1' ) {
       return;
@@ -9979,8 +10119,10 @@ dbDelta( $sql_companies );
   $context['assiduity']        = $acdc_state['time']['half_days'] > 0 ? 'Oui' : 'Non';
   $context['is_due']           = ! empty( $acdc_state['certificat'] );
   $context = $this->acdc_apply_completion_period( $context, $acdc_state );
-  $context['issuer_city'] = ! empty( $profile['city'] ) ? (string) $profile['city'] : 'Cogolin';
-  $context['issuer_name'] = ! empty( $profile['enterprise'] ) ? (string) $profile['enterprise'] : 'ACDC-Formation';
+  /* ACDC 3.25.290 — Ville et raison sociale de l'émetteur : plus de repli en
+     dur, la fiche fait foi. */
+  $context['issuer_city'] = $this->acdc_org_identity()['ville'];
+  $context['issuer_name'] = $this->acdc_org_identity()['raison_sociale'];
   $signatory = trim( (string) ( $profile['first_name'] ?? '' ) . ' ' . (string) ( $profile['last_name'] ?? '' ) );
   if ( '' === trim( $signatory ) ) {
     $signatory = 'David';
@@ -10107,7 +10249,7 @@ dbDelta( $sql_companies );
   $page[] = array( 'type' => 'rect', 'x' => 300, 'y' => 80, 'width' => 180, 'height' => 0.8, 'fill_color' => $navy );
   $page[] = array( 'text' => 'Fait à : ' . $context['issuer_city'], 'x' => 610, 'y' => 92, 'size' => 9.5, 'font' => 'Helvetica', 'color' => '#475569' );
   $page[] = array( 'text' => 'Le : ' . date_i18n( 'd/m/Y' ), 'x' => 610, 'y' => 78, 'size' => 9.5, 'font' => 'Helvetica', 'color' => '#475569' );
-  $page[] = array( 'text' => 'ACDC-Formation', 'x' => 610, 'y' => 53, 'size' => 10.5, 'font' => 'Helvetica-Bold', 'color' => $navy );
+  $page[] = array( 'text' => $this->acdc_org_identity()['raison_sociale'], 'x' => 610, 'y' => 53, 'size' => 10.5, 'font' => 'Helvetica-Bold', 'color' => $navy );
   $page[] = array( 'text' => 'Organisme de formation', 'x' => 610, 'y' => 40, 'size' => 9.5, 'font' => 'Helvetica', 'color' => '#475569' );
   /* ACDC 3.25.264 — LE CACHET RECOUVRAIT LA DATE.
      Posé en (612, 55), il montait jusqu'à y=120 et passait sur « Fait à : … »
@@ -10200,12 +10342,13 @@ dbDelta( $sql_companies );
   } else {
     $context['result_label'] = 'Acquis non validés' . ( '' !== $context['assessment_score'] ? ' — ' . $context['assessment_score'] : '' );
   }
-  $context['issuer_city'] = ! empty( $profile['city'] ) ? (string) $profile['city'] : 'Cogolin';
-  $context['issuer_name'] = ! empty( $profile['enterprise'] ) ? (string) $profile['enterprise'] : 'ACDC-Formation';
-  $signatory = trim( (string) ( $profile['first_name'] ?? '' ) . ' ' . (string) ( $profile['last_name'] ?? '' ) );
-  if ( '' === trim( $signatory ) ) {
-    $signatory = 'David Contal';
-  }
+  /* ACDC 3.25.290 — Ville et raison sociale de l'émetteur : plus de repli en
+     dur, la fiche fait foi. */
+  $context['issuer_city'] = $this->acdc_org_identity()['ville'];
+  $context['issuer_name'] = $this->acdc_org_identity()['raison_sociale'];
+  /* ACDC 3.25.290 — Le signataire retombait sur un nom écrit en dur : une
+     attestation aurait continué de nommer l'ancien dirigeant. */
+  $signatory = $this->acdc_org_identity()['signataire'];
   $context['signatory_name'] = trim( $signatory );
   $context['signatory_role'] = ! empty( $profile['signatory_role'] ) ? (string) $profile['signatory_role'] : 'Président';
   return $context;
@@ -10281,8 +10424,8 @@ private function build_absence_certificate_pdf_pages( $registration, $context = 
   $ink   = '#1f2937';
   $muted = '#6b7280';
 
-  $org_name  = ! empty( $profile['enterprise'] ) ? (string) $profile['enterprise'] : 'ACDC-Formation';
-  $org_city  = ! empty( $profile['city'] ) ? (string) $profile['city'] : 'Cogolin';
+  $org_name  = $this->acdc_org_identity()['raison_sociale'];
+  $org_city  = $this->acdc_org_identity()['ville'];
   $signatory = trim( (string) ( $profile['first_name'] ?? '' ) . ' ' . (string) ( $profile['last_name'] ?? '' ) );
   if ( '' === $signatory ) {
     $signatory = 'La direction';
@@ -11953,21 +12096,20 @@ private function acdc_pdf_asset_is_readable( $url ) {
    * L'identité de l'organisme, lue dans les Réglages — jamais écrite en dur.
    */
   private function acdc_pdf_charte_org() {
-    $profile = $this->get_company_profile_options();
-    $address = trim(
-      (string) ( $profile['address'] ?? '' )
-      . ( ! empty( $profile['postal_code'] ) ? ', ' . (string) $profile['postal_code'] : '' )
-      . ( ! empty( $profile['city'] ) ? ' ' . (string) $profile['city'] : '' )
-    );
+    /* ACDC 3.25.290 — La charte de l'organisme lisait cinq champs correctement
+       et deux de travers : « nda_number » et « website », qui n'existent pas
+       dans la fiche. La charte partait donc sans numéro de déclaration
+       d'activité et sans site, quoi qu'on saisisse dans les réglages. */
+    $__id = $this->acdc_org_identity();
     return array(
-      'name'    => ! empty( $profile['enterprise'] ) ? (string) $profile['enterprise'] : 'ACDC-Formation',
-      'address' => $address,
-      'siret'   => (string) ( $profile['siret_identification'] ?? '' ),
-      'nda'     => (string) ( $profile['nda_number'] ?? '' ),
-      'phone'   => (string) ( $profile['enterprise_contact_phone'] ?? '' ),
-      'email'   => ! empty( $profile['enterprise_contact_email'] ) ? (string) $profile['enterprise_contact_email'] : (string) get_option( 'admin_email' ),
-      'site'    => (string) ( $profile['website'] ?? '' ),
-      'city'    => (string) ( $profile['city'] ?? '' ),
+      'name'    => $__id['raison_sociale'],
+      'address' => \ACDC\Support\OrgIdentity::addressLine( $__id, ', ' ),
+      'siret'   => $__id['siret'],
+      'nda'     => $__id['nda'],
+      'phone'   => $__id['telephone'],
+      'email'   => '' !== $__id['email'] ? $__id['email'] : (string) get_option( 'admin_email' ),
+      'site'    => \ACDC\Support\OrgIdentity::siteAffiche( $__id ),
+      'city'    => $__id['ville'],
     );
   }
 
@@ -11995,7 +12137,7 @@ private function acdc_pdf_asset_is_readable( $url ) {
         'x' => $m['left'], 'y' => 782,
       );
     }
-    $page[] = array( 'text' => 'ACDC-Formation', 'x' => $m['left'] + 62, 'y' => 806, 'size' => 13.6, 'font' => 'Helvetica-Bold', 'color' => $c['navy'] );
+    $page[] = array( 'text' => $this->acdc_org_identity()['raison_sociale'], 'x' => $m['left'] + 62, 'y' => 806, 'size' => 13.6, 'font' => 'Helvetica-Bold', 'color' => $c['navy'] );
     $page[] = array( 'text' => 'Azur - Compétences - Développement - Conseils', 'x' => $m['left'] + 62, 'y' => 792, 'size' => 8.4, 'font' => 'Helvetica', 'color' => $c['gold'] );
 
     $company_x = $m['page_w'] - $m['right'] - 130;

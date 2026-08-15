@@ -1355,7 +1355,9 @@ trait ACDC_Documents_Billing_Actions_Trait {
       }
     }
     $profile_s   = $this->get_company_profile_options();
-    $from_name_s = ! empty( $profile_s['enterprise_contact_name'] )  ? sanitize_text_field( (string) $profile_s['enterprise_contact_name'] )  : get_bloginfo( 'name' );
+    /* ACDC 3.25.290 — « enterprise_contact_name » n'existe pas dans la fiche :
+       l'accusé de devis signé partait au nom du site WordPress. */
+    $from_name_s = $this->acdc_expediteur_organisme();
     $from_email_s= ! empty( $profile_s['enterprise_contact_email'] ) ? sanitize_email( (string) $profile_s['enterprise_contact_email'] )       : sanitize_email( (string) get_option( 'admin_email' ) );
     $signer_name = sanitize_text_field( (string) $quote->apprenant_name );
     $quote_num   = sanitize_text_field( (string) $quote->number );

@@ -2529,7 +2529,9 @@ public function handle_save_quiz() {
     $tr_name_send = trim( (string) $trainer->first_name . ' ' . (string) $trainer->last_name );
     $label        = wp_strip_all_tags( html_entity_decode( (string) $contract->label, ENT_QUOTES, 'UTF-8' ) );
     $profile_mail = $this->get_company_profile_options();
-    $from_name    = ! empty( $profile_mail['enterprise_contact_name'] ) ? sanitize_text_field( (string) $profile_mail['enterprise_contact_name'] ) : get_bloginfo( 'name' );
+    $from_name    = /* ACDC 3.25.290 — « enterprise_contact_name » n'existe pas dans la fiche :
+                       l'expéditeur retombait toujours sur le nom du site WordPress. */
+                    $this->acdc_expediteur_organisme();
     $from_email   = ! empty( $profile_mail['enterprise_contact_email'] ) ? sanitize_email( (string) $profile_mail['enterprise_contact_email'] ) : sanitize_email( (string) get_option( 'admin_email' ) );
 
     $subject = '📄 Votre contrat de sous-traitance — ' . $label;
@@ -2590,14 +2592,18 @@ public function handle_save_quiz() {
     $page_w = 595; $page_h = 842; $left = 35.43; $right = 35.43;
     $content_w = $page_w - $left - $right;
     // ── Données organisme ─────────────────────────────────────────────────
-    $org_name  = ! empty( $profile['enterprise'] )               ? (string) $profile['enterprise']               : 'ACDC-Formation';
-    $org_addr  = trim( ( ! empty( $profile['address'] )           ? (string) $profile['address']          : '' ) . ( ! empty( $profile['postal_code'] ) ? ', ' . (string) $profile['postal_code'] : '' ) . ( ! empty( $profile['city'] ) ? ' ' . (string) $profile['city'] : '' ) );
-    $org_siret = ! empty( $profile['siret_identification'] )      ? (string) $profile['siret_identification']      : '';
-    $org_nda   = ! empty( $profile['nda_number'] )                ? (string) $profile['nda_number']                : '';
+    /* ACDC 3.25.290 — Trois champs lisaient la fiche, le quatrième demandait
+       « nda_number » — une clé qui n'existe pas. Le contrat de sous-traitance
+       partait donc systématiquement sans numéro de déclaration d'activité, et
+       aucun réglage ne pouvait y remédier. */
+    $__id      = $this->acdc_org_identity();
+    $org_name  = $__id['raison_sociale'];
+    $org_addr  = \ACDC\Support\OrgIdentity::addressLine( $__id, ', ' );
+    $org_siret = $__id['siret'];
+    $org_nda   = $__id['nda'];
     /* Téléphone, e-mail et site ne servaient qu'au pied de page : la charte les
        lit elle-même dans les Réglages. */
-    $org_rep   = trim( ( ! empty( $profile['first_name'] ) ? (string) $profile['first_name'] : '' ) . ' ' . ( ! empty( $profile['last_name'] ) ? (string) $profile['last_name'] : '' ) );
-    if ( '' === trim( $org_rep ) ) { $org_rep = $org_name; }
+    $org_rep   = '' !== $__id['signataire'] ? $__id['signataire'] : $org_name;
     // ── Données formateur ─────────────────────────────────────────────────
     $tr_name  = trim( (string) $trainer->first_name . ' ' . (string) $trainer->last_name );
     $tr_siret = ! empty( $trainer->siret ) ? (string) $trainer->siret : '';
@@ -2953,7 +2959,9 @@ public function handle_save_quiz() {
     $tr_name_s = trim( (string) $trainer->first_name . ' ' . (string) $trainer->last_name );
     $signed_at = wp_date( 'd/m/Y à H:i' );
     $profile_s = $this->get_company_profile_options();
-    $from_name_s  = ! empty( $profile_s['enterprise_contact_name'] )  ? sanitize_text_field( (string) $profile_s['enterprise_contact_name'] )  : get_bloginfo( 'name' );
+    $from_name_s  = /* ACDC 3.25.290 — « enterprise_contact_name » n'existe pas dans la fiche :
+                       l'expéditeur retombait toujours sur le nom du site WordPress. */
+                    $this->acdc_expediteur_organisme();
     $from_email_s = ! empty( $profile_s['enterprise_contact_email'] ) ? sanitize_email( (string) $profile_s['enterprise_contact_email'] )       : sanitize_email( (string) get_option( 'admin_email' ) );
     /* ACDC 3.25.160 — L'exemplaire contresigné du contrat formateur part d'ICI, et
        non du module signature : les en-têtes ajoutés là-bas ne l'atteignaient donc
@@ -3886,7 +3894,9 @@ public function handle_save_quiz() {
     $sender_email = sanitize_email( $branding['email'] );
   }
   if ( '' === $sender_email ) {
-    $sender_email = 'contact@acdc-formation.com';
+    /* ACDC 3.25.290 — L'expéditeur de dernier recours était écrit en dur. */
+    $__id_exp     = $this->acdc_org_identity();
+    $sender_email = '' !== $__id_exp['email'] ? sanitize_email( $__id_exp['email'] ) : sanitize_email( (string) get_option( 'admin_email' ) );
   }
   $reply_to = ! empty( $marketing_settings['reply_to'] ) ? sanitize_email( $marketing_settings['reply_to'] ) : $sender_email;
   $internal_email = ! empty( $marketing_settings['internal_notification_email'] ) ? sanitize_email( $marketing_settings['internal_notification_email'] ) : $sender_email;
@@ -4227,24 +4237,30 @@ private function acdc_build_need_pdf_pages( $need, $source_prospect_id = 0, $cli
         'x' => 35,
         'y' => 767,
       );
-      $add_text( $page, 'ACDC - Formation', 118, 803, 15.2, true, $navy );
+      $add_text( $page, $this->acdc_org_identity()['raison_sociale'], 118, 803, 15.2, true, $navy );
     } else {
-      $add_text( $page, 'ACDC - Formation', 35, 803, 15.2, true, $navy );
+      $add_text( $page, $this->acdc_org_identity()['raison_sociale'], 35, 803, 15.2, true, $navy );
     }
-    $add_text( $page, 'AZUR COMPETENCES DEVELOPPEMENT & CONSEIL', 35, 758, 8.5, false, $gold );
-    $add_text( $page, 'ACDC-Formation', 420, 803, 8.2, true, '#374151' );
-    $add_text( $page, '7 avenue Paul Cezanne', 420, 792, 8.0, false, '#374151' );
-    $add_text( $page, '83310 Cogolin - France', 420, 781, 8.0, false, '#374151' );
-    $add_text( $page, 'Siret : 405109901 00042', 420, 770, 8.0, false, '#374151' );
-    $add_text( $page, 'NDA : 93 83 08347 83', 420, 759, 8.0, false, '#374151' );
+    /* ACDC 3.25.290 — Ce bloc n'ouvrait aucun réglage : raison sociale, adresse,
+       SIRET et NDA étaient posés ligne par ligne dans le code. Les lignes se
+       dessinent maintenant à partir de l'identité, et une ligne absente ne
+       laisse pas de trou : les suivantes remontent. */
+    $__bloc = \ACDC\Support\OrgIdentity::blockLines( $this->acdc_org_identity() );
+    $__y    = 803;
+    foreach ( $__bloc as $__i => $__ligne ) {
+      $add_text( $page, $__ligne, 420, $__y, 0 === $__i ? 8.2 : 8.0, 0 === $__i, '#374151' );
+      $__y -= 11;
+    }
     $add_rect( $page, 35, 745, 525, 1.2, $gold, null, 0 );
     $add_text( $page, $title, 35, 722, 15.4, true, $navy );
   };
 
-  $draw_footer = function( &$page ) use ( $add_rect, $add_text, $line ) {
+  /* ACDC 3.25.290 — Le pied de page portait l'identité en toutes lettres. */
+  $__identite = $this->acdc_org_identity();
+  $draw_footer = function( &$page ) use ( $add_rect, $add_text, $line, $__identite ) {
     $add_rect( $page, 25, 34, 545, 0.8, $line, null, 0 );
-    $add_text( $page, '7 avenue Paul Cézanne - 83310 Cogolin - France - Siret : 405109901 00042 - NDA : 93 83 08347 83', 40, 20, 6.5, false, '#4b5563' );
-    $add_text( $page, 'e-mail : contact@acdc-formation.com - Tél : 06 78 26 91 10 - site web : acdc-formation.com', 68, 10, 6.5, false, '#4b5563' );
+    $add_text( $page, \ACDC\Support\OrgIdentity::footerLine( $__identite ), 40, 20, 6.5, false, '#4b5563' );
+    $add_text( $page, \ACDC\Support\OrgIdentity::contactLine( $__identite ), 68, 10, 6.5, false, '#4b5563' );
   };
 
   $draw_card = function( &$page, $x, $y, $w, $h, $title ) use ( $add_text, $add_rect, $gold, $title_case ) {
@@ -5715,7 +5731,11 @@ public function handle_purge_plugin_data() {
 
     // ACDC 3.21.29-hotfix4b — Notification interne : alerte l'admin/formateur que l'analyse a été soumise.
     $company_profile  = get_option( 'acdc_of_company_profile', array() );
-    $internal_email   = ! empty( $company_profile['email'] ) ? sanitize_email( $company_profile['email'] ) : get_option( 'admin_email' );
+    /* ACDC 3.25.290 — « email » n'existe pas dans la fiche (elle enregistre
+       « enterprise_contact_email ») : cette alerte partait donc toujours sur
+       l'adresse d'administration de WordPress, jamais sur celle de l'organisme. */
+    $__id_notif       = $this->acdc_org_identity();
+    $internal_email   = '' !== $__id_notif['email'] ? sanitize_email( $__id_notif['email'] ) : get_option( 'admin_email' );
     /* ACDC 3.25.211 — L'intitulé nomme l'entreprise, puis la personne, puis sa
        qualité : deux analyses d'une même signataire qui est aussi apprenante ne
        peuvent plus arriver sous le même titre. */

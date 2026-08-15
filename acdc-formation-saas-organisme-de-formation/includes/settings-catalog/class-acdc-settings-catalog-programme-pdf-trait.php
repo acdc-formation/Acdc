@@ -38,10 +38,20 @@ trait ACDC_Settings_Catalog_Programme_PDF_Trait {
 			array( 'nom' => 'Ann-Cécile Joucher', 'tel' => '06.29.93.74.24', 'email' => 'acjoucher@acdc-formation.com' ),
 		);
 	}
-	private function get_prog_pdf_adresse() { return '7 avenue Paul Cézanne — 83310 Cogolin — Golfe de St-Tropez'; }
-	private function get_prog_pdf_site()    { return 'https://acdc-formation.com'; }
-	private function get_prog_pdf_siret()   { return '405 109 901 00042'; }
-	private function get_prog_pdf_nda()     { return '93 83 08347 83'; }
+	/* ACDC 3.25.290 — Ces quatre fonctions RENVOYAIENT une constante. Elles
+	   avaient la forme d'une lecture de réglage et n'en étaient pas une : le
+	   programme de formation, qui part aux financeurs et au catalogue public,
+	   portait une identité que rien ne pilotait. Elles interrogent désormais la
+	   fiche entreprise. Les deux contacts nommés, eux, restent écrits en dur —
+	   c'est un choix assumé de l'exploitant, à reprendre plus tard. */
+	private function get_prog_pdf_adresse() {
+		$id = $this->acdc_org_identity();
+		return \ACDC\Support\OrgIdentity::addressLine( $id, ' — ' );
+	}
+	private function get_prog_pdf_site()    { return $this->acdc_org_identity()['site']; }
+	private function get_prog_pdf_siret()   { return $this->acdc_org_identity()['siret']; }
+	private function get_prog_pdf_nda()     { return $this->acdc_org_identity()['nda']; }
+	private function get_prog_pdf_raison_sociale() { return $this->acdc_org_identity()['raison_sociale']; }
 
 	/* ─────────────────────────────────────────
 	   INTERCEPTION template_redirect
@@ -806,11 +816,18 @@ body{font-family:'Rubik',sans-serif;font-size:14px;color:var(--text);background:
 		echo '</div>';
 		echo '<div class="contact-footer-row">';
 		echo '<div class="contact-adresse">';
-		echo '<strong>ACDC Formation</strong><br>';
-		echo esc_html( $this->get_prog_pdf_adresse() ) . '<br>';
-		echo '<a href="' . esc_url( $this->get_prog_pdf_site() ) . '" style="color:var(--marine-dark);font-weight:600;">' . esc_html( $this->get_prog_pdf_site() ) . '</a><br>';
-		echo 'Siret : ' . esc_html( $this->get_prog_pdf_siret() ) . '<br>';
-		echo 'NDA : ' . esc_html( $this->get_prog_pdf_nda() );
+		/* Chaque mention disparaît avec sa valeur : « Siret : » suivi de rien,
+		   sur un programme envoyé à un financeur, se remarque. */
+		$__rs = $this->get_prog_pdf_raison_sociale();
+		$__ad = $this->get_prog_pdf_adresse();
+		$__st = $this->get_prog_pdf_site();
+		$__si = $this->get_prog_pdf_siret();
+		$__nd = $this->get_prog_pdf_nda();
+		if ( '' !== $__rs ) { echo '<strong>' . esc_html( $__rs ) . '</strong><br>'; }
+		if ( '' !== $__ad ) { echo esc_html( $__ad ) . '<br>'; }
+		if ( '' !== $__st ) { echo '<a href="' . esc_url( $__st ) . '" style="color:var(--marine-dark);font-weight:600;">' . esc_html( \ACDC\Support\OrgIdentity::siteAffiche( $this->acdc_org_identity() ) ) . '</a><br>'; }
+		if ( '' !== $__si ) { echo 'Siret : ' . esc_html( $__si ) . '<br>'; }
+		if ( '' !== $__nd ) { echo 'NDA : ' . esc_html( $__nd ); }
 		echo '</div>';
 		echo '<div class="contact-logo"><img src="' . esc_url( $logo_url ) . '" alt="ACDC Formation"></div>';
 		echo '</div>';

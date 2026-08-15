@@ -1417,8 +1417,11 @@ trait ACDC_Sessions_Actions_Trait {
     $now_mysql  = current_time( 'mysql' );
     $lockout_ts = $now_ts - ( 7 * DAY_IN_SECONDS );
 
-    $company_profile = get_option( 'acdc_of_company_profile', array() );
-    $admin_email     = ! empty( $company_profile['email'] ) ? sanitize_email( (string) $company_profile['email'] ) : sanitize_email( (string) get_option( 'admin_email' ) );
+    /* ACDC 3.25.290 — « email » n'existe pas dans la fiche entreprise : l'alerte
+       d'absence partait donc toujours sur l'adresse d'administration de
+       WordPress, jamais sur celle renseignée pour l'organisme. */
+    $__id            = $this->acdc_org_identity();
+    $admin_email     = '' !== $__id['email'] ? sanitize_email( $__id['email'] ) : sanitize_email( (string) get_option( 'admin_email' ) );
 
     if ( ! $admin_email || ! is_email( $admin_email ) ) {
       return;

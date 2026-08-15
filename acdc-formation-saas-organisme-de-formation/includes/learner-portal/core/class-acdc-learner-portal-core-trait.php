@@ -29,7 +29,11 @@ trait ACDC_Learner_Portal_Core_Trait {
   }
 
   private function learner_portal_contact_email() {
-    return 'contact@acdc-formation.com';
+    /* ACDC 3.25.290 — Cette adresse était écrite en dur : un apprenant dont le
+       compte se bloque était invité à écrire à une boîte que les réglages ne
+       pilotaient pas. */
+    $email = $this->acdc_org_identity()['email'];
+    return '' !== $email ? $email : sanitize_email( (string) get_option( 'admin_email' ) );
   }
 
   private function learner_portal_admin_notification_email() {

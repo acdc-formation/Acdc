@@ -182,7 +182,7 @@ table.res td.lbl { width:38%; font-weight:bold; color:#113860; background:#fffdf
   <tr>
     <td style="height:105pt;background:#c99d4a;vertical-align:middle;padding:14pt 20pt;">
       <p style="font-size:11pt;font-weight:bold;font-style:italic;color:#fff;margin-bottom:6pt;">Date de la proposition&nbsp;: <?php echo $e($date_prop); ?></p>
-      <p style="font-size:11pt;font-weight:bold;font-style:italic;color:#fff;margin-bottom:6pt;">Proposition réalisée par&nbsp;: <?php echo $e($acdc['contact_name'] ?? 'David Contal'); ?></p>
+      <p style="font-size:11pt;font-weight:bold;font-style:italic;color:#fff;margin-bottom:6pt;">Proposition réalisée par&nbsp;: <?php echo $e($acdc['contact_name'] ?? ''); ?></p>
       <p style="font-size:11pt;font-weight:bold;font-style:italic;color:#fff;">Tél&nbsp;: <?php echo $e($acdc['phone']); ?> · <?php echo $e($acdc['email']); ?></p>
     </td>
   </tr>
@@ -444,7 +444,7 @@ $_fav = $this->acdc_pdf_image_src( $acdc['logo_favicon_url'] ?? $logo_url, 400 )
 <div class="pb"></div>
 <?php echo $pg_header(); echo $rib('Nous contacter'); ?>
 <div class="cnt">
-<p style="font-size:11pt;color:#c99d4a;font-weight:bold;margin-bottom:6pt;"><?php echo $e($acdc['contact_name']??'David Contal');?></p>
+<p style="font-size:11pt;color:#c99d4a;font-weight:bold;margin-bottom:6pt;"><?php echo $e($acdc['contact_name']??'');?></p>
 <table width="100%" style="border-collapse:collapse;">
   <tr>
     <td width="55%" style="vertical-align:top;padding-right:12pt;">

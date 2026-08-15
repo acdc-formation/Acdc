@@ -294,12 +294,15 @@ trait ACDC_Documents_Billing_Render_Trait {
               </div>
               <div class="acdc-email-box">
                 <p style="margin:0 0 20px;text-align:center;">Nous restons à votre entière disposition au besoin. 🙂</p>
-                <p style="margin:0;text-align:center;font-weight:700;">ACDC FORMATION<br>06 78 26 91 10<br>contact@acdc-formation.com<br>acdcformation.com</p>
+                <?php /* ACDC 3.25.290 — Coordonnées écrites en dur dans un e-mail :
+                         après un changement d'entité, le client appelle l'ancien
+                         numéro et écrit à l'ancienne boîte. */ ?>
+                <p style="margin:0;text-align:center;font-weight:700;"><?php $__id = $this->acdc_org_identity(); echo implode( '<br>', array_map( 'esc_html', array_filter( array( $__id['raison_sociale'], $__id['telephone'], $__id['email'], \ACDC\Support\OrgIdentity::siteAffiche( $__id ) ), 'strlen' ) ) ); ?></p>
               </div>
               <div style="padding:0 42px 34px;font-size:18px;line-height:1.65;">
-                <p>Cordialement,<br><strong>L’équipe ACDC Formation</strong></p>
+                <p>Cordialement,<br><strong><?php $__sig = $this->acdc_org_identity()['raison_sociale']; echo esc_html( '' !== $__sig ? 'L’équipe ' . $__sig : 'L’équipe' ); ?></strong></p>
               </div>
-              <div style="border-top:1px solid #dfe6f0;padding:22px 24px 30px;text-align:center;color:#64779d;font-size:14px;line-height:1.75;">06 78 26 91 10 · contact@acdc-formation.com · acdcformation.com<br>7 avenue Paul Cézanne — 83310 Cogolin<br>Ce message a été envoyé dans le cadre du suivi de votre devis.</div>
+              <div style="border-top:1px solid #dfe6f0;padding:22px 24px 30px;text-align:center;color:#64779d;font-size:14px;line-height:1.75;"><?php $__pied = $this->acdc_org_identity(); echo esc_html( implode( ' · ', array_filter( array( $__pied['telephone'], $__pied['email'], \ACDC\Support\OrgIdentity::siteAffiche( $__pied ) ), 'strlen' ) ) ); ?><br><?php echo esc_html( \ACDC\Support\OrgIdentity::addressLine( $__pied, ' — ' ) ); ?><br>Ce message a été envoyé dans le cadre du suivi de votre devis.</div>
             </div>
           </div>
           <p class="acdc-actions-end"><button type="button" class="acdc-button acdc-button-soft" data-acdc-modal-close>Annuler</button><button type="button" class="acdc-button acdc-button-primary">Exécuter l'action</button></p>
@@ -445,7 +448,9 @@ trait ACDC_Documents_Billing_Render_Trait {
         'quantity' => '1,00', 'designation' => "Dates de l'action de formation : à définir",
         'format' => 'Présentiel', 'validity_days' => (string) $quote_validity_days,
         'vat_rate' => ( isset( $profile_q['vat_rate_default'] ) && '20' === (string) $profile_q['vat_rate_default'] ) ? '20,00' : '0,00',
-        'iban' => ! empty( $profile_q['bank_iban'] ) ? (string) $profile_q['bank_iban'] : 'FR76 3000 4023 7500 0101 1397 203',
+        /* ACDC 3.25.290 — Plus d'IBAN de repli : un compte bancaire faux est
+           infiniment pire qu'un compte bancaire manquant. */
+        'iban' => ! empty( $profile_q['bank_iban'] ) ? (string) $profile_q['bank_iban'] : '',
         'bic'  => ! empty( $profile_q['bank_bic'] )  ? (string) $profile_q['bank_bic']  : 'BNPAFRPPXXX',
         'payment_methods' => "Règlement par virement bancaire à l'édition de la facture.",
         'address' => '', 'address_complement' => '', 'postal_code' => '', 'city' => '',
@@ -951,10 +956,10 @@ trait ACDC_Documents_Billing_Render_Trait {
                 <div style="padding:34px 42px 12px;font-size:18px;line-height:1.65;">
                   <p>Bonjour,</p>
                   <p>Veuillez trouver ci-joint votre facture. Nous vous remercions pour votre confiance.</p>
-                  <p>Si vous avez des questions, vous pouvez nous contacter directement à <strong>contact@acdc-formation.com</strong> ou au <strong>06 78 26 91 10</strong>.</p>
-                  <p>Cordialement,<br><strong>L’équipe ACDC Formation</strong></p>
+                  <?php $__c = $this->acdc_org_identity(); if ( '' !== $__c['email'] || '' !== $__c['telephone'] ) : ?><p>Si vous avez des questions, vous pouvez nous contacter directement<?php echo '' !== $__c['email'] ? ' à <strong>' . esc_html( $__c['email'] ) . '</strong>' : ''; ?><?php echo '' !== $__c['telephone'] ? ' ou au <strong>' . esc_html( $__c['telephone'] ) . '</strong>' : ''; ?>.</p><?php endif; ?>
+                  <p>Cordialement,<br><strong><?php $__sig = $this->acdc_org_identity()['raison_sociale']; echo esc_html( '' !== $__sig ? 'L’équipe ' . $__sig : 'L’équipe' ); ?></strong></p>
                 </div>
-                <div style="border-top:1px solid #dfe6f0;padding:22px 24px 30px;text-align:center;color:#64779d;font-size:14px;line-height:1.75;">06 78 26 91 10 · contact@acdc-formation.com · acdcformation.com<br>7 avenue Paul Cézanne — 83310 Cogolin<br>Ce message a été envoyé dans le cadre de votre facture.</div>
+                <div style="border-top:1px solid #dfe6f0;padding:22px 24px 30px;text-align:center;color:#64779d;font-size:14px;line-height:1.75;"><?php $__pied = $this->acdc_org_identity(); echo esc_html( implode( ' · ', array_filter( array( $__pied['telephone'], $__pied['email'], \ACDC\Support\OrgIdentity::siteAffiche( $__pied ) ), 'strlen' ) ) ); ?><br><?php echo esc_html( \ACDC\Support\OrgIdentity::addressLine( $__pied, ' — ' ) ); ?><br>Ce message a été envoyé dans le cadre de votre facture.</div>
               </div>
             </div>
             <p class="acdc-actions-end"><button type="button" class="acdc-button acdc-button-soft" data-acdc-modal-close>Annuler</button><button type="submit" class="acdc-button acdc-button-primary">Envoyer la facture</button></p>

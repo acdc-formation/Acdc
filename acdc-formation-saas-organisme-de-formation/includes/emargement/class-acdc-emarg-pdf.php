@@ -132,15 +132,16 @@ class ACDC_Emarg_PDF {
           }
         }
 
-        $profile  = get_option( 'acdc_of_company_profile', array() );
-        $branding = get_option( 'acdc_of_branding', array() );
-        $org_name = ! empty( $profile['enterprise'] ) ? $profile['enterprise'] : ( ! empty( $branding['company_name'] ) ? $branding['company_name'] : get_bloginfo('name') );
-        $org_nda  = ! empty( $profile['activity_declaration_number'] ) ? $profile['activity_declaration_number'] : '';
-        $org_addr = trim( implode( ', ', array_filter( array(
-            ! empty( $profile['address'] )     ? $profile['address']     : ( $branding['address']     ?? '' ),
-            ! empty( $profile['postal_code'] ) ? $profile['postal_code'] : ( $branding['postal_code'] ?? '' ),
-            ! empty( $profile['city'] )        ? $profile['city']        : ( $branding['city']        ?? '' ),
-        ) ) ) );
+        /* ACDC 3.25.290 — Ce bloc refaisait à la main l'arbitrage entre la fiche
+           entreprise et la fiche marque. Il le faisait juste ; il le faisait
+           SEUL, et une règle recopiée finit toujours par diverger de l'originale. */
+        $__id     = \ACDC\Support\OrgIdentity::fromOptions(
+            get_option( 'acdc_of_company_profile', array() ),
+            get_option( 'acdc_of_branding', array() )
+        );
+        $org_name = '' !== $__id['raison_sociale'] ? $__id['raison_sociale'] : get_bloginfo( 'name' );
+        $org_nda  = $__id['nda'];
+        $org_addr = \ACDC\Support\OrgIdentity::addressLine( $__id, ', ' );
 
         $n = count( $signed_sheets );
 
@@ -594,10 +595,12 @@ class ACDC_Emarg_PDF {
             $token        = $row->sign_token;
         }
 
-        $profile  = get_option( 'acdc_of_company_profile', array() );
-        $branding = get_option( 'acdc_of_branding', array() );
-        $org_name = ! empty( $profile['enterprise'] ) ? $profile['enterprise'] : ( $branding['company_name'] ?? get_bloginfo('name') );
-        $org_site = ! empty( $profile['website_url'] ) ? $profile['website_url'] : home_url();
+        $__id     = \ACDC\Support\OrgIdentity::fromOptions(
+            get_option( 'acdc_of_company_profile', array() ),
+            get_option( 'acdc_of_branding', array() )
+        );
+        $org_name = '' !== $__id['raison_sociale'] ? $__id['raison_sociale'] : get_bloginfo( 'name' );
+        $org_site = '' !== $__id['site'] ? $__id['site'] : home_url();
 
         $formation_label = ! empty( $row->formation_title ) ? $row->formation_title : '—';
         $doc_type_label  = 'Feuille d\'emargement';

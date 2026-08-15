@@ -211,7 +211,7 @@ trait Acdc_Proposals_Render_Trait {
     /* Bande dorée bas */
     $lines[] = array( 'type' => 'rect', 'x' => 0, 'y' => 0, 'width' => 595, 'height' => 75, 'fill_color' => '#C5A253' );
     $lines[] = array( 'type' => 'text', 'x' => 28, 'y' => 55, 'text' => 'Date : ' . $date, 'font' => 'regular', 'size' => 10, 'color' => '#ffffff' );
-    $lines[] = array( 'type' => 'text', 'x' => 28, 'y' => 38, 'text' => 'ACDC Formation  |  dcontal@acdc-formation.com  |  06 78 26 91 10', 'font' => 'regular', 'size' => 10, 'color' => '#ffffff' );
+    $lines[] = array( 'type' => 'text', 'x' => 28, 'y' => 38, 'text' => implode( '  |  ', array_filter( array( $this->acdc_org_identity()['raison_sociale'], $this->acdc_org_identity()['email'], $this->acdc_org_identity()['telephone'] ), 'strlen' ) ), 'font' => 'regular', 'size' => 10, 'color' => '#ffffff' );
     return $lines;
   }
 
@@ -375,8 +375,11 @@ trait Acdc_Proposals_Render_Trait {
     if ( $cgv_stored ) {
       $cgv_text = wp_kses_post( $cgv_stored );
     } else {
-      $cgv_text = '<p><strong>ACDC FORMATION</strong> &mdash; Organisme de formation professionnelle d&eacute;clar&eacute; sous le n&deg;&nbsp;' . esc_html( ! empty( $company_profile['nda_number'] ) ? $company_profile['nda_number'] : '93830834783' ) . ' aupr&egrave;s de la DREETS PACA.</p>'
-        . '<p><strong>Article 1 &ndash; Objet</strong><br />Les pr&eacute;sentes Conditions G&eacute;n&eacute;rales de Vente (CGV) s&rsquo;appliquent &agrave; l&rsquo;ensemble des prestations de formation professionnelle dispens&eacute;es par ACDC FORMATION. Toute inscription implique l&rsquo;adh&eacute;sion sans r&eacute;serve aux pr&eacute;sentes CGV.</p>'
+      $__cgv_id  = $this->acdc_org_identity();
+      $__cgv_org = '' !== $__cgv_id['raison_sociale'] ? $__cgv_id['raison_sociale'] : 'L’organisme de formation';
+      $cgv_text = '<p><strong>' . esc_html( $__cgv_org ) . '</strong>'
+        . ( '' !== $__cgv_id['nda'] ? ' &mdash; Organisme de formation professionnelle d&eacute;clar&eacute; sous le n&deg;&nbsp;' . esc_html( $__cgv_id['nda'] ) . ' aupr&egrave;s de la DREETS PACA.' : '' ) . '</p>'
+        . '<p><strong>Article 1 &ndash; Objet</strong><br />Les pr&eacute;sentes Conditions G&eacute;n&eacute;rales de Vente (CGV) s&rsquo;appliquent &agrave; l&rsquo;ensemble des prestations de formation professionnelle dispens&eacute;es par ' . esc_html( $__cgv_org ) . '. Toute inscription implique l&rsquo;adh&eacute;sion sans r&eacute;serve aux pr&eacute;sentes CGV.</p>'
         . '<p><strong>Article 6 &ndash; Annulation</strong><br />Plus de 15 jours avant&nbsp;: aucun frais. Entre 15 et 7 jours&nbsp;: 50&nbsp;% du montant. Moins de 7 jours&nbsp;: facturation int&eacute;grale.</p>'
         . '<p><strong>Derni&egrave;re mise &agrave; jour&nbsp;:</strong> 18/02/2026.</p>';
     }
@@ -387,16 +390,25 @@ trait Acdc_Proposals_Render_Trait {
       $logo_url = 'https://acdcformation.com/wp-content/uploads/2026/03/Logo-ACDC.png';
     }
     $logo_favicon_url = 'https://acdcformation.com/wp-content/uploads/2026/05/Favicon.png';
+    /* ACDC 3.25.290 — Ce bloc demandait « company_name », « siret »,
+       « nda_number », « email », « phone », « website », « contact_name ».
+       AUCUNE de ces clés n'existe dans la fiche entreprise, qui enregistre
+       « enterprise », « siret_identification »,
+       « activity_declaration_number »… La condition échouait donc à tous les
+       coups et c'était le repli en dur qui s'affichait : la proposition portait
+       une identité que les réglages ne pilotaient pas, et qui aurait survécu au
+       changement d'entité. Trois documents portaient le même bloc. */
+    $__id = $this->acdc_org_identity();
     $acdc = array(
-      'name'         => ! empty( $company_profile['company_name'] ) ? $company_profile['company_name'] : 'ACDC Formation',
-      'address'      => ! empty( $company_profile['address'] )      ? $company_profile['address']      : '7 avenue Paul C&eacute;zanne',
-      'city'         => ! empty( $company_profile['city'] )         ? $company_profile['city']         : '83310 Cogolin',
-      'siret'        => ! empty( $company_profile['siret'] )        ? $company_profile['siret']        : '',
-      'nda'          => ! empty( $company_profile['nda_number'] )   ? $company_profile['nda_number']   : '93 83 08347 83',
-      'email'        => ! empty( $company_profile['email'] )        ? $company_profile['email']        : 'dcontal@acdc-formation.com',
-      'phone'        => ! empty( $company_profile['phone'] )        ? $company_profile['phone']        : '06 78 26 91 10',
-      'website'      => ! empty( $company_profile['website'] )      ? $company_profile['website']      : 'https://acdc-formation.com',
-      'contact_name' => ! empty( $company_profile['contact_name'] ) ? $company_profile['contact_name'] : 'David Contal',
+      'name'         => $__id['raison_sociale'],
+      'address'         => $__id['adresse'],
+      'city'         => trim( $__id['code_postal'] . ' ' . $__id['ville'] ),
+      'siret'         => $__id['siret'],
+      'nda'         => $__id['nda'],
+      'email'         => $__id['email'],
+      'phone'         => $__id['telephone'],
+      'website'         => $__id['site'],
+      'contact_name'         => $__id['signataire'],
       'logo_url'         => $logo_url,
       'logo_favicon_url' => $logo_favicon_url,
     );
@@ -471,16 +483,25 @@ trait Acdc_Proposals_Render_Trait {
     }
     $logo_url         = get_option( 'acdc_of_logo_url', '' ) ?: 'https://acdcformation.com/wp-content/uploads/2026/03/Logo-ACDC.png';
     $logo_favicon_url = 'https://acdcformation.com/wp-content/uploads/2026/05/Favicon.png';
+    /* ACDC 3.25.290 — Ce bloc demandait « company_name », « siret »,
+       « nda_number », « email », « phone », « website », « contact_name ».
+       AUCUNE de ces clés n'existe dans la fiche entreprise, qui enregistre
+       « enterprise », « siret_identification »,
+       « activity_declaration_number »… La condition échouait donc à tous les
+       coups et c'était le repli en dur qui s'affichait : la proposition portait
+       une identité que les réglages ne pilotaient pas, et qui aurait survécu au
+       changement d'entité. Trois documents portaient le même bloc. */
+    $__id = $this->acdc_org_identity();
     $acdc = array(
-      'name'             => ! empty( $company_profile['company_name'] ) ? $company_profile['company_name'] : 'ACDC Formation',
-      'address'          => ! empty( $company_profile['address'] )      ? $company_profile['address']      : '7 avenue Paul Cézanne',
-      'city'             => ! empty( $company_profile['city'] )         ? $company_profile['city']         : '83310 Cogolin',
-      'siret'            => ! empty( $company_profile['siret'] )        ? $company_profile['siret']        : '',
-      'nda'              => ! empty( $company_profile['nda_number'] )   ? $company_profile['nda_number']   : '93 83 08347 83',
-      'email'            => ! empty( $company_profile['email'] )        ? $company_profile['email']        : 'dcontal@acdc-formation.com',
-      'phone'            => ! empty( $company_profile['phone'] )        ? $company_profile['phone']        : '06 78 26 91 10',
-      'website'          => ! empty( $company_profile['website'] )      ? $company_profile['website']      : 'https://acdc-formation.com',
-      'contact_name'     => ! empty( $company_profile['contact_name'] ) ? $company_profile['contact_name'] : 'David Contal',
+      'name'             => $__id['raison_sociale'],
+      'address'             => $__id['adresse'],
+      'city'             => trim( $__id['code_postal'] . ' ' . $__id['ville'] ),
+      'siret'             => $__id['siret'],
+      'nda'             => $__id['nda'],
+      'email'             => $__id['email'],
+      'phone'             => $__id['telephone'],
+      'website'             => $__id['site'],
+      'contact_name'             => $__id['signataire'],
       'logo_url'         => $logo_url,
       'logo_favicon_url' => $logo_favicon_url,
     );
@@ -754,7 +775,7 @@ startxref
       // Bande gold bas
       array( 'type' => 'rect', 'x' => 0, 'y' => 0, 'width' => $w, 'height' => 80, 'fill_color' => '#C5A253' ),
       array( 'type' => 'text', 'x' => 28, 'y' => 62, 'text' => 'Date : ' . $date, 'font' => 'regular', 'size' => 11, 'color' => '#ffffff' ),
-      array( 'type' => 'text', 'x' => 28, 'y' => 47, 'text' => 'ACDC Formation  |  dcontal@acdc-formation.com  |  06 78 26 91 10', 'font' => 'regular', 'size' => 10, 'color' => '#ffffff' ),
+      array( 'type' => 'text', 'x' => 28, 'y' => 47, 'text' => implode( '  |  ', array_filter( array( $this->acdc_org_identity()['raison_sociale'], $this->acdc_org_identity()['email'], $this->acdc_org_identity()['telephone'] ), 'strlen' ) ), 'font' => 'regular', 'size' => 10, 'color' => '#ffffff' ),
     );
     return $lines;
   }
@@ -2914,16 +2935,25 @@ startxref
     $logo_url         = get_option( 'acdc_of_logo_url', '' ) ?: 'https://acdcformation.com/wp-content/uploads/2026/03/Logo-ACDC.png';
     $logo_favicon_url = 'https://acdcformation.com/wp-content/uploads/2026/05/Favicon.png';
     $company_profile  = get_option( 'acdc_of_company_profile', array() );
+    /* ACDC 3.25.290 — Ce bloc demandait « company_name », « siret »,
+       « nda_number », « email », « phone », « website », « contact_name ».
+       AUCUNE de ces clés n'existe dans la fiche entreprise, qui enregistre
+       « enterprise », « siret_identification »,
+       « activity_declaration_number »… La condition échouait donc à tous les
+       coups et c'était le repli en dur qui s'affichait : la proposition portait
+       une identité que les réglages ne pilotaient pas, et qui aurait survécu au
+       changement d'entité. Trois documents portaient le même bloc. */
+    $__id = $this->acdc_org_identity();
     $acdc = array(
-      'name'         => ! empty( $company_profile['company_name'] ) ? $company_profile['company_name'] : 'ACDC Formation',
-      'address'      => ! empty( $company_profile['address'] )      ? $company_profile['address']      : '7 avenue Paul Cézanne',
-      'city'         => ! empty( $company_profile['city'] )         ? $company_profile['city']         : '83310 Cogolin',
-      'siret'        => ! empty( $company_profile['siret'] )        ? $company_profile['siret']        : '',
-      'nda'          => ! empty( $company_profile['nda_number'] )   ? $company_profile['nda_number']   : '93 83 08347 83',
-      'email'        => ! empty( $company_profile['email'] )        ? $company_profile['email']        : 'dcontal@acdc-formation.com',
-      'phone'        => ! empty( $company_profile['phone'] )        ? $company_profile['phone']        : '06 78 26 91 10',
-      'website'      => ! empty( $company_profile['website'] )      ? $company_profile['website']      : 'https://acdc-formation.com',
-      'contact_name' => ! empty( $company_profile['contact_name'] ) ? $company_profile['contact_name'] : 'David Contal',
+      'name'         => $__id['raison_sociale'],
+      'address'         => $__id['adresse'],
+      'city'         => trim( $__id['code_postal'] . ' ' . $__id['ville'] ),
+      'siret'         => $__id['siret'],
+      'nda'         => $__id['nda'],
+      'email'         => $__id['email'],
+      'phone'         => $__id['telephone'],
+      'website'         => $__id['site'],
+      'contact_name'         => $__id['signataire'],
       'logo_url'     => $logo_url,
       'logo_favicon_url' => $logo_favicon_url,
     );

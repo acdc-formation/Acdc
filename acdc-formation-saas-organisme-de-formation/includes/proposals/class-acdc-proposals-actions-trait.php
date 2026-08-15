@@ -529,8 +529,9 @@ trait Acdc_Proposals_Actions_Trait {
     /* Corps email */
     $formation_title = $proposal->formation_title ?: 'Formation professionnelle';
     $total_hours     = (int) $proposal->formation_days * (int) $proposal->formation_hours_per_day;
-    $company_profile = get_option( 'acdc_of_company_profile', array() );
-    $acdc_name       = ! empty( $company_profile['company_name'] ) ? $company_profile['company_name'] : 'ACDC Formation';
+    /* ACDC 3.25.290 — « company_name » n'existe pas dans la fiche : le nom de
+       l'organisme dans cet e-mail était donc toujours celui écrit en dur. */
+    $acdc_name       = $this->acdc_org_identity()['raison_sociale'];
 
     /* Bouton d'accès à la proposition HTML */
     $cta_html = '<p style="text-align:center;margin:28px 0;">'

@@ -14780,8 +14780,13 @@ public function render_admin_configuration_page() {
               <div class="acdc-form-field"><label>Site web</label><input type="url" name="branding[website]" value="<?php echo esc_attr( $text( 'website', home_url( '/' ) ) ); ?>"></div>
               <div class="acdc-form-field"><label>Téléphone</label><input type="text" name="branding[phone]" value="<?php echo esc_attr( $text( 'phone' ) ); ?>"></div>
               <div class="acdc-form-field"><label>E-mail</label><input type="email" name="branding[email]" value="<?php echo esc_attr( $text( 'email' ) ); ?>"></div>
-              <div class="acdc-form-field"><label>NDA</label><input type="text" name="branding[nda]" value="<?php echo esc_attr( $text( 'nda', '93 83 08347 83' ) ); ?>"></div>
-              <div class="acdc-form-field"><label>SIRET</label><input type="text" name="branding[siret]" value="<?php echo esc_attr( $text( 'siret', '405 109 901 00042' ) ); ?>" placeholder="405 109 901 00042"></div>
+              <?php /* ACDC 3.25.290 — Ces deux champs se remplissaient tout seuls
+                       avec le SIRET et le NDA écrits en dur : les vider n'avait
+                       aucun effet, ils revenaient au rechargement. La fiche
+                       entreprise fait foi ; ce formulaire ne propose plus rien
+                       de lui-même. */ ?>
+              <div class="acdc-form-field"><label>NDA</label><input type="text" name="branding[nda]" value="<?php echo esc_attr( $text( 'nda', '' ) ); ?>" placeholder="repris de la fiche entreprise"></div>
+              <div class="acdc-form-field"><label>SIRET</label><input type="text" name="branding[siret]" value="<?php echo esc_attr( $text( 'siret', '' ) ); ?>" placeholder="repris de la fiche entreprise"></div>
               <div class="acdc-form-field acdc-form-field-full"><label>Adresse</label><input type="text" name="branding[address]" value="<?php echo esc_attr( $text( 'address' ) ); ?>"></div>
               <div class="acdc-form-field"><label>Code postal</label><input type="text" name="branding[postal_code]" value="<?php echo esc_attr( $text( 'postal_code' ) ); ?>"></div>
               <div class="acdc-form-field"><label>Ville</label><input type="text" name="branding[city]" value="<?php echo esc_attr( $text( 'city' ) ); ?>"></div>
@@ -15618,7 +15623,11 @@ private function acdc_build_nad_apprenant_pdf_html( $nad ) {
 
   $logo_url = '';
   if ( ! empty( $pdf_assets['logo_url'] ) )      { $logo_url = (string) $pdf_assets['logo_url']; }
-  elseif ( ! empty( $profile['pdf_logo_url'] ) ) { $logo_url = (string) $profile['pdf_logo_url']; }
+  /* ACDC 3.25.290 — « pdf_logo_url » existe, mais dans la fiche MARQUE, pas
+     dans la fiche entreprise : ce test interrogeait la mauvaise fiche et ne
+     s'est jamais exécuté. Le petit logo réservé aux PDF était donc réglable
+     sans effet. */
+  elseif ( ! empty( $this->get_branding_options()['pdf_logo_url'] ) ) { $logo_url = (string) $this->get_branding_options()['pdf_logo_url']; }
   elseif ( ! empty( $profile['logo_url'] ) )     { $logo_url = (string) $profile['logo_url']; }
   else { $logo_url = 'https://acdcformation.com/wp-content/uploads/2026/03/Logo-ACDC.png'; }
 
@@ -15697,20 +15706,22 @@ private function acdc_build_nad_apprenant_pdf_html( $nad ) {
     );
   }
 
+  /* ACDC 3.25.290 — « company_name », « tagline », « address2 », « zip »,
+     « siret », « nda », « email », « phone », « website » : aucune de ces clés
+     n'existe dans la fiche entreprise. Ce PDF affichait donc toujours ses
+     valeurs de repli — jusqu'au code postal et à la ville, écrits en dur au
+     milieu de l'adresse. */
+  $__id = $this->acdc_org_identity();
   $data = array(
     'logo_url'        => $logo_url,
-    'org_name'        => ! empty( $profile['company_name'] ) ? $profile['company_name'] : 'ACDC - Formation',
-    'org_sub'         => ! empty( $profile['tagline'] )      ? $profile['tagline']      : 'Azur Compétences Développement & Conseil',
-    'org_addr'        => array_filter( array(
-      ! empty( $profile['address'] )  ? (string) $profile['address']  : 'ACDC-Formation',
-      ! empty( $profile['address2'] ) ? (string) $profile['address2'] : '',
-      trim( ( ! empty( $profile['zip'] ) ? $profile['zip'] : '83310' ) . ' ' . ( ! empty( $profile['city'] ) ? $profile['city'] : 'Cogolin' ) ) . ' - France',
-    ) ),
-    'org_siret'       => ! empty( $profile['siret'] )   ? $profile['siret']   : '',
-    'org_nda'         => ! empty( $profile['nda'] )     ? $profile['nda']     : '',
-    'org_email'       => ! empty( $profile['email'] )   ? $profile['email']   : '',
-    'org_tel'         => ! empty( $profile['phone'] )   ? $profile['phone']   : '',
-    'org_web'         => ! empty( $profile['website'] ) ? $profile['website'] : '',
+    'org_name'        => $__id['raison_sociale'],
+    'org_sub'         => '',
+    'org_addr'        => \ACDC\Support\OrgIdentity::addressLines( $__id ),
+    'org_siret'       => $__id['siret'],
+    'org_nda'         => $__id['nda'],
+    'org_email'       => $__id['email'],
+    'org_tel'         => $__id['telephone'],
+    'org_web'         => \ACDC\Support\OrgIdentity::siteAffiche( $__id ),
     'learner_name'    => $learner_name,
     'learner_email'   => $learner_email,
     'formation_title' => $formation_title,
@@ -15787,8 +15798,9 @@ private function acdc_build_need_pdf_html( $need, $source_prospect_id = 0, $clie
   $logo_url = '';
   if ( ! empty( $pdf_assets['logo_url'] ) ) {
     $logo_url = (string) $pdf_assets['logo_url'];
-  } elseif ( ! empty( $profile['pdf_logo_url'] ) ) {
-    $logo_url = (string) $profile['pdf_logo_url'];
+  } elseif ( ! empty( $this->get_branding_options()['pdf_logo_url'] ) ) {
+    /* ACDC 3.25.290 — Même correction : « pdf_logo_url » vit dans la fiche marque. */
+    $logo_url = (string) $this->get_branding_options()['pdf_logo_url'];
   } elseif ( ! empty( $profile['logo_url'] ) ) {
     $logo_url = (string) $profile['logo_url'];
   } else {
@@ -15823,21 +15835,23 @@ private function acdc_build_need_pdf_html( $need, $source_prospect_id = 0, $clie
   };
 
   /* ── Données passées au template ── */
+  /* ACDC 3.25.290 — « company_name », « tagline », « address2 », « zip »,
+     « siret », « nda », « email », « phone », « website » : aucune de ces clés
+     n'existe dans la fiche entreprise. Ce PDF affichait donc toujours ses
+     valeurs de repli — jusqu'au code postal et à la ville, écrits en dur au
+     milieu de l'adresse. */
+  $__id = $this->acdc_org_identity();
   $data = array(
     'logo_url'          => $logo_url,
     'signature_url'     => $signature_url,
-    'org_name'          => ! empty( $profile['company_name'] ) ? $profile['company_name'] : 'ACDC - Formation',
-    'org_sub'           => ! empty( $profile['tagline'] )      ? $profile['tagline']      : 'Azur Compétences Développement & Conseil',
-    'org_addr'          => array_filter( array(
-      ! empty( $profile['address'] )  ? (string) $profile['address']  : 'ACDC-Formation',
-      ! empty( $profile['address2'] ) ? (string) $profile['address2'] : '',
-      trim( ( ! empty( $profile['zip'] ) ? $profile['zip'] : '83310' ) . ' ' . ( ! empty( $profile['city'] ) ? $profile['city'] : 'Cogolin' ) ) . ' - France',
-    ) ),
-    'org_siret'         => ! empty( $profile['siret'] )   ? $profile['siret']   : '405109901 00042',
-    'org_nda'           => ! empty( $profile['nda'] )     ? $profile['nda']     : '93 83 08347 83',
-    'org_email'         => ! empty( $profile['email'] )   ? $profile['email']   : 'contact@acdc-formation.com',
-    'org_tel'           => ! empty( $profile['phone'] )   ? $profile['phone']   : '06 78 26 91 10',
-    'org_web'           => ! empty( $profile['website'] ) ? $profile['website'] : 'acdc-formation.com',
+    'org_name'          => $__id['raison_sociale'],
+    'org_sub'           => '',
+    'org_addr'          => \ACDC\Support\OrgIdentity::addressLines( $__id ),
+    'org_siret'         => $__id['siret'],
+    'org_nda'           => $__id['nda'],
+    'org_email'         => $__id['email'],
+    'org_tel'           => $__id['telephone'],
+    'org_web'           => \ACDC\Support\OrgIdentity::siteAffiche( $__id ),
     'company_name'      => $company_name,
     'contact_name'      => $contact_name,
     'theme'             => ! empty( $need->theme )              ? (string) $need->theme              : '',

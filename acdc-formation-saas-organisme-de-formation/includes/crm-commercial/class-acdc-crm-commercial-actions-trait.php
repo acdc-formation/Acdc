@@ -653,12 +653,10 @@ public function handle_save_prospect_rdv() {
       $mode_html = '<p style="font-size:18px;line-height:1.7;margin:30px 0 0;"><strong>Modalité du rendez-vous :</strong> Nous vous appellerons à la date et à l’heure convenues.</p>';
       break;
     case 'au_bureau':
-      $branding_rdv  = $this->get_branding_options();
-      $acdc_addr_rdv = trim(
-        ( ! empty( $branding_rdv['address'] )     ? (string) $branding_rdv['address']     : '7 avenue Paul Cézanne' ) . ', ' .
-        ( ! empty( $branding_rdv['postal_code'] ) ? (string) $branding_rdv['postal_code'] : '83310' ) . ' ' .
-        ( ! empty( $branding_rdv['city'] )        ? (string) $branding_rdv['city']        : 'Cogolin' )
-      );
+      /* ACDC 3.25.290 — L'adresse du rendez-vous avait les anciens locaux en
+         repli : un prospect pouvait être convoqué à une adresse que l'on ne
+         pilotait plus depuis les réglages. */
+      $acdc_addr_rdv = \ACDC\Support\OrgIdentity::addressLine( $this->acdc_org_identity(), ', ' );
       $comment_text = 'Rendez-vous dans nos bureaux — ' . $acdc_addr_rdv . '.';
       $mode_html = '<p style="font-size:18px;line-height:1.7;margin:30px 0 0;"><strong>Modalité du rendez-vous :</strong> Le rendez-vous aura lieu dans nos bureaux, au ' . esc_html( $acdc_addr_rdv ) . '.</p>';
       break;

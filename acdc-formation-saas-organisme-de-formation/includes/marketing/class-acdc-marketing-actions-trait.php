@@ -143,7 +143,7 @@ trait ACDC_Marketing_Actions_Trait {
     $input = isset( $_POST['marketing_settings'] ) && is_array( $_POST['marketing_settings'] ) ? wp_unslash( $_POST['marketing_settings'] ) : array();
     $settings = $this->get_marketing_store( 'settings', array() );
     $settings['sender_name'] = isset( $input['sender_name'] ) ? sanitize_text_field( $input['sender_name'] ) : 'ACDC-Formation';
-    $settings['sender_email'] = isset( $input['sender_email'] ) ? sanitize_email( $input['sender_email'] ) : 'contact@acdc-formation.com';
+    $settings['sender_email'] = isset( $input['sender_email'] ) ? sanitize_email( $input['sender_email'] ) : $this->acdc_org_identity()['email'];
     $settings['reply_to'] = isset( $input['reply_to'] ) ? sanitize_email( $input['reply_to'] ) : $settings['sender_email'];
     $settings['queue_threshold'] = isset( $input['queue_threshold'] ) ? max( 1, absint( $input['queue_threshold'] ) ) : 20;
     $settings['limit_per_minute'] = isset( $input['limit_per_minute'] ) ? max( 1, absint( $input['limit_per_minute'] ) ) : 30;
@@ -157,7 +157,7 @@ trait ACDC_Marketing_Actions_Trait {
     $settings['unsubscribe_mode'] = isset( $input['unsubscribe_mode'] ) && in_array( $input['unsubscribe_mode'], array( 'category', 'global' ), true ) ? sanitize_key( $input['unsubscribe_mode'] ) : 'category';
     $settings['soft_bounce_limit'] = isset( $input['soft_bounce_limit'] ) ? max( 1, absint( $input['soft_bounce_limit'] ) ) : 3;
     $settings['hard_bounce_blacklist'] = ! empty( $input['hard_bounce_blacklist'] ) ? 1 : 0;
-    $settings['internal_notification_email'] = isset( $input['internal_notification_email'] ) ? sanitize_email( $input['internal_notification_email'] ) : 'contact@acdc-formation.com';
+    $settings['internal_notification_email'] = isset( $input['internal_notification_email'] ) ? sanitize_email( $input['internal_notification_email'] ) : $this->acdc_org_identity()['email'];
     $settings['scheduler_enabled'] = ! empty( $input['scheduler_enabled'] ) ? 1 : 0;
     $settings['scheduler_retry_lag'] = isset( $input['scheduler_retry_lag'] ) ? max( 1, absint( $input['scheduler_retry_lag'] ) ) : 15;
     $settings['retention_mode'] = isset( $input['retention_mode'] ) && in_array( $input['retention_mode'], array( 'archive_only', 'manual_delete', 'anonymize' ), true ) ? sanitize_key( $input['retention_mode'] ) : 'archive_only';
@@ -474,7 +474,7 @@ trait ACDC_Marketing_Actions_Trait {
       $headers[] = 'Content-Type: text/html; charset=UTF-8';
     }
     if ( ! empty( $entry['from_email'] ) ) {
-      $from_name = ! empty( $entry['from_name'] ) ? $entry['from_name'] : 'ACDC-Formation';
+      $from_name = ! empty( $entry['from_name'] ) ? $entry['from_name'] : $this->acdc_expediteur_organisme();
       $headers[] = 'From: ' . $from_name . ' <' . $entry['from_email'] . '>';
     }
     if ( ! empty( $entry['reply_to'] ) ) {
@@ -497,7 +497,7 @@ trait ACDC_Marketing_Actions_Trait {
     }
     $sent = wp_mail(
       ! empty( $entry['to'] ) ? $entry['to'] : array(),
-      ! empty( $entry['subject'] ) ? $entry['subject'] : 'E-mail ACDC-Formation',
+      ! empty( $entry['subject'] ) ? $entry['subject'] : trim( 'E-mail ' . $this->acdc_org_identity()['raison_sociale'] ),
       ! empty( $entry['body'] ) ? $entry['body'] : '',
       $headers,
       ! empty( $entry['attachments'] ) ? (array) $entry['attachments'] : array()

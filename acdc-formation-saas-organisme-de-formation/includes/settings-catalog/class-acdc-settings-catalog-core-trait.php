@@ -29,7 +29,12 @@ trait ACDC_Settings_Catalog_Core_Trait {
       'first_name' => '',
       'last_name' => '',
       'vat_number' => '',
-      'activity_declaration_number' => '93 83 08347 83',
+      /* ACDC 3.25.290 — Ce champ portait le numéro de déclaration d'activité
+         en dur comme valeur par défaut : un champ vidé se remplissait tout
+         seul à la lecture suivante et l'ancien NDA revenait sur les documents.
+         La migration backfill_org_identity_from_code() a écrit la valeur dans
+         la fiche ; un champ vide reste désormais vide. */
+      'activity_declaration_number' => '',
       'inrs_number' => '',
       'draaf_number' => '',
       'apr_number' => '',
@@ -201,8 +206,8 @@ trait ACDC_Settings_Catalog_Core_Trait {
         'next_number' => '2',
         'restart_each_year' => 1,
         'validity_days' => 30,
-        'payment_terms' => "Règlement par virement bancaire, à l'édition de la facture.\nEn cas de retard de paiement, des pénalités seront exigibles au taux de 3 fois le taux d'intérêt légal.\nUne indemnité forfaitaire pour frais de recouvrement de 40 € sera due automatiquement (article L441-10 du Code de commerce).\nIBAN FR76 3000 4023 7500 0101 1397 203 - BIC BNPAFRPPXXX",
-        'special_mention' => "Ce devis est valable 30 jours à compter de sa date d'émission.\nLes prix indiqués sont exprimés en euros, hors taxes et toutes taxes comprises (HT et TTC).\nTVA au taux en vigueur.\nOrganisme de formation ACDC Formation, certifié Qualiopi au titre de ses actions de formation.\nDéclaration d'activité enregistrée sous le numéro 93 83 08347 83 auprès du préfet de région Provence-Alpes-Côte d'Azur.\nNos conditions générales de vente s'appliquent.",
+        'payment_terms' => "Règlement par virement bancaire, à l'édition de la facture.\nEn cas de retard de paiement, des pénalités seront exigibles au taux de 3 fois le taux d'intérêt légal.\nUne indemnité forfaitaire pour frais de recouvrement de 40 € sera due automatiquement (article L441-10 du Code de commerce).\nIBAN [IBAN] - BIC [BIC]",
+        'special_mention' => "Ce devis est valable 30 jours à compter de sa date d'émission.\nLes prix indiqués sont exprimés en euros, hors taxes et toutes taxes comprises (HT et TTC).\nTVA au taux en vigueur.\nOrganisme de formation [RAISON SOCIALE], certifié Qualiopi au titre de ses actions de formation.\nDéclaration d'activité enregistrée sous le numéro [VOTRE NUMÉRO DE DÉCLARATION D'ACTIVITÉ] auprès du préfet de région Provence-Alpes-Côte d'Azur.\nNos conditions générales de vente s'appliquent.",
       ),
       'invoices' => array(
         'prefix' => 'FA-(annee)',
@@ -211,8 +216,8 @@ trait ACDC_Settings_Catalog_Core_Trait {
         'day_tag' => 'Jour',
         'next_number' => '5',
         'restart_each_year' => 1,
-        'payment_terms' => "Règlement par virement bancaire, à l'édition de la facture.\nEn cas de retard de paiement, des pénalités seront exigibles au taux de 3 fois le taux d'intérêt légal.\nUne indemnité forfaitaire pour frais de recouvrement de 40 € sera due automatiquement (article L441-10 du Code de commerce).\nIBAN FR76 3000 4023 7500 0101 1397 203 - BIC BNPAFRPPXXX",
-        'special_mention' => "Les prix indiqués sont exprimés en euros, hors taxes et toutes taxes comprises (HT et TTC).\nTVA au taux en vigueur.\nOrganisme de formation ACDC Formation – Déclaration d'activité enregistrée sous le n° 93 83 08347 83 auprès du préfet de région Provence-Alpes-Côte d'Azur.\nCertifié Qualiopi au titre des actions de formation.",
+        'payment_terms' => "Règlement par virement bancaire, à l'édition de la facture.\nEn cas de retard de paiement, des pénalités seront exigibles au taux de 3 fois le taux d'intérêt légal.\nUne indemnité forfaitaire pour frais de recouvrement de 40 € sera due automatiquement (article L441-10 du Code de commerce).\nIBAN [IBAN] - BIC [BIC]",
+        'special_mention' => "Les prix indiqués sont exprimés en euros, hors taxes et toutes taxes comprises (HT et TTC).\nTVA au taux en vigueur.\nOrganisme de formation [RAISON SOCIALE] – Déclaration d'activité enregistrée sous le n° [VOTRE NUMÉRO DE DÉCLARATION D'ACTIVITÉ] auprès du préfet de région Provence-Alpes-Côte d'Azur.\nCertifié Qualiopi au titre des actions de formation.",
       ),
       'credit_notes' => array(
         'prefix' => 'AV-(annee)',
@@ -220,7 +225,7 @@ trait ACDC_Settings_Catalog_Core_Trait {
         'month_tag' => 'Mois',
         'day_tag' => 'Jour',
         'payment_terms' => "L'avoir sera imputé automatiquement sur la prochaine facture.\nEn cas d'impossibilité, le remboursement sera effectué par virement bancaire dans un délai de 30 jours à compter de son émission.",
-        'special_mention' => "Montants exprimés HT et TTC avec application de la TVA au taux en vigueur.\nOrganisme de formation ACDC Formation – Déclaration d'activité enregistrée sous le 93 83 08347 83 auprès du préfet de région Provence-Alpes-Côte d'Azur.\nCertifié Qualiopi au titre des actions de formation.",
+        'special_mention' => "Montants exprimés HT et TTC avec application de la TVA au taux en vigueur.\nOrganisme de formation [RAISON SOCIALE] – Déclaration d'activité enregistrée sous le [VOTRE NUMÉRO DE DÉCLARATION D'ACTIVITÉ] auprès du préfet de région Provence-Alpes-Côte d'Azur.\nCertifié Qualiopi au titre des actions de formation.",
       ),
     );
     $stored   = get_option( 'acdc_of_billing_settings', array() );
@@ -229,21 +234,33 @@ trait ACDC_Settings_Catalog_Core_Trait {
     // Substitution du gabarit NDA par le vrai numéro (source unique : profil organisme,
     // repli sur le NDA officiel). Corrige aussi les mentions déjà enregistrées avec le
     // placeholder « [VOTRE NUMÉRO DE DÉCLARATION D'ACTIVITÉ] ».
-    $nda = '';
-    if ( method_exists( $this, 'get_company_profile_options' ) ) {
-      $profile = $this->get_company_profile_options();
-      $nda     = isset( $profile['activity_declaration_number'] ) ? trim( (string) $profile['activity_declaration_number'] ) : '';
-    }
-    if ( '' === $nda ) {
-      $nda = '93 83 08347 83';
-    }
+    /* ACDC 3.25.290 — Le repli écrivait le NDA en dur : la mention légale d'une
+       facture aurait donc continué d'annoncer l'ancien numéro de déclaration
+       d'activité après un changement d'entité. Sans NDA renseigné, la PHRASE
+       ENTIÈRE qui le porte disparaît — une déclaration annoncée « sous le
+       numéro » suivi de rien n'est pas une mention incomplète, c'est une
+       mention fausse. */
+    $identite  = $this->acdc_org_identity();
+    /* ACDC 3.25.290 — Les conditions de règlement par défaut portaient l'IBAN et
+       le BIC en toutes lettres. Un compte bancaire écrit dans le code, c'est un
+       virement qui part sur l'ancien compte le jour où l'entité change ; sans
+       coordonnées renseignées, la ligne disparaît. */
+    $__fiche_banque = get_option( 'acdc_of_company_profile', array() );
+    $marqueurs = array(
+      "[VOTRE NUMÉRO DE DÉCLARATION D'ACTIVITÉ]" => $identite['nda'],
+      '[VOTRE NUMÉRO DE DÉCLARATION D’ACTIVITÉ]' => $identite['nda'],
+      '[RAISON SOCIALE]'                         => $identite['raison_sociale'],
+      '[IBAN]'                                   => is_array( $__fiche_banque ) && ! empty( $__fiche_banque['bank_iban'] ) ? (string) $__fiche_banque['bank_iban'] : '',
+      '[BIC]'                                    => is_array( $__fiche_banque ) && ! empty( $__fiche_banque['bank_bic'] ) ? (string) $__fiche_banque['bank_bic'] : '',
+    );
     foreach ( array( 'quotes', 'invoices', 'credit_notes' ) as $scope_key ) {
-      if ( isset( $settings[ $scope_key ]['special_mention'] ) && is_string( $settings[ $scope_key ]['special_mention'] ) ) {
-        $settings[ $scope_key ]['special_mention'] = str_replace(
-          array( "[VOTRE NUMÉRO DE DÉCLARATION D'ACTIVITÉ]", '[VOTRE NUMÉRO DE DÉCLARATION D’ACTIVITÉ]' ),
-          $nda,
-          $settings[ $scope_key ]['special_mention']
-        );
+      foreach ( array( 'special_mention', 'payment_terms' ) as $__champ ) {
+        if ( isset( $settings[ $scope_key ][ $__champ ] ) && is_string( $settings[ $scope_key ][ $__champ ] ) ) {
+          $settings[ $scope_key ][ $__champ ] = self::acdc_appliquer_marqueurs( $settings[ $scope_key ][ $__champ ], $marqueurs );
+        }
+      }
+      if ( ! isset( $settings[ $scope_key ]['special_mention'] ) || ! is_string( $settings[ $scope_key ]['special_mention'] ) ) {
+        continue;
       }
     }
     return $settings;
@@ -401,22 +418,59 @@ trait ACDC_Settings_Catalog_Core_Trait {
   }
 
 
+/**
+ * Remplace les marqueurs d'un texte de réglage, et retire les lignes orphelines.
+ *
+ * ACDC 3.25.290. Une mention légale ou une condition de règlement qui annonce
+ * « sous le numéro » ou « IBAN » suivi de rien n'est pas incomplète : elle est
+ * fausse. La ligne entière disparaît donc avec sa valeur.
+ *
+ * @param string $texte
+ * @param array<string,string> $marqueurs
+ * @return string
+ */
+private static function acdc_appliquer_marqueurs( $texte, $marqueurs ) {
+  $gardees = array();
+  foreach ( explode( "\n", (string) $texte ) as $ligne ) {
+    $abandon = false;
+    foreach ( $marqueurs as $marqueur => $valeur ) {
+      if ( false !== strpos( $ligne, $marqueur ) && '' === $valeur ) {
+        $abandon = true;
+        break;
+      }
+    }
+    if ( ! $abandon ) {
+      $gardees[] = str_replace( array_keys( $marqueurs ), array_values( $marqueurs ), $ligne );
+    }
+  }
+  return implode( "\n", $gardees );
+}
+
 private function get_branding_defaults() {
   return array(
     'logo_url' => '',
     'favicon_url' => '',
     'display_name' => 'ACDC Formation SAAS',
     'sidebar_subtitle' => 'Organisme de formation',
-    'company_name' => 'ACDC Formation',
-    'address' => '7 avenue Paul Cézanne',
-    'postal_code' => '83310',
-    'city' => 'Cogolin',
-    'country' => 'France',
-    'phone' => '06 78 26 91 10',
-    'email' => 'contact@acdc-formation.com',
-    'website' => 'https://acdc-formation.com/',
-    'siret' => '405 109 901 00042',
-    'nda' => '93 83 08347 83',
+    /* ACDC 3.25.290 — Ces huit valeurs par défaut étaient l'identité de
+       l'organisme, écrite dans le code. Elles se réinjectaient à chaque lecture
+       d'un champ vide, ce qui rendait impossible d'abandonner une ancienne
+       adresse ou un ancien numéro. La migration backfill_org_identity_from_code()
+       les a écrites une fois dans la fiche entreprise, où elles sont désormais
+       modifiables — et effaçables. */
+    'company_name' => '',
+    'address' => '',
+    'postal_code' => '',
+    'city' => '',
+    'country' => '',
+    'phone' => '',
+    'email' => '',
+    'website' => '',
+    /* ACDC 3.25.290 — Mêmes raisons : la fiche entreprise fait foi, la marque
+       n'est qu'un secours, et un secours ne doit pas ressusciter une identité
+       que l'on vient d'abandonner. */
+    'siret' => '',
+    'nda' => '',
     'font_family' => 'Rubik, Arial, system-ui, sans-serif',
     'font_weight' => '500',
     'line_height' => '1.5',

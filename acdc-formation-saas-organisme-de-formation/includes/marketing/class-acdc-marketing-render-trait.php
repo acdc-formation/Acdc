@@ -1938,10 +1938,13 @@ trait ACDC_Marketing_Render_Trait {
 
 
   private function render_front_marketing_settings_tab() {
+    /* ACDC 3.25.290 — Cet écran proposait un expéditeur écrit en dur, différent
+       du reste du plugin : la fiche entreprise décide, ici comme ailleurs. */
+    $__id_mk = $this->acdc_org_identity();
     $settings_defaults = array(
-      'sender_name' => 'ACDC-Formation',
-      'sender_email' => 'contact@acdc-formation.com',
-      'reply_to' => 'contact@acdc-formation.com',
+      'sender_name' => $__id_mk['raison_sociale'],
+      'sender_email' => $__id_mk['email'],
+      'reply_to' => $__id_mk['email'],
       'queue_threshold' => 20,
       'limit_per_minute' => 30,
       'limit_per_hour' => 300,
@@ -1955,7 +1958,7 @@ trait ACDC_Marketing_Render_Trait {
       'smtp_mode' => 'wp_mail_smtp_status_only',
       'soft_bounce_limit' => 3,
       'hard_bounce_blacklist' => 1,
-      'internal_notification_email' => 'contact@acdc-formation.com',
+      'internal_notification_email' => $__id_mk['email'],
       'scheduler_enabled' => 1,
       'scheduler_retry_lag' => 15,
       'retention_mode' => 'archive_only',
@@ -3863,7 +3866,9 @@ trait ACDC_Marketing_Render_Trait {
       } ) );
     }
 
-    $acdc_email   = 'contact@acdc-formation.com';
+    /* ACDC 3.25.290 — Sert à distinguer, dans l'archive des envois, ce qui est
+       parti vers l'organisme lui-même : l'adresse vient donc de la fiche. */
+    $acdc_email   = $this->acdc_org_identity()['email'];
     $archive_dest = array();
     $archive_acdc = array();
     foreach ( $archive as $entry ) {
@@ -4008,7 +4013,7 @@ trait ACDC_Marketing_Render_Trait {
             </p>
             <p>
               <label>Nom affiché *</label>
-              <input type="text" name="sig[display_name]" value="<?php echo esc_attr( $v( 'display_name' ) ); ?>" required placeholder="ex : David Contal">
+              <input type="text" name="sig[display_name]" value="<?php echo esc_attr( $v( 'display_name' ) ); ?>" required placeholder="ex : Prénom Nom">
             </p>
             <p>
               <label>Titre / fonction</label>
@@ -4016,11 +4021,11 @@ trait ACDC_Marketing_Render_Trait {
             </p>
             <p>
               <label>Adresse e-mail *</label>
-              <input type="email" name="sig[email]" value="<?php echo esc_attr( $v( 'email' ) ); ?>" required placeholder="ex : david@acdc-formation.com">
+              <input type="email" name="sig[email]" value="<?php echo esc_attr( $v( 'email' ) ); ?>" required placeholder="ex : prenom@votre-organisme.fr">
             </p>
             <p>
               <label>Téléphone</label>
-              <input type="text" name="sig[phone]" value="<?php echo esc_attr( $v( 'phone' ) ); ?>" placeholder="ex : 06 78 26 91 10">
+              <input type="text" name="sig[phone]" value="<?php echo esc_attr( $v( 'phone' ) ); ?>" placeholder="ex : 06 00 00 00 00">
             </p>
             <p>
               <label>Nom de l'organisme</label>
@@ -4032,7 +4037,7 @@ trait ACDC_Marketing_Render_Trait {
             </p>
             <p>
               <label>Adresse postale</label>
-              <input type="text" name="sig[address]" value="<?php echo esc_attr( $v( 'address', '7, avenue Paul Cézanne - 83310 - Cogolin' ) ); ?>">
+              <input type="text" name="sig[address]" value="<?php echo esc_attr( $v( 'address', \ACDC\Support\OrgIdentity::addressLine( $this->acdc_org_identity(), ' - ' ) ) ); ?>">
             </p>
             <p>
               <label>URL de la photo (médiathèque WP)</label>

@@ -282,13 +282,18 @@ trait ACDC_Documents_Billing_Core_Trait {
     $branding  = $this->get_branding_options();
     $params    = method_exists( $this, 'get_contract_params_options' ) ? $this->get_contract_params_options() : array();
     $company_profile = get_option( 'acdc_of_company_profile', array() );
-    // NDA : profil organisme → identité (branding) → repli sur le NDA officiel (jamais vide).
-    $nda       = ! empty( $company_profile['activity_declaration_number'] ) ? (string) $company_profile['activity_declaration_number']
-               : ( ! empty( $branding['nda'] ) ? (string) $branding['nda'] : '93 83 08347 83' );
-    $siret     = ! empty( $branding['siret'] ) ? (string) $branding['siret'] : '405 109 901 00042';
-    $org_name  = ! empty( $branding['company_name'] ) ? (string) $branding['company_name'] : 'ACDC Formation';
-    $org_addr  = trim( ( $branding['address'] ?? '' ) . ', ' . ( $branding['postal_code'] ?? '' ) . ' ' . ( $branding['city'] ?? '' ) );
-    $logo_url  = ! empty( $branding['logo_url'] ) ? (string) $branding['logo_url'] : 'https://acdcformation.com/wp-content/uploads/2026/03/Logo-ACDC.png';
+    /* ACDC 3.25.290 — Le NDA venait de la fiche, le SIRET et la raison sociale
+       de la marque, et les trois avaient un repli écrit en dur : une facture
+       pouvait donc mélanger deux identités, et continuer d'afficher l'ancienne
+       après un changement. Une seule source désormais, et rien quand c'est
+       vide — une mention légale creuse sur une facture se discute, une mention
+       absente se corrige. */
+    $identite  = $this->acdc_org_identity();
+    $nda       = $identite['nda'];
+    $siret     = $identite['siret'];
+    $org_name  = $identite['raison_sociale'];
+    $org_addr  = \ACDC\Support\OrgIdentity::addressLine( $identite, ', ' );
+    $logo_url  = ! empty( $branding['logo_url'] ) ? (string) $branding['logo_url'] : '';
 
     $tarif_ht  = (float) $q->tarif_ht;
     $vat_rate  = (float) $q->vat_rate;
@@ -663,8 +668,11 @@ trait ACDC_Documents_Billing_Core_Trait {
       'currency'    => 'EUR',
       'type_code'   => in_array( (string) $type_code, array( '380', '381' ), true ) ? (string) $type_code : '380',
       'seller'      => array(
-        'name'    => ! empty( $branding['company_name'] ) ? (string) $branding['company_name'] : 'ACDC Formation',
-        'siret'   => ! empty( $branding['siret'] ) ? preg_replace( '/\D/', '', (string) $branding['siret'] ) : '',
+        /* ACDC 3.25.290 — Le vendeur d'une facture électronique lisait la fiche
+           marque avec un nom en dur en repli : la mention transmise à
+           l'administration pouvait donc être l'ancienne entité. */
+        'name'    => $this->acdc_org_identity()['raison_sociale'],
+        'siret'   => preg_replace( '/\D/', '', $this->acdc_org_identity()['siret'] ),
         'vat'     => $vat,
         'country' => 'FR',
       ),
@@ -1235,8 +1243,15 @@ trait ACDC_Documents_Billing_Core_Trait {
       if ( empty( $row['location'] ) ) { $row['location'] = trim( $row['formation_address'] . ', ' . $row['formation_postal_code'] . ' ' . $row['formation_city'] ); }
       if ( empty( $row['description_modalite'] ) ) { $row['description_modalite'] = $row['scope_label'] . ' — ' . $row['format']; }
       if ( empty( $row['payment_methods'] ) ) { $row['payment_methods'] = "Règlement par virement bancaire à l’édition de la facture. En cas de retard, pénalités au taux légal majoré et indemnité forfaitaire de 40 € pour frais de recouvrement."; }
-      if ( empty( $row['iban'] ) ) { $row['iban'] = 'FR76 3000 4023 7500 0101 1397 203'; }
-      if ( empty( $row['bic'] ) ) { $row['bic'] = 'BNPAFRPPXXX'; }
+      /* ACDC 3.25.290 — Ces deux replis écrivaient un compte bancaire en dur sur
+         une facture dont les coordonnées n'étaient pas renseignées. On les prend
+         désormais dans la fiche entreprise, et à défaut on n'affiche rien : un
+         IBAN faux est infiniment pire qu'un IBAN manquant. */
+      if ( empty( $row['iban'] ) || empty( $row['bic'] ) ) {
+        $__fiche = get_option( 'acdc_of_company_profile', array() );
+        if ( empty( $row['iban'] ) && ! empty( $__fiche['bank_iban'] ) ) { $row['iban'] = (string) $__fiche['bank_iban']; }
+        if ( empty( $row['bic'] ) && ! empty( $__fiche['bank_bic'] ) )   { $row['bic']  = (string) $__fiche['bank_bic']; }
+      }
       if ( empty( $row['validity_days'] ) ) { $row['validity_days'] = '30'; }
       $row['tarif_ht_number'] = $this->normalize_price_number( isset( $row['tarif_ht_value'] ) ? $row['tarif_ht_value'] : $row['tarif_ht'] );
       $row['tarif_ttc_number'] = $this->normalize_price_number( isset( $row['tarif_ttc_value'] ) ? $row['tarif_ttc_value'] : $row['tarif_ttc'] );
@@ -2015,9 +2030,9 @@ trait ACDC_Documents_Billing_Core_Trait {
     <div class="header">
       <div class="brand">
         <img src="<?php echo $logo_data_uri ?: 'https://acdcformation.com/wp-content/uploads/2026/03/Logo-ACDC.png'; ?>" alt="Logo ACDC-Formation" />
-        <div class="brand-text"><strong>ACDC-Formation</strong><span><?php echo esc_html( $doc_span ); ?></span></div>
+        <div class="brand-text"><strong><?php echo esc_html( $this->acdc_org_identity()['raison_sociale'] ); ?></strong><span><?php echo esc_html( $doc_span ); ?></span></div>
       </div>
-      <div class="company"><strong>ACDC-Formation</strong><br />7 avenue Paul Cézanne<br />83310 Cogolin - France<br />Siret : 405109901 00042<br />NDA : 93 83 08347 83</div>
+      <div class="company"><?php echo implode( '<br />', array_map( 'esc_html', \ACDC\Support\OrgIdentity::blockLines( $this->acdc_org_identity() ) ) ); ?></div>
     </div>
     <div class="top-grid">
       <div class="box"><div class="box-title"><?php echo esc_html( $addressee_title ); ?></div><div class="client-lines">Nom / Société : <?php echo esc_html( $addressee_name ); ?><br />Adresse : <?php echo esc_html( $addressee_addr ); ?><br />Code postal / Ville : <?php echo esc_html( $addressee_city ); ?><br /><?php if ( $billed_to_funder ) : ?>Bénéficiaire : <?php echo esc_html( $beneficiary ); ?><?php else : ?>Contact : <?php echo esc_html( $client_contact ); ?><?php endif; ?></div></div>
@@ -2050,9 +2065,12 @@ trait ACDC_Documents_Billing_Core_Trait {
       <tbody><tr><td class="designation"><?php echo nl2br( esc_html( $designation ) ); ?></td><td><?php echo esc_html( $quantity ); ?></td><td><?php echo esc_html( $tot_ht ); ?></td><td><?php echo esc_html( $vat_rate ); ?></td><td><?php echo esc_html( $tot_ht ); ?></td></tr></tbody>
     </table>
     <div class="totals"><div class="total-row"><div><strong>Total HT (€)</strong></div><div><?php echo esc_html( $tot_ht ); ?> €</div></div><div class="total-row"><div><strong>Total TVA (€)</strong></div><div><?php echo esc_html( $tva_total ); ?> €</div></div><div class="total-row grand"><div><strong>Total TTC (€)</strong></div><div><?php echo esc_html( $tot_ttc ); ?> €</div></div></div>
-    <div class="notes"><p><?php echo nl2br( esc_html( $methods ) ); ?></p><p class="bank">IBAN : <?php echo esc_html( $row['iban'] ?? 'FR76 3000 4023 7500 0101 1397 203' ); ?> &nbsp;&nbsp; BIC : <?php echo esc_html( $row['bic'] ?? 'BNPAFRPPXXX' ); ?></p><p>Prix exprimés en euros HT et TTC. TVA au taux en vigueur. Organisme de formation ACDC-Formation. CGV applicables.</p></div>
+    <div class="notes"><p><?php echo nl2br( esc_html( $methods ) ); ?></p><?php /* ACDC 3.25.290 — Un IBAN de repli écrit en dur sur une facture, c'est
+         un virement qui part sur l'ancien compte le jour où l'entité change.
+         Sans coordonnées bancaires renseignées, la ligne disparaît. */ ?>
+    <?php if ( ! empty( $row['iban'] ) || ! empty( $row['bic'] ) ) : ?><p class="bank">IBAN : <?php echo esc_html( $row['iban'] ?? '' ); ?> &nbsp;&nbsp; BIC : <?php echo esc_html( $row['bic'] ?? '' ); ?></p><?php endif; ?><p>Prix exprimés en euros HT et TTC. TVA au taux en vigueur.<?php $__rs = $this->acdc_org_identity()['raison_sociale']; echo '' !== $__rs ? ' Organisme de formation ' . esc_html( $__rs ) . '.' : ''; ?> CGV applicables.</p></div>
     <div class="signature-zone"><div></div><div class="sign-box"><?php if ( ! empty( $sig_data_uri_t2 ) ) : ?><img src="<?php echo $sig_data_uri_t2; ?>" alt="Signature" style="position:absolute; right:2mm; bottom:-8mm; height:28mm; width:auto; object-fit:contain; opacity:0.95; z-index:3;" /><?php endif; ?>Signature / cachet</div></div>
-    <div class="footer">7 avenue Paul Cézanne - 83310 Cogolin - France - Siret : 405109901 00042 - NDA : 93 83 08347 83<br />e-mail : contact@acdc-formation.com - Tél : 06 78 26 91 10 - site web : acdc-formation.com</div>
+    <div class="footer"><?php $__id = $this->acdc_org_identity(); echo esc_html( \ACDC\Support\OrgIdentity::footerLine( $__id ) ); ?><br /><?php echo esc_html( \ACDC\Support\OrgIdentity::contactLine( $__id ) ); ?></div>
   </div>
 </body>
 </html>
