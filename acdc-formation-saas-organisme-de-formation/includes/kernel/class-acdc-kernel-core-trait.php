@@ -5409,9 +5409,75 @@ dbDelta( $sql_companies );
   }
 
   /**
+   * Le nom d'une formation, partout où on la choisit ou on la lit.
+   *
+   * ACDC 3.25.277 — Point d'entrée unique. Il en existait quatre, divergents,
+   * et trois écrans qui n'écrivaient que l'intitulé nu : deux fiches du même
+   * nom, l'une en présentiel l'autre en distanciel, s'y présentaient comme deux
+   * lignes rigoureusement identiques. La règle est désormais dans
+   * \ACDC\Support\FormationLabel, où elle se vérifie sans base de données.
+   *
+   * @param object|array|null $formation Ligne de acdc_of_formations.
+   * @return string « CODE | Intitulé (Modalité) », segments vides omis.
+   */
+  public function acdc_formation_choice_label( $formation ) {
+    return \ACDC\Support\FormationLabel::fromRow( $formation );
+  }
+
+  /**
+   * La cellule « Formation » d'un tableau, modalité comprise.
+   *
+   * ACDC 3.25.277 — Les tableaux (séances, dossiers, résultats, extranets) ne
+   * lisent pas la fiche formation : leur requête ne ramène qu'un
+   * `formation_title` par jointure. Deux séances de la même formation, l'une en
+   * présentiel l'autre en distanciel, s'y affichaient donc sur deux lignes
+   * portant exactement le même nom. Les requêtes ramènent désormais aussi
+   * `formation_modality`, et cette fonction compose la cellule.
+   *
+   * Elle rend le tiret cadratin quand il n'y a rien à écrire : une cellule vide
+   * dans un tableau se lit comme une colonne cassée, pas comme une donnée
+   * absente.
+   *
+   * @param object|array|null $row      Ligne de résultat portant formation_title.
+   * @param string            $fallback Ce qu'on écrit quand la formation manque.
+   * @return string
+   */
+  /**
+   * Le format d'une séance : le sien, à défaut celui de sa formation.
+   *
+   * ACDC 3.25.277 — Une séance porte sa propre colonne `session_format`, très
+   * souvent vide : personne ne la ressaisit quand la formation la déclare
+   * déjà. La feuille d'émargement le savait et retombait sur la modalité de la
+   * formation ; les tableaux de séances, eux, affichaient un tiret. La règle
+   * était donc juste à un endroit et absente ailleurs — recopiée nulle part,
+   * appelée nulle part.
+   *
+   * @param object|array|null $session Ligne portant session_format, et si
+   *                                   possible formation_modality.
+   * @return string
+   */
+  public function acdc_session_format_label( $session ) {
+    $row = is_object( $session ) ? get_object_vars( $session ) : ( is_array( $session ) ? $session : array() );
+    foreach ( array( 'session_format', 'formation_modality', 'modality' ) as $key ) {
+      if ( isset( $row[ $key ] ) && is_scalar( $row[ $key ] ) && '' !== trim( (string) $row[ $key ] ) ) {
+        return \ACDC\Support\FormationLabel::modality( (string) $row[ $key ] );
+      }
+    }
+    return '—';
+  }
+
+  public function acdc_formation_cell( $row, $fallback = '—' ) {
+    $label = \ACDC\Support\FormationLabel::fromJoinedRow( $row );
+    return '' !== $label ? $label : $fallback;
+  }
+
+  /**
    * ACDC hotfix63 — Label formation pour les menus déroulants.
    * Format : "1 Titre" pour la formation mère, "1.1 Titre" pour une variante.
-   * Utilisé partout dans le plugin pour garantir la cohérence.
+   *
+   * ACDC 3.25.277 — Le repère numérique est conservé (huit écrans l'affichent
+   * depuis toujours, le retirer en passant serait une perte silencieuse) mais
+   * la modalité vient désormais s'ajouter derrière, comme partout ailleurs.
    *
    * @param object $formation  Ligne de acdc_of_formations.
    * @return string
@@ -5421,7 +5487,11 @@ dbDelta( $sql_companies );
       $code = $is_variant
           ? (int) $formation->base_formation_id . '.' . (int) $formation->variant_number
           : (string) (int) $formation->id;
-      return $code . ' ' . (string) $formation->title;
+      return \ACDC\Support\FormationLabel::prefixed(
+          $code,
+          isset( $formation->title ) ? (string) $formation->title : '',
+          isset( $formation->modality ) ? (string) $formation->modality : ''
+      );
   }
 
   private function get_formations( $args = array() ) {
@@ -7677,16 +7747,10 @@ dbDelta( $sql_companies );
    * La valeur de l'option reste toujours l'id réel de la formation.
    */
   private function build_formation_option_label( $f ) {
-    /* Calcul du numéro affiché */
-    if ( ! empty( $f->base_formation_id ) && (int) $f->base_formation_id > 0 ) {
-      $num = (int) $f->base_formation_id . '.' . (int) $f->variant_number;
-    } else {
-      $num = (string) (int) $f->id;
-    }
-    $parts = array( $num . ' ' . (string) $f->title );
-    if ( ! empty( $f->modality ) ) {
-      $parts[] = (string) $f->modality;
-    }
+    /* ACDC 3.25.277 — Le numéro, le nom et la modalité viennent de la règle
+       commune ; le prix reste propre à ces deux écrans commerciaux, où il aide
+       à choisir. */
+    $parts = array( $this->format_formation_option_label( $f ) );
     if ( ! empty( $f->price_ht ) ) {
       $price = trim( (string) $f->price_ht );
       if ( strpos( $price, '€' ) === false && strpos( $price, 'EUR' ) === false ) {
@@ -8461,7 +8525,7 @@ dbDelta( $sql_companies );
     return $blocks;
   }  private function get_groups() {
     global $wpdb;
-    $sql = "SELECT g.*, f.title AS formation_title, s.start_date, s.end_date
+    $sql = "SELECT g.*, f.title AS formation_title, f.modality AS formation_modality, s.start_date, s.end_date
         FROM {$this->group_table} g
         LEFT JOIN {$this->formation_table} f ON f.id = g.formation_id
         LEFT JOIN {$this->session_table} s ON s.id = g.session_id
@@ -8469,7 +8533,7 @@ dbDelta( $sql_companies );
     return $wpdb->get_results( $sql );
   }  private function get_group( $id ) {
     global $wpdb;
-    $sql = "SELECT g.*, f.title AS formation_title, s.start_date, s.end_date
+    $sql = "SELECT g.*, f.title AS formation_title, f.modality AS formation_modality, s.start_date, s.end_date
         FROM {$this->group_table} g
         LEFT JOIN {$this->formation_table} f ON f.id = g.formation_id
         LEFT JOIN {$this->session_table} s ON s.id = g.session_id

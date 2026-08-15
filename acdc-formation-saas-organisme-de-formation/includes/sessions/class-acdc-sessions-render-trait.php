@@ -193,7 +193,14 @@ trait ACDC_Sessions_Render_Trait {
                   <?php if ( ! empty( $entry->formation_code ) ) : ?><small><?php echo esc_html( $entry->formation_code ); ?></small><?php endif; ?>
                 </td>
                 <td><?php echo esc_html( $entry->trainer_display_name ); ?></td>
-                <td><?php echo esc_html( ! empty( $entry->session_format ) ? $entry->session_format : '—' ); ?></td>
+                <?php /* ACDC 3.25.277 — La colonne « Format » retombe sur la
+                         modalité de la formation quand la séance n'en déclare
+                         pas. La règle existait déjà — la feuille d'émargement
+                         la tient depuis toujours — mais elle n'avait pas été
+                         appelée ici : la colonne affichait un tiret, et deux
+                         séances de la même formation devenaient impossibles à
+                         distinguer. */ ?>
+                <td><?php echo esc_html( $this->acdc_session_format_label( $entry ) ); ?></td>
                 <td><?php echo esc_html( ! empty( $entry->attendance_method ) ? $entry->attendance_method : '—' ); ?></td>
                 <td><?php echo esc_html( $this->get_session_datetime_label( $entry ) ); ?></td>
                 <td><?php echo esc_html( $entry->location_display ); ?></td>
@@ -1099,7 +1106,11 @@ trait ACDC_Sessions_Render_Trait {
             <?php foreach ( $sessions as $entry ) : ?>
               <tr>
                 <td><?php echo esc_html( $entry->title ); ?></td>
-                <td><?php echo esc_html( $entry->formation_title ); ?></td>
+                <?php /* ACDC 3.25.277 — Ce tableau n'a pas de colonne « Format » :
+                         la modalité s'écrit donc dans la cellule Formation, sans
+                         quoi deux séances de la même formation en présentiel et
+                         en distanciel y tiennent la même ligne. */ ?>
+                <td><?php echo esc_html( ! empty( $entry->formation_title ) ? $this->acdc_formation_cell( $entry ) : '—' ); ?></td>
                 <td><?php echo esc_html( $entry->company_name ); ?></td>
                 <td><?php echo esc_html( $entry->start_date ); ?> → <?php echo esc_html( $entry->end_date ); ?></td>
                 <td><?php echo esc_html( $entry->status ); ?></td>
@@ -1146,7 +1157,7 @@ trait ACDC_Sessions_Render_Trait {
       }
       if ( empty( $session->formation_title ) || empty( $session->company_name ) ) {
         global $wpdb;
-        $session = $wpdb->get_row( $wpdb->prepare( "SELECT s.*, f.title AS formation_title, e.name AS company_name FROM {$this->session_table} s LEFT JOIN {$this->formation_table} f ON f.id = s.formation_id LEFT JOIN {$this->company_table} e ON e.id = s.company_id WHERE s.id = %d", $item_id ) );
+        $session = $wpdb->get_row( $wpdb->prepare( "SELECT s.*, f.title AS formation_title, f.modality AS formation_modality, e.name AS company_name FROM {$this->session_table} s LEFT JOIN {$this->formation_table} f ON f.id = s.formation_id LEFT JOIN {$this->company_table} e ON e.id = s.company_id WHERE s.id = %d", $item_id ) );
       }
       ?>
       <section class="acdc-section-head">
@@ -1235,7 +1246,14 @@ trait ACDC_Sessions_Render_Trait {
                 </td>
                 <td><?php echo esc_html( $this->get_session_datetime_label( $entry ) ); ?></td>
                 <td><?php echo esc_html( ! empty( $entry->attendance_method ) ? $entry->attendance_method : '—' ); ?></td>
-                <td><?php echo esc_html( ! empty( $entry->session_format ) ? $entry->session_format : '—' ); ?></td>
+                <?php /* ACDC 3.25.277 — La colonne « Format » retombe sur la
+                         modalité de la formation quand la séance n'en déclare
+                         pas. La règle existait déjà — la feuille d'émargement
+                         la tient depuis toujours — mais elle n'avait pas été
+                         appelée ici : la colonne affichait un tiret, et deux
+                         séances de la même formation devenaient impossibles à
+                         distinguer. */ ?>
+                <td><?php echo esc_html( $this->acdc_session_format_label( $entry ) ); ?></td>
                 <td>
                   <?php
                   $acdc_pending_trainer = ! empty( $entry->trainer_id ) ? $this->get_trainer( (int) $entry->trainer_id ) : null;

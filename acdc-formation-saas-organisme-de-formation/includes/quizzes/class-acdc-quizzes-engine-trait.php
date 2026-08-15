@@ -726,7 +726,7 @@ trait ACDC_Quizzes_Engine_Trait {
                        p.completed_at, p.started_at, p.status,
                        {$result_col_sql}
                        q.id AS quiz_id, q.title AS quiz_title, q.quiz_purpose, q.pass_threshold,
-                       f.title AS formation_title
+                       f.title AS formation_title, f.modality AS formation_modality
                 FROM {$tbl_p} p
                 INNER JOIN {$tbl_s} s  ON s.id = p.session_id
                 INNER JOIN {$tbl_q} q  ON q.id = s.quiz_id

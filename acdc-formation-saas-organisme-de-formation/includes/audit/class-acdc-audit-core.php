@@ -333,7 +333,11 @@ class ACDC_Audit_Core {
      * -------------------------------------------------------------------- */
     public function get_filter_formations() {
         global $wpdb;
-        return $wpdb->get_results( "SELECT id, title FROM {$wpdb->prefix}acdc_of_formations ORDER BY title ASC" );
+        /* ACDC 3.25.277 — La modalité et le code sont ramenés avec le titre :
+           sans eux, deux fiches du même nom (présentiel / distanciel) donnent
+           deux lignes identiques dans le filtre, et on ne sait pas laquelle on
+           a choisie. */
+        return $wpdb->get_results( "SELECT id, title, code, modality FROM {$wpdb->prefix}acdc_of_formations ORDER BY title ASC, modality ASC" );
     }
 
     public function get_filter_learners() {

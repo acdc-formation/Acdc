@@ -1360,7 +1360,13 @@ trait ACDC_Learner_Portal_Core_Trait {
         continue;
       }
 
-      $formation_title = ! empty( $formation->title ) ? $formation->title : 'Formation';
+      /* ACDC 3.25.277 — La modalité entre dans le libellé : un apprenant
+         inscrit à la même formation en présentiel puis en distanciel voyait
+         deux blocs de ressources portant le même nom, sans rien pour les
+         départager. Ce libellé sert AUSSI de clé de regroupement et de valeur
+         de filtre : sans la modalité, les deux dossiers fusionnaient. */
+      $formation_title = $this->acdc_formation_choice_label( $formation );
+      if ( '' === $formation_title ) { $formation_title = 'Formation'; }
       $session_label   = $session && ! empty( $session->title ) ? $session->title : '';
 
       /* ACDC 3.25.251 — La ligne « Programme » n'apparaît que si le programme
@@ -1640,7 +1646,12 @@ trait ACDC_Learner_Portal_Core_Trait {
         continue;
       }
       $formation    = $item['formation'];
-      $formation_title = $formation && ! empty( $formation->title ) ? $formation->title : ( ! empty( $registration->formation_title ) ? $registration->formation_title : 'Formation' );
+      /* ACDC 3.25.277 — Même règle que la liste des ressources : la modalité
+         fait partie du nom, sinon deux dossiers se confondent. */
+      $formation_title = $formation ? $this->acdc_formation_choice_label( $formation ) : '';
+      if ( '' === $formation_title ) {
+        $formation_title = $this->acdc_formation_cell( $registration, 'Formation' );
+      }
       $base = array(
         'formation' => $formation_title,
         'registration_id' => (int) $registration->id,

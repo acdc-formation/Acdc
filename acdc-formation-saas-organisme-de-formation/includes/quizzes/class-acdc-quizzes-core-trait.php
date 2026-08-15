@@ -2317,7 +2317,7 @@ trait ACDC_Quizzes_Core_Trait {
         }
         $rows = $wpdb->get_results(
             "SELECT g.id, g.name,
-                    f.title AS formation_title,
+                    f.title AS formation_title, f.modality AS formation_modality,
                     COUNT(DISTINCT r.learner_id) AS learner_count
              FROM {$tbl_g} g
              LEFT JOIN {$tbl_f} f ON f.id = g.formation_id
@@ -2374,22 +2374,11 @@ trait ACDC_Quizzes_Core_Trait {
      * @return string
      */
     public function format_qz_formation_label( $formation ) {
-        if ( ! is_object( $formation ) ) {
-            return '';
-        }
-        $title    = isset( $formation->title ) ? (string) $formation->title : '';
-        $code     = isset( $formation->code ) ? trim( (string) $formation->code ) : '';
-        $modality = isset( $formation->modality ) ? trim( (string) $formation->modality ) : '';
-
-        $parts = array();
-        if ( '' !== $code ) {
-            $parts[] = $code . ' |';
-        }
-        $parts[] = $title;
-        if ( '' !== $modality ) {
-            $parts[] = '(' . $modality . ')';
-        }
-        return implode( ' ', $parts );
+        /* ACDC 3.25.277 — La règle a quitté cet écran pour
+           \ACDC\Support\FormationLabel : elle était juste, mais elle était
+           seule de son espèce, et trois autres fonctions en disaient autre
+           chose ailleurs. Le format rendu est inchangé. */
+        return \ACDC\Support\FormationLabel::fromRow( $formation );
     }
 
     /**

@@ -26,6 +26,7 @@ lancent sans WordPress, en quelques secondes.
     php tests/test-mots-reserves.php   # le calendrier ne s'arrête pas au 31 décembre
     php tests/test-indicateurs.php     # les taux publiés : mesurés, pondérés, jamais moyennés deux fois
     php tests/test-fenetre-quiz.php    # quiz visibles chez le formateur : de J-1 à J+2
+    php tests/test-libelle-formation.php # deux formations du même nom ne se confondent jamais
     node tests/test-signature-trace.js # continuité du tracé des signatures
     php tests/scan-global-wpdb.php acdc-formation-saas-organisme-de-formation
     php tests/scan-envois-email.php  # e-mails qui contournent la porte commune
@@ -54,6 +55,7 @@ lancent sans WordPress, en quelques secondes.
     php tests/scan-responsive.php # la couche d'adaptation aux écrans est en place et chargée
     php tests/scan-portail-visiteur.php # les actions des portails sont jouables par leurs utilisateurs
     php tests/scan-sql-invalide.php # une virgule orpheline rend une liste vide, sans un mot
+    php tests/scan-formation-identifiable.php # une formation proposée dit toujours sa modalité
 
 Le dernier balaie tout le plugin et signale les fonctions qui utilisent `$wpdb`
 sans l'avoir importé — la faute qui a produit l'erreur fatale de la 3.25.236.

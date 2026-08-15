@@ -499,7 +499,7 @@ trait ACDC_Quizzes_Render_Results_Trait {
             <p class="acdc-qz-results-hero-eyebrow"><?php echo esc_html( $hero_purpose_label ); ?></p>
             <h1 class="acdc-qz-results-hero-title"><?php echo esc_html( $session->quiz_title ); ?></h1>
             <p class="acdc-qz-results-hero-meta">
-                <strong>Formation :</strong> <?php echo esc_html( $session->formation_title ?? '—' ); ?>
+                <strong>Formation :</strong> <?php echo esc_html( $this->acdc_formation_cell( $session ) ); ?>
                 &nbsp;·&nbsp;
                 <?php
                 /* ACDC 3.25.157 — « Envoyé le » et « Échéance » n'ont aucun sens pour une
@@ -1424,7 +1424,7 @@ trait ACDC_Quizzes_Render_Results_Trait {
                                         <br><small style="color:#b45309;font-weight:600;">⚠ non rattaché à un apprenant</small>
                                     <?php endif; ?>
                                 </td>
-                                <td><?php echo esc_html( (string) $r->formation_title ?: '—' ); ?></td>
+                                <td><?php echo esc_html( $this->acdc_formation_cell( $r ) ); ?></td>
                                 <td><?php echo esc_html( (string) $r->quiz_title ); ?></td>
                                 <td>
                                     <span class="acdc-qz-type-badge acdc-qz-type-badge-<?php echo esc_attr( (string) $r->quiz_purpose ); ?>">

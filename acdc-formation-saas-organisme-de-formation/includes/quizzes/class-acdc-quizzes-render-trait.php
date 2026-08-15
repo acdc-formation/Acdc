@@ -652,7 +652,10 @@ trait ACDC_Quizzes_Render_Trait {
                                         <?php
                                         echo esc_html( $g->name );
                                         if ( ! empty( $g->formation_title ) ) {
-                                            echo ' — ' . esc_html( $g->formation_title );
+                                            /* ACDC 3.25.277 — Modalité comprise : deux groupes
+                                               de la même formation, l'un en présentiel l'autre
+                                               en distanciel, portaient le même libellé. */
+                                            echo ' — ' . esc_html( $this->acdc_formation_cell( $g ) );
                                         }
                                         echo ' (' . (int) $g->learner_count . ' apprenant' . ( (int) $g->learner_count > 1 ? 's' : '' ) . ')';
                                         ?>

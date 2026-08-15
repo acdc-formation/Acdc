@@ -261,7 +261,10 @@ trait ACDC_Learner_Portal_Render_Trait {
         <?php if ( ! empty( $items ) ) : ?>
           <ul class="acdc-learner-list-plain">
             <?php foreach ( $items as $item ) : ?>
-              <?php $title = ! empty( $item['formation']->title ) ? $item['formation']->title : ( ! empty( $item['registration']->formation_title ) ? $item['registration']->formation_title : 'Formation' ); ?>
+              <?php /* ACDC 3.25.277 — Modalité comprise : deux inscriptions à la
+                       même formation, l'une en présentiel l'autre en distanciel,
+                       offraient deux liens identiques. */ ?>
+              <?php $title = ! empty( $item['formation'] ) ? $this->acdc_formation_choice_label( $item['formation'] ) : ''; if ( '' === $title ) { $title = $this->acdc_formation_cell( $item['registration'] ?? null, 'Formation' ); } ?>
               <li><a href="<?php echo esc_url( $this->learner_portal_page_url( 'formation', array( 'registration_id' => (int) $item['registration']->id ) ) ); ?>"><?php echo esc_html( $title ); ?></a><br><small>Accès jusqu’au <?php echo esc_html( $this->learner_portal_format_date( $item['expires_at'], true ) ); ?></small></li>
             <?php endforeach; ?>
           </ul>
@@ -276,7 +279,7 @@ trait ACDC_Learner_Portal_Render_Trait {
             <?php foreach ( $sessions as $entry ) : ?>
               <?php $session = $entry['session']; ?>
               <li>
-                <strong><?php echo esc_html( ! empty( $entry['formation']->title ) ? $entry['formation']->title : $session->title ); ?></strong><br>
+                <strong><?php echo esc_html( ! empty( $entry['formation'] ) ? $this->acdc_formation_choice_label( $entry['formation'] ) : (string) $session->title ); ?></strong><br>
                 <small><?php echo esc_html( $this->learner_portal_format_date( ! empty( $session->start_at ) ? $session->start_at : $session->start_date, true ) ); ?><?php if ( ! empty( $session->location ) ) : ?> · <?php echo esc_html( $session->location ); ?><?php elseif ( ! empty( $session->remote_link ) ) : ?> · Distanciel<?php endif; ?></small>
               </li>
             <?php endforeach; ?>
@@ -816,7 +819,7 @@ trait ACDC_Learner_Portal_Render_Trait {
         <div>
           <select onchange="if(this.value){window.location=this.value;}">
             <?php foreach ( $items as $switch_item ) : ?>
-              <?php $switch_title = ! empty( $switch_item['formation']->title ) ? $switch_item['formation']->title : ( ! empty( $switch_item['registration']->formation_title ) ? $switch_item['registration']->formation_title : 'Formation' ); ?>
+              <?php $switch_title = ! empty( $switch_item['formation'] ) ? $this->acdc_formation_choice_label( $switch_item['formation'] ) : ''; if ( '' === $switch_title ) { $switch_title = $this->acdc_formation_cell( $switch_item['registration'] ?? null, 'Formation' ); } ?>
               <option value="<?php echo esc_url( $this->learner_portal_page_url( 'formation', array( 'registration_id' => (int) $switch_item['registration']->id ) ) ); ?>" <?php selected( (int) $switch_item['registration']->id, $registration_id ); ?>><?php echo esc_html( $switch_title ); ?></option>
             <?php endforeach; ?>
           </select>
@@ -1315,7 +1318,7 @@ trait ACDC_Learner_Portal_Render_Trait {
         <?php if ( ! empty( $items ) ) : ?>
           <ul class="acdc-learner-list-plain">
             <?php foreach ( $items as $item ) : ?>
-              <?php $formation_title = ! empty( $item['formation']->title ) ? $item['formation']->title : ( ! empty( $item['registration']->formation_title ) ? $item['registration']->formation_title : 'Formation' ); ?>
+              <?php $formation_title = ! empty( $item['formation'] ) ? $this->acdc_formation_choice_label( $item['formation'] ) : ''; if ( '' === $formation_title ) { $formation_title = $this->acdc_formation_cell( $item['registration'] ?? null, 'Formation' ); } ?>
               <li><?php echo esc_html( $formation_title ); ?> — <small>Accès jusqu’au <?php echo esc_html( $this->learner_portal_format_date( $item['expires_at'], true ) ); ?></small></li>
             <?php endforeach; ?>
           </ul>
@@ -1475,7 +1478,7 @@ trait ACDC_Learner_Portal_Render_Trait {
                         $detail_end       = $detail_session && ! empty( $detail_session->end_date ) ? $detail_session->end_date : '';
                         ?>
                         <tr>
-                          <td><?php echo esc_html( $detail_formation && ! empty( $detail_formation->title ) ? $detail_formation->title : '—' ); ?></td>
+                          <td><?php echo esc_html( $detail_formation ? $this->acdc_formation_choice_label( $detail_formation ) : '—' ); ?></td>
                           <td><?php echo esc_html( $detail_session && ! empty( $detail_session->title ) ? $detail_session->title : '—' ); ?></td>
                           <td><?php echo esc_html( ! empty( $detail_item['trainer_label'] ) ? $detail_item['trainer_label'] : '—' ); ?></td>
                           <td><?php echo esc_html( $detail_end ? $this->learner_portal_format_date( $detail_end ) : '—' ); ?></td>

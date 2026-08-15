@@ -3596,7 +3596,7 @@ trait ACDC_Kernel_Render_Trait {
                   <td>#<?php echo esc_html( (string) $entry->id ); ?></td>
                   <?php if ( 'apprenants' !== $trf_view ) : ?><td><?php echo esc_html( $entry->title ); ?></td><?php endif; ?>
                   <td><?php echo esc_html( $row['subject'] ); ?></td>
-                  <td><?php echo esc_html( $entry->formation_title ? $entry->formation_title : '—' ); ?></td>
+                  <td><?php echo esc_html( $this->acdc_formation_cell( $entry ) ); ?></td>
                   <td><?php echo esc_html( $entry->company_label ? $entry->company_label : '—' ); ?></td>
                   <td><span class="acdc-status-badge"><?php echo esc_html( $row['status_label'] ); ?></span></td>
                   <td><?php echo esc_html( mysql2date( 'j F Y à H\hi', $entry->updated_at ) ); ?></td>
@@ -3808,7 +3808,7 @@ trait ACDC_Kernel_Render_Trait {
     $upcoming_sessions = array();
     if ( ! empty( $this->session_table ) ) {
       $upcoming_sessions = (array) $wpdb->get_results( $wpdb->prepare(
-        "SELECT s.*, f.title AS formation_title, f.duration AS formation_duration
+        "SELECT s.*, f.title AS formation_title, f.duration AS formation_duration, f.modality AS formation_modality
          FROM {$this->session_table} s
          LEFT JOIN {$this->formation_table} f ON f.id = s.formation_id
          WHERE s.start_date >= %s
@@ -4935,12 +4935,15 @@ trait ACDC_Kernel_Render_Trait {
             <p><label>Formation liée (facultatif)</label>
               <?php
               global $wpdb;
-              $formations = $wpdb->get_results( "SELECT id, title FROM {$wpdb->prefix}acdc_of_formations ORDER BY title ASC LIMIT 200" );
+              /* ACDC 3.25.277 — Code et modalité ramenés avec le titre : c'est
+                 la formation que l'analyse du besoin va désigner, elle ne peut
+                 pas se choisir entre deux lignes identiques. */
+              $formations = $wpdb->get_results( "SELECT id, title, code, modality FROM {$wpdb->prefix}acdc_of_formations ORDER BY title ASC, modality ASC LIMIT 200" );
               ?>
               <select name="analysis_formation_id">
                 <option value="">Aucune</option>
                 <?php foreach ( $formations as $f ) : ?>
-                  <option value="<?php echo (int) $f->id; ?>"><?php echo esc_html( $f->title ); ?></option>
+                  <option value="<?php echo (int) $f->id; ?>"><?php echo esc_html( $this->acdc_formation_choice_label( $f ) ); ?></option>
                 <?php endforeach; ?>
               </select></p>
             <!-- ACDC 3.21.11 — Sources liées dès la création -->
@@ -8351,7 +8354,11 @@ trait ACDC_Kernel_Render_Trait {
               <select id="acdc_tc_ref_<?php echo $tid; ?>" name="formation_id">
                 <option value="">— Aucune formation liée —</option>
                 <?php foreach ( $all_formations as $f ) : ?>
-                <option value="<?php echo (int) $f->id; ?>" <?php selected( $current_fid > 0 ? $current_fid : -1, (int) $f->id ); ?>><?php echo esc_html( $this->acdc_formation_labelled( (int) $f->id, (string) $f->title ) ); ?></option>
+                <?php /* ACDC 3.25.277 — La référence de famille disait déjà que
+                         « 1.0 » et « 1.1 » sont deux fiches jumelles ; elle ne
+                         disait pas LAQUELLE est le présentiel. La modalité s'écrit
+                         maintenant en toutes lettres, comme partout ailleurs. */ ?>
+                <option value="<?php echo (int) $f->id; ?>" <?php selected( $current_fid > 0 ? $current_fid : -1, (int) $f->id ); ?>><?php echo esc_html( \ACDC\Support\FormationLabel::prefixed( $this->acdc_formation_reference( (int) $f->id ) . ' —', (string) $f->title, isset( $f->modality ) ? (string) $f->modality : '' ) ); ?></option>
                 <?php endforeach; ?>
               </select>
               <?php if ( 0 === $current_fid && '' !== $current_ref ) : ?>
@@ -9284,7 +9291,7 @@ trait ACDC_Kernel_Render_Trait {
               <?php $learner_names = $this->get_group_learner_names( $entry ); ?>
               <tr>
                 <td><?php echo esc_html( $entry->name ?: '—' ); ?></td>
-                <td><?php echo esc_html( $entry->formation_title ?: '—' ); ?></td>
+                <td><?php echo esc_html( $this->acdc_formation_cell( $entry ) ); ?></td>
                 <td><?php echo esc_html( $entry->start_date ? 'Début : ' . mysql2date( 'd/m/Y', $entry->start_date ) : '—' ); ?><?php if ( ! empty( $entry->end_date ) ) : ?><br><small><?php echo esc_html( 'Fin : ' . mysql2date( 'd/m/Y', $entry->end_date ) ); ?></small><?php endif; ?></td>
                 <td class="acdc-groups-attendance-cell"><?php echo esc_html( $entry->attendance_method ?: '—' ); ?></td>
                 <td class="acdc-groups-trainer-cell"><?php echo esc_html( $entry->trainer_name ?: '—' ); ?></td>
@@ -9358,7 +9365,7 @@ trait ACDC_Kernel_Render_Trait {
       <p class="acdc-help">Cet espace regroupe les documents liés au groupe, à la formation concernée et à la session de formation.</p>
       <div class="acdc-grid-2cols acdc-mb-18">
         <p><label>Groupe</label><input type="text" readonly value="<?php echo esc_attr( $group->name ?: '—' ); ?>"></p>
-        <p><label>Formation</label><input type="text" readonly value="<?php echo esc_attr( $group->formation_title ?: '—' ); ?>"></p>
+        <p><label>Formation</label><input type="text" readonly value="<?php echo esc_attr( $this->acdc_formation_cell( $group ) ); ?>"></p>
         <p><label>Date de début</label><input type="text" readonly value="<?php echo esc_attr( ! empty( $group->start_date ) ? mysql2date( 'd/m/Y', $group->start_date ) : '—' ); ?>"></p>
         <p><label>Date de fin</label><input type="text" readonly value="<?php echo esc_attr( ! empty( $group->end_date ) ? mysql2date( 'd/m/Y', $group->end_date ) : '—' ); ?>"></p>
       </div>
@@ -9369,7 +9376,7 @@ trait ACDC_Kernel_Render_Trait {
             <?php foreach ( $families as $family ) : ?>
               <tr>
                 <td><?php echo esc_html( $family ); ?></td>
-                <td><?php echo esc_html( 'Groupe #' . (int) $group->id . ' — ' . ( $group->formation_title ?: 'formation non renseignée' ) ); ?></td>
+                <td><?php echo esc_html( 'Groupe #' . (int) $group->id . ' — ' . $this->acdc_formation_cell( $group, 'formation non renseignée' ) ); ?></td>
                 <td><span class="acdc-badge acdc-badge-soft">Espace prêt</span></td>
               </tr>
             <?php endforeach; ?>
@@ -10645,7 +10652,7 @@ trait ACDC_Kernel_Render_Trait {
               $name = trim( implode( ' ', array_filter( array( $entry->first_name, $entry->usage_last_name ?: $entry->last_name ) ) ) );
               $commanditaire_type = ! empty( $entry->company_name ) ? 'Entreprise' : 'Particulier';
               $commanditaire_meta = ! empty( $entry->company_name ) ? $entry->company_name : '';
-              $formation = ! empty( $entry->formation_title ) ? $entry->formation_title : '—';
+              $formation = $this->acdc_formation_cell( $entry );
               $dates = '—';
               if ( ! empty( $entry->start_date ) ) {
                 $dates = 'Début : ' . mysql2date( 'd/m/Y', $entry->start_date );
@@ -11092,7 +11099,7 @@ trait ACDC_Kernel_Render_Trait {
         "SELECT qs.id AS questionnaire_session_id, qs.source_type, qs.source_id, qs.session_title, qs.formation_id, qs.session_date,
                 qp.id AS participant_id, qp.apprenant_id, qp.responded_at, qp.final_score,
                 l.first_name, l.last_name, l.usage_last_name,
-                f.title AS formation_title, f.duration AS formation_duration,
+                f.title AS formation_title, f.duration AS formation_duration, f.modality AS formation_modality,
                 sx.start_date, sx.end_date, sx.session_format
          FROM {$this->questionnaire_session_table} qs
          INNER JOIN {$this->questionnaire_participant_table} qp ON qp.session_id = qs.id
@@ -11130,7 +11137,7 @@ trait ACDC_Kernel_Render_Trait {
                 qp.total_score_percentage, qp.is_passed,
                 qq.title AS quiz_title, qq.quiz_purpose, qs.formation_id,
                 l.first_name, l.last_name, l.usage_last_name,
-                f.title AS formation_title, f.duration AS formation_duration
+                f.title AS formation_title, f.duration AS formation_duration, f.modality AS formation_modality
            FROM {$wpdb->prefix}acdc_of_qz_participants qp
            INNER JOIN {$wpdb->prefix}acdc_of_qz_sessions qs ON qs.id = qp.session_id
            INNER JOIN {$wpdb->prefix}acdc_of_qz_quizzes qq ON qq.id = qs.quiz_id
@@ -11177,7 +11184,7 @@ trait ACDC_Kernel_Render_Trait {
           'apprenant' => $quiz_name ?: '—',
           'test' => $is_positioning ? 'Test de positionnement' : 'Évaluation des acquis',
           'source' => (string) $quiz_entry->quiz_title,
-          'formation' => ! empty( $quiz_entry->formation_title ) ? (string) $quiz_entry->formation_title : '—',
+          'formation' => $this->acdc_formation_cell( $quiz_entry ),
           'dates' => '—',
           'duree' => $format_duration( ! empty( $quiz_entry->formation_duration ) ? $quiz_entry->formation_duration : '' ),
           'format' => '—',
@@ -11237,10 +11244,10 @@ trait ACDC_Kernel_Render_Trait {
           'apprenant' => $name ?: '—',
           'test' => 'positioning_test' === $entry->source_type ? 'Test de positionnement' : 'Évaluation des acquis',
           'source' => ! empty( $source['title'] ) ? (string) $source['title'] : (string) $entry->session_title,
-          'formation' => ! empty( $entry->formation_title ) ? (string) $entry->formation_title : '—',
+          'formation' => $this->acdc_formation_cell( $entry ),
           'dates' => 'Début : ' . $format_input( $entry->start_date ) . '<br><small>Fin : ' . $format_input( $entry->end_date ) . '</small>',
           'duree' => $format_duration( ! empty( $entry->formation_duration ) ? $entry->formation_duration : '' ),
-          'format' => ! empty( $entry->session_format ) ? (string) $entry->session_format : '—',
+          'format' => $this->acdc_session_format_label( $entry ),
           'added' => ! empty( $entry->responded_at ) ? mysql2date( 'j F Y', $entry->responded_at ) : '—',
           'result' => $result_label,
           'score' => $score_display,
@@ -11309,7 +11316,7 @@ trait ACDC_Kernel_Render_Trait {
       $star_labels = array( 1 => '&#9733;', 2 => '&#9733;&#9733;', 3 => '&#9733;&#9733;&#9733;', 4 => '&#9733;&#9733;&#9733;&#9733;', 5 => '&#9733;&#9733;&#9733;&#9733;&#9733;' );
 
       // Tableau détaillé par enquête
-      $sat_rows  = $wpdb->get_results( "SELECT s.id AS session_id, s.session_title, s.source_type, s.formation_id, s.ended_at, f.title AS formation_title, COUNT(DISTINCT p.id) AS nb_repondants, AVG(a.numeric_score) AS avg_score FROM {$this->questionnaire_session_table} s LEFT JOIN {$this->formation_table} f ON f.id = s.formation_id LEFT JOIN {$this->questionnaire_participant_table} p ON p.session_id = s.id AND p.responded_at IS NOT NULL LEFT JOIN {$this->questionnaire_answer_table} a ON a.session_id = s.id AND a.answer_type = 'notation' AND a.numeric_score IS NOT NULL WHERE s.is_survey_session = 1 AND s.source_type IN ({$sat_source_types}) GROUP BY s.id ORDER BY s.id DESC" );
+      $sat_rows  = $wpdb->get_results( "SELECT s.id AS session_id, s.session_title, s.source_type, s.formation_id, s.ended_at, f.title AS formation_title, f.modality AS formation_modality, COUNT(DISTINCT p.id) AS nb_repondants, AVG(a.numeric_score) AS avg_score FROM {$this->questionnaire_session_table} s LEFT JOIN {$this->formation_table} f ON f.id = s.formation_id LEFT JOIN {$this->questionnaire_participant_table} p ON p.session_id = s.id AND p.responded_at IS NOT NULL LEFT JOIN {$this->questionnaire_answer_table} a ON a.session_id = s.id AND a.answer_type = 'notation' AND a.numeric_score IS NOT NULL WHERE s.is_survey_session = 1 AND s.source_type IN ({$sat_source_types}) GROUP BY s.id ORDER BY s.id DESC" );
       $type_labels = array( 'hot_survey' => 'A chaud', 'mid_survey' => 'Intermediaire', 'cold_survey' => 'A froid', 'company_survey' => 'Entreprise', 'trainer_survey' => 'Formateur', 'funder_survey' => 'Financeur' );
       ?>
       <section class="acdc-section-head"><div><h2><?php echo esc_html( $table_title ); ?></h2></div></section>
@@ -11332,7 +11339,7 @@ trait ACDC_Kernel_Render_Trait {
       <section class="acdc-section-head"><div><h2><?php echo esc_html( $table_title ); ?></h2></div></section>
       <div class="acdc-panel"><div class="acdc-table-wrap"><table class="acdc-table"><thead><tr><th>Enquete</th><th>Type</th><th>Formation</th><th>Date cloture</th><th>Repondants</th><th>Note moyenne</th></tr></thead><tbody>
       <?php if ( ! empty( $sat_rows ) ) : foreach ( $sat_rows as $sr ) : $type_key = isset( $sr->source_type ) ? (string) $sr->source_type : ''; $type_lbl = isset( $type_labels[ $type_key ] ) ? $type_labels[ $type_key ] : $type_key; $note_val = isset( $sr->avg_score ) && null !== $sr->avg_score ? round( (float) $sr->avg_score, 2 ) : null; ?>
-      <tr><td><?php echo esc_html( $sr->session_title ?: '--' ); ?></td><td><?php echo esc_html( $type_lbl ); ?></td><td><?php echo esc_html( $sr->formation_title ?: '--' ); ?></td><td><?php echo esc_html( $sr->ended_at ? mysql2date( 'd/m/Y', $sr->ended_at ) : '--' ); ?></td><td><?php echo (int) $sr->nb_repondants; ?></td><td><?php echo null !== $note_val ? esc_html( number_format_i18n( $note_val, 2 ) ) . ' / 5' : '--'; ?></td></tr>
+      <tr><td><?php echo esc_html( $sr->session_title ?: '--' ); ?></td><td><?php echo esc_html( $type_lbl ); ?></td><td><?php echo esc_html( $this->acdc_formation_cell( $sr, '--' ) ); ?></td><td><?php echo esc_html( $sr->ended_at ? mysql2date( 'd/m/Y', $sr->ended_at ) : '--' ); ?></td><td><?php echo (int) $sr->nb_repondants; ?></td><td><?php echo null !== $note_val ? esc_html( number_format_i18n( $note_val, 2 ) ) . ' / 5' : '--'; ?></td></tr>
       <?php endforeach; else : ?>
       <tr><td colspan="6">Aucune enquete avec reponses pour le moment.</td></tr>
       <?php endif; ?>
@@ -11392,7 +11399,7 @@ trait ACDC_Kernel_Render_Trait {
       elseif ( $score >= 50 )   { $result_lbl = 'En progression'; $result_color = '#f97316'; }
       else                      { $result_lbl = 'Non acquis';    $result_color = '#ef4444'; }
     ?>
-    <tr><td><?php echo esc_html( $sname ?: '--' ); ?></td><td><?php echo esc_html( $sr->formation_title ?: '--' ); ?></td><td><?php echo esc_html( $sr->session_title ?: '--' ); ?></td><td><?php echo esc_html( $sr->responded_at ? mysql2date( 'd/m/Y', $sr->responded_at ) : '--' ); ?></td><td><?php echo null !== $score ? esc_html( number_format_i18n( $score, 1 ) ) . '%' : '--'; ?></td><td><span style="color:<?php echo esc_attr( $result_color ); ?>;font-weight:600;"><?php echo esc_html( $result_lbl ); ?></span></td></tr>
+    <tr><td><?php echo esc_html( $sname ?: '--' ); ?></td><td><?php echo esc_html( $this->acdc_formation_cell( $sr, '--' ) ); ?></td><td><?php echo esc_html( $sr->session_title ?: '--' ); ?></td><td><?php echo esc_html( $sr->responded_at ? mysql2date( 'd/m/Y', $sr->responded_at ) : '--' ); ?></td><td><?php echo null !== $score ? esc_html( number_format_i18n( $score, 1 ) ) . '%' : '--'; ?></td><td><span style="color:<?php echo esc_attr( $result_color ); ?>;font-weight:600;"><?php echo esc_html( $result_lbl ); ?></span></td></tr>
     <?php endforeach; else : ?>
     <tr><td colspan="6">Aucune evaluation completee pour le moment.</td></tr>
     <?php endif; ?>
@@ -11442,7 +11449,7 @@ trait ACDC_Kernel_Render_Trait {
               r.price_ht AS registration_price, r.formation_id,
               l.first_name, l.last_name, l.usage_last_name, l.status,
               c.name AS company_name,
-              f.title AS formation_title, f.duration AS formation_duration, f.price AS formation_price
+              f.title AS formation_title, f.duration AS formation_duration, f.price AS formation_price, f.modality AS formation_modality
          FROM {$this->training_registration_table} r
          LEFT JOIN {$this->learner_table} l ON l.id = r.learner_id
          LEFT JOIN {$this->company_table} c ON c.id = r.company_id
@@ -11529,7 +11536,7 @@ trait ACDC_Kernel_Render_Trait {
            personne qui a signé pour elle. */
         $commanditaire_meta = ! empty( $entry->company_name ) ? (string) $entry->company_name : (string) ( $entry->company_label ?? '' );
         $commanditaire_type = '' !== $commanditaire_meta ? 'Entreprise' : 'Particulier';
-        $formation = ! empty( $entry->formation_title ) ? $entry->formation_title : '—';
+        $formation = $this->acdc_formation_cell( $entry );
         $dates = '—';
         if ( ! empty( $entry->start_date ) ) {
           $dates = 'Début : ' . mysql2date( 'd/m/Y', $entry->start_date );
@@ -11876,7 +11883,7 @@ trait ACDC_Kernel_Render_Trait {
           <h3>Informations de la séance</h3>
           <div class="acdc-list-details">
             <div><strong>Apprenant / groupe :</strong> <?php echo esc_html( $this->get_session_validated_learner_or_group_label( $session ) ); ?></div>
-            <div><strong>Formation :</strong> <?php echo esc_html( ! empty( $session->formation_title ) ? $session->formation_title : '—' ); ?></div>
+            <div><strong>Formation :</strong> <?php echo esc_html( $this->acdc_formation_cell( $session ) ); ?></div>
             <div><strong>Formateur :</strong> <?php echo esc_html( $this->get_session_validated_trainer_label( $session ) ); ?></div>
             <div><strong>Date et heures :</strong> <?php echo esc_html( $this->get_session_datetime_label( $session ) ); ?></div>
             <div><strong>Durée :</strong> <?php echo esc_html( $this->get_session_duration_label( $session ) ); ?></div>
@@ -11974,7 +11981,7 @@ trait ACDC_Kernel_Render_Trait {
                 <td><?php echo esc_html( $this->get_session_datetime_label( $entry ) ); ?></td>
                 <td><?php echo esc_html( $entry->attendance_duration_label ); ?></td>
                 <td>
-                  <div><?php echo esc_html( ! empty( $entry->formation_title ) ? $entry->formation_title : '—' ); ?></div>
+                  <div><?php echo esc_html( $this->acdc_formation_cell( $entry ) ); ?></div>
                   <?php if ( ! empty( $entry->formation_code ) ) : ?><small><?php echo esc_html( $entry->formation_code ); ?></small><?php endif; ?>
                 </td>
                 <td><?php echo esc_html( $entry->trainer_display_name ); ?></td>
@@ -13165,7 +13172,7 @@ Nb de questions réussies / Nb de questions : <?php echo esc_html( (int) $contex
     <?php
     // ACDC 3.23.1 — Séances avec convocation commanditaire envoyée (preuve Qualiopi ind. 9).
     $conv_sessions = $wpdb->get_results( $wpdb->prepare(
-      "SELECT s.id, s.title, s.start_date, s.start_at, s.convocation_company_sent_at, f.title AS formation_title FROM {$this->session_table} s LEFT JOIN {$this->formation_table} f ON f.id = s.formation_id WHERE s.company_id = %d AND s.convocation_company_sent_at IS NOT NULL ORDER BY s.convocation_company_sent_at DESC LIMIT 50",
+      "SELECT s.id, s.title, s.start_date, s.start_at, s.convocation_company_sent_at, f.title AS formation_title, f.modality AS formation_modality FROM {$this->session_table} s LEFT JOIN {$this->formation_table} f ON f.id = s.formation_id WHERE s.company_id = %d AND s.convocation_company_sent_at IS NOT NULL ORDER BY s.convocation_company_sent_at DESC LIMIT 50",
       (int) $company->id
     ) );
     if ( ! empty( $conv_sessions ) ) :
@@ -13177,7 +13184,7 @@ Nb de questions réussies / Nb de questions : <?php echo esc_html( (int) $contex
           <thead><tr><th>Formation</th><th>Date de séance</th><th>Convocation envoyée le</th></tr></thead>
           <tbody>
           <?php foreach ( $conv_sessions as $cs ) :
-            $formation_label = ! empty( $cs->formation_title ) ? (string) $cs->formation_title : ( ! empty( $cs->title ) ? (string) $cs->title : '—' );
+            $formation_label = $this->acdc_formation_cell( $cs, ! empty( $cs->title ) ? (string) $cs->title : '—' );
             $start_ts = ! empty( $cs->start_date ) ? strtotime( $cs->start_date ) : ( ! empty( $cs->start_at ) ? strtotime( $cs->start_at ) : 0 );
             $start_label = $start_ts ? wp_date( 'd/m/Y', $start_ts ) : '—';
             $sent_label  = mysql2date( 'd/m/Y \\à H\\hi', $cs->convocation_company_sent_at );

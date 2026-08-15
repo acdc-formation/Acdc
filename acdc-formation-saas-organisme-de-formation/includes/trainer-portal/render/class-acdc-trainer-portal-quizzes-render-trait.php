@@ -840,20 +840,39 @@ trait ACDC_Trainer_Portal_Quizzes_Render_Trait {
     }
 
     /**
-     * Liste des formations proposables au formateur dans la modale de création.
+     * Les formations que CE formateur anime — celles-là seulement.
      *
-     * Logique en 2 temps :
-     * 1. On tente d'abord la liste filtrée : formations dont au moins une session a
-     *    trainer_id = $trainer_id. C'est le cas idéal en multi-formateurs.
-     * 2. Si cette liste est vide (cas d'un formateur unique qui n'a pas encore été
-     *    explicitement assigné à des sessions, ou cas où trainer_id n'est pas encore
-     *    backfillé sur les sessions), on retombe sur la liste complète des formations
-     *    actives — comportement aligné sur ce que voit l'admin dans le back-office.
+     * ACDC 3.25.277. Relevé en recette : « il y a toujours la liste de toutes
+     * les formations ». Deux fautes se cachaient l'une derrière l'autre.
      *
-     * Ce fallback est nécessaire parce que la colonne sessions.trainer_id existe
-     * depuis 3.20.92 mais n'est pas toujours renseignée sur l'historique. Plutôt
-     * que de laisser le sélecteur vide (et bloquer la création), on offre une
-     * dégradation gracieuse : voir toutes les formations actives plutôt qu'aucune.
+     * LA RÈGLE N'ÉTAIT LUE QU'À MOITIÉ. Un formateur est rattaché à une séance
+     * de deux façons : directement (`sessions.trainer_id`) ou par un de ses
+     * groupes (`groups.trainer_id`). Partout ailleurs dans l'extranet — la liste
+     * des séances, le détail d'une séance, le calendrier, le tableau de bord,
+     * les documents — les deux sont lues ensemble. Ici, seule la première
+     * l'était. Un formateur désigné par son groupe n'existait donc pas pour cet
+     * écran. La règle avait été recopiée, pas appelée, et la copie a perdu une
+     * moitié : c'est la famille de défauts la plus coûteuse du plugin.
+     *
+     * LE REPLI MASQUAIT LA PREMIÈRE FAUTE. Comme la requête amputée rendait
+     * souvent une liste vide, un repli affichait tout le catalogue — le
+     * commentaire d'origine l'assumait comme une « dégradation gracieuse ».
+     * Ce n'en était pas une : elle transformait un rattachement mal lu en
+     * autorisation universelle, et rendait inopérante la barrière posée en
+     * 3.25.276 (`$can_create = … && ! empty( $formations_animees )`), qui ne
+     * pouvait plus jamais tomber puisque la liste n'était jamais vide.
+     *
+     * Le repli disparaît. Un formateur rattaché à aucune séance voit une liste
+     * vide et ne peut pas créer de quiz — c'est la règle demandée.
+     *
+     * On ne filtre plus sur `is_active` : archiver une formation pendant qu'une
+     * séance tourne priverait le formateur de son quiz live en pleine salle.
+     * Le rattachement à une séance est la preuve qu'il l'anime ; le statut
+     * catalogue de la fiche ne le contredit pas. Les brouillons restent exclus :
+     * une fiche jamais publiée n'a pas de séance à animer.
+     *
+     * @param int $trainer_id
+     * @return array Lignes de la table des formations, jamais le catalogue entier.
      */
     private function get_qz_formations_for_trainer( $trainer_id ) {
         global $wpdb;
@@ -863,22 +882,16 @@ trait ACDC_Trainer_Portal_Quizzes_Render_Trait {
         }
         $tbl_formations = $wpdb->prefix . 'acdc_of_formations';
         $tbl_sessions   = $wpdb->prefix . 'acdc_of_sessions';
+        $tbl_groups     = $wpdb->prefix . 'acdc_of_groups';
 
-        // 1. Tentative filtrée par sessions animées
         $sql = 'SELECT DISTINCT f.* FROM ' . $tbl_formations . ' f '
              . 'INNER JOIN ' . $tbl_sessions . ' s ON s.formation_id = f.id '
-             . 'WHERE s.trainer_id = %d AND f.is_active = 1 AND f.is_draft = 0 '
-             . 'ORDER BY f.title ASC';
-        $rows = $wpdb->get_results( $wpdb->prepare( $sql, $trainer_id ) );
+             . 'WHERE ( s.trainer_id = %d '
+             . '        OR EXISTS ( SELECT 1 FROM ' . $tbl_groups . ' g WHERE g.session_id = s.id AND g.trainer_id = %d ) ) '
+             . '  AND f.is_draft = 0 '
+             . 'ORDER BY f.title ASC, f.modality ASC';
+        $rows = $wpdb->get_results( $wpdb->prepare( $sql, $trainer_id, $trainer_id ) );
 
-        if ( ! empty( $rows ) ) {
-            return $rows;
-        }
-
-        // 2. Fallback : toutes les formations actives (cohérent avec ce que voit l'admin)
-        if ( method_exists( $this, 'get_qz_available_formations' ) ) {
-            return $this->get_qz_available_formations();
-        }
-        return array();
+        return is_array( $rows ) ? $rows : array();
     }
 }

@@ -1051,7 +1051,7 @@ trait ACDC_Quizzes_Actions_Trait {
         $params = array( $today, $today, $today );
         $rows = $wpdb->get_results( $wpdb->prepare(
             "SELECT s.id, s.formation_id, s.start_date, s.end_date, s.location, s.status,
-                    f.title AS formation_title
+                    f.title AS formation_title, f.modality AS formation_modality
              FROM {$tbl} s
              LEFT JOIN {$wpdb->prefix}acdc_of_formations f ON f.id = s.formation_id
              WHERE (

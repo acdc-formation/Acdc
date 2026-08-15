@@ -137,7 +137,7 @@ trait ACDC_Trainer_Portal_Results_Render_Trait {
                             <td>
                                 <strong><?php echo esc_html( $s->quiz_title ); ?></strong>
                             </td>
-                            <td><?php echo esc_html( $s->formation_title ?? '—' ); ?></td>
+                            <td><?php echo esc_html( $this->acdc_formation_cell( $s ) ); ?></td>
                             <?php
                             /* ACDC 3.25.171 — Le formateur ne lisait que sent_at, qui n'est
                                rempli que pour un envoi par e-mail : toutes ses passations
@@ -223,7 +223,7 @@ trait ACDC_Trainer_Portal_Results_Render_Trait {
                 <div>
                     <h1><?php echo esc_html( $session->quiz_title ); ?></h1>
                     <p class="acdc-tp-results-meta">
-                        <strong>Formation :</strong> <?php echo esc_html( $session->formation_title ?? '—' ); ?>
+                        <strong>Formation :</strong> <?php echo esc_html( $this->acdc_formation_cell( $session ) ); ?>
                         &nbsp;·&nbsp;
                         <?php
                         $hdr_launched = ! empty( $session->started_at ) ? $session->started_at

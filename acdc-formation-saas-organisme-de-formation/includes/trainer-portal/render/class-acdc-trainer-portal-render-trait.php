@@ -988,6 +988,7 @@ trait ACDC_Trainer_Portal_Render_Trait {
          Ce n'est donc pas « deux écrans, deux vérités » : c'est un écran qui
          n'a jamais posé sa question. Depuis l'écriture de cette page. */
       "SELECT s.*, f.title AS formation_title, f.duration AS formation_duration,
+              f.modality AS formation_modality,
               c.name AS company_name
        FROM {$this->session_table} s
        LEFT JOIN {$this->formation_table} f ON f.id = s.formation_id
@@ -1090,7 +1091,7 @@ trait ACDC_Trainer_Portal_Render_Trait {
       <div class="acdc-session-card-body">
         <a class="acdc-session-card-title" href="<?php echo esc_url( $detail_url ); ?>"><?php echo esc_html( $row->title ); ?></a>
         <span class="acdc-session-card-meta">
-          <?php if ( ! empty( $row->formation_title ) ) : ?><strong><?php echo esc_html( $row->formation_title ); ?></strong> · <?php endif; ?>
+          <?php if ( ! empty( $row->formation_title ) ) : ?><strong><?php echo esc_html( $this->acdc_formation_cell( $row ) ); ?></strong> · <?php endif; ?>
           <?php if ( $period ) : ?><?php echo esc_html( $period ); ?><?php endif; ?>
           <?php if ( ! empty( $row->location ) ) : ?> · <?php echo esc_html( $row->location ); ?><?php endif; ?>
           <?php if ( ! empty( $row->company_name ) ) : ?><br><?php echo esc_html( $row->company_name ); ?><?php endif; ?>
@@ -1129,6 +1130,7 @@ trait ACDC_Trainer_Portal_Render_Trait {
 
     $session = $wpdb->get_row( $wpdb->prepare(
       "SELECT s.*, f.title AS formation_title, f.duration AS formation_duration,
+              f.modality AS formation_modality,
               c.name AS company_name
        FROM {$this->session_table} s
        LEFT JOIN {$this->formation_table} f ON f.id = s.formation_id
@@ -1195,7 +1197,7 @@ trait ACDC_Trainer_Portal_Render_Trait {
         <h3><?php echo esc_html( $session->title ); ?></h3>
         <dl class="acdc-info-grid">
           <?php if ( ! empty( $session->formation_title ) ) : ?>
-            <dt>Formation</dt><dd><?php echo esc_html( $session->formation_title ); ?><?php if ( ! empty( $session->formation_duration ) ) : ?> <span style="color:#5a6577;">(<?php echo esc_html( $session->formation_duration ); ?>)</span><?php endif; ?></dd>
+            <dt>Formation</dt><dd><?php echo esc_html( $this->acdc_formation_cell( $session ) ); ?><?php if ( ! empty( $session->formation_duration ) ) : ?> <span style="color:#5a6577;">(<?php echo esc_html( $session->formation_duration ); ?>)</span><?php endif; ?></dd>
           <?php endif; ?>
           <?php if ( ! empty( $session->company_name ) ) : ?>
             <dt>Entreprise</dt><dd><?php echo esc_html( $session->company_name ); ?></dd>
@@ -1793,7 +1795,7 @@ trait ACDC_Trainer_Portal_Render_Trait {
             $mission_date = mysql2date( 'd/m/Y', (string) $mission->start_date );
           }
           ?>
-          <li><?php echo esc_html( trim( (string) ( $mission->formation_title ?? $mission->title ?? 'Séance' ) ) ); ?><?php echo '' !== $mission_date ? ' — ' . esc_html( $mission_date ) : ''; ?></li>
+          <li><?php echo esc_html( $this->acdc_formation_cell( $mission, trim( (string) ( $mission->title ?? 'Séance' ) ) ) ); ?><?php echo '' !== $mission_date ? ' — ' . esc_html( $mission_date ) : ''; ?></li>
         <?php endforeach; ?>
         </ul>
       <?php endif; ?>

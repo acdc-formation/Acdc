@@ -1424,7 +1424,10 @@ A noter : Certaines des questions peuvent être évaluées sur une échelle de 1
       case 'formation':
         foreach ( (array) $this->get_formations( array( 'archived' => false ) ) as $formation ) {
           if ( ! empty( $formation->id ) ) {
-            $rows[ (int) $formation->id ] = (string) $formation->title;
+            /* ACDC 3.25.277 — Le titre seul propose deux fois la même ligne
+               quand la formation existe en présentiel et en distanciel : on
+               affecte alors un questionnaire à une modalité au hasard. */
+            $rows[ (int) $formation->id ] = $this->acdc_formation_choice_label( $formation );
           }
         }
         break;

@@ -262,7 +262,7 @@ body{font-family:Arial,sans-serif;background:#f5f6fa;color:#1a2744;font-size:14p
                     <select name="formation_id">
                         <option value="">Toutes</option>
                         <?php foreach ( $formations as $f ) : ?>
-                        <option value="<?php echo esc_attr( $f->id ); ?>" <?php selected( $filters['formation_id'] ?? '', $f->id ); ?>><?php echo esc_html( $f->title ); ?></option>
+                        <option value="<?php echo esc_attr( $f->id ); ?>" <?php selected( $filters['formation_id'] ?? '', $f->id ); ?>><?php echo esc_html( \ACDC\Support\FormationLabel::fromRow( $f ) ); ?></option>
                         <?php endforeach; ?>
                     </select>
                 </div>

@@ -442,7 +442,10 @@ trait ACDC_Watch_Render_Trait {
 
   private function render_watch_exploit_modal() {
     global $wpdb;
-    $formations = $wpdb->get_results( "SELECT id, title FROM {$this->formation_table} WHERE is_draft = 0 AND is_active = 1 ORDER BY title ASC" );
+    /* ACDC 3.25.277 — Code et modalité ramenés avec le titre : la formation
+       impactée par une évolution réglementaire ne peut pas être choisie au
+       hasard entre deux fiches du même nom. */
+    $formations = $wpdb->get_results( "SELECT id, title, code, modality FROM {$this->formation_table} WHERE is_draft = 0 AND is_active = 1 ORDER BY title ASC, modality ASC" );
     ?>
     <div id="acdc-watch-exploit-modal" style="display:none;position:fixed;inset:0;z-index:99999;background:rgba(15,44,82,.45);overflow-y:auto;">
       <div style="background:#fff;border-radius:10px;max-width:640px;margin:60px auto;box-shadow:0 10px 30px rgba(28,44,64,.12);position:relative;">
@@ -468,7 +471,7 @@ trait ACDC_Watch_Render_Trait {
                 <label class="acdc-contract-label">Formation impactée</label>
                 <select name="formation_id" id="exploit_formation" style="width:100%;height:40px;border:1px solid var(--acdc-border,#dfe5ee);border-radius:10px;padding:0 12px;font-size:13px;">
                   <option value="">— Aucune —</option>
-                  <?php foreach ( $formations as $f ) : ?><option value="<?php echo (int) $f->id; ?>"><?php echo esc_html( $f->title ); ?></option><?php endforeach; ?>
+                  <?php foreach ( $formations as $f ) : ?><option value="<?php echo (int) $f->id; ?>"><?php echo esc_html( $this->acdc_formation_choice_label( $f ) ); ?></option><?php endforeach; ?>
                 </select>
               </div>
               <div>

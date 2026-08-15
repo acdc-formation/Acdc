@@ -614,7 +614,7 @@ trait ACDC_Trainer_Portal_Core_Trait {
     $now_sql    = current_time( 'mysql' );
     $rows = $wpdb->get_results( $wpdb->prepare(
       "SELECT DISTINCT s.id, s.title, s.start_at, s.start_date, s.end_at, s.end_date, s.location, s.remote_link,
-              f.title AS formation_title
+              f.title AS formation_title, f.modality AS formation_modality
        FROM {$this->session_table} s
        LEFT JOIN {$this->formation_table} f ON f.id = s.formation_id
        WHERE ( s.trainer_id = %d

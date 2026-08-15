@@ -16,7 +16,7 @@ trait ACDC_Sessions_Core_Trait {
 
   private function get_sessions() {
     global $wpdb;
-    $sql = "SELECT s.*, f.title AS formation_title, e.name AS company_name
+    $sql = "SELECT s.*, f.title AS formation_title, f.modality AS formation_modality, e.name AS company_name
         FROM {$this->session_table} s
         LEFT JOIN {$this->formation_table} f ON f.id = s.formation_id
         LEFT JOIN {$this->company_table} e ON e.id = s.company_id
@@ -33,7 +33,7 @@ trait ACDC_Sessions_Core_Trait {
       $where .= $wpdb->prepare( " AND ( s.title LIKE %s OR f.title LIKE %s OR e.name LIKE %s OR s.session_type LIKE %s OR s.session_format LIKE %s )", $like, $like, $like, $like, $like );
     }
 
-    $sql = "SELECT s.*, f.title AS formation_title, e.name AS company_name
+    $sql = "SELECT s.*, f.title AS formation_title, f.modality AS formation_modality, e.name AS company_name
       FROM {$this->session_table} s
       LEFT JOIN {$this->formation_table} f ON f.id = s.formation_id
       LEFT JOIN {$this->company_table} e ON e.id = s.company_id
@@ -145,7 +145,7 @@ trait ACDC_Sessions_Core_Trait {
       array_push( $values, $like, $like, $like, $like );
     }
 
-    $sql = "SELECT s.*, f.title AS formation_title, f.code AS formation_code, c.city AS formation_city,\n        MAX(g.id) AS group_id, MAX(g.name) AS group_name, MAX(g.trainer_name) AS group_trainer_name, MAX(g.learner_ids) AS group_learner_ids,\n        COUNT(DISTINCT l.id) AS learner_count, MAX(l.first_name) AS learner_first_name, MAX(l.usage_last_name) AS learner_usage_last_name, MAX(l.last_name) AS learner_last_name,\n        MAX(t.first_name) AS trainer_first_name, MAX(t.last_name) AS trainer_last_name\n      FROM {$this->session_table} s\n      LEFT JOIN {$this->formation_table} f ON f.id = s.formation_id\n      LEFT JOIN {$this->company_table} c ON c.id = s.company_id\n      LEFT JOIN {$this->group_table} g ON g.session_id = s.id\n      LEFT JOIN {$this->learner_table} l ON l.session_id = s.id\n      LEFT JOIN {$this->trainer_table} t ON t.id = s.trainer_id\n      WHERE " . implode( ' AND ', $where ) . "\n      GROUP BY s.id\n      ORDER BY COALESCE(s.start_at, CONCAT(s.start_date,' 00:00:00'), s.created_at) DESC, s.id DESC";
+    $sql = "SELECT s.*, f.title AS formation_title, f.code AS formation_code, f.modality AS formation_modality, c.city AS formation_city,\n        MAX(g.id) AS group_id, MAX(g.name) AS group_name, MAX(g.trainer_name) AS group_trainer_name, MAX(g.learner_ids) AS group_learner_ids,\n        COUNT(DISTINCT l.id) AS learner_count, MAX(l.first_name) AS learner_first_name, MAX(l.usage_last_name) AS learner_usage_last_name, MAX(l.last_name) AS learner_last_name,\n        MAX(t.first_name) AS trainer_first_name, MAX(t.last_name) AS trainer_last_name\n      FROM {$this->session_table} s\n      LEFT JOIN {$this->formation_table} f ON f.id = s.formation_id\n      LEFT JOIN {$this->company_table} c ON c.id = s.company_id\n      LEFT JOIN {$this->group_table} g ON g.session_id = s.id\n      LEFT JOIN {$this->learner_table} l ON l.session_id = s.id\n      LEFT JOIN {$this->trainer_table} t ON t.id = s.trainer_id\n      WHERE " . implode( ' AND ', $where ) . "\n      GROUP BY s.id\n      ORDER BY COALESCE(s.start_at, CONCAT(s.start_date,' 00:00:00'), s.created_at) DESC, s.id DESC";
 
     $rows = ! empty( $values ) ? $wpdb->get_results( $wpdb->prepare( $sql, $values ) ) : $wpdb->get_results( $sql );
 
@@ -544,7 +544,7 @@ trait ACDC_Sessions_Core_Trait {
     $month_start = sprintf( '%04d-%02d-01', $year, $month );
     $month_end   = gmdate( 'Y-m-t', gmmktime( 12, 0, 0, $month, 1, $year ) );
 
-    $sql = "SELECT s.*, f.title AS formation_title, e.name AS company_name
+    $sql = "SELECT s.*, f.title AS formation_title, f.modality AS formation_modality, e.name AS company_name
       FROM {$this->session_table} s
       LEFT JOIN {$this->formation_table} f ON f.id = s.formation_id
       LEFT JOIN {$this->company_table} e ON e.id = s.company_id
