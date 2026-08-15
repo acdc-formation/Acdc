@@ -1,0 +1,399 @@
+/**
+ * ACDC 3.25.273 — La couche d'adaptation aux écrans.
+ *
+ * « Tout le plugin a été développé sur mon Mac 27". Quand je le visualise sur
+ * mon iPhone, mon iPad ou mon laptop, visuellement c'est compliqué. »
+ *
+ * Trois modèles de référence, confirmés par David : iPhone SE / 13 mini
+ * (375 px), iPad en portrait (768 px), laptop 14" (1280 px). Ce sont les plus
+ * petits de chaque famille : ce qui tient sur eux tient sur les autres.
+ *
+ * UN SEUL FICHIER, CHARGÉ EN DERNIER. L'alternative — retoucher les dix-huit
+ * feuilles existantes — aurait dispersé la règle dans autant d'endroits, et la
+ * prochaine grille écrite ailleurs aurait échappé au traitement. Ici, tout ce
+ * qui concerne l'adaptation aux écrans se lit d'un seul tenant.
+ *
+ * LE DÉFAUT PRINCIPAL ÉTAIT STRUCTUREL, pas décoratif. En dessous de 1100 px,
+ * le menu latéral passait bien en pleine largeur — mais son conteneur restait
+ * en `display:flex` sans changer de direction. Le menu et le contenu restaient
+ * donc côte à côte : le menu prenait toute la largeur, et il ne restait rien
+ * pour le contenu. C'est ce qu'on voyait sur un iPad en portrait.
+ *
+ * PROGRESSION, PAS DÉPENDANCE. Le tiroir coulissant et les tableaux en fiches
+ * ne s'activent que si le navigateur a exécuté notre script — d'où la classe
+ * `acdc-js-ready`. Sans lui, on retombe sur une mise en page empilée et des
+ * tableaux qui défilent : moins confortable, mais utilisable. Une interface
+ * qui ne s'ouvre pas quand un script échoue est pire qu'une interface austère.
+ */
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   1. GARDE-FOUS UNIVERSELS
+   Ce qui déborde d'un écran étroit le fait presque toujours pour l'une de ces
+   trois raisons : une image sans limite, un mot trop long, un tableau plus
+   large que son parent.
+   ═══════════════════════════════════════════════════════════════════════════ */
+
+.acdc-portal-shell img,
+.acdc-portal-content img,
+.acdc-portal-content svg,
+.acdc-portal-content video,
+.acdc-portal-content canvas {
+    max-width: 100%;
+    height: auto;
+}
+
+.acdc-portal-content {
+    /* Une URL ou une référence sans espace ne doit pas élargir toute la page. */
+    overflow-wrap: break-word;
+}
+
+/* UNE VALEUR NE SE COUPE PAS AU MILIEU D'UN MOT.
+   Sur un laptop 14", on lisait « Présenti / el », « Planifié / e », « Brouillo /
+   n » : les colonnes étaient si serrées que les mots se brisaient. Un mot coupé
+   se relit deux fois — et sur une liste qu'on parcourt du regard, deux fois,
+   c'est déjà trop.
+   Les cellules cessent donc de casser les mots, et le tableau garde une largeur
+   minimale honnête : s'il ne tient pas, son conteneur défile — il est prévu pour
+   ça depuis toujours. Mieux vaut pousser du doigt que déchiffrer. */
+.acdc-table-wrap table th,
+table.acdc-table th {
+    white-space: nowrap;
+}
+
+.acdc-table-wrap table td,
+table.acdc-table td {
+    word-break: normal;
+    overflow-wrap: break-word;
+}
+
+
+/* Un libellé de bouton coupé en deux syllabes n'est plus un bouton. */
+.acdc-button,
+.acdc-status-badge,
+.acdc-badge {
+    white-space: nowrap;
+}
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   2. TABLETTE ET EN DESSOUS — jusqu'à 1024 px
+   Modèle : iPad en portrait, 768 px.
+   ═══════════════════════════════════════════════════════════════════════════ */
+
+@media (max-width: 1024px) {
+
+    /* LA CORRECTION STRUCTURELLE. Le conteneur cesse d'aligner le menu et le
+       contenu sur une même ligne : ils s'empilent. */
+    .acdc-portal-layout {
+        display: block;
+    }
+
+    .acdc-portal-nav {
+        width: 100%;
+        height: auto;
+        position: relative;
+        border-right: none;
+        border-bottom: 1px solid var(--acdc-border, #dce4ec);
+    }
+
+    .acdc-portal-content {
+        padding: 16px 14px;
+    }
+
+    /* Le tiroir : réservé aux navigateurs qui ont exécuté notre script. */
+    .acdc-js-ready .acdc-portal-nav {
+        position: fixed;
+        top: 0;
+        left: 0;
+        bottom: 0;
+        width: min(86vw, 320px);
+        height: 100vh;
+        max-height: 100vh;
+        overflow-y: auto;
+        z-index: 100050;
+        transform: translateX(-102%);
+        transition: transform .22s ease;
+        box-shadow: 0 0 40px rgba(12, 45, 82, .18);
+        border-bottom: none;
+    }
+
+    .acdc-js-ready.is-nav-open .acdc-portal-nav {
+        transform: translateX(0);
+    }
+
+    .acdc-js-ready .acdc-nav-backdrop {
+        position: fixed;
+        inset: 0;
+        background: rgba(12, 45, 82, .45);
+        z-index: 100040;
+        opacity: 0;
+        pointer-events: none;
+        transition: opacity .22s ease;
+    }
+
+    .acdc-js-ready.is-nav-open .acdc-nav-backdrop {
+        opacity: 1;
+        pointer-events: auto;
+    }
+
+    .acdc-js-ready .acdc-nav-toggle {
+        display: inline-flex;
+    }
+
+    /* Deux colonnes sur 768 px font deux colonnes trop étroites. */
+    .acdc-grid-2cols,
+    .acdc-profile-row,
+    .acdc-contract-grid,
+    .acdc-perf-cards,
+    .acdc-fin-filter-grid,
+    .acdc-trainer-filter-grid,
+    .acdc-ped-top,
+    .acdc-trainer-top,
+    .acdc-db21-kpis {
+        grid-template-columns: 1fr !important;
+    }
+
+    .acdc-section-head {
+        flex-direction: column;
+        align-items: flex-start;
+        gap: 12px;
+    }
+
+    /* UN CHAMP SUR SA PROPRE LIGNE.
+       Les formulaires posent le libellé et le champ côte à côte : sur 768 px,
+       le libellé mange la moitié de la place et la valeur saisie se retrouve
+       coupée en plein milieu — on ne relit pas ce qu'on vient d'écrire. */
+    .acdc-portal-content .acdc-form p > label,
+    .acdc-portal-content .acdc-form-panel p > label,
+    .acdc-portal-content .acdc-contract-grid > div > label {
+        display: block;
+        margin-bottom: 4px;
+    }
+
+    .acdc-portal-content input:not([type="checkbox"]):not([type="radio"]):not([type="submit"]),
+    .acdc-portal-content select,
+    .acdc-portal-content textarea {
+        width: 100%;
+        max-width: 100%;
+    }
+
+    /* Un tableau que le script n'a pas transformé en fiches ne doit pas
+       s'écraser pour tenir : ses colonnes se chevaucheraient et le texte se
+       lirait lettre par lettre à la verticale. Il défile. */
+    .acdc-table-wrap > table:not(.acdc-table-cards) {
+        min-width: 760px;
+    }
+
+    /* LES TABLEAUX DEVIENNENT DES FICHES.
+       Un tableau de douze colonnes sur 375 px se lit à la loupe, ou au doigt
+       en poussant de gauche à droite — et l'on perd les en-têtes en route.
+       Chaque ligne devient une fiche, chaque cellule porte son libellé, repris
+       de l'en-tête par le script. C'est le seul agencement où l'on sait
+       toujours ce qu'on lit.
+       Les tableaux non préparés par le script gardent le défilement
+       horizontal : mieux vaut une lecture au doigt qu'une colonne anonyme. */
+    .acdc-table-cards,
+    .acdc-table-cards thead,
+    .acdc-table-cards tbody,
+    .acdc-table-cards tr,
+    .acdc-table-cards td {
+        display: block;
+        width: 100%;
+    }
+
+    .acdc-table-cards thead {
+        display: none;
+    }
+
+    /* En fiches, le libellé est repris dans la cellule : il doit pouvoir se
+       plier, sinon une carte de 375 px déborderait. */
+    .acdc-table-cards td::before,
+    .acdc-table-cards td {
+        white-space: normal;
+    }
+
+    .acdc-table-cards tr {
+        margin: 0 0 12px;
+        border: 1px solid var(--acdc-border-soft, #e6eaf0);
+        border-radius: 12px;
+        background: #fff;
+        padding: 6px 12px 10px;
+    }
+
+    .acdc-table-cards td {
+        border: none !important;
+        border-bottom: 1px solid rgba(12, 45, 82, .07) !important;
+        padding: 8px 0 !important;
+        text-align: left !important;
+    }
+
+    .acdc-table-cards tr td:last-child {
+        border-bottom: none !important;
+    }
+
+    .acdc-table-cards td::before {
+        content: attr(data-acdc-label);
+        display: block;
+        margin-bottom: 2px;
+        font-size: 11px;
+        line-height: 1.35;
+        text-transform: uppercase;
+        letter-spacing: .3px;
+        color: var(--acdc-muted, #66738b);
+    }
+
+    /* Une cellule vide de libellé — la colonne d'actions — n'affiche pas un
+       bandeau gris vide au-dessus des boutons. */
+    .acdc-table-cards td[data-acdc-label=""]::before {
+        display: none;
+    }
+
+    .acdc-table-cards .acdc-actions-cell-icons,
+    .acdc-table-cards .acdc-sessions-actions-inline,
+    .acdc-table-cards .acdc-groups-actions-inline {
+        justify-content: flex-start;
+    }
+
+}
+
+/* Le bouton du menu n'existe que sur petit écran : au-delà, la barre latérale
+   est là en permanence et un bouton pour l'ouvrir n'aurait pas de sens. */
+.acdc-nav-toggle {
+    display: none;
+    align-items: center;
+    gap: 8px;
+    min-height: 44px;              /* la cible tactile recommandée */
+    padding: 0 14px;
+    border: 1px solid var(--acdc-border, #dce4ec);
+    border-radius: 12px;
+    background: #fff;
+    color: var(--acdc-text, #0C2D52);
+    font-size: 14px;
+    font-weight: 600;
+    cursor: pointer;
+}
+
+.acdc-nav-toggle-bars {
+    display: inline-flex;
+    flex-direction: column;
+    gap: 3px;
+}
+
+.acdc-nav-toggle-bars span {
+    display: block;
+    width: 18px;
+    height: 2px;
+    border-radius: 2px;
+    background: currentColor;
+}
+
+.acdc-nav-toggle-bar-holder {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    margin: 0 0 14px;
+}
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   3. MOBILE — jusqu'à 640 px
+   Modèle : iPhone SE / 13 mini, 375 px.
+   ═══════════════════════════════════════════════════════════════════════════ */
+
+@media (max-width: 640px) {
+
+    .acdc-portal-content {
+        padding: 12px 10px;
+    }
+
+    /* Les barres d'action passent à la ligne au lieu de déborder. */
+    .acdc-inline-wrap,
+    .acdc-section-head .acdc-inline-wrap {
+        flex-wrap: wrap;
+    }
+
+    /* Une cible tactile se manque à 30 px, pas à 44. */
+    .acdc-button,
+    .acdc-row-action-icon,
+    .acdc-icon-button {
+        min-height: 44px;
+    }
+
+    .acdc-button {
+        padding-left: 14px;
+        padding-right: 14px;
+    }
+
+    /* Les onglets défilent plutôt que de s'empiler sur six lignes. */
+    .acdc-tabs,
+    .acdc-subtabs {
+        display: flex;
+        flex-wrap: nowrap;
+        overflow-x: auto;
+        -webkit-overflow-scrolling: touch;
+        gap: 8px;
+    }
+
+    .acdc-tabs > *,
+    .acdc-subtabs > * {
+        flex: 0 0 auto;
+    }
+
+    /* Un champ sous 16 px déclenche le zoom automatique d'iOS à la saisie, et
+       la page reste zoomée ensuite. C'est la cause la plus fréquente des
+       formulaires « qui sautent » sur iPhone. */
+    .acdc-portal-content input,
+    .acdc-portal-content select,
+    .acdc-portal-content textarea {
+        font-size: 16px !important;
+        max-width: 100%;
+    }
+
+    /* Les modales occupent l'écran : une fenêtre centrée de 92 % avec des
+       marges perd la moitié de sa surface utile sur un téléphone. */
+    .acdc-modal-panel,
+    .acdc-modal-content,
+    .acdc-tp-modal-panel {
+        width: 100% !important;
+        max-width: 100% !important;
+        max-height: 100vh !important;
+        border-radius: 0 !important;
+        margin: 0 !important;
+    }
+
+    .acdc-panel,
+    .acdc-profile-section {
+        padding: 14px 12px;
+    }
+
+    h1, .acdc-page-title { font-size: 20px; line-height: 1.25; }
+    h2 { font-size: 17px; line-height: 1.3; }
+    h3 { font-size: 15px; line-height: 1.35; }
+}
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   4. LAPTOP 14" — de 1025 à 1440 px
+   Modèle : 1280 px. L'écran n'est pas étroit, il est simplement deux fois plus
+   petit que le 27" sur lequel tout a été dessiné : ce sont les marges et les
+   grilles à quatre colonnes qui coûtent, pas la structure.
+   ═══════════════════════════════════════════════════════════════════════════ */
+
+@media (min-width: 1025px) and (max-width: 1440px) {
+
+    .acdc-portal-nav {
+        width: min(var(--acdc-sidebar-width, 260px), 232px);
+    }
+
+    .acdc-portal-content {
+        padding: 20px 22px;
+    }
+
+    .acdc-perf-cards,
+    .acdc-trainer-top,
+    .acdc-db21-kpis {
+        grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
+    }
+
+    .acdc-panel,
+    .acdc-profile-section {
+        padding: 18px 20px;
+    }
+}

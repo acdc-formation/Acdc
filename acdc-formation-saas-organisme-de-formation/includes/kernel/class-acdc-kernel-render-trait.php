@@ -114,6 +114,21 @@ trait ACDC_Kernel_Render_Trait {
       /* ACDC 3.20.74 — Composant éditeur riche centralisé (réutilisable partout). */
       wp_enqueue_style( 'acdc-of-rich-editor', ACDC_OF_SAAS_URL . 'assets/css/acdc-rich-editor.css', array( 'acdc-of-ui-system' ), ACDC_OF_SAAS_VERSION );
       wp_enqueue_script( 'acdc-of-rich-editor', ACDC_OF_SAAS_URL . 'assets/js/acdc-rich-editor.js', array(), ACDC_OF_SAAS_VERSION, true );
+
+      /* ACDC 3.25.273 — LA COUCHE D'ADAPTATION AUX ÉCRANS, CHARGÉE EN DERNIER.
+         Tout le plugin a été dessiné sur un 27". Cette feuille corrige ce que
+         les petits écrans ne pardonnent pas, et elle est déclarée après toutes
+         les autres pour l'emporter sans avoir à multiplier les `!important`.
+         Le script, lui, ne fait que deux choses que le CSS ne sait pas faire :
+         replier le menu derrière un bouton, et recopier les en-têtes de colonne
+         dans les cellules pour que les tableaux deviennent lisibles en fiches. */
+      wp_enqueue_style(
+        'acdc-of-responsive',
+        ACDC_OF_SAAS_URL . 'assets/css/responsive.css',
+        array( 'acdc-of-ui-system', 'acdc-of-components', 'acdc-of-learner-portal', 'acdc-of-trainer-portal' ),
+        ACDC_OF_SAAS_VERSION
+      );
+      wp_enqueue_script( 'acdc-of-responsive', ACDC_OF_SAAS_URL . 'assets/js/acdc-responsive.js', array(), ACDC_OF_SAAS_VERSION, true );
     }
 
   }
@@ -14772,6 +14787,10 @@ Nb de questions réussies / Nb de questions : <?php echo esc_html( (int) $contex
   wp_enqueue_script( 'acdc-of-ui-system', ACDC_OF_SAAS_URL . 'assets/js/acdc-ui-system.js', array( 'acdc-of-ui-kernel', 'acdc-of-admin' ), ACDC_OF_SAAS_VERSION, true );
   wp_enqueue_style( 'acdc-of-admin-backoffice', ACDC_OF_SAAS_URL . 'assets/css/acdc-admin-backoffice.css', array( 'acdc-of-components' ), ACDC_OF_SAAS_VERSION );
   wp_enqueue_script( 'acdc-of-admin-backoffice', ACDC_OF_SAAS_URL . 'assets/js/acdc-admin-backoffice.js', array( 'acdc-of-ui-system' ), ACDC_OF_SAAS_VERSION, true );
+  /* ACDC 3.25.273 — Les mêmes écrans s'ouvrent depuis wp-admin : ils méritent
+     la même adaptation. Déclarée en dernier, après le back-office. */
+  wp_enqueue_style( 'acdc-of-responsive', ACDC_OF_SAAS_URL . 'assets/css/responsive.css', array( 'acdc-of-admin-backoffice' ), ACDC_OF_SAAS_VERSION );
+  wp_enqueue_script( 'acdc-of-responsive', ACDC_OF_SAAS_URL . 'assets/js/acdc-responsive.js', array(), ACDC_OF_SAAS_VERSION, true );
 }
 
 

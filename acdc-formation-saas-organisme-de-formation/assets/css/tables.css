@@ -252,26 +252,21 @@
     min-width: 230px;
 }
 
-/* 3.20.07 — Correction réelle Répertoire Apprenants : actions et colonnes */
-.acdc-table th:nth-child(1),
-.acdc-table td:nth-child(1) {
+/* 3.20.07 — Correction réelle Répertoire Apprenants : actions et colonnes.
+   ACDC 3.25.273 — CES RÈGLES ÉTAIENT ÉCRITES POUR UN SEUL TABLEAU ET
+   S'APPLIQUAIENT À TOUS. Elles visaient le répertoire des apprenants, dont la
+   quatrième colonne est courte ; mais posées sur `.acdc-table`, elles
+   plafonnaient la QUATRIÈME COLONNE DE TOUS LES TABLEAUX du plugin à 74 px,
+   largeur maximale comprise. Sur la liste des séances, « Méthode d'émargement »
+   s'y trouve : son en-tête débordait par-dessus la colonne suivante, et l'on
+   lisait « MÉTHODE D'ÉMARGEMENT » et « FORMAT » superposés. C'était visible sur
+   un 27" comme sur un laptop — personne ne l'avait rapporté à cette cause.
+   Les mêmes règles existent quelques lignes plus bas pour `.acdc-learners-table`
+   avec de meilleures valeurs : on se contente donc de rendre celles-ci à leur
+   tableau d'origine. */
+.acdc-learners-table th:nth-child(1),
+.acdc-learners-table td:nth-child(1) {
     min-width: 82px;
-}
-
-.acdc-table th:nth-child(4),
-.acdc-table td:nth-child(4) {
-    width: 74px;
-    min-width: 74px;
-    max-width: 74px;
-    text-align: center;
-    white-space: nowrap;
-}
-
-.acdc-table th:nth-child(5),
-.acdc-table td:nth-child(5),
-.acdc-table th:nth-child(6),
-.acdc-table td:nth-child(6) {
-    white-space: nowrap;
 }
 
 .acdc-learner-prospect-cell {
