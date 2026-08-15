@@ -1604,8 +1604,19 @@ trait ACDC_Learner_Portal_Render_Trait {
     $value    = (string) $value;
     $url      = ( $url && '#' !== $url ) ? esc_url( $url ) : '#';
     $extra_class = $highlight ? ' acdc-workflow-card--alert' : '';
+    /* ACDC 3.25.274 — UNE PHRASE NE SE REND PAS À LA TAILLE D'UN CHIFFRE.
+       Ces cartes affichent presque toujours un nombre seul, et 56 px lui vont
+       très bien. Mais la carte des disponibilités porte « 0/14 demi-j. » : à la
+       même taille, elle se coupait en « 0/14 demi- » puis « j. » sur un
+       téléphone, et écrasait sa propre étiquette. Une feuille de style ne peut
+       pas distinguer un chiffre d'une phrase — le code, lui, sait ce qu'il
+       affiche. Il le dit, et la mise en forme suit. */
+    $value_class = 'acdc-workflow-value';
+    if ( function_exists( 'mb_strlen' ) ? mb_strlen( $value ) > 4 : strlen( $value ) > 4 ) {
+      $value_class .= ' acdc-workflow-value--long';
+    }
     echo '<a href="' . $url . '" class="acdc-workflow-card' . esc_attr( $extra_class ) . '">'
-      . '<span class="acdc-workflow-value">' . esc_html( $value ) . '</span>'
+      . '<span class="' . esc_attr( $value_class ) . '">' . esc_html( $value ) . '</span>'
       . '<span class="acdc-workflow-label">' . esc_html( $label ) . '</span>'
       . '</a>';
   }

@@ -53,6 +53,13 @@ if ( ! is_readable( $css ) ) {
     if ( false === strpos( $src, 'acdc-nav-toggle' ) ) {
         $hits[] = 'Le bouton du menu a disparu : sur un téléphone, la barre latérale occupe tout l’écran.';
     }
+    /* Deux blocages mesurés sur l'iPhone de David, tous deux dus à `100vh`. */
+    if ( false === strpos( $src, '100dvh' ) ) {
+        $hits[] = 'L’unité dvh a disparu : `100vh` vaut sur iOS la hauteur écran BARRE D’ADRESSE COMPRISE. Le tiroir redevient plus haut que la surface visible, ne se déclare pas débordé, et ses dernières entrées deviennent inaccessibles.';
+    }
+    if ( false === strpos( $src, 'acdc-qz-live-player' ) ) {
+        $hits[] = 'Le déverrouillage des écrans de quiz a disparu : ils sont posés en height:100vh AVEC overflow:hidden, et sur un téléphone tout ce qui dépasse — la question, les réponses, le bouton de validation — redevient purement inatteignable.';
+    }
 }
 
 if ( ! is_readable( $js ) ) {

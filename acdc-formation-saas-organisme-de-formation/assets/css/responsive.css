@@ -100,6 +100,17 @@ table.acdc-table td {
     }
 
     /* Le tiroir : réservé aux navigateurs qui ont exécuté notre script. */
+    /* LE MENU OUVERT NE DÉFILAIT PAS JUSQU'EN BAS.
+       Relevé par David sur son iPhone : le tiroir s'ouvre, mais les dernières
+       entrées restent inaccessibles.
+       La cause est `100vh`, et elle est perverse : sur iOS, cette unité vaut la
+       hauteur de l'écran BARRE D'ADRESSE COMPRISE. Le tiroir était donc plus
+       haut que la surface réellement visible ; son contenu tenait dans cette
+       hauteur théorique, il ne se déclarait pas débordé, et rien ne défilait —
+       pendant que le bas passait sous la barre du navigateur.
+       `dvh` mesure la hauteur réellement disponible, barres comprises et
+       ajustée quand elles se replient. `100vh` reste écrit avant, comme repli
+       pour les navigateurs qui ne connaissent pas encore `dvh`. */
     .acdc-js-ready .acdc-portal-nav {
         position: fixed;
         top: 0;
@@ -107,8 +118,16 @@ table.acdc-table td {
         bottom: 0;
         width: min(86vw, 320px);
         height: 100vh;
+        height: 100dvh;
         max-height: 100vh;
+        max-height: 100dvh;
         overflow-y: auto;
+        -webkit-overflow-scrolling: touch;
+        /* Le geste de défilement reste dans le tiroir au lieu d'entraîner la
+           page derrière lui — sans quoi on croit que rien ne bouge. */
+        overscroll-behavior: contain;
+        /* La zone du geste d'accueil de l'iPhone mange les derniers pixels. */
+        padding-bottom: calc(24px + env(safe-area-inset-bottom, 0px));
         z-index: 100050;
         transform: translateX(-102%);
         transition: transform .22s ease;
@@ -253,6 +272,39 @@ table.acdc-table td {
         justify-content: flex-start;
     }
 
+    /* LES ÉCRANS QUI SE VERROUILLENT.
+       « J'avais déjà remarqué ça aussi pour les quiz : impossible de scroller
+       vers le bas, ça bloque. » Même cause que le tiroir, en pire, parce
+       qu'elle est écrite noir sur blanc : les pages de quiz en salle sont
+       posées en `height:100vh` AVEC `overflow:hidden`. Sur un écran d'ordinateur
+       le contenu tient, et l'on ne voit rien. Sur un téléphone, tout ce qui
+       dépasse la hauteur — c'est-à-dire la question, les réponses, le bouton de
+       validation — devient purement inatteignable : il n'y a pas de barre de
+       défilement, il n'y a rien.
+       On rend la hauteur MINIMALE au lieu de fixe, et le débordement visible.
+       La mise en page plein écran est conservée quand elle tient. */
+    .acdc-qz-live-host,
+    .acdc-qz-live-player,
+    .acdc-qz-host-state-podium.is-active,
+    .acdc-qz-player-state-podium.is-active {
+        height: auto !important;
+        min-height: 100vh;
+        min-height: 100dvh;
+        max-height: none !important;
+        overflow: visible !important;
+        overflow-y: auto !important;
+        -webkit-overflow-scrolling: touch;
+    }
+
+    /* Une page de questionnaire ou d'émargement ne se verrouille pas non plus. */
+    .acdc-survey-shell,
+    .acdc-qz-public-shell,
+    .acdc-emarg-shell {
+        min-height: 100vh;
+        min-height: 100dvh;
+        height: auto;
+        overflow: visible;
+    }
 }
 
 /* Le bouton du menu n'existe que sur petit écran : au-delà, la barre latérale
@@ -362,6 +414,28 @@ table.acdc-table td {
     .acdc-panel,
     .acdc-profile-section {
         padding: 14px 12px;
+    }
+
+    /* « 0/14 demi-j. » DÉBORDAIT SA CARTE.
+       Les valeurs des cartes de synthèse sont posées à 56 px : parfait pour un
+       chiffre seul — « 1 », « 0 » — mais cette carte-ci porte une phrase, et à
+       56 px sur un téléphone elle se coupait en « 0/14 demi- » puis « j. ». Le
+       chiffre restait lisible, la carte ne l'était plus.
+       La taille s'adapte donc à la largeur disponible, avec un plancher qui
+       garde de la présence à un chiffre seul et un plafond qui empêche une
+       valeur bavarde de tout emporter. */
+    .acdc-workflow-value {
+        font-size: clamp( 26px, 9vw, 40px ) !important;
+        line-height: 1.1;
+        display: block;
+        overflow-wrap: break-word;
+    }
+
+    /* Une valeur qui est une phrase se contente de la taille d'un titre : sur
+       375 px, la carte doit rester lue d'un coup d'œil, étiquette comprise. */
+    .acdc-workflow-value--long {
+        font-size: clamp( 17px, 5vw, 22px ) !important;
+        line-height: 1.25;
     }
 
     h1, .acdc-page-title { font-size: 20px; line-height: 1.25; }

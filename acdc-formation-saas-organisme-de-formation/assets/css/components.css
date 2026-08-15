@@ -209,6 +209,14 @@
     font-weight: 800;
 }
 
+/* ACDC 3.25.274 — La valeur qui n'est pas un nombre. Posée par le code, qui
+   sait ce qu'il affiche : « 0/14 demi-j. » à 56 px écrasait sa carte, sur un
+   téléphone comme sur un grand écran. */
+.acdc-workflow-value--long {
+    font-size: 26px;
+    line-height: 1.15;
+}
+
 /* hotfix54 — Carte en alerte (valeur > 0, action requise) */
 .acdc-workflow-card--alert {
     background: #fff0f0 !important;
