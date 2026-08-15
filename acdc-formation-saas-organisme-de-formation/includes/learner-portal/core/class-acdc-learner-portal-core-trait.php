@@ -1689,6 +1689,16 @@ trait ACDC_Learner_Portal_Core_Trait {
         'available' => ! empty( $registration->positioning_result_document_url ),
         'url' => ! empty( $registration->positioning_result_document_url ) ? $this->learner_portal_get_document_download_url( $registration->id, 'positioning_result' ) : '',
       ) );
+      /* ACDC 3.25.280 — L'apprenant voit son résultat d'évaluation diagnostique
+         au même endroit que les deux autres. Il existait dans le module quiz,
+         mais pas dans l'espace où l'apprenant vient chercher ses pièces. */
+      $groups['results']['items'][] = array_merge( $base, array(
+        'label' => 'Résultat de l’évaluation diagnostique',
+        'document_type' => 'diagnostic_result',
+        'doc_index' => 0,
+        'available' => ! empty( $registration->diagnostic_result_document_url ),
+        'url' => ! empty( $registration->diagnostic_result_document_url ) ? $this->learner_portal_get_document_download_url( $registration->id, 'diagnostic_result' ) : ''
+      ) );
       $groups['results']['items'][] = array_merge( $base, array(
         'label' => 'Résultat de l’évaluation des acquis',
         'document_type' => 'evaluation_result',
@@ -2061,6 +2071,8 @@ trait ACDC_Learner_Portal_Core_Trait {
         return ! empty( $registration->convocation_document_url ) ? (string) $registration->convocation_document_url : '';
       case 'positioning_result':
         return ! empty( $registration->positioning_result_document_url ) ? (string) $registration->positioning_result_document_url : '';
+      case 'diagnostic_result':
+        return ! empty( $registration->diagnostic_result_document_url ) ? (string) $registration->diagnostic_result_document_url : '';
       case 'evaluation_result':
         return ! empty( $registration->evaluation_result_document_url ) ? (string) $registration->evaluation_result_document_url : '';
       case 'completion_certificate':

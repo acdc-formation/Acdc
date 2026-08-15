@@ -3251,6 +3251,7 @@ public function render_admin_registration_contract_page() { $this->render_admin_
       $eval_items = array();
       $doc_types_eval = array(
         'positioning_result_document_url' => 'Test de positionnement',
+        'diagnostic_result_document_url'  => 'Évaluation diagnostique',
         'mid_survey_document_url'         => 'Enquête intermédiaire',
         'hot_survey_document_url'         => 'Enquête à chaud',
         'cold_survey_document_url'        => 'Enquête à froid',
@@ -3303,6 +3304,7 @@ public function render_admin_registration_contract_page() { $this->render_admin_
       $all_doc_types = array(
         'convocation_document_url'              => 'Convocation',
         'positioning_result_document_url'       => 'Positionnement',
+        'diagnostic_result_document_url'        => 'Diagnostique',
         'mid_survey_document_url'               => 'Enquête inter.',
         'hot_survey_document_url'               => 'Enquête chaud',
         'cold_survey_document_url'              => 'Enquête froid',

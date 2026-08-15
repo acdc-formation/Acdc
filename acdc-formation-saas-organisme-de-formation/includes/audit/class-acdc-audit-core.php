@@ -54,6 +54,10 @@ class ACDC_Audit_Core {
             'emargement'        => array( 'label' => 'Feuille d\'émargement',        'icon' => '' ),
             'convocation'       => array( 'label' => 'Convocation',                  'icon' => '' ),
             'positionnement'    => array( 'label' => 'Test de positionnement',        'icon' => '' ),
+            /* ACDC 3.25.280 — L'évaluation diagnostique manquait au catalogue de
+               l'audit : son résultat n'aurait porté aucun libellé devant
+               l'auditeur, ce qui revient à ne pas la produire. */
+            'diagnostic'        => array( 'label' => 'Évaluation diagnostique',       'icon' => '' ),
             'evaluation'        => array( 'label' => 'Évaluation des acquis',        'icon' => '' ),
             'satisfaction_mi'   => array( 'label' => 'Questionnaire satisfaction (mi-parcours)', 'icon' => '' ),
             'satisfaction_fin'  => array( 'label' => 'Questionnaire satisfaction (fin)',         'icon' => '' ),
@@ -182,6 +186,7 @@ class ACDC_Audit_Core {
             'mid_survey_document_url'               => 'satisfaction_mi',
             'hot_survey_document_url'               => 'satisfaction_fin',
             'cold_survey_document_url'              => 'satisfaction_froid',
+            'diagnostic_result_document_url'        => 'diagnostic',
             'evaluation_result_document_url'        => 'evaluation',
             'completion_certificate_document_url'   => 'attestation',
             'end_training_certificate_document_url' => 'certificat',

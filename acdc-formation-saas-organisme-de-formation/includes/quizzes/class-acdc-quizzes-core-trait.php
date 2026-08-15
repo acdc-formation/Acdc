@@ -5236,10 +5236,19 @@ trait ACDC_Quizzes_Core_Trait {
             return;
         }
         $qz_purpose = isset( $session->quiz_purpose ) ? (string) $session->quiz_purpose : '';
+        /* ACDC 3.25.280 — L'ÉVALUATION DIAGNOSTIQUE DÉPOSE AUSSI SON RÉSULTAT.
+           Elle était le seul des trois quiz structurels à ne rien laisser sur le
+           dossier : le positionnement et l'évaluation des acquis y écrivaient
+           depuis toujours, elle non. Son résultat existait donc — dans le module
+           quiz — mais il ne rejoignait jamais la pièce où l'on va chercher les
+           preuves d'un apprenant. Un résultat qu'il faut aller chercher ailleurs
+           est un résultat qu'on oublie de produire le jour de l'audit. */
         $reg_col = '';
-        if ( 'positioning' === $qz_purpose ) {
+        if ( self::ACDC_OF_QZ_PURPOSE_POSITIONING === $qz_purpose ) {
             $reg_col = 'positioning_result_document_url';
-        } elseif ( 'assessment' === $qz_purpose ) {
+        } elseif ( self::ACDC_OF_QZ_PURPOSE_DIAGNOSTIC === $qz_purpose ) {
+            $reg_col = 'diagnostic_result_document_url';
+        } elseif ( self::ACDC_OF_QZ_PURPOSE_ASSESSMENT === $qz_purpose ) {
             $reg_col = 'evaluation_result_document_url';
         }
         if ( '' === $reg_col ) {

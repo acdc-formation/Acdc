@@ -2255,6 +2255,7 @@ trait ACDC_Kernel_Render_Trait {
               $synt_docs = count( array_filter( array(
                 $registration->convocation_document_url ?? '',
                 $registration->positioning_result_document_url ?? '',
+                $registration->diagnostic_result_document_url ?? '',
                 $registration->mid_survey_document_url ?? '',
                 $registration->hot_survey_document_url ?? '',
                 $registration->cold_survey_document_url ?? '',
@@ -2355,6 +2356,7 @@ trait ACDC_Kernel_Render_Trait {
               <tr><th>Documents liés</th><td><?php echo esc_html( (string) count( array_filter( array(
                 $registration->convocation_document_url ?? '',
                 $registration->positioning_result_document_url ?? '',
+                $registration->diagnostic_result_document_url ?? '',
                 $registration->mid_survey_document_url ?? '',
                 $registration->hot_survey_document_url ?? '',
                 $registration->cold_survey_document_url ?? '',
@@ -2852,6 +2854,10 @@ trait ACDC_Kernel_Render_Trait {
         <?php
           $eval_docs = array(
             array( 'label' => 'Positionnement initial', 'url' => isset( $registration->positioning_result_document_url ) ? $registration->positioning_result_document_url : '' ),
+            /* ACDC 3.25.280 — Le résultat de l'évaluation diagnostique rejoint
+               ses deux jumeaux : sans lui, la preuve existait dans le module
+               quiz mais restait absente du dossier de l'apprenant. */
+            array( 'label' => 'Évaluation diagnostique', 'url' => isset( $registration->diagnostic_result_document_url ) ? $registration->diagnostic_result_document_url : '' ),
             array( 'label' => 'Enquête intermédiaire',  'url' => isset( $registration->mid_survey_document_url ) ? $registration->mid_survey_document_url : '' ),
             array( 'label' => 'Enquête à chaud',        'url' => isset( $registration->hot_survey_document_url ) ? $registration->hot_survey_document_url : '' ),
             array( 'label' => 'Évaluation des acquis',  'url' => isset( $registration->evaluation_result_document_url ) ? $registration->evaluation_result_document_url : '' ),
@@ -2922,6 +2928,9 @@ trait ACDC_Kernel_Render_Trait {
           $document_links = array(
             array( 'label' => 'Convocations', 'url' => is_admin() ? $this->admin_tab_url( 'invitations' ) : $this->portal_page_url( array( 'tab' => 'invitations' ) ), 'doc' => ! empty( $registration->convocation_document_url ) ),
             array( 'label' => 'Résultats de positionnement', 'url' => is_admin() ? $this->admin_tab_url( 'qz_results_positioning' ) : $this->portal_page_url( array( 'tab' => 'qz_results_positioning' ) ), 'doc' => ! empty( $registration->positioning_result_document_url ) ),
+            /* ACDC 3.25.280 — La famille « Évaluations diagnostiques » manquait à
+               cette liste : son résultat ne remontait nulle part sur le dossier. */
+            array( 'label' => 'Évaluations diagnostiques', 'url' => is_admin() ? $this->admin_tab_url( 'qz_results_diagnostic' ) : $this->portal_page_url( array( 'tab' => 'qz_results_diagnostic' ) ), 'doc' => ! empty( $registration->diagnostic_result_document_url ) ),
             array( 'label' => 'Enquêtes intermédiaires', 'url' => is_admin() ? $this->admin_tab_url( 'mid_surveys' ) : $this->portal_page_url( array( 'tab' => 'mid_surveys' ) ), 'doc' => ! empty( $registration->mid_survey_document_url ) ),
             array( 'label' => 'Enquêtes à chaud', 'url' => is_admin() ? $this->admin_tab_url( 'hot_surveys' ) : $this->portal_page_url( array( 'tab' => 'hot_surveys' ) ), 'doc' => ! empty( $registration->hot_survey_document_url ) ),
             array( 'label' => 'Enquêtes à froid', 'url' => is_admin() ? $this->admin_tab_url( 'cold_surveys' ) : $this->portal_page_url( array( 'tab' => 'cold_surveys' ) ), 'doc' => ! empty( $registration->cold_survey_document_url ) ),
@@ -2958,6 +2967,7 @@ trait ACDC_Kernel_Render_Trait {
                 $doc_direct_urls = array(
                   'Convocations'                   => isset( $registration->convocation_document_url ) ? $registration->convocation_document_url : '',
                   'Résultats de positionnement'    => isset( $registration->positioning_result_document_url ) ? $registration->positioning_result_document_url : '',
+                  'Évaluations diagnostiques'      => isset( $registration->diagnostic_result_document_url ) ? $registration->diagnostic_result_document_url : '',
                   'Enquêtes intermédiaires'        => isset( $registration->mid_survey_document_url ) ? $registration->mid_survey_document_url : '',
                   'Enquêtes à chaud'               => isset( $registration->hot_survey_document_url ) ? $registration->hot_survey_document_url : '',
                   'Enquêtes à froid'               => isset( $registration->cold_survey_document_url ) ? $registration->cold_survey_document_url : '',

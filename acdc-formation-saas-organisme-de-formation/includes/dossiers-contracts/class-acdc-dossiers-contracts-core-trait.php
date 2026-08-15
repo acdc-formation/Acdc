@@ -2659,6 +2659,8 @@ trait ACDC_Dossiers_Contracts_Core_Trait {
       'convocation_document_path' => '',
       'positioning_result_document_url' => '',
       'positioning_result_document_path' => '',
+      'diagnostic_result_document_url' => '',
+      'diagnostic_result_document_path' => '',
       'mid_survey_document_url' => '',
       'mid_survey_document_path' => '',
       'hot_survey_document_url' => '',

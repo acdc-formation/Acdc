@@ -2233,6 +2233,8 @@ private function acdc_send_transactional_email( $to, $subject, $template_args = 
       convocation_document_path TEXT,
       positioning_result_document_url TEXT,
       positioning_result_document_path TEXT,
+      diagnostic_result_document_url TEXT,
+      diagnostic_result_document_path TEXT,
       mid_survey_document_url TEXT,
       mid_survey_document_path TEXT,
       hot_survey_document_url TEXT,
@@ -2680,6 +2682,12 @@ dbDelta( $sql_companies );
        certificat reviendrait à écraser l'une par l'autre. */
     $this->maybe_add_table_column( $this->training_registration_table, 'absence_certificate_document_url', 'TEXT DEFAULT NULL' );
     $this->maybe_add_table_column( $this->training_registration_table, 'absence_certificate_document_path', 'TEXT DEFAULT NULL' );
+    /* ACDC 3.25.280 — Le résultat de l'évaluation diagnostique se dépose sur le
+       dossier, comme celui du test de positionnement et celui de l'évaluation
+       des acquis. Il était le seul des trois quiz structurels à ne laisser
+       aucune trace sur la fiche d'inscription. */
+    $this->maybe_add_table_column( $this->training_registration_table, 'diagnostic_result_document_url',  'TEXT DEFAULT NULL' );
+    $this->maybe_add_table_column( $this->training_registration_table, 'diagnostic_result_document_path', 'TEXT DEFAULT NULL' );
     $this->maybe_add_table_column( $this->session_table, 'completion_certificate_sent_at', 'DATETIME DEFAULT NULL' );
     $this->maybe_add_table_column( $this->session_table, 'end_training_certificate_sent_at', 'DATETIME DEFAULT NULL' );
     $this->maybe_add_table_column( $this->session_table, 'positioning_sent_at', 'DATETIME DEFAULT NULL' );
@@ -6723,6 +6731,7 @@ dbDelta( $sql_companies );
     $document_map = array(
       'convocation_document_url' => 'Convocation disponible',
       'positioning_result_document_url' => 'Résultat de positionnement disponible',
+      'diagnostic_result_document_url' => 'Résultat de l’évaluation diagnostique disponible',
       'mid_survey_document_url' => 'Enquête intermédiaire disponible',
       'hot_survey_document_url' => 'Enquête à chaud disponible',
       'cold_survey_document_url' => 'Enquête à froid disponible',
@@ -12477,6 +12486,7 @@ private function acdc_pdf_asset_is_readable( $url ) {
     $registration_columns = array(
       'convocation_document_path',
       'positioning_result_document_path',
+      'diagnostic_result_document_path',
       'mid_survey_document_path',
       'hot_survey_document_path',
       'cold_survey_document_path',
