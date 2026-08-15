@@ -155,42 +155,124 @@ private function acdc_build_transactional_email_html( $args = array() ) {
     $summary_rows = ! empty( $args['summary_rows'] ) && is_array( $args['summary_rows'] ) ? $args['summary_rows'] : array();
     $footer_notice = isset( $args['footer_notice'] ) ? trim( wp_strip_all_tags( (string) $args['footer_notice'] ) ) : 'Cet e-mail a été envoyé par ACDC Formation. Vos données sont traitées conformément au RGPD.';
 
+    /* ACDC 3.25.272 — CE GABARIT ÉTAIT ILLISIBLE SUR UN TÉLÉPHONE.
+     *
+     * Relevé sur l'iPhone de David, captures à l'appui : le titre passait sur
+     * deux lignes, le sous-titre sur quatre, et son code de vérification se
+     * coupait en deux — « 7 6 9 7 » puis « 6 0 ». Un code qu'on doit recopier
+     * ne doit jamais passer à la ligne.
+     *
+     * La cause n'était pas mystérieuse : 860 px de large, 56 px de marge de
+     * chaque côté, un titre à 34 px, un corps à 19 px. Sur un écran de 390 px,
+     * il restait environ 250 px utiles. Et le document n'avait ni en-tête, ni
+     * balise viewport, ni la moindre règle d'adaptation : rien n'était prévu
+     * pour un petit écran, nulle part.
+     *
+     * LE PARTI PRIS : les tailles écrites en ligne sont celles du MOBILE, et
+     * une règle d'adaptation les agrandit sur grand écran. C'est l'inverse de
+     * ce qu'on fait d'habitude, et c'est volontaire : plusieurs messageries
+     * suppriment les feuilles de style. Si cela arrive, il reste la version
+     * mobile — lisible partout — au lieu de la version bureau, illisible sur un
+     * téléphone. Le mode dégradé doit rester lisible.
+     */
     $summary_html = '';
     if ( $summary_title && ! empty( $summary_rows ) ) {
-      $summary_html .= '<div style="background:#f7f7f8;border-radius:10px;padding:28px 32px;margin:0 0 30px;">';
-      $summary_html .= '<div style="font-size:16px;font-weight:800;letter-spacing:0.5px;text-transform:uppercase;color:#1f335d;margin-bottom:18px;">' . esc_html( $summary_title ) . '</div>';
-      $summary_html .= '<table style="width:100%;border-collapse:collapse;font-size:17px;line-height:1.5;">';
+      $summary_html .= '<div style="background:#f7f7f8;border-radius:10px;padding:18px 20px;margin:0 0 24px;">';
+      $summary_html .= '<div style="font-size:13px;font-weight:800;letter-spacing:0.4px;text-transform:uppercase;color:#1f335d;margin-bottom:12px;">' . esc_html( $summary_title ) . '</div>';
+      $first = true;
       foreach ( $summary_rows as $row ) {
         $label = ! empty( $row['label'] ) ? trim( wp_strip_all_tags( (string) $row['label'] ) ) : '';
         $value = isset( $row['value'] ) ? trim( wp_strip_all_tags( (string) $row['value'] ) ) : '';
         if ( '' === $label ) {
           continue;
         }
-        $summary_html .= '<tr><td style="padding:6px 0;color:#66738b;width:38%;">' . esc_html( $label ) . '</td><td style="padding:6px 0;font-weight:700;color:#222;">' . esc_html( '' !== $value ? $value : '—' ) . '</td></tr>';
+        /* Le récapitulatif était une table à deux colonnes dont la première
+           occupait 38 % : sur un téléphone, le libellé tenait dans 95 px et la
+           valeur dans 155 px. « Intelligence artificielle » y passait sur deux
+           lignes, et un libellé court se retrouvait centré à côté d'une valeur
+           de cinq lignes — la ligne ne voulait plus rien dire.
+           Empilé, le libellé au-dessus de sa valeur, il n'y a plus de largeur à
+           partager : c'est lisible sur un téléphone ET sur un écran large. */
+        $summary_html .= '<div style="padding:' . ( $first ? '0' : '12px' ) . ' 0 12px;border-top:' . ( $first ? 'none' : '1px solid #e6e8ee' ) . ';">'
+          . '<div style="font-size:12px;line-height:1.4;text-transform:uppercase;letter-spacing:0.4px;color:#66738b;">' . esc_html( $label ) . '</div>'
+          . '<div style="font-size:15px;line-height:1.5;font-weight:700;color:#222;">' . esc_html( '' !== $value ? $value : '—' ) . '</div>'
+          . '</div>';
+        $first = false;
       }
-      $summary_html .= '</table></div>';
+      $summary_html .= '</div>';
     }
 
-    return '<div style="margin:0;padding:24px;background:#f3f4f6;font-family:Arial,sans-serif;color:#24324a;">'
-      . '<div style="max-width:860px;margin:0 auto;background:#ffffff;border-radius:24px;overflow:hidden;box-shadow:0 8px 24px rgba(28,44,64,0.08);">'
-      . '<div style="padding:44px 56px 24px;text-align:center;">'
-      . ( $branding['logo_url'] ? '<div style="margin-bottom:18px;"><img src="' . esc_url( $branding['logo_url'] ) . '" alt="Logo" style="max-width:120px;height:auto;"></div>' : '' )
-      . '<div style="font-size:34px;line-height:1.2;font-weight:800;color:#1f335d;">' . esc_html( $branding['company_name'] ) . '</div>'
-      . '<div style="font-size:18px;line-height:1.4;letter-spacing:1px;color:#45567b;text-transform:uppercase;">' . esc_html( $branding['subtitle'] ) . '</div>'
+    $styles = 'body{margin:0;padding:0;width:100%!important;}'
+      . 'img{border:0;outline:none;text-decoration:none;-ms-interpolation-mode:bicubic;}'
+      . 'a{color:#c59a2a;}'
+      /* LE CORPS DU MESSAGE N'EST PAS ÉCRIT ICI.
+         Chaque envoi compose son propre contenu — une trentaine d'endroits dans
+         le plugin — et beaucoup posent des tailles calibrées pour un grand
+         écran : 18, 19 px, parfois davantage. Les corriger un par un serait
+         long, et surtout le prochain paragraphe écrit ailleurs recommencerait.
+         On plafonne donc à la source, pour le petit écran seulement. Une règle
+         marquée `!important` l'emporte sur un style posé en ligne : c'est le
+         seul moyen de reprendre la main sur du contenu qu'on ne maîtrise pas. */
+      . '@media only screen and (max-width:599px){'
+      . '.acdc-mail-body p,.acdc-mail-body li,.acdc-mail-body td,.acdc-mail-body div{font-size:15px!important;line-height:1.6!important;}'
+      . '.acdc-mail-body h1{font-size:20px!important;line-height:1.3!important;}'
+      . '.acdc-mail-body h2{font-size:17px!important;line-height:1.35!important;}'
+      . '.acdc-mail-body h3{font-size:15px!important;line-height:1.4!important;}'
+      . '.acdc-mail-body img{max-width:100%!important;height:auto!important;}'
+      /* Une adresse ou un lien long ne doit pas élargir tout le message : il
+         vaut mieux le couper que de faire défiler la page entière. */
+      . '.acdc-mail-body a{word-break:break-word!important;}'
+      /* Les tableaux de mise en page restent, mais ils cessent d'imposer une
+         largeur que l'écran n'a pas. */
+      . '.acdc-mail-body table{width:100%!important;max-width:100%!important;}'
+      . '}'
+      /* Au-delà de 600 px on retrouve le confort d'origine — jamais en dessous. */
+      . '@media only screen and (min-width:600px){'
+      . '.acdc-mail-shell{padding:24px!important;}'
+      . '.acdc-mail-head{padding:40px 48px 20px!important;}'
+      . '.acdc-mail-body{padding:8px 48px 44px!important;}'
+      . '.acdc-mail-foot{padding:24px 40px!important;}'
+      . '.acdc-mail-title{font-size:30px!important;}'
+      . '.acdc-mail-subtitle{font-size:15px!important;}'
+      . '.acdc-mail-text{font-size:17px!important;}'
+      . '}';
+
+    return '<!DOCTYPE html><html lang="fr"><head>'
+      . '<meta charset="utf-8">'
+      /* Sans cette ligne, iOS ne sait pas que la page est prévue pour la
+         largeur de l'écran : il la met à l'échelle, et tout devient énorme ou
+         minuscule selon l'élément le plus large. */
+      . '<meta name="viewport" content="width=device-width,initial-scale=1">'
+      . '<meta name="x-apple-disable-message-reformatting">'
+      . '<meta name="color-scheme" content="light only">'
+      . '<title>' . esc_html( $branding['company_name'] ) . '</title>'
+      . '<style>' . $styles . '</style>'
+      . '</head>'
+      . '<body style="margin:0;padding:0;background:#f3f4f6;">'
+      . '<div class="acdc-mail-shell" style="margin:0;padding:12px;background:#f3f4f6;font-family:Arial,Helvetica,sans-serif;color:#24324a;">'
+      . '<div style="max-width:860px;margin:0 auto;background:#ffffff;border-radius:16px;overflow:hidden;">'
+      . '<div class="acdc-mail-head" style="padding:24px 20px 12px;text-align:center;">'
+      . ( $branding['logo_url'] ? '<div style="margin-bottom:14px;"><img src="' . esc_url( $branding['logo_url'] ) . '" alt="' . esc_attr( $branding['company_name'] ) . '" width="110" style="max-width:110px;height:auto;"></div>' : '' )
+      . '<div class="acdc-mail-title" style="font-size:22px;line-height:1.25;font-weight:800;color:#1f335d;">' . esc_html( $branding['company_name'] ) . '</div>'
+      /* Le sous-titre passait sur quatre lignes : en majuscules espacées, il
+         est le plus large de tout le message. Il perd son interlettrage et
+         redescend à une taille qui tient sur une ou deux lignes. */
+      . '<div class="acdc-mail-subtitle" style="font-size:12px;line-height:1.4;color:#45567b;text-transform:uppercase;">' . esc_html( $branding['subtitle'] ) . '</div>'
       . '</div>'
-      . '<div style="padding:12px 56px 56px;">'
-      . '<p style="font-size:19px;line-height:1.7;margin:0 0 24px;">Bonjour <strong>' . esc_html( $greeting_name ? $greeting_name : '—' ) . '</strong>,</p>'
+      . '<div class="acdc-mail-body" style="padding:8px 20px 28px;">'
+      . '<p class="acdc-mail-text" style="font-size:15px;line-height:1.6;margin:0 0 18px;">Bonjour <strong>' . esc_html( $greeting_name ? $greeting_name : '—' ) . '</strong>,</p>'
       . $intro_html
       . $summary_html
       . $body_html
-      . '<p style="font-size:18px;line-height:1.7;margin:30px 0 0;">Si vous avez des questions, vous pouvez nous contacter directement à <a href="mailto:' . esc_attr( $branding['email'] ) . '" style="color:#c59a2a;text-decoration:underline;">' . esc_html( $branding['email'] ) . '</a> ou au <strong>' . esc_html( $branding['phone'] ) . '</strong>.</p>'
-      . '<p style="font-size:18px;line-height:1.7;margin:36px 0 0;">Cordialement,<br><strong>L’équipe ' . esc_html( $branding['company_name'] ) . '</strong></p>'
+      . '<p class="acdc-mail-text" style="font-size:15px;line-height:1.6;margin:24px 0 0;">Si vous avez des questions, vous pouvez nous contacter directement à <a href="mailto:' . esc_attr( $branding['email'] ) . '" style="color:#c59a2a;text-decoration:underline;word-break:break-word;">' . esc_html( $branding['email'] ) . '</a> ou au <strong>' . esc_html( $branding['phone'] ) . '</strong>.</p>'
+      . '<p class="acdc-mail-text" style="font-size:15px;line-height:1.6;margin:24px 0 0;">Cordialement,<br><strong>L’équipe ' . esc_html( $branding['company_name'] ) . '</strong></p>'
       . '</div>'
-      . '<div style="padding:28px 40px;text-align:center;border-top:1px solid #e3e7ef;background:#fafafa;color:#6a7488;font-size:13px;line-height:1.6;">'
-      . esc_html( $branding['phone'] ) . ' · <a href="mailto:' . esc_attr( $branding['email'] ) . '" style="color:#5579bf;text-decoration:underline;">' . esc_html( $branding['email'] ) . '</a> · <a href="' . esc_url( $branding['website'] ) . '" style="color:#5579bf;text-decoration:underline;">' . esc_html( $branding['website_label'] ) . '</a>'
+      . '<div class="acdc-mail-foot" style="padding:18px 20px;text-align:center;border-top:1px solid #e3e7ef;background:#fafafa;color:#6a7488;font-size:12px;line-height:1.6;">'
+      . esc_html( $branding['phone'] ) . ' · <a href="mailto:' . esc_attr( $branding['email'] ) . '" style="color:#5579bf;text-decoration:underline;word-break:break-word;">' . esc_html( $branding['email'] ) . '</a> · <a href="' . esc_url( $branding['website'] ) . '" style="color:#5579bf;text-decoration:underline;word-break:break-word;">' . esc_html( $branding['website_label'] ) . '</a>'
       . ( $branding['address_line'] ? '<br>' . esc_html( $branding['address_line'] ) : '' )
       . '<br>' . esc_html( $footer_notice )
-      . '</div></div></div>';
+      . '</div></div></div>'
+      . '</body></html>';
   }
 
 private function acdc_get_transactional_email_headers( $args = array() ) {

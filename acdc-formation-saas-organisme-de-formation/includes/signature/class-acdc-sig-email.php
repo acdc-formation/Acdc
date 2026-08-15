@@ -311,9 +311,19 @@ class ACDC_Sig_Email {
         /* ACDC 3.25.246 — Gabarit commun. Le bloc du code reste tel quel : c'est
            lui que le signataire cherche des yeux, il doit rester grand et
            centré. Seule l'enveloppe change. */
-        $otp_block = '<div style="text-align:center;margin:28px 0">'
-                   . '<div style="display:inline-block;background:#f0f4ff;border:2px solid #1a2744;border-radius:10px;padding:18px 36px">'
-                   . '<span style="font-size:36px;font-weight:900;letter-spacing:10px;color:#1a2744;font-family:monospace">' . esc_html( $otp ) . '</span>'
+        /* ACDC 3.25.272 — LE CODE SE COUPAIT EN DEUX SUR UN TÉLÉPHONE.
+           « 7 6 9 7 » sur une ligne, « 6 0 » sur la suivante : six chiffres à
+           36 px avec 10 px d'interlettrage réclament près de 280 px, plus 72 px
+           de marge intérieure — soit davantage que la largeur utile d'un
+           iPhone. Un code qu'on doit recopier ne doit jamais passer à la ligne :
+           c'est la seule information de tout le message qui doit être lue
+           caractère par caractère.
+           Il reste grand et centré — c'est ce que le signataire cherche des
+           yeux — mais il tient désormais sur une ligne, et `nowrap` le garantit
+           même si une messagerie décide de rétrécir encore. */
+        $otp_block = '<div style="text-align:center;margin:24px 0">'
+                   . '<div style="display:inline-block;background:#f0f4ff;border:2px solid #1a2744;border-radius:10px;padding:14px 20px">'
+                   . '<span style="font-size:28px;font-weight:900;letter-spacing:5px;color:#1a2744;font-family:monospace;white-space:nowrap;">' . esc_html( $otp ) . '</span>'
                    . '</div></div>'
                    . '<p style="text-align:center;color:#856404;background:#fff3cd;padding:8px 12px;border-radius:4px;font-size:13px">⏳ Ce code est valable <strong>15 minutes</strong>.</p>'
                    . '<p style="font-size:12px;color:#666;margin-top:20px">Ce code est personnel et confidentiel. Ne le communiquez à personne.<br>'
