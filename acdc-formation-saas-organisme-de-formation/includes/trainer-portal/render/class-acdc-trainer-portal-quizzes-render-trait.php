@@ -157,21 +157,38 @@ trait ACDC_Trainer_Portal_Quizzes_Render_Trait {
         $base_url = $this->trainer_portal_page_url( 'quizzes' );
 
         ob_start();
-        $can_create = $this->trainer_can( $trainer_id, 'create_quiz' );
+        /* ACDC 3.25.276 — PAS DE FORMATION, PAS DE CRÉATION.
+           « Vérifie aussi qu'il ne peut créer un quiz que s'il est rattaché à
+           une formation, sinon pas la possibilité de créer un quiz. »
+           Un quiz est toujours rattaché à une formation : le formulaire l'exige
+           déjà. Mais il s'ouvrait quand même sur une liste vide, et l'on ne
+           découvrait le blocage qu'après avoir saisi un titre. Le bouton ne
+           s'affiche donc plus, et l'on dit pourquoi — un bouton absent sans
+           explication est une autre façon de laisser quelqu'un chercher. */
+        $formations_animees = (array) $this->get_qz_formations_for_trainer( $trainer_id );
+        $can_create = $this->trainer_can( $trainer_id, 'create_quiz' ) && ! empty( $formations_animees );
+        $create_bloque = $this->trainer_can( $trainer_id, 'create_quiz' ) && empty( $formations_animees );
         ?>
         <div class="acdc-trainer-portal-quizzes">
             <div class="acdc-trainer-portal-quizzes-header">
                 <div class="acdc-trainer-portal-quizzes-header-text">
                     <h1>Mes quiz</h1>
                     <p class="acdc-trainer-portal-quizzes-subtitle">
-                        Quiz, tests de positionnement et évaluations rattachés aux formations que vous animez.
+                        Quiz live, tests de positionnement et évaluations rattachés aux formations que vous animez. Vous créez les quiz live ; les autres sont préparés par l’organisme.
                     </p>
                 </div>
                 <?php if ( $can_create ) : ?>
                     <div class="acdc-trainer-portal-quizzes-header-actions">
                         <button type="button" class="acdc-button acdc-button-primary" data-acdc-tp-modal-open="acdc-tp-quiz-create">
-                            + Créer un quiz
+                            + Créer un quiz live
                         </button>
+                    </div>
+                <?php elseif ( $create_bloque ) : ?>
+                    <div class="acdc-trainer-portal-quizzes-header-actions">
+                        <span class="acdc-tp-hint" style="display:block;max-width:320px;text-align:right;">
+                            La création d’un quiz demande d’être rattaché à une formation.
+                            Vous n’en animez aucune pour le moment.
+                        </span>
                     </div>
                 <?php endif; ?>
             </div>
@@ -361,6 +378,12 @@ trait ACDC_Trainer_Portal_Quizzes_Render_Trait {
         $preselected_purpose = isset( $purpose_default_map[ $current_purpose ] ) ? $purpose_default_map[ $current_purpose ] : 'assessment';
 
         $formations = $this->get_qz_formations_for_trainer( $trainer_id );
+
+        /* ACDC 3.25.276 — L'ÉCRAN DIT LA MÊME CHOSE QUE LE SERVEUR.
+           Le formateur ne crée que des quiz live : le menu déroulant des
+           finalités n'a plus lieu d'être, et le mode de passation non plus — un
+           quiz live se joue en salle, par définition. Ce qui reste à saisir
+           tient en deux champs : un titre, une formation. */
         ?>
         <div id="acdc-tp-quiz-create" class="acdc-tp-modal" hidden role="dialog" aria-modal="true" aria-label="Créer un quiz">
             <div class="acdc-tp-modal-overlay" data-acdc-tp-modal-close></div>
@@ -382,16 +405,11 @@ trait ACDC_Trainer_Portal_Quizzes_Render_Trait {
                         <input type="text" id="acdc-tp-quiz-title" name="title" required maxlength="200" autocomplete="off" />
                     </p>
 
-                    <p class="acdc-tp-field">
-                        <label for="acdc-tp-quiz-purpose">
-                            <span class="acdc-tp-required">Finalité <span aria-hidden="true">*</span></span>
-                        </label>
-                        <select id="acdc-tp-quiz-purpose" name="quiz_purpose" required>
-                            <option value="live" <?php selected( $preselected_purpose, 'live' ); ?>>Quiz live (animé en direct)</option>
-                            <option value="positioning" <?php selected( $preselected_purpose, 'positioning' ); ?>>Test de positionnement (avant formation)</option>
-                            <option value="diagnostic" <?php selected( $preselected_purpose, 'diagnostic' ); ?>>Évaluation diagnostique (début de formation)</option>
-                            <option value="assessment" <?php selected( $preselected_purpose, 'assessment' ); ?>>Évaluation des acquis (fin de formation)</option>
-                        </select>
+                    <input type="hidden" name="quiz_purpose" value="live" />
+                    <p class="acdc-tp-hint" style="margin:0 0 14px;">
+                        Vous créez un <strong>quiz live</strong>, animé en direct pendant la formation.
+                        Les tests de positionnement et les évaluations sont préparés par l’organisme
+                        pour chaque action de formation.
                     </p>
 
                     <p class="acdc-tp-field">
@@ -409,17 +427,10 @@ trait ACDC_Trainer_Portal_Quizzes_Render_Trait {
                         <?php endif; ?>
                     </p>
 
-                    <?php /* ACDC 3.25.167 — L'évaluation diagnostique se passe en salle au
-                             début de la formation, comme l'évaluation des acquis à la fin :
-                             les deux ouvrent le choix de la modalité, avec la salle par
-                             défaut. L'asynchrone reste possible pour un rattrapage. */ ?>
-                    <p class="acdc-tp-field" data-show-when-purpose="diagnostic,assessment">
-                        <label for="acdc-tp-quiz-delivery-mode">Mode de passation</label>
-                        <select id="acdc-tp-quiz-delivery-mode" name="delivery_mode">
-                            <option value="live_sync">En salle, en direct (anti-triche)</option>
-                            <option value="async_token">À distance, par e-mail (rattrapage)</option>
-                        </select>
-                    </p>
+                    <?php /* ACDC 3.25.276 — Le mode de passation ne concernait que les
+                             évaluations, que le formateur ne crée plus depuis cet écran.
+                             Un quiz live se joue en salle : il n'y a rien à choisir. */ ?>
+                    <input type="hidden" name="delivery_mode" value="live_sync" />
 
                     <footer class="acdc-tp-modal-footer">
                         <button type="button" class="acdc-button acdc-button-soft" data-acdc-tp-modal-close>Annuler</button>

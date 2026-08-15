@@ -278,7 +278,11 @@ trait ACDC_Export_CSV_Trait {
 		$rows = $wpdb->get_results(
 			"SELECT s.*,
 			        f.title AS formation_title,
-			        t.first_name AS trainer_first, t.last_name AS trainer_last,
+			        t.first_name AS trainer_first, t.last_name AS trainer_last
+			 /* ACDC 3.25.276 — Même virgule orpheline que la liste des sessions
+			    du formateur, trouvée par le balayage écrit pour l'autre. L'export
+			    CSV des séances produisait donc un fichier vide — en-têtes seuls —
+			    et un fichier vide se prend pour un export réussi. */
 			 FROM {$this->session_table} s
 			 LEFT JOIN {$this->formation_table} f ON f.id = s.formation_id
 			 LEFT JOIN {$this->trainer_table} t ON t.id = s.trainer_id

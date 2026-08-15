@@ -598,6 +598,51 @@ trait ACDC_Quizzes_Actions_Trait {
                     'error'
                 );
             }
+
+            /* ACDC 3.25.276 — LE FORMATEUR NE CRÉE QUE DES QUIZ LIVE.
+               Décision de David. Les trois autres finalités — positionnement,
+               diagnostique, acquis — sont des pièces du dossier de formation :
+               une par action, préparées automatiquement depuis la 3.25.271, et
+               décidées par l'organisme. Le quiz live, lui, est un outil
+               d'animation : brise-glace, contrôle de compréhension en cours de
+               journée, autant que le formateur en veut.
+               La règle est posée ICI, au serveur, et pas seulement dans le menu
+               déroulant. Retirer un choix d'un formulaire n'empêche rien : la
+               requête peut être rejouée telle quelle avec une autre valeur. Un
+               écran qui restreint sans que le serveur restreigne est un décor. */
+            if ( $this->qz_request_origin_is_trainer_portal()
+                && self::ACDC_OF_QZ_PURPOSE_LIVE !== $purpose ) {
+                $this->qz_redirect(
+                    self::ACDC_OF_QZ_PURPOSE_LIVE,
+                    array(),
+                    __( 'Depuis votre espace, vous pouvez créer des quiz live. Les tests de positionnement et les évaluations sont préparés par l’organisme pour chaque action de formation.', 'acdc-formation-saas' ),
+                    'error'
+                );
+            }
+
+            /* Et pas sur n'importe quelle formation : seulement celles qu'il
+               anime. Sans ce contrôle, un identifiant modifié suffirait à
+               accrocher un quiz à la formation d'un collègue. */
+            if ( $this->qz_request_origin_is_trainer_portal() ) {
+                $compte = method_exists( $this, 'trainer_portal_get_current_account' )
+                    ? $this->trainer_portal_get_current_account()
+                    : null;
+                $siennes = ( $compte && ! empty( $compte->trainer_id ) && method_exists( $this, 'get_qz_formations_for_trainer' ) )
+                    ? (array) $this->get_qz_formations_for_trainer( (int) $compte->trainer_id )
+                    : array();
+                $ids = array();
+                foreach ( $siennes as $f_sienne ) {
+                    if ( ! empty( $f_sienne->id ) ) { $ids[] = (int) $f_sienne->id; }
+                }
+                if ( ! in_array( $formation_id, $ids, true ) ) {
+                    $this->qz_redirect(
+                        self::ACDC_OF_QZ_PURPOSE_LIVE,
+                        array(),
+                        __( 'Vous ne pouvez créer un quiz que sur une formation que vous animez.', 'acdc-formation-saas' ),
+                        'error'
+                    );
+                }
+            }
         } else {
             $existing = $this->get_qz_quiz( $quiz_id );
             if ( ! $existing ) {

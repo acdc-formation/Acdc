@@ -107,6 +107,31 @@ foreach ( $rii as $f ) {
     }
 }
 
+/* ── CE QUE LE FORMATEUR PEUT CRÉER ──────────────────────────────────────
+   ACDC 3.25.276 — « Le formateur ne doit pouvoir créer uniquement un quiz
+   live », et seulement sur une formation qu'il anime. Retirer les autres choix
+   du menu déroulant ne restreint RIEN : la requête se rejoue telle quelle avec
+   une autre valeur, et l'identifiant de formation se change aussi facilement.
+   Un écran qui restreint sans que le serveur restreigne est un décor — la même
+   famille que les soixante et un filtres retirés en 3.25.270. */
+$quiz_actions = $root . '/includes/quizzes/class-acdc-quizzes-actions-trait.php';
+if ( is_readable( $quiz_actions ) ) {
+    $src   = (string) file_get_contents( $quiz_actions );
+    $debut = strpos( $src, 'function handle_acdc_of_qz_save_quiz(' );
+    if ( false !== $debut ) {
+        $fin  = strpos( $src, 'public function', $debut + 30 );
+        $bloc = substr( $src, $debut, ( false === $fin ? strlen( $src ) : $fin ) - $debut );
+        if ( false === strpos( $bloc, 'qz_request_origin_is_trainer_portal' ) ) {
+            $hits[] = 'La création de quiz ne distingue plus le portail formateur de l’administration : un formateur pourra de nouveau créer un test de positionnement ou une évaluation, que l’organisme est seul à décider.';
+        } elseif ( false === strpos( $bloc, 'ACDC_OF_QZ_PURPOSE_LIVE !== $purpose' ) ) {
+            $hits[] = 'La règle « le formateur ne crée que des quiz live » a disparu du serveur : la retirer du menu déroulant ne restreint rien, la requête se rejoue avec une autre valeur.';
+        }
+        if ( false === strpos( $bloc, 'get_qz_formations_for_trainer' ) ) {
+            $hits[] = 'La création de quiz ne vérifie plus que la formation est animée par ce formateur : un identifiant modifié suffirait à accrocher un quiz à la formation d’un collègue.';
+        }
+    }
+}
+
 if ( $hits ) {
     echo "Portée et confidentialité dans l’extranet formateur :\n";
     foreach ( array_unique( $hits ) as $h ) { echo '  ' . $h . "\n"; }

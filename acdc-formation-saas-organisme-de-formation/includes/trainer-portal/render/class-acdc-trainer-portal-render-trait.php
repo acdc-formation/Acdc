@@ -977,8 +977,18 @@ trait ACDC_Trainer_Portal_Render_Trait {
        (sessions.trainer_id) soit via un de ses groupes (groups.trainer_id).
        DISTINCT sur s.id pour ne pas dupliquer si plusieurs groupes correspondent. */
     $rows = $wpdb->get_results( $wpdb->prepare(
+      /* ACDC 3.25.276 — UNE VIRGULE, ET LA LISTE N'A JAMAIS RIEN AFFICHÉ.
+         « Sur le tableau de bord il y a une session à venir, et rien dans les
+         sessions. » Les deux écrans ne se contredisaient pas sur les données :
+         celui-ci n'en recevait aucune. La liste des colonnes se terminait par
+         une virgule, juste avant le FROM — la requête était invalide, la base
+         la refusait, et $wpdb rendait un résultat vide sans un mot. Aucune
+         alerte, aucune trace à l'écran : une liste vide ressemble exactement à
+         une absence de sessions.
+         Ce n'est donc pas « deux écrans, deux vérités » : c'est un écran qui
+         n'a jamais posé sa question. Depuis l'écriture de cette page. */
       "SELECT s.*, f.title AS formation_title, f.duration AS formation_duration,
-              c.name AS company_name,
+              c.name AS company_name
        FROM {$this->session_table} s
        LEFT JOIN {$this->formation_table} f ON f.id = s.formation_id
        LEFT JOIN {$this->company_table} c ON c.id = s.company_id
