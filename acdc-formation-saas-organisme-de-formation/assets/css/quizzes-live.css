@@ -49,6 +49,19 @@ body.page-template-default:has(.acdc-qz-live-player) {
 /* ===== MAIN HOST ===== */
 .acdc-qz-live-host-main { flex: 1; min-height: 0; display: flex; flex-direction: column; position: relative; }
 
+/* ===== MAIN PLAYER =====
+   ACDC 3.25.288 — Cette règle n'existait pas. L'écran formateur avait la
+   sienne ; l'écran apprenant, qui porte la même structure, ne l'a jamais eue.
+   Conséquence : <main> restait un bloc ordinaire, donc TOUS les « flex: 1 ;
+   min-height: 0 » écrits en dessous — sur les états, sur la grille des
+   réponses — ne s'appliquaient à rien. Ils étaient là, ils se lisaient dans la
+   feuille, et ils ne faisaient rien. Le conteneur du player étant en
+   height:100vh; overflow:hidden, tout ce que ces règles auraient dû comprimer
+   était simplement coupé : sur un iPhone en portrait, une question à six
+   réponses en choix multiple mettait le bouton « Valider mes réponses » hors
+   de l'écran, sans défilement possible pour aller le chercher. */
+.acdc-qz-live-player-main { flex: 1; min-height: 0; display: flex; flex-direction: column; position: relative; }
+
 /* ===== STATES ===== */
 .acdc-qz-host-state { display: none; flex: 1; min-height: 0; }
 /* fade-in sur activation */
@@ -148,6 +161,11 @@ body.page-template-default:has(.acdc-qz-live-player) {
 .acdc-qz-host-answer-tile-2 { background: #fff4d6; }
 .acdc-qz-host-answer-tile-3 { background: #e8f4ec; }
 .acdc-qz-host-answer-tile-4 { background: #f3e5f5; }
+/* ACDC 3.25.288 — Les lettres vont de A à F dans le code qui construit les
+   réponses ; les couleurs s'arrêtaient à E. Une question à six réponses
+   affichait donc la sixième sans fond, sur le vidéoprojecteur comme sur le
+   téléphone : elle avait l'air désactivée. */
+.acdc-qz-host-answer-tile-5 { background: #e4f2f4; }
 .acdc-qz-host-answer-letter {
     background: rgba(15,44,82,0.15); color: #0f2c52;
     width: 52px; height: 52px; border-radius: 50%;
@@ -189,6 +207,7 @@ body.page-template-default:has(.acdc-qz-live-player) {
 .acdc-qz-host-reveal-tile.acdc-qz-host-answer-tile-2 { background: #fff4d6; }
 .acdc-qz-host-reveal-tile.acdc-qz-host-answer-tile-3 { background: #e8f4ec; }
 .acdc-qz-host-reveal-tile.acdc-qz-host-answer-tile-4 { background: #f3e5f5; }
+.acdc-qz-host-reveal-tile.acdc-qz-host-answer-tile-5 { background: #e4f2f4; }
 .acdc-qz-host-reveal-tile.is-reveal-correct { background: #e8f5e9; border: 3px solid #4caf50; transform: scale(1.02); }
 .acdc-qz-host-reveal-tile.is-reveal-wrong   { background: #fce4ec; border: 2px solid #ef9a9a; opacity: 0.65; }
 .acdc-qz-host-reveal-tile-top {
@@ -497,10 +516,26 @@ body.page-template-default:has(.acdc-qz-live-player) {
 }
 .acdc-qz-live-player-logo { height: 36px; width: auto; }
 .acdc-qz-live-player-brand-text { font-size: 15px; font-weight: 800; color: #0f2c52; }
+/* ACDC 3.25.288 — Même famille que <main> : l'écran apprenant émet
+   « acdc-qz-live-player-brand », « -meta », « -nickname » et « -score », et la
+   feuille ne connaissait que « -brand-text » et « acdc-qz-player-header-score »,
+   deux noms que rien n'écrit. L'en-tête que voit l'apprenant pendant toute la
+   partie était donc sans mise en forme : pseudo et score collés l'un à l'autre,
+   pas de pastille dorée, pas de repli quand le pseudo est long. */
+.acdc-qz-live-player-brand { font-size: 15px; font-weight: 800; color: #0f2c52; }
+.acdc-qz-live-player-meta {
+    display: flex; align-items: center; gap: 10px;
+    min-width: 0; /* pour que le pseudo puisse être tronqué plutôt que pousser le score */
+}
+.acdc-qz-live-player-nickname {
+    font-size: 14px; font-weight: 700; color: #0f2c52;
+    max-width: 40vw; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+.acdc-qz-live-player-score,
 .acdc-qz-player-header-score {
     background: #d6a353; color: #fff;
     border-radius: 20px; padding: 4px 14px;
-    font-size: 13px; font-weight: 800;
+    font-size: 13px; font-weight: 800; white-space: nowrap; flex-shrink: 0;
 }
 
 /* ===== JOIN PLAYER ===== */
@@ -568,7 +603,33 @@ body.page-template-default:has(.acdc-qz-live-player) {
 /* ===== QUESTION PLAYER ===== */
 .acdc-qz-player-state-question { background: #fff; padding: 32px 20px 0; }
 .acdc-qz-player-question-title { text-align: center; font-size: 22px; color: #0f2c52; font-weight: 800; line-height: 1.35; margin: 0 0 24px; }
-.acdc-qz-player-question-answers { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; flex: 1; }
+/* ACDC 3.25.288 — La zone des réponses est la seule qui défile.
+
+   Au-dessus de 1024 px, le conteneur du player reste en height:100vh avec
+   overflow:hidden : ce qui dépasse n'est pas « plus bas », il est coupé. En
+   dessous, responsive.css déverrouille déjà la page, et le débordement se
+   rattrape en faisant défiler tout l'écran — énoncé compris. Dans les deux cas
+   le résultat est mauvais sur une question chronométrée : ou bien la réponse
+   D n'existe pas, ou bien il faut la chercher pendant que le compteur tourne.
+
+   La grille refusait de se comprimer parce qu'un élément flex ne descend pas
+   sous la hauteur de son contenu ; min-height:0 lève ce plancher et overflow-y
+   rend le débordement atteignable SANS bouger l'énoncé, la consigne, le bouton
+   de validation ni le compteur, qui restent fixes.
+
+   align-content: start parce que la grille occupe désormais toute la hauteur
+   disponible : sans cette ligne, quatre réponses s'étireraient en pavés de
+   330 px sur un écran d'ordinateur. Les boutons gardent leur hauteur, la place
+   qui reste reste vide — c'est l'aspect qui est en production aujourd'hui.
+
+   La marge intérieure préserve l'anneau de sélection, qui déborde de 6 px du
+   bouton et serait rogné par le défilement : c'est le seul signe qui confirme
+   à l'apprenant que sa réponse est prise. */
+.acdc-qz-player-question-answers {
+    display: grid; grid-template-columns: 1fr 1fr; gap: 12px; flex: 1;
+    min-height: 0; overflow-y: auto; padding: 6px; box-sizing: border-box;
+    align-content: start;
+}
 .acdc-qz-player-answer-btn {
     border: 0; padding: 24px 20px; border-radius: 14px;
     color: #0f2c52; font-size: 18px; font-weight: 700;
@@ -577,6 +638,11 @@ body.page-template-default:has(.acdc-qz-live-player) {
 }
 .acdc-qz-player-answer-btn:active { transform: scale(0.97); }
 .acdc-qz-player-answer-btn.is-selected { box-shadow: 0 0 0 4px #d6a353, 0 0 0 6px #fff; }
+/* ACDC 3.25.288 — Le libellé n'avait aucune règle alors que le bouton est une
+   boîte flexible : sans min-width:0, un mot long ne se coupe pas et déborde du
+   bouton au lieu de passer à la ligne. */
+.acdc-qz-player-answer-label,
+.acdc-qz-host-answer-label { flex: 1; min-width: 0; overflow-wrap: break-word; }
 .acdc-qz-player-answer-letter {
     background: rgba(15,44,82,0.15); color: #0f2c52;
     width: 40px; height: 40px; border-radius: 50%;
@@ -870,4 +936,76 @@ body.page-template-default:has(.acdc-qz-live-player) {
     background: #fffbeb;
     border-color: #fde68a;
     color: #92400e;
+}
+
+/* =====================================================
+   ACDC 3.25.288 — TÉLÉPHONE EN PAYSAGE : LA CONTRAINTE EST LA HAUTEUR
+
+   Toutes les adaptations de cette feuille sont indexées sur la LARGEUR :
+   1366, 1200, 1024, 880, 767, 768, 480. Un iPhone tenu en paysage fait
+   812 × 375 — il est large, donc il reçoit le traitement vertical d'un
+   grand écran, avec ses boutons de 80 px et son en-tête de 50 px. La
+   dernière réponse tombait à 380 px dans un écran de 375 px de haut.
+
+   On comprime ici tout ce qui n'est pas une réponse — en-tête, énoncé,
+   pied — pour rendre la place aux boutons. Deux colonnes, parce qu'en
+   paysage c'est la largeur qui abonde. Les boutons gardent 48 px, au-dessus
+   du seuil de 44 px retenu pour toutes les cibles tactiles du plugin.
+
+   La garde « orientation: landscape » évite d'imposer deux colonnes à une
+   fenêtre étroite et basse, où elles seraient illisibles ; ce cas-là est
+   couvert par le défilement de la zone des réponses.
+   ===================================================== */
+@media (max-height: 500px) and (orientation: landscape) {
+    .acdc-qz-live-player-header { min-height: 0; padding: 4px 16px; }
+    .acdc-qz-live-player-logo { height: 26px; }
+    .acdc-qz-player-state-question { padding: 6px 16px 0; }
+    .acdc-qz-player-question-title { font-size: 15px; line-height: 1.25; margin-bottom: 6px; }
+    .acdc-qz-answer-instruction { font-size: 12px; padding: 3px 8px; margin: 0 0 4px; }
+    .acdc-qz-player-question-answers { grid-template-columns: 1fr 1fr; gap: 8px; }
+    .acdc-qz-player-answer-btn { min-height: 48px; padding: 10px 12px; font-size: 14px; gap: 10px; }
+    .acdc-qz-player-answer-letter { width: 30px; height: 30px; font-size: 14px; }
+    .acdc-qz-player-question-footer { padding: 4px 0; margin-top: 4px; }
+    .acdc-qz-player-q-counter { font-size: 16px; }
+    .acdc-qz-player-q-type { font-size: 12px; }
+    .acdc-qz-player-multi-footer { padding-top: 6px; }
+    .acdc-qz-player-multi-submit { padding: 8px 24px; font-size: 14px; }
+    /* Le retour d'information doit tenir lui aussi : il s'affiche seul, centré,
+       et sa carte faisait 274 px dans 375. */
+    .acdc-qz-player-feedback-card { padding: 16px 24px; }
+    .acdc-qz-player-feedback-icon { font-size: 38px; margin-bottom: 4px; }
+    .acdc-qz-player-feedback-title { font-size: 20px; margin-bottom: 6px; }
+    .acdc-qz-player-feedback-score { font-size: 22px; margin-bottom: 4px; }
+    /* Attente et puzzle : mêmes 375 px de haut. */
+    .acdc-qz-player-card { padding: 16px 24px; }
+    .acdc-qz-player-loader { width: 34px; height: 34px; margin-bottom: 12px; }
+    .acdc-qz-player-waiting-title { font-size: 20px; }
+    .acdc-qz-player-waiting-avatar { font-size: 30px; margin-top: 10px; }
+    .acdc-qz-puzzle-slot, .acdc-qz-puzzle-tile { min-height: 48px; font-size: 14px; }
+}
+
+/* ACDC 3.25.288 — « Valider mes réponses » ne quitte jamais l'écran.
+
+   Sous 1024 px, responsive.css rend la page défilante — c'est ce qui a réparé
+   les écrans verrouillés. Mais une question à choix multiple avec six réponses
+   dépasse encore la hauteur d'un téléphone : le bouton de validation se
+   retrouve sous la ligne de flottaison, et rien ne dit à l'apprenant qu'il
+   existe. Il coche, il attend, le temps s'écoule.
+
+   Le bouton reste donc collé au bas de l'écran tant que la question est
+   affichée. Il ne prend la place de personne — il n'apparaît que sur les
+   questions à choix multiple, les seules où il faille valider. */
+@media (max-width: 1024px) {
+    .acdc-qz-player-multi-footer {
+        position: sticky;
+        bottom: 0;
+        z-index: 5;
+        background: #fff;
+        padding: 10px 0;
+        /* Un simple filet : un halo blanc plus large délavait la dernière
+           ligne de réponses au lieu de la séparer. */
+        border-top: 1px solid rgba(15,44,82,0.08);
+        box-shadow: 0 -4px 10px -6px rgba(15,44,82,0.25);
+    }
+    .acdc-qz-player-multi-submit { width: 100%; min-height: 48px; }
 }
