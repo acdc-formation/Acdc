@@ -105,6 +105,35 @@ if ( is_readable( $tables ) ) {
     }
 }
 
+/* ── CE QUI SE SAISIT AVEC UN DOIGT ───────────────────────────────────────
+   Relevé sur iPad : « je ne peux pas régler la largeur des colonnes comme sur
+   mon Mac ». La poignée n'écoutait que la souris — or Safari ne fabrique des
+   événements de souris que pour une touche BRÈVE, jamais pour un glissement.
+   Elle ne recevait donc strictement rien quand on la tirait au doigt.
+
+   Deux conditions, et il faut les deux : les événements de POINTEUR, qui
+   couvrent la souris, le doigt et le stylet d'un seul jeu ; et `touch-action`
+   à `none`, sans quoi le navigateur interprète le glissement comme un
+   défilement et la colonne ne bouge jamais. La seconde est invisible à la
+   relecture : le code paraît juste, et rien ne se passe. */
+$kernel_js = $root . '/assets/js/acdc-ui-kernel.js';
+if ( is_readable( $kernel_js ) ) {
+    $src_k = (string) file_get_contents( $kernel_js );
+    $debut = strpos( $src_k, 'kernel.initAdminColumnResize' );
+    if ( false !== $debut ) {
+        $bloc = substr( $src_k, $debut );
+        if ( false === strpos( $bloc, "addEventListener('pointerdown'" ) ) {
+            $hits[] = 'Le redimensionnement des colonnes est revenu aux événements de souris : sur une tablette, la poignée ne recevra rien pendant le glissement, et la largeur restera celle du bureau.';
+        }
+        if ( false === strpos( $bloc, 'touchAction' ) ) {
+            $hits[] = 'La poignée de colonne n’interdit plus le défilement pendant le glissement : le doigt fera défiler la page au lieu de tirer la colonne, sans qu’aucune erreur ne le signale.';
+        }
+        if ( false === strpos( $bloc, 'pointercancel' ) ) {
+            $hits[] = 'Le glissement de colonne ne traite plus l’annulation du pointeur : un appel entrant pendant un redimensionnement laisserait la page en mode glissement, curseur figé et sélection bloquée.';
+        }
+    }
+}
+
 /* ── UN STYLE ÉCRIT DANS LE BALISAGE ANNULE LA FEUILLE ────────────────────
    `.acdc-grid-3cols` et `.acdc-grid-4cols` se replient déjà sur une colonne
    quand l'écran rétrécit — la règle existe depuis longtemps dans

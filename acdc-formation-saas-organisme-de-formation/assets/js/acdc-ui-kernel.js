@@ -784,28 +784,66 @@
         handle.className = 'acdc-col-resize-handle';
         handle.setAttribute('aria-hidden', 'true');
 
+        /* ACDC 3.25.287 — LA POIGNÉE ÉTAIT INSAISISSABLE AU DOIGT.
+         * Relevé sur iPad : « je ne peux pas régler la largeur des colonnes
+         * comme sur mon Mac ». Deux causes, et il fallait corriger les deux.
+         *
+         * La première : huit pixels de large. C'est confortable au curseur,
+         * qui vise au pixel ; c'est hors de portée d'un doigt, qui couvre une
+         * quarantaine de pixels. On élargit donc la ZONE SAISISSABLE sans
+         * toucher au trait dessiné — la poignée reste fine à l'œil et devient
+         * large à la main.
+         *
+         * La seconde, plus bas : les événements écoutés.
+         */
+        const auDoigt = window.matchMedia && window.matchMedia('(pointer: coarse)').matches;
+
         handle.style.position = 'absolute';
         handle.style.top = '0';
-        handle.style.right = '-4px';
-        handle.style.width = '8px';
+        handle.style.right = auDoigt ? '-11px' : '-4px';
+        handle.style.width = auDoigt ? '22px' : '8px';
         handle.style.height = '100%';
         handle.style.cursor = 'col-resize';
         handle.style.userSelect = 'none';
         handle.style.zIndex = '50';
-        handle.style.background = 'linear-gradient(90deg, transparent 0, transparent 3px, #8b5b23 3px, #8b5b23 5px, transparent 5px)';
-        handle.style.opacity = '0.45';
+        /* Le trait reste au même endroit quelle que soit la largeur de prise :
+         * il est centré dans la poignée. */
+        handle.style.background = auDoigt
+          ? 'linear-gradient(90deg, transparent 0, transparent 10px, #8b5b23 10px, #8b5b23 12px, transparent 12px)'
+          : 'linear-gradient(90deg, transparent 0, transparent 3px, #8b5b23 3px, #8b5b23 5px, transparent 5px)';
+        /* Un doigt ne survole rien : sans hover, la poignée resterait à demi
+         * effacée et rien n'indiquerait qu'elle est saisissable. */
+        handle.style.opacity = auDoigt ? '0.75' : '0.45';
+        /* Sans cette ligne, le navigateur interprète le glissement comme un
+         * défilement et la colonne ne bouge jamais — c'est la moitié invisible
+         * du défaut. */
+        handle.style.touchAction = 'none';
 
         handle.addEventListener('mouseenter', function(){
           handle.style.opacity = '1';
         });
 
         handle.addEventListener('mouseleave', function(){
-          handle.style.opacity = '0.45';
+          handle.style.opacity = auDoigt ? '0.75' : '0.45';
         });
 
-        handle.addEventListener('mousedown', function(e){
+        /* ACDC 3.25.287 — `pointerdown` plutôt que `mousedown`.
+         * Safari ne fabrique des événements de souris que pour une TOUCHE
+         * BRÈVE, jamais pour un glissement : la poignée ne recevait donc
+         * strictement rien quand on la tirait au doigt. Les événements de
+         * pointeur couvrent la souris, le doigt et le stylet d'un seul jeu —
+         * le comportement au curseur est inchangé, il passe simplement par le
+         * même chemin. */
+        handle.addEventListener('pointerdown', function(e){
           e.preventDefault();
           e.stopPropagation();
+
+          /* La capture garde le glissement lié à la poignée même si le doigt
+           * sort du tableau : sans elle, on perd la colonne dès qu'on dépasse
+           * le bord, ce qui arrive tout le temps sur un écran étroit. */
+          if (handle.setPointerCapture) {
+            try { handle.setPointerCapture(e.pointerId); } catch (err) {}
+          }
 
           /* ACDC 3.20.67 — Lecture du verrou : si le tableau est verrouillé,
            * le mousedown sur la poignée ne fait rien.
@@ -874,12 +912,17 @@
             document.body.style.removeProperty('cursor');
             document.body.style.removeProperty('user-select');
 
-            document.removeEventListener('mousemove', move);
-            document.removeEventListener('mouseup', up);
+            document.removeEventListener('pointermove', move);
+            document.removeEventListener('pointerup', up);
+            document.removeEventListener('pointercancel', up);
           }
 
-          document.addEventListener('mousemove', move);
-          document.addEventListener('mouseup', up);
+          document.addEventListener('pointermove', move);
+          document.addEventListener('pointerup', up);
+          /* Un appel entrant, un geste système : le pointeur est annulé sans
+           * `pointerup`. Sans cette ligne, la page resterait en mode
+           * redimensionnement, curseur figé et sélection bloquée. */
+          document.addEventListener('pointercancel', up);
         });
 
         th.appendChild(handle);
