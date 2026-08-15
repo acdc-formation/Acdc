@@ -3,7 +3,7 @@
  * Plugin Name:  ACDC Indicateurs
  * Plugin URI:   https://acdc-formation.com/
  * Description:  Affiche les indicateurs de résultats ACDC Formation (apprenants, satisfaction, réussite, heures) en consommant le SAAS via REST API.
- * Version:      1.0.7
+ * Version:      1.0.8
  * Author:       ACDC Formation
  * Text Domain:  acdc-indicateurs
  * License:      Propriétaire
@@ -11,7 +11,7 @@
 
 defined( 'ABSPATH' ) || exit;
 
-define( 'ACDC_IND_VERSION', '1.0.7' );
+define( 'ACDC_IND_VERSION', '1.0.8' );
 define( 'ACDC_IND_FILE',    __FILE__ );
 define( 'ACDC_IND_DIR',     plugin_dir_path( __FILE__ ) );
 define( 'ACDC_IND_URL',     plugin_dir_url( __FILE__ ) );
@@ -44,7 +44,11 @@ function acdc_ind_render_settings_page() {
 
     // Vider le cache
     if ( isset( $_POST['acdc_ind_flush'] ) ) {
+        /* ACDC 1.0.8 — On vide l'ancienne clé ET celle de la version courante :
+           un site mis à jour depuis une version antérieure garde sinon un
+           transient orphelin que plus rien ne relit ni ne nettoie. */
         delete_transient( 'acdc_ind_global' );
+        delete_transient( 'acdc_ind_global_' . str_replace( '.', '_', ACDC_IND_VERSION ) );
         echo '<div class="notice notice-success"><p>Cache vidé.</p></div>';
     }
 
@@ -58,7 +62,30 @@ function acdc_ind_render_settings_page() {
     if ( isset( $_POST['acdc_ind_test'] ) && $saas_url ) {
         $api  = new ACDC_Ind_Api();
         $data = $api->fetch_global( true ); // forcer sans cache
-        $test_result = $data ? '<span style="color:green;">✅ Connexion réussie — ' . count( $data ) . ' clés reçues.</span>' : '<span style="color:red;">❌ Impossible de joindre le SAAS.</span>';
+        /* ACDC 1.0.8 — Le test annonçait « connexion réussie, N clés reçues ».
+           C'est vrai et inutile : quand un chiffre ne remonte pas, ce qu'on veut
+           savoir c'est CE QUE le SAAS répond, pas combien de clés il envoie. On
+           affiche donc les valeurs qui alimentent l'encadré, ce qui distingue
+           d'un coup d'œil un SAAS trop ancien d'un cache non vidé. */
+        if ( $data ) {
+            $lignes_test = array();
+            foreach ( array(
+                'total_apprenants'             => 'Apprenants — organisme seul',
+                'total_apprenants_tous'        => 'Apprenants — tout compris',
+                'total_heures'                 => 'Heures dispensées — organisme seul',
+                'total_heures_dispensees_tous' => 'Heures dispensées — tout compris',
+                'total_heures_suivies_tous'    => 'Heures suivies — tout compris',
+                'total_formations'             => 'Formations actives',
+            ) as $cle_test => $libelle_test ) {
+                $lignes_test[] = '<li>' . esc_html( $libelle_test ) . ' : <strong>'
+                    . ( array_key_exists( $cle_test, $data ) ? esc_html( (string) $data[ $cle_test ] ) : '<em>absent — SAAS antérieur à 3.25.281</em>' )
+                    . '</strong></li>';
+            }
+            $test_result = '<span style="color:green;">Connexion réussie.</span><ul style="margin:8px 0 0 18px;list-style:disc;">'
+                . implode( '', $lignes_test ) . '</ul>';
+        } else {
+            $test_result = '<span style="color:red;">Impossible de joindre le SAAS ou réponse invalide.</span>';
+        }
     }
     ?>
     <div class="wrap">

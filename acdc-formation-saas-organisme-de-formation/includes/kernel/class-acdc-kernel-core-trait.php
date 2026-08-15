@@ -789,6 +789,10 @@ private function acdc_send_transactional_email( $to, $subject, $template_args = 
       if ( function_exists( 'wp_cache_flush' ) ) {
         wp_cache_flush();
       }
+      /* ACDC 3.25.282 — Les réponses publiques mises en cache décrivent une
+         version qui n'est plus celle qui tourne. `wp_cache_flush()` ne touche
+         pas les transients stockés en base : on les nomme. */
+      delete_transient( 'acdc_of_indicators_global' );
       /* LiteSpeed (l'hébergement de production) écoute cette action ; les
          autres caches qui l'implémentent en profitent aussi. Sur un serveur
          sans cache, elle ne fait rien. */

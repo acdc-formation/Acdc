@@ -285,6 +285,13 @@ trait ACDC_Compliance_Quality_Core_Trait {
 
   private function save_external_mission_records( $records ) {
     update_option( 'acdc_of_external_mission_records', array_values( $records ), false );
+    /* ACDC 3.25.282 — Les indicateurs publics comptent ces prestations depuis
+       la 3.25.281 : leur réponse en cache doit tomber avec la saisie, sinon une
+       prestation ajoutée n'apparaît sur le site qu'au bout d'une heure — et,
+       le cache du site vitrine s'ajoutant au nôtre, d'un jour de plus. Deux
+       caches en série transforment une attente acceptable en « ça ne marche
+       pas ». */
+    delete_transient( 'acdc_of_indicators_global' );
   }
 
   private function get_external_mission( $id ) {

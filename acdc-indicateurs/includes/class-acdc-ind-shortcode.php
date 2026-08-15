@@ -45,7 +45,7 @@ class ACDC_Ind_Shortcode {
                     $data['total_apprenants_tous'] ?? 0,
                     $data['total_apprenants'] ?? 0,
                     get_option( 'acdc_ind_fallback_apprenants', 0 ),
-                ) ),
+                ), true ),
                 'label' => 'Apprenants formés',
                 'suffix' => '',
             ),
@@ -86,7 +86,13 @@ class ACDC_Ind_Shortcode {
                 'suffix' => 'h',
                 'format' => 'heures',
             ),
-            /* Les heures réellement animées, pour qui veut les deux. */
+            /* ACDC 1.0.8 — CET INDICATEUR NE S'AFFICHE QUE SI ON LE DEMANDE.
+               Ajouté à la liste par défaut en 1.0.7, il est apparu tout seul sur
+               la page d'accueil : un septième encadré que personne n'avait
+               demandé, à côté de celui dont il ne fait que changer l'unité.
+               Ajouter un indicateur à `all` modifie une page en production sans
+               que son auteur ait rien changé — ça ne doit jamais arriver.
+               Il reste disponible via items="…,heures_dispensees". */
             'heures_dispensees' => array(
                 'value' => self::premier_positif( array(
                     $data['total_heures_dispensees_tous'] ?? 0,
@@ -98,8 +104,20 @@ class ACDC_Ind_Shortcode {
             ),
         );
 
+        /* ACDC 1.0.8 — « all » désigne les six indicateurs historiques, et non
+           « tout ce que le code connaît ». Les suivants s'ajouteront par leur
+           nom, jamais par surprise. */
+        $items_par_defaut = array( 'apprenants', 'satisfaction', 'reussite', 'recommandation', 'formations', 'heures' );
+
         // Filtrer selon l'attribut items
-        if ( 'all' !== $atts['items'] ) {
+        if ( 'all' === $atts['items'] ) {
+            $items_to_show = array();
+            foreach ( $items_par_defaut as $key ) {
+                if ( isset( $all_items[ $key ] ) ) {
+                    $items_to_show[ $key ] = $all_items[ $key ];
+                }
+            }
+        } else {
             $requested = array_map( 'trim', explode( ',', $atts['items'] ) );
             $items_to_show = array();
             foreach ( $requested as $key ) {
@@ -107,8 +125,6 @@ class ACDC_Ind_Shortcode {
                     $items_to_show[ $key ] = $all_items[ $key ];
                 }
             }
-        } else {
-            $items_to_show = $all_items;
         }
 
         if ( empty( $items_to_show ) ) {
@@ -163,14 +179,18 @@ class ACDC_Ind_Shortcode {
      * @param array $candidats Du plus souhaitable au dernier recours.
      * @return float
      */
-    private static function premier_positif( $candidats ) {
+    private static function premier_positif( $candidats, $entier = false ) {
         foreach ( (array) $candidats as $v ) {
             $n = (float) $v;
             if ( $n > 0 ) {
-                return $n;
+                /* ACDC 1.0.8 — « 73,0 apprenants formés » s'est affiché sur la
+                   page d'accueil : un compte de personnes n'a pas de décimale.
+                   L'appelant dit ce qu'il compte ; la fonction ne le devine
+                   pas. */
+                return $entier ? (int) round( $n ) : $n;
             }
         }
-        return 0.0;
+        return $entier ? 0 : 0.0;
     }
 
     private static function get_css() {

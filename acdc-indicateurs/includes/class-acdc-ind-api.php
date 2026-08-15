@@ -13,7 +13,16 @@ class ACDC_Ind_Api {
      * @return array|null  Tableau de données ou null en cas d'erreur.
      */
     public function fetch_global( $force_refresh = false ) {
-        $cache_key   = 'acdc_ind_global';
+        /* ACDC 1.0.8 — LA CLÉ DE CACHE PORTE LA VERSION DU PLUGIN.
+           Relevé en recette : après la mise à jour, la page affichait toujours
+           les anciens chiffres. Le plugin était bien à jour, le SAAS renvoyait
+           bien les nouvelles données — mais le cache de vingt-quatre heures
+           tenait encore la réponse d'avant, et rien à l'écran ne le disait.
+           « J'ai installé et rien ne change » est la pire forme d'échec : elle
+           ressemble à un défaut du code, et fait chercher là où il n'y a rien.
+           En attachant la version à la clé, toute mise à jour repart d'un cache
+           vide, sans le moindre geste. */
+        $cache_key   = 'acdc_ind_global_' . ( defined( 'ACDC_IND_VERSION' ) ? str_replace( '.', '_', ACDC_IND_VERSION ) : '0' );
         $cache_hours = (int) get_option( 'acdc_ind_cache_hours', 24 );
 
         if ( ! $force_refresh ) {
