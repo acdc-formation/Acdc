@@ -56,6 +56,8 @@ lancent sans WordPress, en quelques secondes.
     php tests/scan-portail-visiteur.php # les actions des portails sont jouables par leurs utilisateurs
     php tests/scan-sql-invalide.php # une virgule orpheline rend une liste vide, sans un mot
     php tests/scan-formation-identifiable.php # une formation proposée dit toujours sa modalité
+    php tests/scan-gestionnaire-absent.php # un bouton branché sur une fonction qui n'existe pas
+    php tests/scan-interrupteur-branche.php # un automatisme Qualiopi qui ne commande rien
 
 Le dernier balaie tout le plugin et signale les fonctions qui utilisent `$wpdb`
 sans l'avoir importé — la faute qui a produit l'erreur fatale de la 3.25.236.

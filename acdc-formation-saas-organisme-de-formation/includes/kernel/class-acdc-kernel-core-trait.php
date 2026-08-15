@@ -612,7 +612,6 @@ private function acdc_send_transactional_email( $to, $subject, $template_args = 
       'acdc-of-funders'                => 'funders',
       'acdc-of-trainers'               => 'trainers',
       'acdc-of-quiz'                   => 'quiz',
-      'acdc-of-positioning-tests'      => 'positioning_tests',
       'acdc-of-need-analyses'          => 'need_analyses',
       'acdc-of-training-files'         => 'training_files',
       'acdc-of-registration-contract'  => 'registration_contract',
@@ -776,6 +775,16 @@ private function acdc_send_transactional_email( $to, $subject, $template_args = 
        pour les formateurs créés avant que handle_save_trainer() ne gère cette dérivation.
        Idempotent : flag d'option empêche toute re-exécution. */
     $this->backfill_is_self_trainer_from_trainer_type();
+
+    /* ACDC 3.25.278 — Les automatismes Qualiopi remis dans l'état voulu sur
+       toutes les formations existantes : une valeur par défaut ne s'applique
+       qu'aux lignes à venir. Une seule passe, flag d'option à l'appui. */
+    $this->backfill_qualiopi_toggles_default_state();
+
+    /* ACDC 3.25.278 — Retrait de l'ancien module « Tests de positionnement »,
+       dont l'envoi n'a jamais fonctionné et qui faisait double emploi avec le
+       quiz. Copie déposée dans les sauvegardes avant suppression. */
+    $this->retire_legacy_positioning_test_module();
 
     /* ACDC 3.25.251 — Purge des adresses de programme héritées du Manager.
        Elles portent un nonce périmé : elles ne mènent nulle part et ne servent
@@ -1108,6 +1117,134 @@ private function acdc_send_transactional_email( $to, $subject, $template_args = 
     global $wpdb;
     $wpdb->query( "UPDATE {$this->trainer_table} SET is_self_trainer = CASE WHEN trainer_type = 'Interne' THEN 1 ELSE 0 END" );
     update_option( 'acdc_of_saas_3_22_0_is_self_trainer_backfill_done', '1', false );
+  }
+
+  /**
+   * Les automatismes Qualiopi d'une formation : leur nom, leur état par défaut,
+   * et CE QU'ILS COMMANDENT VRAIMENT.
+   *
+   * ACDC 3.25.278 — Cette liste existait en quatre exemplaires divergents :
+   * l'écran, la sauvegarde, l'export Excel et l'import. « Enquête financeur »
+   * était dans les deux premiers et absente des deux autres — elle disparaissait
+   * à chaque aller-retour par le tableur, sans que rien ne le signale.
+   *
+   * La colonne `commande` n'est pas de la documentation : c'est elle que lit le
+   * balayage tests/scan-interrupteur-branche.php. Un interrupteur déclaré ici
+   * sans automatisme qui le consulte est un décor — un écran qui affirme retirer
+   * un document du parcours alors qu'il y reste. C'est exactement ce qui s'est
+   * produit pour les trois quiz structurels, préparés quoi qu'on décide.
+   *
+   * @return array<string,array{label:string,default:int,commande:string}>
+   */
+  public function acdc_qualiopi_toggles() {
+    return array(
+      'convocation_enabled'           => array( 'label' => 'Convocation de début de formation',    'default' => 1, 'commande' => 'convocation automatique des apprenants' ),
+      'positioning_test_enabled'      => array( 'label' => 'Test de positionnement',               'default' => 0, 'commande' => 'quiz de positionnement préparé sur l’action' ),
+      'diagnostic_evaluation_enabled' => array( 'label' => 'Évaluation diagnostique',              'default' => 1, 'commande' => 'quiz diagnostique préparé sur l’action' ),
+      'intermediate_survey_enabled'   => array( 'label' => 'Enquête de satisfaction intermédiaire', 'default' => 0, 'commande' => 'enquête à mi-parcours' ),
+      'hot_survey_enabled'            => array( 'label' => 'Enquête de satisfaction à chaud',      'default' => 1, 'commande' => 'enquête de fin de formation' ),
+      'evaluation_enabled'            => array( 'label' => 'Évaluation des acquis',                'default' => 1, 'commande' => 'quiz d’évaluation des acquis préparé sur l’action' ),
+      'end_documents_enabled'         => array( 'label' => 'Documents de fin de formation',        'default' => 1, 'commande' => 'certificat de réalisation et attestation' ),
+      'cold_survey_enabled'           => array( 'label' => 'Enquête de satisfaction à froid',      'default' => 1, 'commande' => 'enquête différée' ),
+      'trainer_survey_enabled'        => array( 'label' => 'Enquête formateur',                    'default' => 1, 'commande' => 'enquête adressée au formateur' ),
+      'company_survey_enabled'        => array( 'label' => 'Enquête entreprise',                   'default' => 1, 'commande' => 'enquête adressée au commanditaire' ),
+      'funder_survey_enabled'         => array( 'label' => 'Enquête financeur',                    'default' => 1, 'commande' => 'enquête adressée au financeur' ),
+    );
+  }
+
+  /**
+   * ACDC 3.25.278 — Les automatismes Qualiopi remis dans l'état voulu.
+   *
+   * Demandé en recette : « ils doivent tous être cochés sauf Test de
+   * positionnement et Enquête de satisfaction intermédiaire ». Changer la
+   * valeur par défaut d'une colonne ne touche que les LIGNES À VENIR : les
+   * formations déjà enregistrées gardent ce qu'elles portent. Sans cette passe,
+   * l'écran continuerait d'afficher l'ancien réglage sur toutes les fiches
+   * existantes, et il faudrait les rouvrir une par une.
+   *
+   * Elle écrase donc les interrupteurs sur toutes les formations, une seule
+   * fois. C'est volontaire et c'est ce qui a été demandé — un réglage
+   * particulier posé auparavant sur une fiche sera remis à la règle commune.
+   */
+  private function backfill_qualiopi_toggles_default_state() {
+    if ( get_option( 'acdc_of_saas_3_25_278_toggles_done' ) === '1' ) {
+      return;
+    }
+    global $wpdb;
+    if ( empty( $this->formation_table ) ) {
+      return;
+    }
+    $colonnes = array();
+    foreach ( (array) $wpdb->get_col( "SHOW COLUMNS FROM {$this->formation_table}" ) as $col ) {
+      $colonnes[ (string) $col ] = true;
+    }
+    $sets = array();
+    foreach ( $this->acdc_qualiopi_toggles() as $champ => $meta ) {
+      if ( isset( $colonnes[ $champ ] ) ) {
+        $sets[] = $champ . ' = ' . (int) $meta['default'];
+      }
+    }
+    if ( empty( $sets ) ) {
+      return;
+    }
+    $wpdb->query( "UPDATE {$this->formation_table} SET " . implode( ', ', $sets ) );
+    update_option( 'acdc_of_saas_3_25_278_toggles_done', '1', false );
+  }
+
+  /**
+   * ACDC 3.25.278 — L'ANCIEN MODULE « TESTS DE POSITIONNEMENT » EST RETIRÉ.
+   *
+   * Relevé en recette : « je ne comprends pas pourquoi il y a 2 tests de
+   * positionnement ». Il y en avait bien deux dans le menu, portant le même
+   * nom : ce module-ci, et le quiz de positionnement. Décision de David — « le
+   * seul qui sera valide sera fait par le quiz ».
+   *
+   * CE MODULE N'A JAMAIS FONCTIONNÉ. Son envoi automatique était programmé tous
+   * les jours, mais la fonction qu'il appelait n'existait pas : un rendez-vous
+   * quotidien, personne au bout du fil. Aucun test n'est donc jamais parti par
+   * cette voie — et chaque passage plantait l'exécution des tâches planifiées,
+   * emportant avec lui ce qui était programmé derrière.
+   *
+   * ON COPIE AVANT DE SUPPRIMER. La table peut contenir des tests composés à la
+   * main. Une suppression demandée reste une suppression irréversible : on
+   * dépose donc une copie en clair dans le répertoire des sauvegardes, puis on
+   * supprime. Si la copie ne peut pas s'écrire, on ne supprime pas — mieux vaut
+   * une table qui traîne qu'une preuve perdue.
+   *
+   * Les RÉSULTATS de positionnement ne sont pas concernés : ils vivent sur la
+   * fiche d'inscription (`positioning_result_document_url`), c'est là que le
+   * quiz les dépose, et ils restent consultables dans chaque dossier.
+   */
+  private function retire_legacy_positioning_test_module() {
+    if ( get_option( 'acdc_of_saas_3_25_278_positioning_retired' ) === '1' ) {
+      return;
+    }
+    global $wpdb;
+    $table = $wpdb->prefix . 'acdc_of_positioning_tests';
+
+    if ( $wpdb->get_var( $wpdb->prepare( 'SHOW TABLES LIKE %s', $table ) ) !== $table ) {
+      wp_clear_scheduled_hook( 'acdc_of_positioning_test_cron' );
+      update_option( 'acdc_of_saas_3_25_278_positioning_retired', '1', false );
+      return;
+    }
+
+    $rows = (array) $wpdb->get_results( "SELECT * FROM {$table}", ARRAY_A );
+    if ( ! empty( $rows ) ) {
+      $base = $this->get_backup_base_directory();
+      if ( '' === $base || ! wp_mkdir_p( $base ) ) {
+        return;   // pas de copie possible : on ne supprime rien.
+      }
+      $fichier = trailingslashit( $base ) . 'acdc-tests-positionnement-retires-' . gmdate( 'Ymd-His' ) . '.json';
+      $ecrit   = file_put_contents( $fichier, wp_json_encode( $rows, JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE ) );
+      if ( false === $ecrit ) {
+        return;   // idem : la suppression attend que la copie soit possible.
+      }
+      update_option( 'acdc_of_saas_3_25_278_positioning_backup', $fichier, false );
+    }
+
+    $wpdb->query( "DROP TABLE IF EXISTS {$table}" );
+    wp_clear_scheduled_hook( 'acdc_of_positioning_test_cron' );
+    update_option( 'acdc_of_saas_3_25_278_positioning_retired', '1', false );
   }
 
   /**
@@ -1656,7 +1793,8 @@ private function acdc_send_transactional_email( $to, $subject, $template_args = 
       internal_docs LONGTEXT,
       shared_links LONGTEXT,
       convocation_enabled TINYINT(1) NOT NULL DEFAULT 1,
-      positioning_test_enabled TINYINT(1) NOT NULL DEFAULT 1,
+      positioning_test_enabled TINYINT(1) NOT NULL DEFAULT 0,
+      diagnostic_evaluation_enabled TINYINT(1) NOT NULL DEFAULT 1,
       intermediate_survey_enabled TINYINT(1) NOT NULL DEFAULT 0,
       hot_survey_enabled TINYINT(1) NOT NULL DEFAULT 1,
       evaluation_enabled TINYINT(1) NOT NULL DEFAULT 1,
@@ -1940,22 +2078,7 @@ private function acdc_send_transactional_email( $to, $subject, $template_args = 
       KEY correction_type (correction_type)
     ) {$charset_collate};";
 
-    $sql_positioning_tests = "CREATE TABLE {$this->positioning_test_table} (
-      id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
-      title VARCHAR(190) NOT NULL,
-      description_text LONGTEXT,
-      correction_type VARCHAR(50) NOT NULL DEFAULT 'Correction automatique',
-      duration_minutes INT UNSIGNED NOT NULL DEFAULT 5,
-      formation_ids LONGTEXT,
-      question_blocks LONGTEXT,
-      scoring_blocks LONGTEXT,
-      alert_notation VARCHAR(50) DEFAULT '',
-      created_at DATETIME NOT NULL,
-      updated_at DATETIME NOT NULL,
-      PRIMARY KEY (id),
-      KEY title (title),
-      KEY correction_type (correction_type)
-    ) {$charset_collate};";
+    /* ACDC 3.25.278 — Table retirée avec son module. */
 
     $sql_evaluations = "CREATE TABLE {$this->evaluation_table} (
       id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
@@ -2331,7 +2454,6 @@ dbDelta( $sql_companies );
     dbDelta( $sql_trainer_portal_logs );
 
     dbDelta( $sql_quizzes );
-    dbDelta( $sql_positioning_tests );
     dbDelta( $sql_evaluations );
     dbDelta( $sql_need_analyses );
 
@@ -2501,12 +2623,19 @@ dbDelta( $sql_companies );
     $this->maybe_add_table_column( $this->formation_table, 'jours_count',      'TINYINT UNSIGNED NOT NULL DEFAULT 0' );
     // ACDC 3.21.49 — Colonnes toggles Qualiopi (absentes du maybe_add — manquaient sur installations existantes).
     $this->maybe_add_table_column( $this->formation_table, 'convocation_enabled',          'TINYINT(1) NOT NULL DEFAULT 1' );
-    $this->maybe_add_table_column( $this->formation_table, 'positioning_test_enabled',     'TINYINT(1) NOT NULL DEFAULT 1' );
+    /* ACDC 3.25.278 — Le test de positionnement vérifie les prérequis d'accès.
+       Il n'entre pas dans le parcours par défaut : c'est une décision prise
+       formation par formation, pas une étape de tous les parcours. */
+    $this->maybe_add_table_column( $this->formation_table, 'positioning_test_enabled',     'TINYINT(1) NOT NULL DEFAULT 0' );
+    /* ACDC 3.25.278 — L'évaluation diagnostique n'avait pas d'interrupteur : le
+       quiz correspondant était préparé quoi qu'on décide, et l'écran ne
+       proposait rien pour l'arrêter. */
+    $this->maybe_add_table_column( $this->formation_table, 'diagnostic_evaluation_enabled','TINYINT(1) NOT NULL DEFAULT 1' );
     $this->maybe_add_table_column( $this->formation_table, 'intermediate_survey_enabled',  'TINYINT(1) NOT NULL DEFAULT 0' );
     $this->maybe_add_table_column( $this->formation_table, 'hot_survey_enabled',           'TINYINT(1) NOT NULL DEFAULT 1' );
     $this->maybe_add_table_column( $this->formation_table, 'evaluation_enabled',           'TINYINT(1) NOT NULL DEFAULT 1' );
     $this->maybe_add_table_column( $this->formation_table, 'end_documents_enabled',        'TINYINT(1) NOT NULL DEFAULT 1' );
-    $this->maybe_add_table_column( $this->formation_table, 'cold_survey_enabled',          'TINYINT(1) NOT NULL DEFAULT 0' );
+    $this->maybe_add_table_column( $this->formation_table, 'cold_survey_enabled',          'TINYINT(1) NOT NULL DEFAULT 1' );
     $this->maybe_add_table_column( $this->formation_table, 'trainer_survey_enabled',       'TINYINT(1) NOT NULL DEFAULT 1' );
     $this->maybe_add_table_column( $this->formation_table, 'company_survey_enabled',       'TINYINT(1) NOT NULL DEFAULT 1' );
     $this->maybe_add_table_column( $this->formation_table, 'qualiopi_compliant',           'TINYINT(1) NOT NULL DEFAULT 1' );
@@ -3749,7 +3878,6 @@ dbDelta( $sql_companies );
         'acdc-of-funders'               => 'funders',
         'acdc-of-trainers'              => 'trainers',
         'acdc-of-quiz'                  => 'quiz',
-        'acdc-of-positioning-tests'     => 'positioning_tests',
         'acdc-of-need-analyses'         => 'need_analyses',
         'acdc-of-training-files'        => 'training_files',
         'acdc-of-registration-contract' => 'registration_contract',
@@ -3941,7 +4069,6 @@ dbDelta( $sql_companies );
       'funders' => $this->funder_table,
       'trainers' => $this->trainer_table,
       'quizzes' => $this->quiz_table,
-      'positioning_tests' => $this->positioning_test_table,
       'evaluations' => $this->evaluation_table,
       'need_analyses' => $this->need_analysis_table,
       'registration_contracts' => $this->registration_contract_table,
@@ -6799,36 +6926,11 @@ dbDelta( $sql_companies );
     $profiles = $this->get_training_file_profiles();
     $profiles[ $registration_id ] = $profile;
     update_option( 'acdc_of_training_file_profiles', $profiles, false );
-  }  private function get_positioning_tests( $search = '' ) {
-    global $wpdb;
-    $where = '';
-    if ( '' !== trim( (string) $search ) ) {
-      $like = '%' . $wpdb->esc_like( trim( (string) $search ) ) . '%';
-      $where = $wpdb->prepare( "WHERE title LIKE %s OR correction_type LIKE %s", $like, $like );
-    }
-    return $wpdb->get_results( "SELECT * FROM {$this->positioning_test_table} {$where} ORDER BY updated_at DESC, id DESC" );
-  }  private function get_positioning_test( $id ) {
-    global $wpdb;
-    return $wpdb->get_row( $wpdb->prepare( "SELECT * FROM {$this->positioning_test_table} WHERE id = %d", $id ) );
-  }  private function get_positioning_test_formation_ids( $test ) {
-    if ( ! $test || empty( $test->formation_ids ) ) {
-      return array();
-    }
-    $decoded = json_decode( (string) $test->formation_ids, true );
-    if ( is_array( $decoded ) ) {
-      return array_values( array_filter( array_map( 'absint', $decoded ) ) );
-    }
-    return array_values( array_filter( array_map( 'absint', explode( ',', (string) $test->formation_ids ) ) ) );
-  }  private function get_positioning_test_formation_titles( $test ) {
-    $ids = $this->get_positioning_test_formation_ids( $test );
-    if ( empty( $ids ) ) {
-      return array();
-    }
-    global $wpdb;
-    $placeholders = implode( ',', array_fill( 0, count( $ids ), '%d' ) );
-    $rows = $wpdb->get_results( $wpdb->prepare( "SELECT title FROM {$this->formation_table} WHERE id IN ($placeholders) ORDER BY title ASC", $ids ) );
-    return array_map( static function( $row ) { return (string) $row->title; }, $rows );
   }
+
+  /* ACDC 3.25.278 — Les cinq lectures de l'ancienne table « tests de
+     positionnement » sont retirées avec elle : le module faisait double emploi
+     avec le quiz, et son envoi automatique n'a jamais fonctionné. */
 
   /* -----------------------------------------------------------------------
    * ACDC 3.21.10 — Seed des blocs et questions système (idempotent).
@@ -9578,78 +9680,34 @@ dbDelta( $sql_companies );
     $learner = isset( $context['learner_name'] ) ? (string) $context['learner_name'] : ( ! empty( $registration->learner_label ) ? (string) $registration->learner_label : 'apprenant' );
     $formation = isset( $context['formation_title'] ) ? (string) $context['formation_title'] : ( ! empty( $registration->formation_title ) ? (string) $registration->formation_title : 'formation' );
     return sanitize_file_name( 'resultat-test-positionnement-' . $learner . '-' . $formation . '.pdf' );
-  }  private function get_positioning_test_for_formation( $formation_id ) {
-    global $wpdb;
-    $formation_id = absint( $formation_id );
-    if ( ! $formation_id ) {
-      return null;
-    }
-    $tests = $wpdb->get_results( "SELECT * FROM {$this->positioning_test_table} ORDER BY updated_at DESC, id DESC" );
-    foreach ( (array) $tests as $test ) {
-      $ids = $this->get_positioning_test_formation_ids( $test );
-      if ( in_array( $formation_id, $ids, true ) ) {
-        return $test;
-      }
-    }
-    return null;
-  }  private function get_positioning_result_context( $registration ) {
+  }
+
+  private function get_positioning_result_context( $registration ) {
     $convocation_context = $this->get_training_convocation_context( $registration );
     $formation = isset( $convocation_context['formation'] ) ? $convocation_context['formation'] : null;
-    $test = $this->get_positioning_test_for_formation( ! empty( $registration->formation_id ) ? (int) $registration->formation_id : 0 );
-    $questions = array();
-    if ( $test && ! empty( $test->question_blocks ) ) {
-      $decoded = json_decode( (string) $test->question_blocks, true );
-      if ( is_array( $decoded ) ) {
-        $questions = $decoded;
-      }
-    }
-    $scoring = array();
-    if ( $test && ! empty( $test->scoring_blocks ) ) {
-      $decoded = json_decode( (string) $test->scoring_blocks, true );
-      if ( is_array( $decoded ) ) {
-        $scoring = $decoded;
-      }
-    }
+    /* ACDC 3.25.278 — L'ANCIEN MODULE EST RETIRÉ, SON ÉCHAFAUDAGE AUSSI.
+       Ce contexte allait chercher la DÉFINITION du test — ses questions, sa
+       grille de correction — pour composer un intitulé de résultat. Cette
+       définition n'existe plus : le quiz est désormais le seul test de
+       positionnement, et ce qu'il laisse est un DOCUMENT de résultat déposé sur
+       la fiche d'inscription. Le contexte se réduit donc à cette preuve-là.
+
+       Les clés sont conservées, vides : elles sont lues par le composeur de PDF
+       et par l'écran du dossier, qui n'ont pas à savoir que le module a
+       disparu. */
     $result_label = '—';
-    $correct_answers = null;
-    $total_questions = count( $questions );
-    $document = $this->get_positioning_result_document_info( $registration, $convocation_context );
+    $document     = $this->get_positioning_result_document_info( $registration, $convocation_context );
     if ( ! empty( $document['url'] ) || ! empty( $document['path'] ) ) {
       $result_label = 'Résultat disponible';
     }
-    if ( $test && ! empty( $test->correction_type ) && 'Sans correction automatique' !== $test->correction_type ) {
-      $result_label = 'Correction automatique';
-      if ( ! empty( $scoring ) ) {
-        foreach ( $scoring as $score_row ) {
-          $label = isset( $score_row['label'] ) ? trim( (string) $score_row['label'] ) : '';
-          if ( '' !== $label ) {
-            $result_label = $label;
-            break;
-          }
-        }
-      }
-    }
-    $questions_details = array();
-    foreach ( $questions as $idx => $question ) {
-      $options = isset( $question['options'] ) ? trim( (string) $question['options'] ) : '';
-      $options_lines = array_values( array_filter( array_map( 'trim', preg_split( '/\r\n|\r|\n/', $options ) ) ) );
-      $expected = ! empty( $options_lines ) ? $options_lines[0] : '';
-      $questions_details[] = array(
-        'number' => $idx + 1,
-        'label' => isset( $question['label'] ) ? (string) $question['label'] : 'Question',
-        'type' => isset( $question['type'] ) ? (string) $question['type'] : '',
-        'options' => $options,
-        'expected' => $expected,
-      );
-    }
-    $convocation_context['test'] = $test;
-    $convocation_context['test_title'] = $test && ! empty( $test->title ) ? (string) $test->title : 'Test de positionnement';
+    $convocation_context['test'] = null;
+    $convocation_context['test_title'] = 'Test de positionnement';
     $convocation_context['test_source_label'] = 'Plateforme';
-    $convocation_context['correction_type'] = $test && ! empty( $test->correction_type ) ? (string) $test->correction_type : 'Correction automatique';
+    $convocation_context['correction_type'] = 'Correction automatique';
     $convocation_context['result_label'] = $result_label;
-    $convocation_context['correct_answers'] = $correct_answers;
-    $convocation_context['total_questions'] = $total_questions;
-    $convocation_context['questions_details'] = $questions_details;
+    $convocation_context['correct_answers'] = null;
+    $convocation_context['total_questions'] = 0;
+    $convocation_context['questions_details'] = array();
     $convocation_context['document'] = $document;
     /* ACDC 3.25.224 — Le troisième écran de documents affichait la même durée
        vide et la même période approchée que les deux autres. Il lit désormais
@@ -10726,15 +10784,21 @@ private function build_absence_certificate_pdf_pages( $registration, $context = 
       'manager_formation_id' => array( 'manager formation id', 'manager id', 'id manager' ),
       // Toggles Qualiopi
       // "Convocation de début de formation" (nouveau format) + "convocation" (ancien)
-      'convocation_enabled'         => array( 'convocation', 'convocation de debut de formation' ),
-      'positioning_test_enabled'    => array( 'test de positionnement' ),
-      'intermediate_survey_enabled' => array( 'evaluation intermediaire', 'enquete intermediaire' ),
-      'hot_survey_enabled'          => array( 'evaluation a chaud', 'enquete a chaud' ),
-      'evaluation_enabled'          => array( 'evaluation des acquis' ),
-      'end_documents_enabled'       => array( 'documents de fin de formation', 'documents fin de formation' ),
-      'cold_survey_enabled'         => array( 'evaluation a froid', 'enquete a froid' ),
-      'trainer_survey_enabled'      => array( 'enquete formateur' ),
-      'company_survey_enabled'      => array( 'enquete entreprise' ),
+      /* ACDC 3.25.278 — « Enquête financeur » et « Évaluation diagnostique »
+         manquaient à cette table : un fichier exporté puis réimporté perdait
+         ces deux réglages sans le dire. Les intitulés historiques restent
+         reconnus, un ancien fichier s'importe donc toujours. */
+      'convocation_enabled'           => array( 'convocation', 'convocation de debut de formation' ),
+      'positioning_test_enabled'      => array( 'test de positionnement' ),
+      'diagnostic_evaluation_enabled' => array( 'evaluation diagnostique', 'evaluation diagnostic' ),
+      'intermediate_survey_enabled'   => array( 'evaluation intermediaire', 'enquete intermediaire', 'enquete de satisfaction intermediaire' ),
+      'hot_survey_enabled'            => array( 'evaluation a chaud', 'enquete a chaud', 'enquete de satisfaction a chaud' ),
+      'evaluation_enabled'            => array( 'evaluation des acquis' ),
+      'end_documents_enabled'         => array( 'documents de fin de formation', 'documents fin de formation' ),
+      'cold_survey_enabled'           => array( 'evaluation a froid', 'enquete a froid', 'enquete de satisfaction a froid' ),
+      'trainer_survey_enabled'        => array( 'enquete formateur' ),
+      'company_survey_enabled'        => array( 'enquete entreprise' ),
+      'funder_survey_enabled'         => array( 'enquete financeur' ),
     );
 
     $mapping = array();
@@ -10817,11 +10881,14 @@ private function build_absence_certificate_pdf_pages( $registration, $context = 
       'Objectifs de la formation', 'Prérequis', 'Public cible',
       'Format', 'Adresse', 'CP', 'Ville',
       "Tarif de l'action de formation (€ HT)", 'Durée (HH:MM)',
-      'Convocation de début de formation', 'Test de positionnement',
-      'Évaluation intermédiaire', 'Évaluation à chaud', 'Évaluation des acquis',
-      'Documents de fin de formation', 'Évaluation à froid',
-      'Enquête formateur', 'Enquête entreprise',
     );
+    /* ACDC 3.25.278 — Les colonnes d'interrupteurs viennent de la liste
+       commune. Écrites à la main, elles avaient divergé : « Évaluation
+       diagnostique » n'existait pas et « Enquête financeur » manquait — un
+       aller-retour par le tableur perdait donc silencieusement ce réglage. */
+    foreach ( $this->acdc_qualiopi_toggles() as $_tg ) {
+      $headers[] = $_tg['label'];
+    }
     for ( $j = 1; $j <= 5; $j++ ) {
       foreach ( array( 'Matin', 'Après-midi' ) as $_xlm ) {
         $headers[] = 'Jour ' . $j . ' - ' . $_xlm . ' - Titre de la session';
@@ -10898,16 +10965,10 @@ private function build_absence_certificate_pdf_pages( $registration, $context = 
         (string) $f->city,
         (string) $f->price_ht,
         (string) $f->duration,
-        $yn( $f->convocation_enabled ),
-        $yn( $f->positioning_test_enabled ),
-        $yn( isset( $f->intermediate_survey_enabled ) ? $f->intermediate_survey_enabled : 0 ),
-        $yn( $f->hot_survey_enabled ),
-        $yn( $f->evaluation_enabled ),
-        $yn( $f->end_documents_enabled ),
-        $yn( isset( $f->cold_survey_enabled ) ? $f->cold_survey_enabled : 0 ),
-        $yn( $f->trainer_survey_enabled ),
-        $yn( $f->company_survey_enabled ),
       );
+      foreach ( $this->acdc_qualiopi_toggles() as $_tk => $_tg ) {
+        $row[] = $yn( isset( $f->$_tk ) ? $f->$_tk : $_tg['default'] );
+      }
       for ( $_xj = 1; $_xj <= 5; $_xj++ ) {
         foreach ( array( 'matin', 'apm' ) as $_xm ) {
           $row[] = $gp( $_xj, $_xm, 'titre' );
@@ -11638,7 +11699,8 @@ public function register_admin_menu() {
   add_submenu_page( 'acdc-of-dashboard', 'Financeurs', 'Financeurs', 'manage_options', 'acdc-of-funders', array( $this, 'render_admin_funders_page' ) );
   add_submenu_page( 'acdc-of-dashboard', 'Formateurs', 'Formateurs', 'manage_options', 'acdc-of-trainers', array( $this, 'render_admin_trainers_page' ) );
   add_submenu_page( 'acdc-of-dashboard', 'Quiz', 'Quiz', 'manage_options', 'acdc-of-quiz', array( $this, 'render_admin_quiz_page' ) );
-  add_submenu_page( 'acdc-of-dashboard', 'Tests de positionnement', 'Tests de positionnement', 'manage_options', 'acdc-of-positioning-tests', array( $this, 'render_admin_positioning_tests_page' ) );
+  /* ACDC 3.25.278 — Entrée de menu retirée : elle portait le même nom que
+     celle du module quiz, pour un module dont l'envoi n'a jamais fonctionné. */
   add_submenu_page( 'acdc-of-dashboard', 'Analyses du besoin', 'Analyses du besoin', 'manage_options', 'acdc-of-need-analyses', array( $this, 'render_admin_need_analyses_page' ) );
   add_submenu_page( 'acdc-of-dashboard', 'Dossiers de formation', 'Dossiers de formation', 'manage_options', 'acdc-of-training-files', array( $this, 'render_admin_training_files_page' ) );
   add_submenu_page( 'acdc-of-dashboard', 'Convention/Contrat', 'Convention/Contrat', 'manage_options', 'acdc-of-registration-contract', array( $this, 'render_admin_registration_contract_page' ) );
@@ -11664,7 +11726,7 @@ public function register_admin_menu() {
   add_submenu_page( null, 'Veille IA', 'Veille IA', 'manage_options', 'acdc-of-watch-ia', array( $this, 'render_admin_watch_ia_page' ) );
 
   foreach ( array(
-    'acdc-of-needs','acdc-of-calendar','acdc-of-sessions-calendar','acdc-of-pre-meetings','acdc-of-sessions-pending','acdc-of-sessions-validated','acdc-of-prospects','acdc-of-prospect-followup','acdc-of-learners','acdc-of-formations','acdc-of-groups','acdc-of-companies','acdc-of-funders','acdc-of-trainers','acdc-of-quiz','acdc-of-positioning-tests','acdc-of-need-analyses','acdc-of-training-files','acdc-of-registration-contract','acdc-of-register-training','acdc-of-mid-surveys','acdc-of-hot-surveys','acdc-of-evaluations','acdc-of-questionnaire-sessions','acdc-of-questionnaire-results','acdc-of-questionnaire-settings','acdc-of-cold-surveys','acdc-of-trainer-surveys','acdc-of-company-surveys','acdc-of-funder-surveys','acdc-of-users','acdc-of-contacts','acdc-of-documents','acdc-of-learner-portal','acdc-of-settings'
+    'acdc-of-needs','acdc-of-calendar','acdc-of-sessions-calendar','acdc-of-pre-meetings','acdc-of-sessions-pending','acdc-of-sessions-validated','acdc-of-prospects','acdc-of-prospect-followup','acdc-of-learners','acdc-of-formations','acdc-of-groups','acdc-of-companies','acdc-of-funders','acdc-of-trainers','acdc-of-quiz','acdc-of-need-analyses','acdc-of-training-files','acdc-of-registration-contract','acdc-of-register-training','acdc-of-mid-surveys','acdc-of-hot-surveys','acdc-of-evaluations','acdc-of-questionnaire-sessions','acdc-of-questionnaire-results','acdc-of-questionnaire-settings','acdc-of-cold-surveys','acdc-of-trainer-surveys','acdc-of-company-surveys','acdc-of-funder-surveys','acdc-of-users','acdc-of-contacts','acdc-of-documents','acdc-of-learner-portal','acdc-of-settings'
   ) as $hidden_slug ) {
     remove_submenu_page( 'acdc-of-dashboard', $hidden_slug );
   }
@@ -12343,7 +12405,6 @@ private function acdc_pdf_asset_is_readable( $url ) {
       $this->funder_table,
       $this->trainer_table,
       $this->quiz_table,
-      $this->positioning_test_table,
       $this->evaluation_table,
       $this->need_analysis_table,
       $this->registration_contract_table,

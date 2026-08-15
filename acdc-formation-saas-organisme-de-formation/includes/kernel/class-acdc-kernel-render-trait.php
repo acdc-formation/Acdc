@@ -633,9 +633,6 @@ trait ACDC_Kernel_Render_Trait {
             case 'workflow':
               $this->render_front_workflow_tab( $action, $item_id );
               break;
-            case 'positioning_tests':
-              $this->render_front_positioning_tests_tab( $action, $item_id );
-              break;
             case 'mid_surveys':
               $this->render_front_mid_surveys_tab( $action, $item_id );
               break;
@@ -732,9 +729,6 @@ trait ACDC_Kernel_Render_Trait {
               break;
             case 'training_convocations':
               $this->render_front_training_convocations_tab();
-              break;
-            case 'positioning_results':
-              $this->render_front_positioning_results_tab();
               break;
             case 'mid_surveys_documents':
               $this->render_front_mid_survey_documents_tab();
@@ -1150,7 +1144,6 @@ trait ACDC_Kernel_Render_Trait {
           array( 'tab' => 'needs_documents', 'label' => 'Analyses du besoin', 'icon' => 'need' ),
           array( 'tab' => 'contracts_documents', 'label' => 'Conventions/Contrats', 'icon' => 'contract' ),
           array( 'tab' => 'training_convocations', 'label' => 'Convocations de début de formation', 'icon' => 'convocation' ),
-          array( 'tab' => 'positioning_results', 'label' => 'Résultats tests de positionnement', 'icon' => 'results' ),
           array( 'tab' => 'mid_surveys_documents', 'label' => 'Enquêtes intermédiaires', 'icon' => 'survey' ),
           array( 'tab' => 'hot_surveys_documents', 'label' => 'Enquêtes à chaud', 'icon' => 'survey' ),
           array( 'tab' => 'evaluation_results', 'label' => 'Résultat évaluations des acquis', 'icon' => 'evaluation_result' ),
@@ -2654,6 +2647,20 @@ trait ACDC_Kernel_Render_Trait {
             <div class="tf-ug-field tf-full"><span class="tf-ug-label">Test envoyé</span><span style="font-size:13px;color:#aaa;padding-top:7px;">Non encore envoyé</span></div>
             <?php endif; ?>
             <div class="tf-ug-field tf-full"><span class="tf-ug-label">Résultat document</span><span style="font-size:13px;padding-top:7px;"><?php if ( $pos_doc_url ) : ?><a href="<?php echo esc_url( $pos_doc_url ); ?>" target="_blank" style="color:#35b37e;font-weight:600;">📄 Télécharger le résultat</a><?php else : ?><span style="color:#aaa;">Aucun document généré</span><?php endif; ?></span></div>
+            <?php /* ACDC 3.25.278 — Le dépôt manuel d'un résultat vivait sur
+                     l'écran « Résultats tests de positionnement », retiré avec
+                     son module. Il revient ici, à côté du document qu'il
+                     alimente : le quiz dépose le sien tout seul, mais un
+                     résultat passé sur papier doit encore pouvoir être joint. */ ?>
+            <div class="tf-ug-field tf-full"><span class="tf-ug-label">Joindre un résultat</span>
+              <form method="post" action="<?php echo esc_url( admin_url( 'admin-post.php' ) ); ?>" enctype="multipart/form-data" style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;padding-top:5px;">
+                <?php wp_nonce_field( 'acdc_update_positioning_result_document_' . (int) $registration->id ); ?>
+                <input type="hidden" name="action" value="acdc_update_positioning_result_document">
+                <input type="hidden" name="registration_id" value="<?php echo esc_attr( (string) $registration->id ); ?>">
+                <input type="file" name="positioning_result_document_file" accept="application/pdf,image/*">
+                <button type="submit" class="acdc-button acdc-button-soft">Enregistrer</button>
+              </form>
+            </div>
           </div>
         </div>
         <div class="tf-ug-panel">
@@ -2866,7 +2873,7 @@ trait ACDC_Kernel_Render_Trait {
         </div>
         <?php
           $evaluation_links = array(
-            array( 'label' => 'Tests de positionnement', 'url' => is_admin() ? $this->admin_tab_url( 'positioning_tests' ) : $this->portal_page_url( array( 'tab' => 'positioning_tests' ) ), 'doc' => ! empty( $registration->positioning_result_document_url ) ),
+            array( 'label' => 'Tests de positionnement', 'url' => is_admin() ? $this->admin_tab_url( 'qz_positioning' ) : $this->portal_page_url( array( 'tab' => 'qz_positioning' ) ), 'doc' => ! empty( $registration->positioning_result_document_url ) ),
             array( 'label' => 'Enquêtes intermédiaires', 'url' => is_admin() ? $this->admin_tab_url( 'mid_surveys' ) : $this->portal_page_url( array( 'tab' => 'mid_surveys' ) ), 'doc' => ! empty( $registration->mid_survey_document_url ) ),
             array( 'label' => 'Enquêtes à chaud', 'url' => is_admin() ? $this->admin_tab_url( 'hot_surveys' ) : $this->portal_page_url( array( 'tab' => 'hot_surveys' ) ), 'doc' => ! empty( $registration->hot_survey_document_url ) ),
             array( 'label' => 'Évaluations des acquis', 'url' => is_admin() ? $this->admin_tab_url( 'evaluations' ) : $this->portal_page_url( array( 'tab' => 'evaluations' ) ), 'doc' => ! empty( $registration->evaluation_result_document_url ) ),
@@ -2914,7 +2921,7 @@ trait ACDC_Kernel_Render_Trait {
         <?php
           $document_links = array(
             array( 'label' => 'Convocations', 'url' => is_admin() ? $this->admin_tab_url( 'invitations' ) : $this->portal_page_url( array( 'tab' => 'invitations' ) ), 'doc' => ! empty( $registration->convocation_document_url ) ),
-            array( 'label' => 'Résultats de positionnement', 'url' => is_admin() ? $this->admin_tab_url( 'positioning_tests' ) : $this->portal_page_url( array( 'tab' => 'positioning_tests' ) ), 'doc' => ! empty( $registration->positioning_result_document_url ) ),
+            array( 'label' => 'Résultats de positionnement', 'url' => is_admin() ? $this->admin_tab_url( 'qz_results_positioning' ) : $this->portal_page_url( array( 'tab' => 'qz_results_positioning' ) ), 'doc' => ! empty( $registration->positioning_result_document_url ) ),
             array( 'label' => 'Enquêtes intermédiaires', 'url' => is_admin() ? $this->admin_tab_url( 'mid_surveys' ) : $this->portal_page_url( array( 'tab' => 'mid_surveys' ) ), 'doc' => ! empty( $registration->mid_survey_document_url ) ),
             array( 'label' => 'Enquêtes à chaud', 'url' => is_admin() ? $this->admin_tab_url( 'hot_surveys' ) : $this->portal_page_url( array( 'tab' => 'hot_surveys' ) ), 'doc' => ! empty( $registration->hot_survey_document_url ) ),
             array( 'label' => 'Enquêtes à froid', 'url' => is_admin() ? $this->admin_tab_url( 'cold_surveys' ) : $this->portal_page_url( array( 'tab' => 'cold_surveys' ) ), 'doc' => ! empty( $registration->cold_survey_document_url ) ),
@@ -4415,252 +4422,6 @@ trait ACDC_Kernel_Render_Trait {
         <p><a class="acdc-button acdc-button-primary" href="<?php echo esc_url( $this->portal_page_url( array( 'tab' => 'contacts' ) ) ); ?>">Ouvrir les contacts</a></p>
       </div>
     </div>
-    <?php
-  }  private function render_front_positioning_tests_tab( $action, $item_id ) {
-    $search = isset( $_GET['q'] ) ? sanitize_text_field( wp_unslash( $_GET['q'] ) ) : '';
-    $tests = $this->get_positioning_tests( $search );
-    $test = $item_id ? $this->get_positioning_test( $item_id ) : null;
-    $base_url = is_admin() ? admin_url( 'admin.php?page=acdc-of-positioning-tests' ) : $this->portal_page_url( array( 'tab' => 'positioning_tests' ) );
-    ?>
-    <section class="acdc-section-head">
-      <div>
-        <h2>Tests de positionnement</h2>
-        <p>Créez, modifiez et consultez les tests de positionnement rattachés à vos formations.</p>
-      </div>
-      <div class="acdc-inline-wrap">
-        <a class="acdc-button acdc-button-soft" href="<?php echo esc_url( is_admin() ? admin_url( 'admin.php?page=acdc-of-questionnaire-sessions&source_type=positioning_test' ) : $this->portal_page_url( array( 'tab' => 'questionnaire_sessions', 'source_type' => 'positioning_test' ) ) ); ?>">Sessions de questionnaires</a>
-        <a class="acdc-button acdc-button-soft" href="<?php echo esc_url( is_admin() ? admin_url( 'admin.php?page=acdc-of-questionnaire-results&source_type=positioning_test' ) : $this->portal_page_url( array( 'tab' => 'questionnaire_results', 'source_type' => 'positioning_test' ) ) ); ?>">Résultats des sessions</a>
-        <a class="acdc-button acdc-button-primary" href="<?php echo esc_url( add_query_arg( array( 'action' => 'new' ), $base_url ) ); ?>">Créer un test de positionnement</a>
-      </div>
-    </section>
-    <?php if ( in_array( $action, array( 'new', 'edit', 'view' ), true ) ) : ?>
-      <?php $this->render_front_positioning_test_form( $test, 'view' === $action ); ?>
-    <?php endif; ?>
-    <div class="acdc-panel acdc-mb-18">
-      <form method="get" action="">
-        <?php if ( is_admin() ) : ?><input type="hidden" name="page" value="acdc-of-positioning-tests"><?php endif; ?>
-        <input type="hidden" name="tab" value="positioning_tests">
-        <div class="acdc-inline-wrap acdc-inline-wrap-center">
-          <input type="search" name="q" value="<?php echo esc_attr( $search ); ?>" placeholder="Rechercher" style="max-width:420px;">
-          <button type="submit" class="acdc-button acdc-button-soft">Rechercher</button>
-        </div>
-      </form>
-    </div>
-    <div class="acdc-panel">
-      <div class="acdc-table-wrap">
-        <table class="acdc-table">
-          <thead>
-            <tr>
-              <th>Intitulé</th>
-              <th>Formation(s)</th>
-              <th>Durée du questionnaire</th>
-              <th>Modifié le</th>
-              <th>Type de correction</th>
-              <th>Sessions</th>
-              <th>Actions</th>
-            </tr>
-          </thead>
-          <tbody>
-          <?php if ( ! empty( $tests ) ) : foreach ( $tests as $entry ) : $titles = $this->get_positioning_test_formation_titles( $entry ); $session_count = $this->get_questionnaire_session_count_for_source( 'positioning_test', (int) $entry->id ); ?>
-            <tr>
-              <td><?php echo esc_html( $entry->title ); ?></td>
-              <td><?php echo esc_html( count( $titles ) . ' Formation(s)' ); ?></td>
-              <td><?php echo esc_html( absint( $entry->duration_minutes ) ); ?> minutes</td>
-              <td><?php echo esc_html( mysql2date( 'j F Y à H\hi', $entry->updated_at ) ); ?></td>
-              <td><?php echo esc_html( $entry->correction_type ); ?></td>
-              <td><strong><?php echo esc_html( $session_count ); ?></strong><br><small><a href="<?php echo esc_url( $this->get_questionnaire_sessions_url( 'positioning_test', (int) $entry->id ) ); ?>">Voir les sessions</a></small></td>
-              <td>
-                <?php /* ACDC 3.20.104 — Conversion liens texte → icônes inline 25px. */ ?>
-                <div class="acdc-groups-actions-inline">
-                  <a class="acdc-row-action-icon acdc-row-view-link" href="<?php echo esc_url( add_query_arg( array( 'action' => 'view', 'item_id' => (int) $entry->id ), $base_url ) ); ?>" title="Voir" aria-label="Voir le test de positionnement">
-                    <?php echo $this->render_inline_icon( 'eye', 25 ); ?>
-                  </a>
-                  <a class="acdc-row-action-icon acdc-row-edit-link" href="<?php echo esc_url( add_query_arg( array( 'action' => 'edit', 'item_id' => (int) $entry->id ), $base_url ) ); ?>" title="Modifier" aria-label="Modifier le test de positionnement">
-                    <?php echo $this->render_inline_icon( 'edit', 25 ); ?>
-                  </a>
-                  <a class="acdc-row-action-icon" href="<?php echo esc_url( $this->get_questionnaire_new_session_url( 'positioning_test', (int) $entry->id ) ); ?>" title="Créer une session" aria-label="Créer une session pour ce test">
-                    <?php echo $this->render_inline_icon( 'create-session', 25 ); ?>
-                  </a>
-                  <a class="acdc-row-action-icon acdc-row-delete-link" href="<?php echo esc_url( wp_nonce_url( admin_url( 'admin-post.php?action=acdc_delete_positioning_test&test_id=' . (int) $entry->id . ( is_admin() ? '&page=acdc-of-positioning-tests' : '' ) ), 'acdc_delete_positioning_test_' . (int) $entry->id ) ); ?>" title="Supprimer" aria-label="Supprimer le test de positionnement" onclick="return confirm('Supprimer ce test de positionnement ?');">
-                    <?php echo $this->render_inline_icon( 'trash', 25 ); ?>
-                  </a>
-                </div>
-              </td>
-            </tr>
-          <?php endforeach; else : ?>
-            <tr><td colspan="7">Aucun test de positionnement enregistré.</td></tr>
-          <?php endif; ?>
-          </tbody>
-        </table>
-      </div>
-    </div>
-    <?php if ( 'list' === $action ) : ?>
-      <div class="acdc-modal-shell" id="acdc-create-positioning-test-modal" hidden>
-        <div class="acdc-modal-backdrop" data-acdc-close-modal></div>
-        <div class="acdc-modal-dialog acdc-modal-dialog-medium">
-          <div class="acdc-modal-header"><h4>Créer un test de positionnement</h4><button type="button" class="acdc-modal-close" data-acdc-close-modal>&times;</button></div>
-          <div class="acdc-modal-body acdc-pad-24">
-            <form method="get" action="<?php echo esc_url( is_admin() ? admin_url( 'admin.php' ) : $this->portal_page_url() ); ?>">
-              <?php if ( is_admin() ) : ?><input type="hidden" name="page" value="acdc-of-positioning-tests"><?php endif; ?>
-              <input type="hidden" name="tab" value="positioning_tests">
-              <input type="hidden" name="action" value="new">
-              <p><label><strong>Passage test de positionnement *</strong></label><br>
-                <select name="mode" required>
-                  <option value="">Choisir une option</option>
-                  <option value="Correction automatique">Correction automatique</option>
-                  <option value="Sans correction automatique">Sans correction automatique</option>
-                </select>
-              </p>
-              <p class="acdc-actions-end">
-                <button type="button" class="acdc-button acdc-button-soft" data-acdc-close-modal>Annuler</button>
-                <button type="submit" class="acdc-button acdc-button-primary">Créer un test de positionnement</button>
-              </p>
-            </form>
-          </div>
-        </div>
-      </div>
-      <script>
-      document.addEventListener('DOMContentLoaded',function(){
-      });
-      </script>
-    <?php endif; ?>
-    <?php
-  }  private function render_front_positioning_test_form( $test = null, $read_only = false ) {
-    $mode = 'Correction automatique';
-    if ( $test && ! empty( $test->correction_type ) ) {
-      $mode = $test->correction_type;
-    } elseif ( isset( $_GET['mode'] ) ) {
-      $candidate = sanitize_text_field( wp_unslash( $_GET['mode'] ) );
-      if ( in_array( $candidate, array( 'Correction automatique', 'Sans correction automatique' ), true ) ) {
-        $mode = $candidate;
-      }
-    }
-    $is_auto = 'Sans correction automatique' !== $mode;
-    $formations = $this->get_formations( array( 'archived' => false ) );
-    if ( empty( $formations ) ) {
-      $formations = $this->get_formations();
-    }
-    $selected_formations = $test ? $this->get_positioning_test_formation_ids( $test ) : array();
-    $questions = array();
-    if ( $test && ! empty( $test->question_blocks ) ) {
-      $decoded = json_decode( $test->question_blocks, true );
-      if ( is_array( $decoded ) ) {
-        $questions = $decoded;
-      }
-    }
-    if ( empty( $questions ) ) {
-      $questions = array();
-    }
-    $scores = array();
-    if ( $test && ! empty( $test->scoring_blocks ) ) {
-      $decoded = json_decode( $test->scoring_blocks, true );
-      if ( is_array( $decoded ) ) {
-        $scores = $decoded;
-      }
-    }
-    if ( empty( $scores ) ) {
-      $scores = array();
-    }
-    $value = function( $key, $default = '' ) use ( $test, $mode ) {
-      if ( 'correction_type' === $key ) {
-        return $test && isset( $test->$key ) && '' !== $test->$key ? $test->$key : $mode;
-      }
-      return $test && isset( $test->$key ) ? $test->$key : $default;
-    };
-    ?>
-    <form class="acdc-form acdc-positioning-test-form" method="post" action="<?php echo esc_url( admin_url( 'admin-post.php' ) ); ?>">
-      <?php wp_nonce_field( 'acdc_save_positioning_test' ); ?>
-      <input type="hidden" name="action" value="acdc_save_positioning_test">
-      <input type="hidden" name="test_id" value="<?php echo $test ? esc_attr( $test->id ) : 0; ?>">
-      <input type="hidden" name="positioning_test[correction_type]" value="<?php echo esc_attr( $mode ); ?>">
-      <?php if ( is_admin() ) : ?><input type="hidden" name="page" value="acdc-of-positioning-tests"><?php endif; ?>
-      <div class="acdc-panel acdc-mb-18">
-        <div class="acdc-needs-section-title">Informations</div>
-        <div class="acdc-grid-2cols">
-          <p><label>Formation(s) *</label>
-            <select name="positioning_test[formation_ids][]" <?php echo $read_only ? 'disabled' : ''; ?> multiple size="6" required>
-              <?php foreach ( $formations as $formation ) : ?>
-                <option value="<?php echo esc_attr( $formation->id ); ?>" <?php selected( in_array( (int) $formation->id, $selected_formations, true ) ); ?>><?php echo esc_html( $this->format_formation_option_label( $formation ) ); ?></option>
-              <?php endforeach; ?>
-            </select>
-          </p>
-          <p><label>Durée du questionnaire *</label>
-            <input type="number" min="1" name="positioning_test[duration_minutes]" required value="<?php echo esc_attr( $value( 'duration_minutes', 5 ) ); ?>" <?php echo $read_only ? 'readonly' : ''; ?> placeholder="Durée du questionnaire">
-            <small class="acdc-help-inline">Le temps doit être déclaré en minutes</small>
-          </p>
-        </div>
-      </div>
-      <div class="acdc-panel acdc-mb-18">
-        <div class="acdc-needs-section-title">Questionnaire</div>
-        <p><label>Intitulé *</label><input type="text" name="positioning_test[title]" required value="<?php echo esc_attr( $value( 'title' ) ); ?>" <?php echo $read_only ? 'readonly' : ''; ?> placeholder="Intitulé"></p>
-        <p><label>Description</label><textarea name="positioning_test[description_text]" rows="5" <?php echo $read_only ? 'readonly' : ''; ?> placeholder="Description"><?php echo esc_textarea( $value( 'description_text' ) ); ?></textarea></p>
-        <div class="acdc-needs-section-title" style="margin-top:24px;">Type de question</div>
-        <?php if ( ! $read_only ) : ?><p><button type="button" class="acdc-button acdc-button-primary" id="acdc-add-positioning-question">Ajouter une nouvelle question</button></p><?php endif; ?>
-        <div id="acdc-positioning-questions-wrap">
-          <?php foreach ( $questions as $index => $q ) : ?>
-            <div class="acdc-panel acdc-panel-block">
-              <div class="acdc-grid-question-row">
-                <input type="text" name="questions[<?php echo esc_attr( $index ); ?>][label]" value="<?php echo esc_attr( $q['label'] ?? '' ); ?>" <?php echo $read_only ? 'readonly' : ''; ?> placeholder="Intitulé de la question">
-                <select name="questions[<?php echo esc_attr( $index ); ?>][type]" <?php echo $read_only ? 'disabled' : ''; ?>>
-                  <?php foreach ( $this->get_quiz_question_type_options() as $key => $label ) : ?>
-                    <option value="<?php echo esc_attr( $key ); ?>" <?php selected( $q['type'] ?? '', $key ); ?>><?php echo esc_html( $label ); ?></option>
-                  <?php endforeach; ?>
-                </select>
-              </div>
-              <textarea name="questions[<?php echo esc_attr( $index ); ?>][options]" rows="3" <?php echo $read_only ? 'readonly' : ''; ?> placeholder="Options ou consignes"><?php echo esc_textarea( $q['options'] ?? '' ); ?></textarea>
-              <?php if ( ! $read_only ) : ?><p><button type="button" class="acdc-button acdc-remove-positioning-question acdc-button-soft">Supprimer la question</button></p><?php endif; ?>
-            </div>
-          <?php endforeach; ?>
-        </div>
-      </div>
-      <?php if ( $is_auto ) : ?>
-      <div class="acdc-panel acdc-mb-18">
-        <div class="acdc-needs-section-title">Résultats</div>
-        <?php if ( ! $read_only ) : ?><p><button type="button" class="acdc-button acdc-button-primary" id="acdc-add-positioning-score">Ajouter un type de notation</button></p><?php endif; ?>
-        <div id="acdc-positioning-scoring-wrap">
-          <?php foreach ( $scores as $index => $row ) : ?>
-            <div class="acdc-panel acdc-panel-block">
-              <div class="acdc-grid-score-row">
-                <select name="scoring[<?php echo esc_attr( $index ); ?>][type]" <?php echo $read_only ? 'disabled' : ''; ?>>
-                  <?php foreach ( $this->get_quiz_notation_type_options() as $key => $label ) : ?>
-                    <option value="<?php echo esc_attr( $key ); ?>" <?php selected( $row['type'] ?? '', $key ); ?>><?php echo esc_html( $label ); ?></option>
-                  <?php endforeach; ?>
-                </select>
-                <input type="text" name="scoring[<?php echo esc_attr( $index ); ?>][threshold]" value="<?php echo esc_attr( $row['threshold'] ?? '' ); ?>" <?php echo $read_only ? 'readonly' : ''; ?> placeholder="Seuil">
-                <input type="text" name="scoring[<?php echo esc_attr( $index ); ?>][label]" value="<?php echo esc_attr( $row['label'] ?? '' ); ?>" <?php echo $read_only ? 'readonly' : ''; ?> placeholder="Libellé affiché">
-              </div>
-              <?php if ( ! $read_only ) : ?><p><button type="button" class="acdc-button acdc-remove-positioning-score acdc-button-soft">Supprimer ce type</button></p><?php endif; ?>
-            </div>
-          <?php endforeach; ?>
-        </div>
-        <p class="acdc-muted-top-16">“Acquis/Non acquis” : vous devrez indiquer le nombre de bonnes réponses nécessaires pour réussir le test.</p>
-        <p class="acdc-muted-top-6">“Niveaux” : vous pourrez créer plusieurs niveaux et définir le seuil à atteindre pour chaque niveau.</p>
-      </div>
-      <?php endif; ?>
-      <p class="acdc-actions-end">
-        <a class="acdc-button acdc-button-soft" href="<?php echo esc_url( is_admin() ? admin_url( 'admin.php?page=acdc-of-positioning-tests' ) : $this->portal_page_url( array( 'tab' => 'positioning_tests' ) ) ); ?>">Annuler</a>
-        <?php if ( ! $read_only ) : ?>
-          <button type="submit" name="save_and_add" value="1" class="acdc-button acdc-button-primary">Créer & ajouter un autre</button>
-          <button type="submit" name="save_and_prepare_session" value="1" class="acdc-button acdc-button-soft"><?php echo $test ? 'Modifier et préparer une session' : 'Créer et préparer une session'; ?></button>
-          <button type="submit" class="acdc-button acdc-button-primary"><?php echo $test ? 'Modifier un test de positionnement' : 'Créer un test de positionnement'; ?></button>
-        <?php else : ?>
-          <a class="acdc-button acdc-button-primary" href="<?php echo esc_url( is_admin() ? admin_url( 'admin.php?page=acdc-of-positioning-tests&action=edit&item_id=' . (int) $test->id ) : $this->portal_page_url( array( 'tab' => 'positioning_tests', 'action' => 'edit', 'item_id' => (int) $test->id ) ) ); ?>">Modifier ce test</a>
-        <?php endif; ?>
-      </p>
-      <?php if ( $test ) { $this->render_questionnaire_source_visibility_panel( 'positioning_test', (int) $test->id, 'Ce test de positionnement' ); } else { $this->render_questionnaire_source_pending_panel( 'ce test de positionnement' ); } ?>
-      <?php if ( ! $read_only ) : ?>
-      <script>
-      document.addEventListener('DOMContentLoaded',function(){
-        var qWrap=document.getElementById('acdc-positioning-questions-wrap');
-        var addQ=document.getElementById('acdc-add-positioning-question');
-        if(addQ&&qWrap){addQ.addEventListener('click',function(){var i=qWrap.querySelectorAll('.acdc-panel').length;var d=document.createElement('div');d.className='acdc-panel acdc-panel-block';d.innerHTML='<div class="acdc-grid-question-row"><input type="text" name="questions['+i+'][label]" placeholder="Intitulé de la question"><select name="questions['+i+'][type]"><?php foreach ( $this->get_quiz_question_type_options() as $key => $label ) : ?><option value="<?php echo esc_attr( $key ); ?>"><?php echo esc_js( $label ); ?></option><?php endforeach; ?></select></div><textarea name="questions['+i+'][options]" rows="3" placeholder="Options ou consignes"></textarea><p><button type="button" class="acdc-button acdc-remove-positioning-question acdc-button-soft">Supprimer la question</button></p>';qWrap.appendChild(d);});qWrap.addEventListener('click',function(e){if(e.target.classList.contains('acdc-remove-positioning-question')){e.preventDefault();e.target.closest('.acdc-panel').remove();}});}
-        var sWrap=document.getElementById('acdc-positioning-scoring-wrap');
-        var addS=document.getElementById('acdc-add-positioning-score');
-        if(addS&&sWrap){addS.addEventListener('click',function(){var i=sWrap.querySelectorAll('.acdc-panel').length;var d=document.createElement('div');d.className='acdc-panel acdc-panel-block';d.innerHTML='<div class="acdc-grid-score-row"><select name="scoring['+i+'][type]"><?php foreach ( $this->get_quiz_notation_type_options() as $key => $label ) : ?><option value="<?php echo esc_attr( $key ); ?>"><?php echo esc_js( $label ); ?></option><?php endforeach; ?></select><input type="text" name="scoring['+i+'][threshold]" placeholder="Seuil"><input type="text" name="scoring['+i+'][label]" placeholder="Libellé affiché"></div><p><button type="button" class="acdc-button acdc-remove-positioning-score acdc-button-soft">Supprimer ce type</button></p>';sWrap.appendChild(d);});sWrap.addEventListener('click',function(e){if(e.target.classList.contains('acdc-remove-positioning-score')){e.preventDefault();e.target.closest('.acdc-panel').remove();}});}
-      });
-      </script>
-      <?php endif; ?>
-    </form>
     <?php
   }  private function render_front_need_analyses_tab( $action, $item_id ) {
     // ACDC 3.21.13-hotfix2 — Afficher les notices de création NAD si présentes
@@ -12201,232 +11962,6 @@ trait ACDC_Kernel_Render_Trait {
       });
     </script>
     <?php
-  }  private function render_front_positioning_results_tab() {
-    $search = isset( $_GET['q'] ) ? sanitize_text_field( wp_unslash( $_GET['q'] ) ) : '';
-    $per_page = isset( $_GET['per_page'] ) ? absint( $_GET['per_page'] ) : 25;
-    if ( ! in_array( $per_page, array( 25, 50, 100 ), true ) ) {
-      $per_page = 25;
-    }
-    $paged = \ACDC\Support\ScreenQuery::readPaged( $_GET );
-    $base_tab = 'positioning_results';
-    $base_url = is_admin() ? $this->admin_tab_url( $base_tab ) : $this->portal_page_url( array( 'tab' => $base_tab ) );
-    $rows = $this->get_positioning_result_rows( $search );
-    $total = count( $rows );
-    $total_pages = max( 1, (int) ceil( max( 1, $total ) / $per_page ) );
-    if ( $paged > $total_pages ) { $paged = $total_pages; }
-    $offset = ( $paged - 1 ) * $per_page;
-    $page_rows = array_slice( $rows, $offset, $per_page );
-    ?>
-    <section class="acdc-section-head"><div><h2>Résultats tests de positionnement</h2></div></section>
-    <div class="acdc-panel acdc-mb-18">
-      <form class="acdc-search-bar" method="get" action="<?php echo esc_url( $base_url ); ?>">
-        <?php if ( is_admin() ) : ?><input type="hidden" name="page" value="acdc-of-dashboard"><?php endif; ?>
-        <input type="hidden" name="tab" value="positioning_results">
-        <div class="acdc-search-row">
-          <input type="search" name="q" value="<?php echo esc_attr( $search ); ?>" placeholder="Rechercher">
-          <button type="button" class="acdc-filter-toggle acdc-filter-toggle-icons-only" data-acdc-filter-toggle aria-expanded="false" title="Filtres"><?php echo $this->render_inline_icon( 'filter', 18 ); ?> <?php echo $this->render_inline_icon( 'chevron-down', 16 ); ?></button>
-        </div>
-        <div class="acdc-sessions-filters-panel acdc-documents-filters-panel" data-acdc-filters-panel hidden>
-          <div class="acdc-documents-filter-card">
-            <label><span>Par page</span>
-              <select name="per_page">
-                <?php foreach ( array( 25, 50, 100 ) as $size ) : ?>
-                  <option value="<?php echo esc_attr( $size ); ?>" <?php selected( $per_page, $size ); ?>><?php echo esc_html( $size ); ?></option>
-                <?php endforeach; ?>
-              </select>
-            </label>
-          </div>
-          <div class="acdc-inline-wrap" style="justify-content:flex-end;margin-top:14px;">
-            <a class="acdc-button acdc-button-soft" href="<?php echo esc_url( $base_url ); ?>">Réinitialiser</a>
-            <button type="submit" class="acdc-button acdc-button-primary">Appliquer</button>
-          </div>
-        </div>
-      </form>
-    </div>
-    <div class="acdc-panel">
-      <?php if ( empty( $page_rows ) ) : ?>
-        <div class="acdc-empty-state" style="padding:72px 24px;text-align:center;"><div class="acdc-empty-state-icon" aria-hidden="true"><?php echo $this->render_inline_icon( 'results', 54 ); ?></div><p style="margin:0;color:#1E4777;">Aucune donnée ne correspond aux critères demandés.</p></div>
-      <?php else : ?>
-        <div class="acdc-table-wrap">
-          <table class="acdc-table acdc-table-positioning-results-documents">
-            <thead>
-              <tr>
-                <th><input type="checkbox" aria-label="Sélectionner"></th>
-                <th>ID</th>
-                <th>Apprenant</th>
-                <th>Test</th>
-                <th>Type de correction</th>
-                <th>Date ajout/passage</th>
-                <th>Résultats</th>
-                <th>Formation</th>
-                <th>Dates de formation</th>
-                <th>Durée (H)</th>
-                <th>Format</th>
-                <th>État dossier</th>
-                <th><span class="screen-reader-text">Menu</span></th>
-                <th><span class="screen-reader-text">Voir</span></th>
-                <th><span class="screen-reader-text">Modifier</span></th>
-              </tr>
-            </thead>
-            <tbody>
-            <?php foreach ( $page_rows as $row ) : ?>
-              <?php
-              $entry = $row['registration'];
-              $context = $row['context'];
-              $document = $context['document'];
-              $download_url = $this->get_positioning_result_download_url( $entry, 'attachment' );
-              $view_pdf_url = $this->get_positioning_result_download_url( $entry, 'inline' );
-              $file_name = $this->get_positioning_result_display_file_name( $entry, $context, $document );
-              $view_modal_id = 'acdc-positioning-result-view-' . (int) $entry->id;
-              $edit_modal_id = 'acdc-positioning-result-edit-' . (int) $entry->id;
-              $export_modal_id = 'acdc-positioning-result-export-' . (int) $entry->id;
-              $default_filename = sanitize_file_name( 'details-qcm-' . ( ! empty( $context['learner_name'] ) ? $context['learner_name'] : 'apprenant' ) . '-' . date_i18n( 'Ymd' ) );
-              ?>
-              <tr>
-                <td><input type="checkbox" aria-label="Sélectionner ce résultat"></td>
-                <td><?php echo esc_html( (int) $entry->id ); ?></td>
-                <td><?php echo esc_html( $context['learner_name'] ); ?></td>
-                <td><?php echo esc_html( $context['test_source_label'] ); ?><small><?php echo esc_html( $context['test_title'] ); ?></small></td>
-                <td><?php echo esc_html( $context['correction_type'] ); ?></td>
-                <td><?php echo esc_html( $this->format_pdf_date( $context['start_date'] ) ); ?></td>
-                <td><?php echo esc_html( $context['result_label'] ); ?><?php if ( null !== $context['correct_answers'] && ! empty( $context['total_questions'] ) ) : ?><small>Nb de questions réussies / Nb de questions : <?php echo esc_html( (int) $context['correct_answers'] . ' / ' . (int) $context['total_questions'] ); ?></small><?php endif; ?></td>
-                <td><a href="<?php echo esc_url( $view_pdf_url ); ?>" target="_blank" rel="noopener" class="acdc-program-link"><?php echo esc_html( $context['formation_title'] ); ?></a></td>
-                <td><?php echo esc_html( 'Début : ' . $this->format_pdf_date( $context['start_date'] ) . "\nFin : " . $this->format_pdf_date( $context['end_date'] ) ); ?></td>
-                <td><?php echo esc_html( $context['duration'] ); ?></td>
-                <td><?php echo esc_html( $context['format'] ); ?></td>
-                <td><?php echo esc_html( $row['state'] ); ?></td>
-                <td>
-                  <div class="acdc-row-menu" data-acdc-row-menu>
-                    <button type="button" class="acdc-row-menu-toggle" data-acdc-row-menu-toggle aria-expanded="false" title="Actions"><?php echo $this->render_inline_icon( 'more-horizontal', 25 ); ?></button>
-                    <div class="acdc-row-menu-dropdown" data-acdc-row-menu-dropdown hidden>
-                      <a href="<?php echo esc_url( $download_url ); ?>">Résultats test de positionnement</a>
-                      <a href="#" data-acdc-modal-open="<?php echo esc_attr( $export_modal_id ); ?>">Exporter les détails des QCM</a>
-                    </div>
-                  </div>
-                </td>
-                <td><button type="button" class="acdc-row-view-link" data-acdc-modal-open="<?php echo esc_attr( $view_modal_id ); ?>" title="Voir" aria-label="Voir"><?php echo $this->render_inline_icon( 'view', 25 ); ?></button></td>
-                <td><button type="button" class="acdc-row-edit-link" data-acdc-modal-open="<?php echo esc_attr( $edit_modal_id ); ?>" title="Modifier" aria-label="Modifier"><?php echo $this->render_inline_icon( 'edit-pencil', 25 ); ?></button></td>
-              </tr>
-            <?php endforeach; ?>
-            </tbody>
-          </table>
-        </div>
-        <?php if ( $total_pages > 1 ) : ?>
-          <div class="acdc-pagination-wrap"><div class="acdc-pagination"><?php for ( $page = 1; $page <= $total_pages; $page++ ) : ?><a class="<?php echo $page === $paged ? 'is-active' : ''; ?>" href="<?php echo esc_url( add_query_arg( array( 'q' => $search, 'per_page' => $per_page, 'acdc_paged' => $page ), $base_url ) ); ?>"><?php echo esc_html( $page ); ?></a><?php endfor; ?></div><div class="acdc-pagination-summary"><?php echo esc_html( sprintf( '%d-%d de %d', $total ? $offset + 1 : 0, min( $offset + $per_page, $total ), $total ) ); ?></div></div>
-        <?php endif; ?>
-      <?php endif; ?>
-    </div>
-
-    <?php foreach ( $page_rows as $row ) : ?>
-      <?php
-      $entry = $row['registration'];
-      $context = $row['context'];
-      $document = $context['document'];
-      $file_name = $this->get_positioning_result_display_file_name( $entry, $context, $document );
-      $view_modal_id = 'acdc-positioning-result-view-' . (int) $entry->id;
-      $edit_modal_id = 'acdc-positioning-result-edit-' . (int) $entry->id;
-      $export_modal_id = 'acdc-positioning-result-export-' . (int) $entry->id;
-      $view_pdf_url = $this->get_positioning_result_download_url( $entry, 'inline' );
-      $default_filename = sanitize_file_name( 'details-qcm-' . ( ! empty( $context['learner_name'] ) ? $context['learner_name'] : 'apprenant' ) . '-' . date_i18n( 'Ymd' ) );
-      ?>
-      <div class="acdc-modal-shell" id="<?php echo esc_attr( $view_modal_id ); ?>" hidden>
-        <div class="acdc-modal-backdrop" data-acdc-modal-close></div>
-        <div class="acdc-modal-dialog acdc-modal-dialog-contract">
-          <div class="acdc-modal-header"><h4>Voir le résultat du test de positionnement</h4><button type="button" class="acdc-modal-close" data-acdc-modal-close aria-label="Fermer">×</button></div>
-          <div class="acdc-modal-body">
-            <div class="acdc-contract-doc-topbar"><a class="acdc-button acdc-button-primary" href="<?php echo esc_url( $view_pdf_url ); ?>" target="_blank" rel="noopener">Voir le document</a></div>
-            <div class="acdc-contract-details-grid">
-              <div class="acdc-contract-detail-label">ID</div><div><?php echo esc_html( (int) $entry->id ); ?></div>
-              <div class="acdc-contract-detail-label">Apprenant</div><div><?php echo esc_html( $context['learner_name'] ); ?></div>
-              <div class="acdc-contract-detail-label">Test</div><div><?php echo esc_html( $context['test_source_label'] ); ?>
-<?php echo esc_html( $context['test_title'] ); ?></div>
-              <div class="acdc-contract-detail-label">Type de correction</div><div><?php echo esc_html( $context['correction_type'] ); ?></div>
-              <div class="acdc-contract-detail-label">Date Ajout/Passage</div><div><?php echo esc_html( $this->format_pdf_date( $context['start_date'] ) ); ?></div>
-              <div class="acdc-contract-detail-label">Résultats</div><div><?php echo esc_html( $context['result_label'] ); ?><?php if ( null !== $context['correct_answers'] && ! empty( $context['total_questions'] ) ) : ?>
-Nb de questions réussies / Nb de questions : <?php echo esc_html( (int) $context['correct_answers'] . ' / ' . (int) $context['total_questions'] ); ?><?php endif; ?></div>
-              <div class="acdc-contract-detail-label">Adresse e-mail</div><div><?php echo esc_html( $context['email'] ); ?></div>
-              <div class="acdc-contract-detail-label">Téléphone</div><div><?php echo esc_html( $context['phone'] ); ?></div>
-              <div class="acdc-contract-detail-label">Formation</div><div><?php echo esc_html( $context['formation_title'] ); ?></div>
-              <div class="acdc-contract-detail-label">Dates de formation</div><div><?php echo esc_html( 'Début : ' . $this->format_pdf_date( $context['start_date'] ) . "\nFin : " . $this->format_pdf_date( $context['end_date'] ) ); ?></div>
-              <div class="acdc-contract-detail-label">Durée (h)</div><div><?php echo esc_html( $context['duration'] ); ?></div>
-              <div class="acdc-contract-detail-label">Format</div><div><?php echo esc_html( $context['format'] ); ?></div>
-            </div>
-          </div>
-        </div>
-      </div>
-      <div class="acdc-modal-shell" id="<?php echo esc_attr( $export_modal_id ); ?>" hidden>
-        <div class="acdc-modal-backdrop" data-acdc-modal-close></div>
-        <div class="acdc-modal-dialog" style="max-width:1090px;">
-          <div class="acdc-modal-header"><h4>Exporter les détails des QCM</h4><button type="button" class="acdc-modal-close" data-acdc-modal-close aria-label="Fermer">×</button></div>
-          <div class="acdc-modal-body">
-            <form method="post" action="<?php echo esc_url( admin_url( 'admin-post.php' ) ); ?>">
-              <?php wp_nonce_field( 'acdc_export_positioning_qcm_details_' . (int) $entry->id ); ?>
-              <input type="hidden" name="action" value="acdc_export_positioning_qcm_details">
-              <input type="hidden" name="registration_id" value="<?php echo esc_attr( (int) $entry->id ); ?>">
-              <?php if ( is_admin() ) : ?><input type="hidden" name="page" value="acdc-of-dashboard"><?php endif; ?>
-              <input type="hidden" name="tab" value="positioning_results">
-              <div class="acdc-contract-grid">
-                <div class="acdc-contract-label">Nom du fichier <span class="acdc-required">*</span></div>
-                <div><input type="text" name="export_filename" value="<?php echo esc_attr( $default_filename ); ?>" placeholder="Nom du fichier" required></div>
-              </div>
-              <div class="acdc-contract-grid">
-                <div class="acdc-contract-label">Type <span class="acdc-required">*</span></div>
-                <div>
-                  <select name="export_type" required>
-                    <option value="excel">Excel</option>
-                    <option value="csv">CSV</option>
-                  </select>
-                </div>
-              </div>
-              <p class="acdc-actions-end"><button type="button" class="acdc-button acdc-button-soft" data-acdc-modal-close>Annuler</button><button type="submit" class="acdc-button acdc-button-primary">Exécuter l'action</button></p>
-            </form>
-          </div>
-        </div>
-      </div>
-      <div class="acdc-modal-shell" id="<?php echo esc_attr( $edit_modal_id ); ?>" hidden>
-        <div class="acdc-modal-backdrop" data-acdc-modal-close></div>
-        <div class="acdc-modal-dialog acdc-modal-dialog-contract">
-          <div class="acdc-modal-header"><h4>Modifier le résultat du test de positionnement</h4><button type="button" class="acdc-modal-close" data-acdc-modal-close aria-label="Fermer">×</button></div>
-          <div class="acdc-modal-body">
-            <div class="acdc-convocation-edit-topbar"><div>Apprenant : <?php echo esc_html( $context['learner_name'] ); ?></div><a class="acdc-button acdc-button-primary" href="<?php echo esc_url( $this->get_positioning_result_download_url( $entry, 'attachment' ) ); ?>">Télécharger le document actuel</a></div>
-            <div class="acdc-convocation-edit-warning">Attention, cela va écraser l’ancien document et le remplacer par le nouveau document.</div>
-            <form method="post" action="<?php echo esc_url( admin_url( 'admin-post.php' ) ); ?>" enctype="multipart/form-data">
-              <?php wp_nonce_field( 'acdc_update_positioning_result_document_' . (int) $entry->id ); ?>
-              <input type="hidden" name="action" value="acdc_update_positioning_result_document">
-              <input type="hidden" name="registration_id" value="<?php echo esc_attr( (int) $entry->id ); ?>">
-              <?php if ( is_admin() ) : ?><input type="hidden" name="page" value="acdc-of-dashboard"><?php endif; ?>
-              <input type="hidden" name="tab" value="positioning_results">
-              <div class="acdc-contract-grid">
-                <div class="acdc-contract-label">Résultat test de positionnement</div>
-                <div>
-                  <div class="acdc-contract-file-preview">
-                    <div class="acdc-contract-file-preview-thumb"><?php echo $this->render_inline_icon( 'document', 30 ); ?></div>
-                    <div class="acdc-contract-file-preview-name"><?php echo esc_html( $file_name ); ?></div>
-                  </div>
-                  <label class="acdc-upload-dropzone">
-                    <span class="acdc-button acdc-button-primary">Choisir le fichier</span>
-                    <span>Déposez le fichier ou cliquez pour choisir</span>
-                    <input type="file" name="positioning_result_document_file" accept="application/pdf" required>
-                  </label>
-                </div>
-              </div>
-              <p class="acdc-actions-end"><button type="button" class="acdc-button acdc-button-soft" data-acdc-modal-close>Annuler</button><button type="submit" class="acdc-button acdc-button-primary">Modifier Résultat test de positionnement</button></p>
-            </form>
-          </div>
-        </div>
-      </div>
-    <?php endforeach; ?>
-
-    <style>
-      .acdc-table-positioning-results-documents .acdc-row-view-link,.acdc-table-positioning-results-documents .acdc-row-edit-link{display:inline-flex;align-items:center;justify-content:center;width:32px;height:32px;color:#1E4777;text-decoration:none;border:none;background:transparent;cursor:pointer}
-      .acdc-table-positioning-results-documents .acdc-row-view-link:hover,.acdc-table-positioning-results-documents .acdc-row-edit-link:hover{color:#0C2D52}
-      .acdc-table-positioning-results-documents .acdc-program-link{color:#C5A253;text-decoration:none;font-weight:500}
-      .acdc-table-positioning-results-documents .acdc-program-link:hover{text-decoration:underline}
-      .acdc-table-positioning-results-documents th:last-child,.acdc-table-positioning-results-documents td:last-child,.acdc-table-positioning-results-documents th:nth-last-child(2),.acdc-table-positioning-results-documents td:nth-last-child(2),.acdc-table-positioning-results-documents th:nth-last-child(3),.acdc-table-positioning-results-documents td:nth-last-child(3){text-align:center}
-      .acdc-table-positioning-results-documents small{display:block;margin-top:4px;color:#1E4777}
-      .acdc-convocation-edit-topbar{display:flex;align-items:center;justify-content:space-between;gap:18px;padding:16px 18px;border-radius:10px;background:#fbf8f7;color:#1E4777;margin-bottom:0}.acdc-convocation-edit-warning{background:linear-gradient(90deg,#C9A409 0%,#E9C77C 100%);color:#0B0706;text-align:center;padding:10px 14px;border-radius:0 0 6px 6px;margin-bottom:18px}
-    </style>
-    <?php
   }  private function render_front_other_documents_tab() {
     ?>
     <section class="acdc-section-head"><div><h2>Autres documents</h2></div></section>
@@ -14156,27 +13691,28 @@ Nb de questions réussies / Nb de questions : <?php echo esc_html( (int) $contex
               <div class="acdc-formation-section">
                 <h4>Automatismes Qualiopi</h4>
                 <?php
-                $toggles = array(
-                  'convocation_enabled'         => 'Convocation de début de formation',
-                  'positioning_test_enabled'    => 'Test de positionnement',
-                  'intermediate_survey_enabled' => 'Enquête de satisfaction intermédiaire',
-                  'hot_survey_enabled'          => 'Enquête de satisfaction à chaud',
-                  'evaluation_enabled'          => 'Évaluation des acquis',
-                  'end_documents_enabled'       => 'Documents de fin de formation',
-                  'cold_survey_enabled'         => 'Enquête de satisfaction à froid',
-                  'trainer_survey_enabled'      => 'Enquête formateur',
-                  'company_survey_enabled'      => 'Enquête entreprise',
-                  'funder_survey_enabled'       => 'Enquête financeur',
-                );
-                foreach ( $toggles as $field => $label ) : ?>
-                  <p class="acdc-checkbox-line"><label class="acdc-switch"><input type="checkbox" name="<?php echo esc_attr( $field ); ?>" value="1" id="acdc-toggle-<?php echo esc_attr( $field ); ?>" <?php checked( ! $formation || (int) ( isset( $formation->$field ) ? $formation->$field : 1 ) === 1 ); ?> <?php disabled( $is_view ); ?>><span class="acdc-switch-slider"></span></label> <span><?php echo esc_html( $label ); ?></span></p>
+                /* ACDC 3.25.278 — L'ÉTAT PAR DÉFAUT ÉTAIT ÉCRIT À DEUX ENDROITS,
+                   ET LES DEUX SE CONTREDISAIENT. La base posait 0 pour l'enquête
+                   intermédiaire et l'enquête à froid ; cet écran, lui, affichait
+                   les dix cochés à la création. Toute formation créée depuis
+                   l'écran activait donc deux automatismes que la base disait
+                   éteints. La règle vit maintenant dans une seule liste, et
+                   l'écran la lit au lieu de supposer. */
+                $toggles = $this->acdc_qualiopi_toggles();
+                foreach ( $toggles as $field => $meta ) :
+                  $label = $meta['label'];
+                  $coche = ( $formation && isset( $formation->$field ) )
+                    ? ( 1 === (int) $formation->$field )
+                    : ( 1 === (int) $meta['default'] );
+                  ?>
+                  <p class="acdc-checkbox-line"><label class="acdc-switch"><input type="checkbox" name="<?php echo esc_attr( $field ); ?>" value="1" id="acdc-toggle-<?php echo esc_attr( $field ); ?>" <?php checked( $coche ); ?> <?php disabled( $is_view ); ?>><span class="acdc-switch-slider"></span></label> <span><?php echo esc_html( $label ); ?></span></p>
                 <?php endforeach; ?>
                 <?php if ( ! $is_view ) : ?>
                 <script>
                 (function(){
                   var master = document.querySelector('input[name="qualiopi_compliant"]');
                   if (!master) { return; }
-                  var children = ['convocation_enabled','positioning_test_enabled','intermediate_survey_enabled','hot_survey_enabled','evaluation_enabled','end_documents_enabled','cold_survey_enabled','trainer_survey_enabled','company_survey_enabled','funder_survey_enabled'];
+                  var children = <?php echo wp_json_encode( array_keys( $toggles ) ); ?>;
                   master.addEventListener('change', function(){
                     var on = master.checked;
                     children.forEach(function(name){ var el = document.getElementById('acdc-toggle-' + name); if (el) { el.checked = on; } });
@@ -14900,7 +14436,7 @@ private function acdc_format_need_interlocutor_display( $entry ) {
   return '—';
 }
 
-public function render_admin_dashboard_page() { $this->render_admin_portal_wrapper( 'dashboard' ); }public function render_admin_needs_page() { $this->render_admin_portal_wrapper( 'needs' ); }public function render_admin_calendar_page() { $this->render_admin_portal_wrapper( 'calendar' ); }public function render_admin_pre_meetings_page() { $this->render_admin_portal_wrapper( 'pre_meetings' ); }public function render_admin_formations_page() { $this->render_admin_portal_wrapper( 'formations' ); }public function render_admin_groups_page() { $this->render_admin_portal_wrapper( 'groups' ); }public function render_admin_companies_page() { $this->render_admin_portal_wrapper( 'companies' ); }public function render_admin_funders_page() { $this->render_admin_portal_wrapper( 'funders' ); }public function render_admin_trainers_page() { $this->render_admin_portal_wrapper( 'trainers' ); }public function render_admin_quiz_page() { $this->render_admin_portal_wrapper( 'quiz' ); }public function render_admin_positioning_tests_page() { $this->render_admin_portal_wrapper( 'positioning_tests' ); }public function render_admin_need_analyses_page() { $this->render_admin_portal_wrapper( 'need_analyses' ); }public function render_admin_training_files_page() { $this->render_admin_portal_wrapper( 'training_files' ); }public function render_admin_register_training_page() { $this->render_admin_portal_wrapper( 'register_training' ); }public function render_admin_settings_page() { $this->render_admin_portal_wrapper( 'settings' ); }public function render_admin_agent_audit_page() { $this->render_admin_portal_wrapper( 'agent_audit' ); }
+public function render_admin_dashboard_page() { $this->render_admin_portal_wrapper( 'dashboard' ); }public function render_admin_needs_page() { $this->render_admin_portal_wrapper( 'needs' ); }public function render_admin_calendar_page() { $this->render_admin_portal_wrapper( 'calendar' ); }public function render_admin_pre_meetings_page() { $this->render_admin_portal_wrapper( 'pre_meetings' ); }public function render_admin_formations_page() { $this->render_admin_portal_wrapper( 'formations' ); }public function render_admin_groups_page() { $this->render_admin_portal_wrapper( 'groups' ); }public function render_admin_companies_page() { $this->render_admin_portal_wrapper( 'companies' ); }public function render_admin_funders_page() { $this->render_admin_portal_wrapper( 'funders' ); }public function render_admin_trainers_page() { $this->render_admin_portal_wrapper( 'trainers' ); }public function render_admin_quiz_page() { $this->render_admin_portal_wrapper( 'quiz' ); }public function render_admin_need_analyses_page() { $this->render_admin_portal_wrapper( 'need_analyses' ); }public function render_admin_training_files_page() { $this->render_admin_portal_wrapper( 'training_files' ); }public function render_admin_register_training_page() { $this->render_admin_portal_wrapper( 'register_training' ); }public function render_admin_settings_page() { $this->render_admin_portal_wrapper( 'settings' ); }public function render_admin_agent_audit_page() { $this->render_admin_portal_wrapper( 'agent_audit' ); }
 /* ACDC 3.23.19 — Page admin dédiée Veille IA. Utilise render_admin_portal_wrapper avec tab=watch_ia. */
 public function render_admin_watch_ia_page() { $this->render_admin_portal_wrapper( 'watch_ia' ); }
 private function render_admin_portal_wrapper( $tab ) {
@@ -14971,9 +14507,6 @@ private function render_admin_portal_content( $tab ) {
           } elseif ( 'quiz' === $tab ) {
             $admin_quick_url = admin_url( 'admin.php?page=acdc-of-quiz&action=new' );
             $admin_quick_label = 'Créer un quiz';
-          } elseif ( 'positioning_tests' === $tab ) {
-            $admin_quick_url = admin_url( 'admin.php?page=acdc-of-positioning-tests&action=new' );
-            $admin_quick_label = 'Créer un test de positionnement';
           } elseif ( 'registration_contract' === $tab ) {
             $admin_quick_url = admin_url( 'admin.php?page=acdc-of-registration-contract&action=new' );
             $admin_quick_label = 'Créer une convention / un contrat';
@@ -15082,9 +14615,6 @@ private function render_admin_portal_content( $tab ) {
             break;
           case 'registration_contract':
             $this->render_front_registration_contract_tab( $action, $item_id );
-            break;
-          case 'positioning_tests':
-            $this->render_front_positioning_tests_tab( $action, $item_id );
             break;
           case 'mid_surveys':
             $this->render_front_mid_surveys_tab( $action, $item_id );

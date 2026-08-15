@@ -2693,9 +2693,9 @@ Vos réponses nous permettront d’évaluer nos pratiques, d’identifier des ax
     foreach ( $this->get_quizzes() as $item ) {
       $options[] = array( 'type' => 'quiz', 'id' => (int) $item->id, 'label' => 'Quiz — ' . $item->title );
     }
-    foreach ( $this->get_positioning_tests() as $item ) {
-      $options[] = array( 'type' => 'positioning_test', 'id' => (int) $item->id, 'label' => 'Test de positionnement — ' . $item->title );
-    }
+    /* ACDC 3.25.278 — L'ancien module « tests de positionnement » est retiré :
+       il n'y a plus de source de ce type à proposer. Le quiz de positionnement
+       reste disponible dans la liste des quiz, au-dessus. */
     foreach ( $this->get_evaluations() as $item ) {
       $options[] = array( 'type' => 'evaluation', 'id' => (int) $item->id, 'label' => 'Évaluation des acquis — ' . $item->title );
     }
@@ -2736,7 +2736,10 @@ Vos réponses nous permettront d’évaluer nos pratiques, d’identifier des ax
     if ( 'quiz' === $type ) {
       $record = $this->get_quiz( $id );
     } elseif ( 'positioning_test' === $type ) {
-      $record = $this->get_positioning_test( $id );
+      /* ACDC 3.25.278 — Source retirée. Une session historique qui la désigne
+         encore rend null : l'écran affiche « Questionnaire supprimé », ce qui
+         est exact, plutôt que de faire croire à une source vivante. */
+      $record = null;
     } elseif ( 'evaluation' === $type ) {
       $record = $this->get_evaluation( $id );
     } elseif ( 'mid_survey' === $type ) {

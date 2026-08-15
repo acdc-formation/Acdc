@@ -53,6 +53,60 @@ trait ACDC_Quizzes_Preparation_Trait {
     }
 
     /**
+     * L'interrupteur de la fiche formation qui commande chaque quiz structurel.
+     *
+     * ACDC 3.25.278 — IL N'Y EN AVAIT AUCUN. La fiche formation offre dix
+     * interrupteurs « Automatismes Qualiopi » ; ils commandaient bien les
+     * questionnaires et les documents, mais la préparation des quiz, écrite
+     * plus tard, ne les consultait pas. Éteindre « Test de positionnement » ou
+     * « Évaluation des acquis » ne changeait rien : le quiz était préparé et
+     * rattaché aux apprenants quand même.
+     *
+     * Ce n'est pas seulement un réglage sans effet. L'écran AFFIRME que le
+     * document sort du parcours ; on le croit, on ne vérifie plus, et le quiz
+     * part malgré tout. Un écran qui affirme sans avoir lu est plus dangereux
+     * qu'un écran vide.
+     *
+     * L'évaluation diagnostique, elle, n'avait même pas d'interrupteur : on
+     * l'ajoute en même temps, sans quoi elle serait le seul quiz que rien ne
+     * commande.
+     *
+     * @return array<string,string> usage du quiz => colonne de la formation
+     */
+    private function acdc_qz_purpose_toggles() {
+        return array(
+            self::ACDC_OF_QZ_PURPOSE_POSITIONING => 'positioning_test_enabled',
+            self::ACDC_OF_QZ_PURPOSE_DIAGNOSTIC  => 'diagnostic_evaluation_enabled',
+            self::ACDC_OF_QZ_PURPOSE_ASSESSMENT  => 'evaluation_enabled',
+        );
+    }
+
+    /**
+     * Cet usage est-il activé sur cette formation ?
+     *
+     * Une colonne absente — installation dont la mise à jour de schéma n'a pas
+     * encore tourné — vaut l'état par défaut de la liste commune, jamais
+     * « éteint ». Traiter l'inconnu comme un refus arrêterait des automatismes
+     * que personne n'a demandé d'arrêter, et sans le dire.
+     *
+     * @param object|null $formation
+     * @param string      $purpose
+     * @return bool
+     */
+    private function acdc_qz_purpose_is_enabled( $formation, $purpose ) {
+        $toggles = $this->acdc_qz_purpose_toggles();
+        if ( ! isset( $toggles[ $purpose ] ) ) {
+            return true;   // un usage sans interrupteur n'est pas commandé : il passe.
+        }
+        $colonne = $toggles[ $purpose ];
+        if ( is_object( $formation ) && isset( $formation->$colonne ) ) {
+            return 1 === (int) $formation->$colonne;
+        }
+        $defauts = $this->acdc_qualiopi_toggles();
+        return isset( $defauts[ $colonne ] ) ? 1 === (int) $defauts[ $colonne ]['default'] : true;
+    }
+
+    /**
      * Prépare les quiz d'une action de formation.
      *
      * Idempotent : rejouable sans risque sur une action déjà préparée, ce dont
@@ -103,7 +157,22 @@ trait ACDC_Quizzes_Preparation_Trait {
         $ph_jours = implode( ',', array_fill( 0, count( $toutes_les_journees ), '%d' ) );
         $now      = current_time( 'mysql' );
 
+        /* ACDC 3.25.278 — La fiche formation commande ses automatismes. On la
+           lit une fois, avant la boucle : les trois usages s'y réfèrent. */
+        $formation = $wpdb->get_row( $wpdb->prepare(
+            "SELECT * FROM {$this->formation_table} WHERE id = %d",
+            $formation_id
+        ) );
+
         foreach ( $this->acdc_qz_structural_purposes() as $purpose ) {
+            /* Un usage désactivé sur la fiche n'est pas préparé. Il n'est pas
+               non plus compté comme « manquant » : il ne manque pas, il a été
+               décidé. Confondre les deux ferait remonter une alerte à chaque
+               action pour un choix délibéré, et une alerte qu'on apprend à
+               ignorer ne protège plus de rien. */
+            if ( ! $this->acdc_qz_purpose_is_enabled( $formation, $purpose ) ) {
+                continue;
+            }
             /* Le quiz COURANT de la formation pour cet usage. La table porte
                déjà `is_current` : une version en vigueur, les précédentes
                archivées. On ne choisit pas, on lit ce qui a été décidé. */
@@ -189,8 +258,20 @@ trait ACDC_Quizzes_Preparation_Trait {
             return $manquants;
         }
 
+        /* ACDC 3.25.278 — On ne réclame pas un quiz que la fiche formation a
+           désactivé : ce n'est pas un oubli, c'est une décision. Une alerte qui
+           se déclenche sur un choix délibéré s'apprend à s'ignorer, et cesse
+           alors de signaler les vrais oublis. */
+        $formation = $wpdb->get_row( $wpdb->prepare(
+            "SELECT * FROM {$this->formation_table} WHERE id = %d",
+            $formation_id
+        ) );
+
         $labels = $this->get_quiz_purpose_labels();
         foreach ( $this->acdc_qz_structural_purposes() as $purpose ) {
+            if ( ! $this->acdc_qz_purpose_is_enabled( $formation, $purpose ) ) {
+                continue;
+            }
             $existe = (int) $wpdb->get_var( $wpdb->prepare(
                 "SELECT id FROM {$tbl_quizzes}
                   WHERE formation_id = %d AND quiz_purpose = %s AND is_current = 1 AND status = %s

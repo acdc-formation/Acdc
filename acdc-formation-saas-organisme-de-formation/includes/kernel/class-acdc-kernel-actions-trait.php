@@ -129,133 +129,11 @@ trait ACDC_Kernel_Actions_Trait {
     exit;
   }
 
-  public function handle_save_positioning_test() {
-    if ( ! current_user_can( 'manage_options' ) ) {
-      wp_die( esc_html( 'Accès refusé.' ) );
-    }
-    check_admin_referer( 'acdc_save_positioning_test' );
-    global $wpdb;
-    $test_id = isset( $_POST['test_id'] ) ? absint( wp_unslash( $_POST['test_id'] ) ) : 0;
-    $is_admin_page = is_admin() && isset( $_POST['page'] ) && 'acdc-of-positioning-tests' === $_POST['page'];
-    $input = isset( $_POST['positioning_test'] ) && is_array( $_POST['positioning_test'] ) ? wp_unslash( $_POST['positioning_test'] ) : array();
-    $title = isset( $input['title'] ) ? sanitize_text_field( $input['title'] ) : '';
-    $duration = isset( $input['duration_minutes'] ) ? absint( $input['duration_minutes'] ) : 0;
-    $formation_ids = isset( $input['formation_ids'] ) && is_array( $input['formation_ids'] ) ? array_values( array_filter( array_map( 'absint', $input['formation_ids'] ) ) ) : array();
-    $mode = isset( $input['correction_type'] ) ? sanitize_text_field( $input['correction_type'] ) : 'Correction automatique';
-    if ( '' === $title || $duration < 1 || empty( $formation_ids ) ) {
-      $msg = 'Intitulé, durée du questionnaire et au moins une formation sont obligatoires.';
-      if ( $is_admin_page ) { wp_safe_redirect( admin_url( 'admin.php?page=acdc-of-positioning-tests&action=' . ( $test_id ? 'edit&item_id=' . $test_id : 'new' ) . '&notice=' . rawurlencode( $msg ) . '&notice_type=error&mode=' . rawurlencode( $mode ) ) ); exit; }
-      $this->redirect_to_portal( 'positioning_tests', $msg, 'error', array( 'action' => $test_id ? 'edit' : 'new', 'item_id' => $test_id, 'mode' => $mode ) );
-    }
-    $questions_in = isset( $_POST['questions'] ) && is_array( $_POST['questions'] ) ? wp_unslash( $_POST['questions'] ) : array();
-    $questions = array();
-    foreach ( $questions_in as $q ) {
-      $label = sanitize_text_field( $q['label'] ?? '' );
-      $type = sanitize_text_field( $q['type'] ?? '' );
-      $options = sanitize_textarea_field( $q['options'] ?? '' );
-      $answers = array();
-      if ( isset( $q['answers'] ) && is_array( $q['answers'] ) ) {
-        foreach ( $q['answers'] as $answer ) {
-          $answer = sanitize_text_field( $answer );
-          if ( '' !== $answer ) {
-            $answers[] = $answer;
-          }
-        }
-      }
-      $correct_answers = array();
-      if ( isset( $q['correct_answers'] ) ) {
-        if ( is_array( $q['correct_answers'] ) ) {
-          foreach ( $q['correct_answers'] as $correct_answer ) {
-            $correct_answers[] = (string) absint( $correct_answer );
-          }
-        } elseif ( '' !== (string) $q['correct_answers'] ) {
-          $correct_answers[] = (string) absint( $q['correct_answers'] );
-        }
-      }
-      $correct_answers = array_values( array_unique( $correct_answers ) );
-      if ( empty( $label ) && empty( $type ) && empty( $options ) && empty( $answers ) ) { continue; }
-      if ( in_array( $type, array( 'Choix unique', 'Choix multiples', 'Cases à cocher' ), true ) && ! empty( $answers ) ) {
-        $option_lines = array();
-        foreach ( $answers as $answer_index => $answer_label ) {
-          $prefix = in_array( (string) $answer_index, $correct_answers, true ) ? '* ' : '';
-          $option_lines[] = $prefix . $answer_label;
-        }
-        $options = implode( "
-", $option_lines );
-      }
-      $question = array(
-        'label' => $label,
-        'type' => $type,
-        'options' => $options,
-      );
-      if ( ! empty( $answers ) ) {
-        $question['answers'] = $answers;
-        $question['correct_answers'] = $correct_answers;
-      }
-      $questions[] = $question;
-    }
-    $scores_in = isset( $_POST['scoring'] ) && is_array( $_POST['scoring'] ) ? wp_unslash( $_POST['scoring'] ) : array();
-    $scores = array();
-    foreach ( $scores_in as $row ) {
-      if ( empty( $row['type'] ) && empty( $row['threshold'] ) && empty( $row['label'] ) ) { continue; }
-      $scores[] = array(
-        'type' => sanitize_text_field( $row['type'] ?? '' ),
-        'threshold' => sanitize_text_field( $row['threshold'] ?? '' ),
-        'label' => sanitize_text_field( $row['label'] ?? '' ),
-      );
-    }
-    if ( 'Sans correction automatique' === $mode ) {
-      $scores = array();
-    }
-    $data = array(
-      'title' => $title,
-      'description_text' => isset( $input['description_text'] ) ? sanitize_textarea_field( $input['description_text'] ) : '',
-      'correction_type' => $mode,
-      'duration_minutes' => $duration,
-      'formation_ids' => wp_json_encode( $formation_ids ),
-      'question_blocks' => wp_json_encode( $questions ),
-      'scoring_blocks' => wp_json_encode( $scores ),
-      'alert_notation' => '',
-      'updated_at' => $this->now_mysql(),
-    );
-    if ( $test_id ) {
-      $result = $wpdb->update( $this->positioning_test_table, $data, array( 'id' => $test_id ) );
-      $message = 'Test de positionnement mis à jour.';
-    } else {
-      $data['created_at'] = $this->now_mysql();
-      $result = $wpdb->insert( $this->positioning_test_table, $data );
-      $test_id = (int) $wpdb->insert_id;
-      $message = 'Test de positionnement créé.';
-    }
-    if ( false === $result ) {
-      $msg = $this->get_safe_db_error_message( 'Une erreur technique est survenue.' );
-      if ( $is_admin_page ) { wp_safe_redirect( admin_url( 'admin.php?page=acdc-of-positioning-tests&action=' . ( $test_id ? 'edit&item_id=' . $test_id : 'new' ) . '&notice=' . rawurlencode( $msg ) . '&notice_type=error&mode=' . rawurlencode( $mode ) ) ); exit; }
-      $this->redirect_to_portal( 'positioning_tests', $msg, 'error', array( 'action' => $test_id ? 'edit' : 'new', 'item_id' => $test_id, 'mode' => $mode ) );
-    }
-    $target = $is_admin_page ? admin_url( 'admin.php?page=acdc-of-positioning-tests&action=edit&item_id=' . $test_id . '&notice=' . rawurlencode( $message ) . '&notice_type=success' ) : $this->portal_page_url( array( 'tab' => 'positioning_tests', 'action' => 'edit', 'item_id' => $test_id, 'notice' => rawurlencode( $message ), 'notice_type' => 'success' ) );
-    if ( ! empty( $_POST['save_and_add'] ) ) {
-      $target = $is_admin_page ? admin_url( 'admin.php?page=acdc-of-positioning-tests&action=new&mode=' . rawurlencode( $mode ) . '&notice=' . rawurlencode( $message ) . '&notice_type=success' ) : $this->portal_page_url( array( 'tab' => 'positioning_tests', 'action' => 'new', 'mode' => $mode, 'notice' => rawurlencode( $message ), 'notice_type' => 'success' ) );
-    } elseif ( ! empty( $_POST['save_and_prepare_session'] ) ) {
-      $target = $this->get_questionnaire_new_session_url( 'positioning_test', $test_id );
-    }
-    wp_safe_redirect( $target );
-    exit;
-  }  public function handle_delete_positioning_test() {
-    if ( ! current_user_can( 'manage_options' ) ) {
-      wp_die( esc_html( 'Accès refusé.' ) );
-    }
-    $test_id = isset( $_GET['test_id'] ) ? absint( wp_unslash( $_GET['test_id'] ) ) : 0;
-    if ( ! $test_id ) {
-      $this->redirect_to_portal( 'positioning_tests', 'Test de positionnement introuvable.', 'error' );
-    }
-    check_admin_referer( 'acdc_delete_positioning_test_' . $test_id );
-    global $wpdb;
-    $wpdb->delete( $this->positioning_test_table, array( 'id' => $test_id ) );
-    if ( is_admin() && isset( $_GET['page'] ) && 'acdc-of-positioning-tests' === $_GET['page'] ) {
-      wp_safe_redirect( admin_url( 'admin.php?page=acdc-of-positioning-tests&notice=' . rawurlencode( 'Test de positionnement supprimé.' ) . '&notice_type=success' ) ); exit;
-    }
-    $this->redirect_to_portal( 'positioning_tests', 'Test de positionnement supprimé.', 'success' );
-  }  public function handle_save_quiz() {
+  /* ACDC 3.25.278 — Enregistrement et suppression des « tests de positionnement »
+     retirés avec leur module : il faisait double emploi avec le quiz, et son
+     envoi automatique appelait depuis toujours une fonction inexistante. */
+
+public function handle_save_quiz() {
     if ( ! current_user_can( 'manage_options' ) ) {
       wp_die( esc_html( 'Accès refusé.' ) );
     }
@@ -1373,15 +1251,9 @@ trait ACDC_Kernel_Actions_Trait {
       'shared_docs' => $shared_docs,
       'internal_docs' => $internal_docs,
       'shared_links' => isset( $_POST['shared_links'] ) ? sanitize_textarea_field( wp_unslash( $_POST['shared_links'] ) ) : '',
-      'convocation_enabled' => ! empty( $_POST['convocation_enabled'] ) ? 1 : 0,
-      'positioning_test_enabled' => ! empty( $_POST['positioning_test_enabled'] ) ? 1 : 0,
-      'intermediate_survey_enabled' => ! empty( $_POST['intermediate_survey_enabled'] ) ? 1 : 0,
-      'hot_survey_enabled' => ! empty( $_POST['hot_survey_enabled'] ) ? 1 : 0,
-      'evaluation_enabled' => ! empty( $_POST['evaluation_enabled'] ) ? 1 : 0,
-      'end_documents_enabled' => ! empty( $_POST['end_documents_enabled'] ) ? 1 : 0,
-      'cold_survey_enabled' => ! empty( $_POST['cold_survey_enabled'] ) ? 1 : 0,
-      'trainer_survey_enabled' => ! empty( $_POST['trainer_survey_enabled'] ) ? 1 : 0,
-      'company_survey_enabled' => ! empty( $_POST['company_survey_enabled'] ) ? 1 : 0,
+      /* ACDC 3.25.278 — Les interrupteurs se lisent sur la liste commune : un
+         interrupteur ajouté à l'écran et oublié ici ne serait jamais
+         enregistré, et l'écran le rouvrirait éteint sans rien dire. */
       'catalog_public' => ! empty( $_POST['catalog_public'] ) ? 1 : 0,
       'catalog_slug' => isset( $_POST['catalog_slug'] ) ? sanitize_title( wp_unslash( $_POST['catalog_slug'] ) ) : '',
       'catalog_image_url' => $catalog_image_url,
@@ -1439,11 +1311,24 @@ trait ACDC_Kernel_Actions_Trait {
     }
     $data['programme_detail'] = ! empty( $blocs_prog ) ? wp_json_encode( $blocs_prog, JSON_UNESCAPED_UNICODE ) : '';
 
-    // ACDC 3.21.49 — funder_survey_enabled ajouté via maybe_add_table_column.
-    // Injection conditionnelle pour éviter un false sur wpdb->update si la colonne
-    // n'existe pas encore (ex : premier déploiement sans vidage cache LiteSpeed).
-    if ( $wpdb->get_var( $wpdb->prepare( 'SELECT COUNT(*) FROM information_schema.COLUMNS WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = %s AND COLUMN_NAME = %s', $this->formation_table, 'funder_survey_enabled' ) ) ) {
-      $data['funder_survey_enabled'] = ! empty( $_POST['funder_survey_enabled'] ) ? 1 : 0;
+    /* ACDC 3.25.278 — LES DIX INTERRUPTEURS QUALIOPI, DEPUIS LA LISTE COMMUNE.
+       Ils étaient énumérés à la main ici, et « Enquête financeur » avait été
+       ajoutée à part, sous condition, parce qu'elle est arrivée après les
+       autres. Résultat : une liste à l'écran, une autre à l'enregistrement.
+       Un interrupteur ajouté d'un côté et oublié de l'autre ne s'enregistre
+       jamais — et l'écran le rouvre éteint, sans rien signaler.
+
+       La vérification d'existence de colonne est conservée : sur un premier
+       déploiement dont le cache n'a pas été vidé, une colonne absente ferait
+       échouer TOUT l'enregistrement de la formation, pas seulement ce champ. */
+    $colonnes_formation = array();
+    foreach ( (array) $wpdb->get_col( "SHOW COLUMNS FROM {$this->formation_table}" ) as $col ) {
+      $colonnes_formation[ (string) $col ] = true;
+    }
+    foreach ( array_keys( $this->acdc_qualiopi_toggles() ) as $interrupteur ) {
+      if ( isset( $colonnes_formation[ $interrupteur ] ) ) {
+        $data[ $interrupteur ] = ! empty( $_POST[ $interrupteur ] ) ? 1 : 0;
+      }
     }
     // ACDC 3.24.8 — R2 : codes RNCP / RS.
     if ( $wpdb->get_var( $wpdb->prepare( 'SELECT COUNT(*) FROM information_schema.COLUMNS WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = %s AND COLUMN_NAME = %s', $this->formation_table, 'rncp_code' ) ) ) {

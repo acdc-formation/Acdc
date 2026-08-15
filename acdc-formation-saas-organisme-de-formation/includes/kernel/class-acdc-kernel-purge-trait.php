@@ -173,10 +173,9 @@ trait ACDC_Kernel_Purge_Trait {
       'quizzes' => array(
         'label'   => 'Quiz, tests de positionnement et évaluations',
         'menu'    => 'Évaluation & Enquêtes › Avant / Pendant la formation',
-        'emporte' => 'Les quiz et leurs questions, les tests de positionnement, les évaluations, ainsi que toutes les participations et réponses.',
+        'emporte' => 'Les quiz et leurs questions, les évaluations, ainsi que toutes les participations et réponses.',
         'tables'  => array(
           $this->quiz_table,
-          $this->positioning_test_table,
           $this->evaluation_table,
           $qz . 'quizzes',
           $qz . 'questions',

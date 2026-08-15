@@ -125,7 +125,6 @@ class ACDC_Formation_SAAS_Plugin {
   private $trainer_portal_session_table;
   private $trainer_portal_log_table;
   private $quiz_table;
-  private $positioning_test_table;
   private $evaluation_table;
   private $need_analysis_table;
   /* ACDC 3.21.10 — Module Analyse du besoin — bibliothèque modulaire. */
@@ -221,7 +220,6 @@ class ACDC_Formation_SAAS_Plugin {
     $this->trainer_portal_session_table = $wpdb->prefix . 'acdc_of_trainer_portal_sessions';
     $this->trainer_portal_log_table     = $wpdb->prefix . 'acdc_of_trainer_portal_logs';
     $this->quiz_table   = $wpdb->prefix . 'acdc_of_quizzes';
-    $this->positioning_test_table = $wpdb->prefix . 'acdc_of_positioning_tests';
     $this->evaluation_table = $wpdb->prefix . 'acdc_of_evaluations';
     $this->need_analysis_table  = $wpdb->prefix . 'acdc_of_need_analyses';
     $this->need_block_table     = $wpdb->prefix . 'acdc_of_need_blocks';
@@ -609,8 +607,6 @@ class ACDC_Formation_SAAS_Plugin {
     add_action( 'admin_post_acdc_save_quiz', array( $this, 'handle_save_quiz' ) );
     add_action( 'admin_post_acdc_delete_quiz', array( $this, 'handle_delete_quiz' ) );
     add_action( 'admin_post_acdc_send_quiz', array( $this, 'handle_send_quiz' ) );
-    add_action( 'admin_post_acdc_save_positioning_test', array( $this, 'handle_save_positioning_test' ) );
-    add_action( 'admin_post_acdc_delete_positioning_test', array( $this, 'handle_delete_positioning_test' ) );
     add_action( 'admin_post_acdc_save_evaluation', array( $this, 'handle_save_evaluation' ) );
     add_action( 'admin_post_acdc_delete_evaluation', array( $this, 'handle_delete_evaluation' ) );
     add_action( 'admin_post_acdc_save_need_analysis', array( $this, 'handle_save_need_analysis' ) );
@@ -812,7 +808,10 @@ class ACDC_Formation_SAAS_Plugin {
     /* ACDC 3.21.05 — Cron quotidien de clôture automatique des sessions OF terminées. */
     add_action( 'acdc_of_session_close_cron', array( $this, 'process_of_session_auto_close' ) );
     add_action( 'acdc_of_convocation_cron',   array( $this, 'process_convocation_cron' ) );
-    add_action( 'acdc_of_positioning_test_cron', array( $this, 'process_positioning_test_cron' ) );
+    /* ACDC 3.25.278 — Rendez-vous quotidien débranché : il appelait
+       `process_positioning_test_cron`, une fonction qui n'a jamais existé. Chaque
+       passage plantait l'exécution des tâches planifiées, emportant avec lui ce
+       qui était programmé derrière. Le module qu'il servait est retiré. */
     /* ACDC 3.24.12 — R-12 : Cron alerte absences / ruptures de parcours (indicateur 12 Qualiopi). */
     add_action( 'acdc_of_absence_alert_cron', array( $this, 'process_absence_alert_cron' ) );
     // ACDC 3.25.118 — Cron quotidien : passage automatique des factures impayées en retard.

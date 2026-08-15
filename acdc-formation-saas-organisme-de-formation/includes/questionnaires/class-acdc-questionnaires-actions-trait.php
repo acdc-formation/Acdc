@@ -987,6 +987,97 @@ trait ACDC_Questionnaires_Actions_Trait {
   }
 
 
+  /**
+   * Duplique une session de questionnaire.
+   *
+   * ACDC 3.25.278 — LE BOUTON EXISTAIT, LA FONCTION NON. `admin_post` était
+   * bien branché sur `handle_duplicate_questionnaire_session`, mais cette
+   * méthode n'était écrite nulle part : cliquer « Dupliquer » appelait un nom
+   * qui ne désignait rien, et PHP s'arrêtait là.
+   *
+   * CE QUI SE COPIE, ET CE QUI NE SE COPIE PAS. La copie reprend le
+   * paramétrage — questionnaire source, formation, formateur, règles
+   * d'affichage, réglages d'enquête. Elle ne reprend NI les participants, NI
+   * les réponses, NI les dates de début et de fin. Ces éléments-là sont des
+   * preuves : ils attestent que telles personnes ont répondu tel jour. Les
+   * recopier fabriquerait une participation qui n'a pas eu lieu, dans un
+   * dossier Qualiopi. Une copie repart donc en brouillon, vide, avec son
+   * propre lien public — le jeton est unique en base, le partager reviendrait
+   * à ce que deux sessions se remplissent l'une l'autre.
+   */
+  public function handle_duplicate_questionnaire_session() {
+    if ( ! current_user_can( 'manage_options' ) ) { wp_die( esc_html( 'Accès refusé.' ) ); }
+    global $wpdb;
+
+    $session_id = isset( $_GET['questionnaire_session_id'] ) ? absint( wp_unslash( $_GET['questionnaire_session_id'] ) ) : 0;
+    check_admin_referer( 'acdc_duplicate_questionnaire_session_' . $session_id );
+
+    $retour = function ( $message, $type = 'success', $extra = array() ) {
+      wp_safe_redirect( $this->acdc_questionnaire_return_url(
+        'acdc-of-questionnaire-sessions',
+        'questionnaire_sessions',
+        array_merge( array( 'notice' => rawurlencode( $message ), 'notice_type' => $type ), $extra )
+      ) );
+      exit;
+    };
+
+    $source = $session_id ? $this->get_questionnaire_session( $session_id ) : null;
+    if ( ! $source ) {
+      $retour( 'Session de questionnaire introuvable.', 'error' );
+    }
+
+    $data = (array) $source;
+    unset( $data['id'] );
+
+    /* Le lien public d'une copie lui appartient. */
+    $token = $this->generate_questionnaire_session_token();
+    $url   = $this->build_questionnaire_session_public_url( $token );
+    $data['public_token'] = $token;
+    $data['public_url']   = $url;
+    $data['qr_code_url']  = $this->generate_questionnaire_session_qrcode_url( $url );
+
+    /* Une copie n'a rien vécu. */
+    $data['status']                 = 'brouillon';
+    $data['current_question_index'] = 0;
+    $data['started_at']             = null;
+    $data['ended_at']               = null;
+
+    $now = current_time( 'mysql' );
+    $data['created_at'] = $now;
+    $data['updated_at'] = $now;
+
+    /* Le titre dit que c'en est une : deux lignes au même nom dans la liste,
+       c'est le défaut qu'on passe notre temps à réparer ailleurs. */
+    $titre = trim( (string) ( $source->session_title ?? '' ) );
+    $data['session_title'] = '' !== $titre ? mb_substr( $titre . ' (copie)', 0, 190 ) : 'Session (copie)';
+
+    /* Les colonnes de la table peuvent différer d'une installation à l'autre —
+       plusieurs ont été ajoutées après coup. On n'écrit que ce qui existe :
+       une clé inconnue ferait échouer l'insertion en bloc, et le bouton
+       échouerait de nouveau, autrement. */
+    $colonnes = array();
+    foreach ( (array) $wpdb->get_col( "SHOW COLUMNS FROM {$this->questionnaire_session_table}" ) as $col ) {
+      $colonnes[ (string) $col ] = true;
+    }
+    foreach ( array_keys( $data ) as $cle ) {
+      if ( ! isset( $colonnes[ $cle ] ) ) {
+        unset( $data[ $cle ] );
+      }
+    }
+
+    $ok = $wpdb->insert( $this->questionnaire_session_table, $data );
+    if ( ! $ok ) {
+      $retour( 'La duplication a échoué.', 'error' );
+    }
+
+    $nouvelle_id = (int) $wpdb->insert_id;
+    $retour(
+      'Session dupliquée en brouillon. Les participants et les réponses ne sont pas repris.',
+      'success',
+      array( 'action' => 'edit', 'item_id' => $nouvelle_id )
+    );
+  }
+
   public function handle_save_questionnaire_session() {
     if ( ! current_user_can( 'manage_options' ) ) { wp_die( esc_html( 'Accès refusé.' ) ); }
     check_admin_referer( 'acdc_save_questionnaire_session' );
