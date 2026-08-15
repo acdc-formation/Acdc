@@ -216,7 +216,11 @@ class ACDC_Emarg_Public {
 <title>Émargement — ACDC Formation</title>
 <style>
 *{box-sizing:border-box;margin:0;padding:0}
-body{font-family:Arial,sans-serif;background:#f5f6fa;min-height:100vh;color:#1a2744}
+/* ACDC 3.25.285 — `100vh` vaut, sur iOS, la hauteur de l'ecran SANS les barres
+   du navigateur : la page depasse toujours un peu et le bas reste hors de portee
+   tant qu'on n'a pas fait defiler dans le vide. `dvh` suit les barres quand elles
+   se replient. La ligne `vh` reste ecrite avant, comme repli. */
+body{font-family:Arial,sans-serif;background:#f5f6fa;min-height:100vh;min-height:100dvh;color:#1a2744}
 .emarg-wrap{max-width:680px;margin:0 auto;padding:20px 16px 40px}
 .emarg-header{background:#1a2744;color:#fff;padding:18px 24px;border-radius:10px 10px 0 0;margin-bottom:0}
 .emarg-header h1{font-size:20px;margin:0 0 2px}
@@ -250,11 +254,20 @@ canvas{display:block;width:100%;height:160px;border:2px dashed #c9a84c;border-ra
 .learner-sign-btn{background:#1a2744;color:#fff;border:none;padding:8px 16px;border-radius:6px;font-size:13px;cursor:pointer;text-decoration:none;display:inline-block}
 .sig-preview{max-width:200px;max-height:80px;border:1px solid #e2e6ea;border-radius:4px;display:block;margin:8px 0 0}
 @media(max-width:480px){
-  .emarg-wrap{padding:10px 8px 30px}
+  /* Le bas de page passait sous l'indicateur d'accueil de l'iPhone : le bouton
+     de validation s'y trouvait a moitie, et c'est le seul geste de cet ecran. */
+  .emarg-wrap{padding:10px 8px calc(30px + env(safe-area-inset-bottom))}
   .emarg-card{padding:16px}
   .btn{width:100%}
   .emarg-actions{flex-direction:column}
   .learner-list li{flex-direction:column;align-items:flex-start}
+}
+/* Le cadre de signature se trace au doigt : trop court, on signe a l'etroit et
+   la trace ne ressemble pas a la signature de reference. */
+@media(pointer:coarse){
+  canvas{height:200px}
+  .learner-sign-btn{min-height:44px;display:inline-flex;align-items:center}
+  .btn-sm{min-height:44px}
 }
 </style>
 </head>

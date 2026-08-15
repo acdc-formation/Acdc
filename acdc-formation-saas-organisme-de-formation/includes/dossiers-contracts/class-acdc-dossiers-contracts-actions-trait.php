@@ -1271,6 +1271,11 @@ public function handle_update_registration_contract_document() {
     }
     ?><!doctype html>
 <html lang="fr"><head><meta charset="utf-8"><meta name="robots" content="noindex,nofollow">
+<?php /* ACDC 3.25.285 — Sans cette balise, un telephone rend la page a 980 px
+         de large puis la reduit : le texte devient illisible et les boutons
+         minuscules. Cette page-la s'ouvre depuis un e-mail, donc tres souvent
+         sur un telephone. */ ?>
+<meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Ouverture d'un accès apprenant</title>
 <style>
  body{font-family:system-ui,-apple-system,"Segoe UI",sans-serif;background:#f6f7f9;margin:0;padding:40px 20px;color:#111827;}

@@ -229,7 +229,13 @@
   padding: 0 !important;
 }
 .acdc-survey-public-wrap {
+  /* ACDC 3.25.285 — `100vh` vaut, sur iOS, la hauteur de l'écran SANS les
+     barres du navigateur : la page dépasse donc toujours un peu, et le bas
+     reste inatteignable tant qu'on n'a pas fait défiler dans le vide. `dvh`
+     suit les barres quand elles se replient. La ligne `vh` reste écrite avant,
+     comme repli pour les navigateurs qui ignorent `dvh`. */
   min-height: 100vh;
+  min-height: 100dvh;
   background: #f5f6fa;
   font-family: 'Helvetica Neue', Arial, sans-serif;
   color: #24324a;
@@ -562,18 +568,85 @@
 .srv-submit-btn:active { transform: scale(.99); }
 
 /* ---- Responsive ---- */
+/* ACDC 3.25.285 — LES ÉTOILES ÉTAIENT TROP PETITES POUR ÊTRE VISÉES.
+   Mesurées au rendu : 23 × 26 px sur un téléphone, 29 × 32 sur une tablette.
+   Un doigt vise mal en-dessous d'une quarantaine de pixels — et cette
+   question-là produit le taux de satisfaction publié sur le site. Une étoile
+   touchée à côté n'est pas une gêne d'ergonomie, c'est une mesure fausse, et
+   rien ne la distinguera jamais d'une vraie.
+
+   LE CRITÈRE EST LE DOIGT, PAS LA LARGEUR. Une tablette de 1024 px se touche
+   autant qu'un téléphone de 375 : borner la correction à un seuil de largeur
+   aurait laissé l'iPad avec ses cibles de 29 px. `pointer: coarse` désigne
+   exactement ce qu'on vise — un pointeur imprécis — et laisse la souris
+   tranquille.
+
+   On agrandit la ZONE TOUCHABLE sans grossir le dessin : le rembourrage porte
+   la cible à 44 px, la marge négative rattrape l'espacement pour que la rangée
+   garde son allure. */
+@media (pointer: coarse) {
+  .srv-stars { gap: 0; margin-left: -8px; }
+  .srv-star {
+    padding: 7px 8px;
+    min-width: 44px;
+    min-height: 44px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+  }
+  .srv-smiley { min-width: 44px; min-height: 44px; }
+  .srv-nps-btn { min-height: 44px; }
+}
+
 @media (max-width: 600px) {
-  .srv-hero { min-height: 220px; }
-  .srv-hero-inner { padding: 18px 16px 0; }
-  .srv-hero-title { font-size: 20px; }
+  /* Le détail du dimensionnement sur petit écran.
+     Mesurées au rendu : 23 × 26 px sur un écran de 375. Un doigt vise mal
+     en-dessous d'une quarantaine de pixels, et cette question-là produit le
+     taux de satisfaction publié sur le site : une étoile touchée à côté n'est
+     pas une gêne d'ergonomie, c'est une mesure fausse — et rien ne la
+     distinguera jamais d'une vraie. On agrandit la ZONE TOUCHABLE sans grossir
+     le dessin : le rembourrage porte la cible à 44 px, la marge négative
+     rattrape l'espacement pour que la rangée garde son allure. */
+  .srv-star { font-size: 30px; }
+
+  /* Le bandeau occupait 220 px sur les 812 d'un iPhone — plus du quart de
+     l'écran pour une image décorative, avant la première question. */
+  .srv-hero { min-height: 132px; }
+  .srv-hero-inner { padding: 14px 16px 0; }
+  .srv-hero-title { font-size: 19px; }
   .srv-progress-wrap { padding: 12px 16px 10px; }
-  .srv-body { padding: 20px 10px 50px; }
+  .srv-body { padding: 18px 10px 50px; }
   .srv-q-num { width: 34px; font-size: 12px; }
   .srv-q-body { padding: 16px 14px; }
-  .srv-star { font-size: 26px; }
   .srv-smileys { gap: 6px; }
-  .srv-smiley { padding: 8px 10px; }
-  .srv-nps-btn { min-width: 36px; height: 38px; font-size: 13px; }
+  .srv-smiley { padding: 8px 10px; min-width: 44px; min-height: 44px; }
+  /* 42 × 38 px au départ : trop court en hauteur pour un doigt. La hauteur
+     passe à 44, et la largeur se CALCULE pour que six boutons tiennent
+     exactement sur une rangée — onze notes se lisent alors sur deux lignes de
+     six et cinq. Une largeur fixe donnait 5 + 5 + 1, avec un « 10 » esseulé
+     sur sa propre ligne : lisible, mais on ne voit plus l'échelle d'un coup
+     d'œil, et c'est justement ce qu'une échelle doit donner. */
+  .srv-nps-btn {
+    /* `box-sizing` n'est pas posé globalement dans cette feuille : sans cette
+       ligne, les 2 px de bordure s'AJOUTENT à la largeur calculée, six boutons
+       réclament 300 px là où il y en a 277, et l'échelle retombe sur trois
+       rangées. Une largeur calculée au pixel près est inutile si le modèle de
+       boîte n'est pas celui qu'on croit. */
+    box-sizing: border-box;
+    flex: 0 0 calc((100% - 30px) / 6);
+    min-width: 0;
+    height: 44px;
+    padding: 0;
+    font-size: 13px;
+  }
+
+  /* Sous 360 px — iPhone SE et anciens modèles encore en service — six boutons
+     tombent à 32 px de large. On passe à cinq par rangée : l'échelle tient sur
+     trois lignes au lieu de deux, mais chaque note reste visable. Une échelle
+     qu'on lit d'un coup d'œil mais qu'on touche de travers ne vaut rien. */
+  @media (max-width: 360px) {
+    .srv-nps-btn { flex: 0 0 calc((100% - 24px) / 5); }
+  }
 }
 
 /* =============================================================

@@ -105,6 +105,50 @@ if ( is_readable( $tables ) ) {
     }
 }
 
+/* ── LES ÉCRANS QUE L'APPRENANT OUVRE SUR SON TÉLÉPHONE ───────────────────
+   Ce sont les seuls que le développeur n'ouvre JAMAIS, et ceux qui produisent
+   les mesures publiées : l'enquête de satisfaction et l'émargement. */
+
+/* 1. Les cibles tactiles. Les étoiles de notation faisaient 23 × 26 px sur un
+      téléphone et 29 × 32 sur une tablette. Un doigt vise mal en-dessous d'une
+      quarantaine de pixels — et cette question-là produit le taux de
+      satisfaction affiché sur le site commercial. Une étoile touchée à côté
+      n'est pas une gêne d'ergonomie : c'est une mesure fausse, que rien ne
+      distinguera jamais d'une vraie.
+      Le critère est le DOIGT, pas la largeur : une tablette se touche autant
+      qu'un téléphone. */
+$surveys = $root . '/assets/css/surveys.css';
+if ( ! is_readable( $surveys ) ) {
+    $hits[] = 'assets/css/surveys.css a disparu : l’enquête que remplit l’apprenant n’a plus de mise en forme.';
+} else {
+    $src = (string) file_get_contents( $surveys );
+    /* On cherche la RÈGLE, pas la mention : le commentaire qui l'explique
+       contient les mêmes mots, et un contrôle qui se satisfait de sa propre
+       documentation ne contrôle rien. */
+    if ( ! preg_match( '/@media\s*\(\s*pointer\s*:\s*coarse\s*\)/', $src ) ) {
+        $hits[] = 'L’enquête ne distingue plus les écrans tactiles : les étoiles de notation redeviennent des cibles de 26 px, sur l’écran même qui produit le taux de satisfaction publié.';
+    }
+    if ( false === strpos( $src, '100dvh' ) ) {
+        $hits[] = 'L’enquête est revenue à `100vh` seul : sur iOS, le bas de la page reste hors de portée tant qu’on n’a pas fait défiler dans le vide.';
+    }
+}
+
+/* 2. L'émargement. C'est le geste qui produit la preuve de présence : s'il
+      échoue sur le téléphone d'un apprenant, il ne reste rien. */
+$emarg = $root . '/includes/emargement/class-acdc-emarg-public.php';
+if ( is_readable( $emarg ) ) {
+    $src = (string) file_get_contents( $emarg );
+    if ( false === strpos( $src, 'name="viewport"' ) ) {
+        $hits[] = 'L’écran d’émargement n’annonce plus sa largeur : un téléphone le rendra à 980 px puis le réduira, et on signera dans un cadre de la taille d’un timbre.';
+    }
+    if ( false === strpos( $src, '100dvh' ) ) {
+        $hits[] = 'L’écran d’émargement est revenu à `100vh` seul : sur iOS, le bouton de validation peut rester sous la barre du navigateur.';
+    }
+    if ( false === strpos( $src, 'safe-area-inset-bottom' ) ) {
+        $hits[] = 'L’écran d’émargement ne tient plus compte de l’indicateur d’accueil de l’iPhone : le bouton de validation passe dessous, et c’est le seul geste de cet écran.';
+    }
+}
+
 if ( $hits ) {
     echo "Adaptation aux écrans :\n";
     foreach ( array_unique( $hits ) as $h ) { echo '  ' . $h . "\n"; }
