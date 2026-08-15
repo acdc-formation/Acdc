@@ -6623,7 +6623,8 @@ public function handle_purge_plugin_data() {
     /* Heures dispensées : les créneaux réellement planifiés, séance par séance,
        comme les compte déjà l'écran des statistiques pédagogiques. La somme
        start_at → end_at ne voyait que les séances portant ces deux colonnes. */
-    $total_heures = 0.0;
+    $total_heures         = 0.0;
+    $total_heures_suivies = 0.0;
     if ( ! empty( $actives ) && method_exists( $this, 'acdc_completion_planned_time' ) ) {
       $ph_actives  = implode( ',', array_fill( 0, count( $actives ), '%d' ) );
       $session_ids = array_map( 'intval', (array) $wpdb->get_col( $wpdb->prepare(
@@ -6635,6 +6636,26 @@ public function handle_purge_plugin_data() {
       ) ) );
       $planned      = $this->acdc_completion_planned_time( $session_ids );
       $total_heures = round( ( (int) $planned['minutes'] ) / 60, 1 );
+
+      /* ACDC 3.25.281 — Les heures SUIVIES de l'organisme, séance par séance.
+         Multiplier le total d'heures par le total d'apprenants donnerait un
+         nombre sans rapport avec la réalité dès que deux séances n'ont pas le
+         même effectif : on compte donc chaque séance avec le sien. */
+      $seances_pour_suivies = array();
+      foreach ( $session_ids as $sid ) {
+        $seance = $wpdb->get_row( $wpdb->prepare( "SELECT * FROM {$this->session_table} WHERE id = %d", (int) $sid ) );
+        if ( ! $seance ) { continue; }
+        $minutes = 0;
+        if ( method_exists( $this, 'acdc_completion_planned_time' ) ) {
+          $p       = $this->acdc_completion_planned_time( array( (int) $sid ) );
+          $minutes = (int) $p['minutes'];
+        }
+        $nb = method_exists( $this, 'acdc_session_learner_ids' )
+          ? count( (array) $this->acdc_session_learner_ids( $seance ) )
+          : 0;
+        $seances_pour_suivies[] = array( 'minutes' => $minutes, 'apprenants' => $nb );
+      }
+      $total_heures_suivies = \ACDC\Support\PublicIndicators::attendedHours( $seances_pour_suivies );
     }
 
     /* Le repli déclaré ne s'applique qu'en l'absence totale de mesure : sans
@@ -6648,10 +6669,39 @@ public function handle_purge_plugin_data() {
     $g_reussite      = \ACDC\Support\Indicators::publish( $mesures_global['taux_reussite'], $moy_declaree( 'taux_reussite' ) );
     $g_recommandation = \ACDC\Support\Indicators::publish( $mesures_global['taux_recommandation'], $moy_declaree( 'taux_recommandation' ) );
 
+    /* ACDC 3.25.281 — LE SITE VITRINE ANNONÇAIT DES CHIFFRES RECOPIÉS À LA MAIN.
+       La page d'accueil affichait « 73 apprenants formés » : ce nombre était
+       saisi dans les réglages du plugin vitrine, parce que le SAAS ne remontait
+       que l'activité de l'organisme — une petite part de ce qui a réellement
+       été animé. Le reste, ce sont les prestations extérieures : les
+       interventions faites pour d'autres organismes, qui appartiennent au
+       formateur et non à l'organisme.
+       On publie donc les deux, sans jamais écraser l'une par l'autre. Les clés
+       d'origine gardent leur sens : un site vitrine non mis à jour continue
+       d'afficher l'organisme seul et ne gonfle jamais ses chiffres tout seul.
+       Les taux, eux, restent l'organisme seul : ils reposent sur des enquêtes,
+       et il n'y a d'enquête que pour ses propres apprenants. */
+    $externes = \ACDC\Support\PublicIndicators::externalTotals(
+      (array) get_option( 'acdc_of_external_mission_records', array() )
+    );
+    $publiables = \ACDC\Support\PublicIndicators::publishable(
+      array(
+        'apprenants'        => $total_apprenants,
+        'heures_dispensees' => $total_heures,
+        'heures_suivies'    => $total_heures_suivies,
+      ),
+      $externes
+    );
+
     $data = array(
       'total_formations'        => $total_formations,
       'total_apprenants'        => $total_apprenants,
       'total_heures'            => $total_heures,
+      /* Tout compris — ce que le site vitrine affiche. */
+      'total_apprenants_tous'         => $publiables['total_apprenants_tous'],
+      'total_heures_dispensees_tous'  => $publiables['total_heures_dispensees_tous'],
+      'total_heures_suivies_tous'     => $publiables['total_heures_suivies_tous'],
+      'detail_activite'               => $publiables['detail'],
       'taux_satisfaction_moyen'   => (int) $g_satisfaction['value'],
       'taux_reussite_moyen'       => (int) $g_reussite['value'],
       'taux_recommandation_moyen' => (int) $g_recommandation['value'],

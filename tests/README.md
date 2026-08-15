@@ -27,6 +27,7 @@ lancent sans WordPress, en quelques secondes.
     php tests/test-indicateurs.php     # les taux publiés : mesurés, pondérés, jamais moyennés deux fois
     php tests/test-fenetre-quiz.php    # quiz visibles chez le formateur : de J-1 à J+2
     php tests/test-libelle-formation.php # deux formations du même nom ne se confondent jamais
+    php tests/test-indicateurs-publies.php # organisme seul / tout compris, dispensées / suivies
     node tests/test-signature-trace.js # continuité du tracé des signatures
     php tests/scan-global-wpdb.php acdc-formation-saas-organisme-de-formation
     php tests/scan-envois-email.php  # e-mails qui contournent la porte commune
