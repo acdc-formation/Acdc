@@ -133,6 +133,12 @@ trait ACDC_Sessions_Actions_Trait {
 
     if ( $session_id ) {
       $this->acdc_ensure_session_document_space( $session_id );
+      /* ACDC 3.25.271 — Une séance saisie à la main est sa propre action : ses
+         quiz se préparent comme ceux d'une séance née d'une convention.
+         L'appel est idempotent, une modification ne double donc rien. */
+      if ( method_exists( $this, 'acdc_prepare_action_quizzes' ) ) {
+        $this->acdc_prepare_action_quizzes( array( $session_id ) );
+      }
     }
 
     $return_after_save = $this->acdc_get_post_return_after_save( 'edit', array( 'edit', 'list', 'new' ) );
@@ -267,6 +273,7 @@ trait ACDC_Sessions_Actions_Trait {
     }
 
     $created = 0;
+    $acdc_builder_session_ids = array();
     $now = $this->now_mysql();
     foreach ( $prepared_slots as $index => $slot ) {
       $resolved_title = $title;
@@ -322,6 +329,14 @@ trait ACDC_Sessions_Actions_Trait {
         );
       }
       $created++;
+      $acdc_builder_session_ids[] = $new_session_id;
+    }
+
+    /* ACDC 3.25.271 — Le constructeur crée les journées d'UNE action : les
+       trois quiz structurels s'accrochent à la première, pas à chacune. Sept
+       journées ne font pas vingt et un quiz. */
+    if ( $acdc_builder_session_ids && method_exists( $this, 'acdc_prepare_action_quizzes' ) ) {
+      $this->acdc_prepare_action_quizzes( $acdc_builder_session_ids );
     }
 
     $message = $created > 1 ? sprintf( '%d séances enregistrées.', $created ) : 'Séance enregistrée.';

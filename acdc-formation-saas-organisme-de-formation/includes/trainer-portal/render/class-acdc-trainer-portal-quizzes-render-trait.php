@@ -704,15 +704,34 @@ trait ACDC_Trainer_Portal_Quizzes_Render_Trait {
                             </p>
                         <?php else : ?>
                             <div class="acdc-tp-learner-list">
+                                <?php
+                                /* ACDC 3.25.271 — DEUX FAUTES SUR LA MÊME LIGNE.
+                                   L'adresse de l'apprenant s'affichait sans que
+                                   personne n'ait demandé la permission — celle-là
+                                   même que l'écran des séances dit respecter — et
+                                   un apprenant SANS adresse était purement et
+                                   simplement retiré de la liste : le formateur ne
+                                   pouvait pas le cocher, donc pas l'inclure au
+                                   quiz. Le rattachement d'un apprenant à un quiz
+                                   ne dépend pas de son adresse e-mail.
+                                   On coche par l'identité, on n'affiche l'adresse
+                                   que si la permission est accordée. */
+                                $tp_can_personal = method_exists( $this, 'trainer_can' )
+                                    && $this->trainer_can( $trainer_id, 'view_learner_personal_data' );
+                                ?>
                                 <?php foreach ( $learners as $l ) :
                                     $email = isset( $l->email ) ? (string) $l->email : '';
-                                    if ( '' === $email ) { continue; }
                                     $name = trim( ( $l->first_name ?? '' ) . ' ' . ( $l->last_name ?? '' ) );
+                                    if ( '' === $name ) { $name = 'Apprenant n° ' . (int) $l->id; }
                                 ?>
                                     <label class="acdc-tp-learner-item">
                                         <input type="checkbox" name="recipients_learners[]" value="<?php echo (int) $l->id; ?>" checked />
                                         <span class="acdc-tp-learner-name"><?php echo esc_html( $name ); ?></span>
-                                        <span class="acdc-tp-learner-email"><?php echo esc_html( $email ); ?></span>
+                                        <?php if ( $tp_can_personal && '' !== $email ) : ?>
+                                            <span class="acdc-tp-learner-email"><?php echo esc_html( $email ); ?></span>
+                                        <?php elseif ( '' === $email ) : ?>
+                                            <span class="acdc-tp-learner-email" style="color:#b45309;">sans adresse — quiz en salle uniquement</span>
+                                        <?php endif; ?>
                                     </label>
                                 <?php endforeach; ?>
                             </div>

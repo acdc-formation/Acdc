@@ -3812,7 +3812,17 @@ trait ACDC_Quizzes_Core_Trait {
             'offset'              => 0,
             'orderby'             => 'updated_at',
             'order'               => 'DESC',
-            'fallback_all_active' => true, /* 3.21.03.2-b — Si filtre par sessions vide, voir tous les quiz actifs. */
+            /* ACDC 3.25.271 — LE REPLI MONTRAIT TOUT À TOUT LE MONDE.
+               Quand un formateur n'avait aucun résultat, on lui affichait
+               l'ensemble des envois actifs de l'organisme — le commentaire
+               d'origine le disait sans détour : « pour un formateur unique, le
+               fallback affichera tous les quiz du SaaS ». Sur des écrans qui
+               portent des noms d'apprenants et leurs scores, une liste vide est
+               une réponse ; la liste des autres n'en est pas une.
+               David demande l'inverse : « les quiz correspondant aux formations
+               qu'il fait ». Le repli est donc éteint par défaut ; l'appelant qui
+               le veut doit le demander explicitement. */
+            'fallback_all_active' => false,
         );
         $args = array_merge( $defaults, $args );
 
@@ -3855,8 +3865,31 @@ trait ACDC_Quizzes_Core_Trait {
         $params = array();
 
         if ( $with_session_filter ) {
-            $where[]  = 'EXISTS (SELECT 1 FROM ' . $tbl_sessions . ' s WHERE s.formation_id = q.formation_id AND s.trainer_id = %d)';
+            /* ACDC 3.25.271 — LA FENÊTRE D'ANIMATION.
+               « Les quiz correspondant aux formations qu'il fait doivent être
+               visibles pendant la formation, mais disparaître quand la
+               formation est terminée, avec un ou deux jours de battement. »
+               Sans borne, la liste d'un formateur ne faisait que grossir : au
+               bout d'un an, retrouver le quiz du jour tenait de la fouille, et
+               un quiz qu'on cherche est un quiz qu'on ne lance pas.
+               Les deux bornes sont réglables. Ce qui disparaît, c'est la liste
+               d'ANIMATION — les résultats des séances passées, eux, restent
+               consultables sans limite : ce sont ses preuves. */
+            $fenetre  = method_exists( $this, 'acdc_qz_visibility_window' )
+                ? $this->acdc_qz_visibility_window()
+                : array( 'avant' => 1, 'apres' => 2 );
+            $where[]  = 'EXISTS (SELECT 1 FROM ' . $tbl_sessions . ' s'
+                . ' WHERE s.formation_id = q.formation_id AND s.trainer_id = %d'
+                . "   AND COALESCE(s.status,'') NOT IN ('Annulée','Annulee')"
+                . '   AND DATE(COALESCE(s.start_date, DATE(s.start_at))) <= %s'
+                . '   AND DATE(COALESCE(s.end_date, DATE(s.end_at), s.start_date, DATE(s.start_at))) >= %s )';
+            /* Les deux bornes sont calculées par ACDC\Support\QuizWindow : la
+               requête ne fait que comparer. Une règle écrite en SQL ne se teste
+               pas, et celle-ci est réglable. */
+            $bornes   = \ACDC\Support\QuizWindow::bounds( current_time( 'Y-m-d' ), $fenetre['avant'], $fenetre['apres'] );
             $params[] = $trainer_id;
+            $params[] = $bornes['debut_au_plus_tard'];
+            $params[] = $bornes['fin_au_plus_tot'];
         }
 
         if ( $args['only_current'] ) {
@@ -3909,7 +3942,7 @@ trait ACDC_Quizzes_Core_Trait {
             'status'              => '',
             'search'              => '',
             'only_current'        => true,
-            'fallback_all_active' => true,
+            'fallback_all_active' => false,
         );
         $args = array_merge( $defaults, $args );
 
@@ -3936,8 +3969,24 @@ trait ACDC_Quizzes_Core_Trait {
         $params = array();
 
         if ( $with_session_filter ) {
-            $where[]  = 'EXISTS (SELECT 1 FROM ' . $tbl_sessions . ' s WHERE s.formation_id = q.formation_id AND s.trainer_id = %d)';
+            /* ACDC 3.25.271 — Le compteur applique la MÊME fenêtre que la
+               liste. Un compteur qui annonce huit quiz au-dessus d'une liste
+               qui en montre deux fait douter de la liste, pas du compteur. */
+            $fenetre  = method_exists( $this, 'acdc_qz_visibility_window' )
+                ? $this->acdc_qz_visibility_window()
+                : array( 'avant' => 1, 'apres' => 2 );
+            $where[]  = 'EXISTS (SELECT 1 FROM ' . $tbl_sessions . ' s'
+                . ' WHERE s.formation_id = q.formation_id AND s.trainer_id = %d'
+                . "   AND COALESCE(s.status,'') NOT IN ('Annulée','Annulee')"
+                . '   AND DATE(COALESCE(s.start_date, DATE(s.start_at))) <= %s'
+                . '   AND DATE(COALESCE(s.end_date, DATE(s.end_at), s.start_date, DATE(s.start_at))) >= %s )';
+            /* Les deux bornes sont calculées par ACDC\Support\QuizWindow : la
+               requête ne fait que comparer. Une règle écrite en SQL ne se teste
+               pas, et celle-ci est réglable. */
+            $bornes   = \ACDC\Support\QuizWindow::bounds( current_time( 'Y-m-d' ), $fenetre['avant'], $fenetre['apres'] );
             $params[] = $trainer_id;
+            $params[] = $bornes['debut_au_plus_tard'];
+            $params[] = $bornes['fin_au_plus_tot'];
         }
         if ( $args['only_current'] ) {
             $where[] = 'q.is_current = 1';
@@ -3996,7 +4045,7 @@ trait ACDC_Quizzes_Core_Trait {
             'offset'              => 0,
             'orderby'             => 'sent_at',
             'order'               => 'DESC',
-            'fallback_all_active' => true,
+            'fallback_all_active' => false,
         );
         $args = array_merge( $defaults, $args );
 
@@ -4028,7 +4077,22 @@ trait ACDC_Quizzes_Core_Trait {
         $params = array();
 
         if ( $with_trainer_filter && (int) $args['trainer_id'] > 0 ) {
-            $where[]  = 'EXISTS (SELECT 1 FROM ' . $tbl_of_sessions . ' s2 WHERE s2.formation_id = s.formation_id AND s2.trainer_id = %d)';
+            /* ACDC 3.25.271 — UN FORMATEUR VOYAIT LES GROUPES DES AUTRES.
+               Ce filtre portait sur la FORMATION : « il existe une séance de
+               cette formation animée par ce formateur ». Autrement dit, dès
+               qu'un formateur avait animé UNE séance d'une formation, il voyait
+               tous les envois de cette formation — y compris ceux du groupe
+               d'un collègue, avec les résultats nominatifs des apprenants
+               correspondants. C'est précisément le mélange que David redoute
+               quand deux sessions de la même formation tournent en parallèle,
+               et il portait sur des données personnelles.
+               Un envoi appartient à une SÉANCE, une séance a un formateur. Les
+               envois sans séance rattachée — les anciens — restent visibles à
+               qui anime la formation, faute de quoi ils disparaîtraient de
+               partout. */
+            $where[]  = '( ( s.formation_session_id IS NOT NULL AND EXISTS (SELECT 1 FROM ' . $tbl_of_sessions . ' s2 WHERE s2.id = s.formation_session_id AND s2.trainer_id = %d) )'
+                . ' OR ( s.formation_session_id IS NULL AND EXISTS (SELECT 1 FROM ' . $tbl_of_sessions . ' s3 WHERE s3.formation_id = s.formation_id AND s3.trainer_id = %d) ) )';
+            $params[] = (int) $args['trainer_id'];
             $params[] = (int) $args['trainer_id'];
         }
         if ( (int) $args['quiz_id'] > 0 ) {
@@ -4161,35 +4225,35 @@ trait ACDC_Quizzes_Core_Trait {
         $tbl_qz_sessions = $this->get_qz_table( 'sessions' );
         $tbl_of_sessions = $wpdb->prefix . 'acdc_of_sessions';
 
-        // Tentative 1 : strict
+        /* ACDC 3.25.271 — C'EST ICI QUE SE JOUE L'ACCÈS, PAS DANS LA LISTE.
+           Cette porte autorisait par la FORMATION : un formateur ayant animé
+           une seule séance d'une formation pouvait ouvrir les résultats de
+           TOUS ses groupes, y compris ceux d'un collègue, avec les noms des
+           apprenants et leurs scores. Et son repli allait plus loin : quand le
+           formateur n'avait aucune séance rattachée, la fonction rendait vrai
+           pour n'importe quel envoi existant — « on accepte toutes les sessions
+           existantes ». Corriger la liste sans corriger cette porte n'aurait
+           rien protégé du tout : il suffisait d'une adresse.
+           Un envoi appartient à une séance, une séance a un formateur. Les
+           envois anciens, sans séance rattachée, restent accessibles à qui
+           anime la formation — sans quoi ils deviendraient invisibles de
+           partout — mais plus rien n'est accessible par défaut. */
         $allowed = (int) $wpdb->get_var( $wpdb->prepare(
             "SELECT COUNT(*) FROM {$tbl_qz_sessions} s
-             WHERE s.id = %d AND EXISTS (
-                SELECT 1 FROM {$tbl_of_sessions} ofs
-                WHERE ofs.formation_id = s.formation_id AND ofs.trainer_id = %d
-             )",
-            $session_id, $trainer_id
+             WHERE s.id = %d
+               AND (
+                 ( s.formation_session_id IS NOT NULL AND EXISTS (
+                     SELECT 1 FROM {$tbl_of_sessions} ofs
+                      WHERE ofs.id = s.formation_session_id AND ofs.trainer_id = %d ) )
+                 OR
+                 ( s.formation_session_id IS NULL AND EXISTS (
+                     SELECT 1 FROM {$tbl_of_sessions} ofs2
+                      WHERE ofs2.formation_id = s.formation_id AND ofs2.trainer_id = %d ) )
+               )",
+            $session_id, $trainer_id, $trainer_id
         ) );
-        if ( $allowed > 0 ) {
-            return true;
-        }
-        // Tentative 2 : fallback (si formateur unique sans trainer_id propagé)
-        $has_any_filtered = (int) $wpdb->get_var( $wpdb->prepare(
-            "SELECT COUNT(*) FROM {$tbl_qz_sessions} s
-             WHERE EXISTS (
-                SELECT 1 FROM {$tbl_of_sessions} ofs
-                WHERE ofs.formation_id = s.formation_id AND ofs.trainer_id = %d
-             ) LIMIT 1",
-            $trainer_id
-        ) );
-        if ( 0 === $has_any_filtered ) {
-            // Aucune session filtrée → on accepte toutes les sessions existantes
-            $exists = (int) $wpdb->get_var( $wpdb->prepare(
-                "SELECT COUNT(*) FROM {$tbl_qz_sessions} WHERE id = %d", $session_id
-            ) );
-            return $exists > 0;
-        }
-        return false;
+
+        return $allowed > 0;
     }
 
     /**

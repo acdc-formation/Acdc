@@ -2679,17 +2679,37 @@ trait ACDC_Quizzes_Actions_Trait {
         if ( empty( $session->formation_session_id ) ) {
             wp_send_json_success( array( 'learners' => array() ) );
         }
-        $learners = $wpdb->get_results( $wpdb->prepare(
-            "SELECT l.id, l.first_name,
-                    COALESCE(NULLIF(l.usage_last_name,''), l.last_name) AS last_name
-             FROM {$this->learner_table} l
-             WHERE l.session_id = %d
-               AND l.email IS NOT NULL
-               AND l.email != ''
-             ORDER BY l.last_name ASC, l.first_name ASC",
-            (int) $session->formation_session_id
-        ) );
-        wp_send_json_success( array( 'learners' => $learners ? $learners : array() ) );
+        /* ACDC 3.25.271 — J'AVAIS RÉPARÉ LA SERRURE, PAS LA SONNETTE.
+         *
+         * La 3.25.266 a corrigé le CONTRÔLE d'appartenance : quand un
+         * identifiant d'apprenant arrive, il est reconnu par le résolveur à
+         * trois chemins. Mais la LISTE dans laquelle l'apprenant choisit son
+         * nom en rejoignant la partie interrogeait toujours
+         * `apprenants.session_id`. Sur une séance née d'une convention, cette
+         * colonne est vide : la liste était vide, l'apprenant ne pouvait pas se
+         * désigner, aucun identifiant n'était envoyé — et mon contrôle n'avait
+         * jamais rien à vérifier. Le participant restait un pseudo, avec
+         * qualiopi_traceable = 0.
+         *
+         * Le filtre sur l'adresse e-mail disparaît aussi. Il excluait de la
+         * liste un apprenant qui n'en a pas — alors qu'en salle, jouer ne
+         * demande pas d'adresse. Un quiz ne doit pas dépendre d'une donnée dont
+         * il n'a pas besoin.
+         */
+        $formation_session = method_exists( $this, 'get_session' )
+            ? $this->get_session( (int) $session->formation_session_id )
+            : null;
+        $learners = array();
+        if ( $formation_session && method_exists( $this, 'acdc_session_learners' ) ) {
+            foreach ( (array) $this->acdc_session_learners( $formation_session ) as $sl ) {
+                $learners[] = (object) array(
+                    'id'         => (int) $sl->id,
+                    'first_name' => (string) $sl->first_name,
+                    'last_name'  => (string) ( ! empty( $sl->usage_last_name ) ? $sl->usage_last_name : $sl->last_name ),
+                );
+            }
+        }
+        wp_send_json_success( array( 'learners' => $learners ) );
     }
 
         public function ajax_acdc_of_qz_player_join() {

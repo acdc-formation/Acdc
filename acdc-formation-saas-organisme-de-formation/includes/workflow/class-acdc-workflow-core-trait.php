@@ -433,6 +433,11 @@ trait ACDC_Workflow_Core_Trait {
         'convocation_hour'           => 17,
         'emargement_lead_minutes'    => 30,
 
+        /* ACDC 3.25.271 — Fenêtre de visibilité des quiz chez le formateur.
+           Un jour avant la première journée, deux jours après la dernière. */
+        'quiz_visible_days_before'   => 1,
+        'quiz_visible_days_after'    => 2,
+
         /* Évaluation — décalage du premier envoi après la fin de la formation */
         'survey_hot_offset_hours'     => 0,
         'survey_company_offset_hours' => 24,

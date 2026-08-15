@@ -41,6 +41,7 @@ class ACDC_Formation_SAAS_Plugin {
   use ACDC_Quizzes_Render_Trait;
   use ACDC_Quizzes_Render_Results_Trait;
   use ACDC_Quizzes_Render_Live_Trait;
+  use ACDC_Quizzes_Preparation_Trait;
   use ACDC_Crm_Commercial_Core_Trait;
   use ACDC_Crm_Commercial_Actions_Trait;
   use ACDC_Crm_Commercial_Render_Trait;

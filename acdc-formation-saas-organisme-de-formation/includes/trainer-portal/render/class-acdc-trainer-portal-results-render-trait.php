@@ -78,10 +78,12 @@ trait ACDC_Trainer_Portal_Results_Render_Trait {
      * Liste des envois du formateur (avec fallback automatique).
      */
     private function render_tp_results_sessions_list( $trainer_id ) {
+        /* ACDC 3.25.271 — Ses envois, et rien que les siens : ces lignes
+           portent des noms d'apprenants et des scores. */
         $sessions = $this->get_qz_dispatch_sessions( array(
             'trainer_id' => $trainer_id,
             'limit'      => 100,
-            'fallback_all_active' => true,
+            'fallback_all_active' => false,
         ) );
         $base_url = $this->trainer_portal_page_url( 'results' );
 
@@ -248,7 +250,7 @@ trait ACDC_Trainer_Portal_Results_Render_Trait {
             } elseif ( 'objectives' === $tab ) {
                 $this->render_tp_results_tab_by_objective( $session );
             } else {
-                $this->render_tp_results_tab_participants( $session );
+                $this->render_tp_results_tab_participants( $session, $trainer_id );
             }
             ?>
         </div>
@@ -256,7 +258,7 @@ trait ACDC_Trainer_Portal_Results_Render_Trait {
         return ob_get_clean();
     }
 
-    private function render_tp_results_tab_participants( $session ) {
+    private function render_tp_results_tab_participants( $session, $trainer_id = 0 ) {
         $participants = $this->get_qz_participants_for_dispatch_session( (int) $session->id );
         if ( empty( $participants ) ) {
             echo '<div class="acdc-trainer-portal-quizzes-empty"><p>Aucun participant.</p></div>';
@@ -282,10 +284,22 @@ trait ACDC_Trainer_Portal_Results_Render_Trait {
                    venait lui-même d'animer. Ordre de préférence identique à celui de
                    l'administration : nom de la fiche apprenant, puis nom saisi, puis
                    pseudo, puis e-mail. */
+                /* ACDC 3.25.271 — L'ADRESSE E-MAIL N'EST PLUS UN REPLI D'IDENTITÉ.
+                   « Je ne veux pas que les e-mails ou téléphones des apprenants
+                   soient visibles (RGPD et confidentiel). » Le dernier repli de
+                   cette cascade affichait l'adresse en clair, et l'écran des
+                   apprenants d'une séance promet pourtant, quelques clics plus
+                   loin, que les coordonnées sont masquées. Une promesse fausse
+                   est pire qu'une absence de promesse : on croit la donnée
+                   protégée.
+                   La permission existante fait foi ; sans elle, un participant
+                   sans nom reste un participant sans nom. */
+                $tp_can_personal = method_exists( $this, 'trainer_can' )
+                    && $this->trainer_can( $trainer_id, 'view_learner_personal_data' );
                 $tp_name = trim( (string) ( $p->learner_full_name ?? '' ) )
                     ?: trim( (string) $p->full_name )
                     ?: trim( (string) $p->nickname )
-                    ?: (string) $p->email;
+                    ?: ( $tp_can_personal ? (string) $p->email : '' );
                 ?>
                 <tr>
                     <td>
@@ -452,7 +466,8 @@ trait ACDC_Trainer_Portal_Results_Render_Trait {
 
             <header class="acdc-tp-results-header">
                 <div>
-                    <h1><?php echo esc_html( $p->full_name ?: $p->email ); ?></h1>
+                    <?php /* ACDC 3.25.271 — Même règle sur la fiche du participant. */ ?>
+                    <h1><?php echo esc_html( $p->full_name ?: ( ( method_exists( $this, 'trainer_can' ) && $this->trainer_can( $trainer_id, 'view_learner_personal_data' ) ) ? $p->email : ( $p->nickname ?: 'Participant' ) ) ); ?></h1>
                     <p class="acdc-tp-results-meta">
                         <strong>Quiz :</strong> <?php echo esc_html( $session->quiz_title ); ?>
                         &nbsp;·&nbsp;

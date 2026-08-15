@@ -563,6 +563,13 @@ trait ACDC_Workflow_Render_Trait {
         $this->acdc_wf_number_row( 'Dossier au formateur, avant le début', 'trainer_pack_days_before', $d, 'jours' );
         $this->acdc_wf_number_row( 'Heure d’envoi de la convocation, la veille', 'convocation_hour', $d, 'h' );
         $this->acdc_wf_number_row( 'Ouverture de la feuille d’émargement, avant chaque demi-journée', 'emargement_lead_minutes', $d, 'minutes' );
+        /* ACDC 3.25.271 — La fenêtre pendant laquelle un formateur voit les quiz
+           de ses formations. « Visibles pendant la formation, mais disparaître
+           quand elle est terminée, avec un ou deux jours de battement. » Ce qui
+           disparaît est la liste d'animation ; les résultats de ses séances
+           passées restent consultables sans limite. */
+        $this->acdc_wf_number_row( 'Quiz visibles chez le formateur, avant le début', 'quiz_visible_days_before', $d, 'jours' );
+        $this->acdc_wf_number_row( 'Quiz retirés de son animation, après la fin', 'quiz_visible_days_after', $d, 'jours' );
         ?>
       </div>
 

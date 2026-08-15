@@ -1365,6 +1365,18 @@ trait ACDC_Dossiers_Contracts_Core_Trait {
         if ( $wpdb->insert_id ) { $created_session_ids[] = (int) $wpdb->insert_id; }
       }
 
+    /* ACDC 3.25.271 — LES QUIZ SE RATTACHENT SEULS À L'ACTION.
+       « Systématiquement, dès qu'une séance est créée. » Les trois quiz
+       structurels — positionnement, diagnostique, acquis — sont accrochés à la
+       PREMIÈRE journée de l'action, une seule fois quelle que soit sa durée.
+       Rien n'est envoyé : le formateur déclenche depuis son extranet.
+       On prépare dès le brouillon, décision de David : une séance qui attend
+       son formateur a déjà ses quiz prêts, et personne ne les voit tant qu'elle
+       n'est pas validée. */
+    if ( ! empty( $created_session_ids ) && method_exists( $this, 'acdc_prepare_action_quizzes' ) ) {
+      $this->acdc_prepare_action_quizzes( $created_session_ids );
+    }
+
     return $created_session_ids;
   }
 

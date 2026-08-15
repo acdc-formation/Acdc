@@ -40,6 +40,8 @@ $acdc_quizzes_manifest = array(
     'class-acdc-quizzes-render-results-trait.php' => 'ACDC_Quizzes_Render_Results_Trait',
     /* ACDC 3.21.04.2-a — Trait des pages live (host + player). */
     'class-acdc-quizzes-render-live-trait.php'    => 'ACDC_Quizzes_Render_Live_Trait',
+    /* ACDC 3.25.271 — Préparation automatique des quiz d'une action. */
+    'class-acdc-quizzes-preparation-trait.php'    => 'ACDC_Quizzes_Preparation_Trait',
 );
 
 foreach ( $acdc_quizzes_manifest as $file => $trait_name ) {

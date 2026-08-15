@@ -480,6 +480,24 @@ trait ACDC_Sessions_Core_Trait {
         'Inscrits' => ! empty( $learner_names ) ? implode( "\n", $learner_names ) : 'Aucun apprenant rattaché à cette séance.',
       ),
     );
+    /* ACDC 3.25.271 — CE QUI MANQUE SE DIT AVANT LE JOUR J.
+       Les trois quiz d'une action — positionnement, diagnostique, acquis — sont
+       préparés d'office à la création de la séance. Encore faut-il que la
+       formation les possède. « Sinon on découvre le trou le matin même » : la
+       fiche de la séance nomme donc précisément ce qui manque, plutôt que
+       d'afficher un compteur qu'il faudrait aller interpréter ailleurs. */
+    if ( method_exists( $this, 'acdc_qz_missing_purposes' ) && ! empty( $session->formation_id ) ) {
+      $quiz_manquants = $this->acdc_qz_missing_purposes( (int) $session->formation_id );
+      $sections[] = array(
+        'title' => 'Quiz de la formation',
+        'items' => array(
+          'Préparés pour cette action' => empty( $quiz_manquants )
+            ? 'Les trois quiz sont en place : test de positionnement, évaluation diagnostique, évaluation des acquis. Le formateur les déclenche depuis son extranet.'
+            : 'MANQUANT : ' . implode( ', ', $quiz_manquants ) . ".\nCette formation ne pourra pas les faire passer tant qu'ils n'existent pas dans le module Quiz.",
+        ),
+      );
+    }
+
     $sections[] = array(
       'title' => 'Notes',
       'items' => array(
