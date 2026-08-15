@@ -28,6 +28,7 @@ lancent sans WordPress, en quelques secondes.
     php tests/test-fenetre-quiz.php    # quiz visibles chez le formateur : de J-1 à J+2
     php tests/test-libelle-formation.php # deux formations du même nom ne se confondent jamais
     php tests/test-indicateurs-publies.php # organisme seul / tout compris, dispensées / suivies
+    php tests/test-bpf-prestations.php # le BPF des prestations extérieures : deux entités, deux déclarations
     node tests/test-signature-trace.js # continuité du tracé des signatures
     php tests/scan-global-wpdb.php acdc-formation-saas-organisme-de-formation
     php tests/scan-envois-email.php  # e-mails qui contournent la porte commune

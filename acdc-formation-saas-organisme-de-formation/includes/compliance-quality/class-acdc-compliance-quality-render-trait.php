@@ -920,6 +920,14 @@ trait ACDC_Compliance_Quality_Render_Trait {
       $this->handle_import_external_missions_csv();
       return;
     }
+    /* ACDC 3.25.283 — L'identité déclarante du formateur, et la règle de
+       rattachement au BPF de l'organisme. */
+    if ( 'save_identity' === $ext_action ) {
+      if ( ! current_user_can( 'manage_options' ) ) { wp_die( esc_html( 'Accès refusé.' ) ); }
+      check_admin_referer( 'acdc_save_external_identity' );
+      $this->handle_save_external_identity();
+      return;
+    }
 
     $action    = isset( $_GET['action'] )  ? sanitize_key( wp_unslash( $_GET['action'] ) )  : 'list';
     $item_id   = isset( $_GET['item_id'] ) ? sanitize_text_field( wp_unslash( $_GET['item_id'] ) ) : '';
@@ -955,7 +963,11 @@ trait ACDC_Compliance_Quality_Render_Trait {
     <section class="acdc-section-head">
       <div>
         <h2>Prestations extérieures</h2>
-        <p>Journal des interventions en tant que formateur indépendant pour d'autres organismes — intégré automatiquement au BPF.</p>
+        <?php /* ACDC 3.25.283 — Le sous-titre affirmait « intégré automatiquement
+                 au BPF ». Ce n'est plus vrai d'office : ça dépend désormais du
+                 réglage ci-dessous, et un écran qui affirme sans avoir lu est
+                 plus trompeur qu'un écran muet. */ ?>
+        <p>Journal des interventions en tant que formateur indépendant pour d'autres organismes.</p>
       </div>
       <div class="acdc-inline-wrap">
         <a class="acdc-button acdc-button-soft" href="<?php echo esc_url( add_query_arg( array( 'tab' => 'external_missions', 'action' => 'import' ), $base_url ) ); ?>" data-acdc-modal-open="acdc-ext-import-modal">⬆ Importer CSV</a>
@@ -968,6 +980,70 @@ trait ACDC_Compliance_Quality_Render_Trait {
       <?php echo esc_html( $notice_code ); ?>
     </div>
     <?php endif; ?>
+
+    <?php
+    /* ACDC 3.25.283 — DEUX ENTITÉS, DEUX DÉCLARATIONS.
+       Tant qu'un seul numéro de déclaration d'activité couvre les deux
+       activités, ces prestations appartiennent au BPF de l'organisme et
+       l'interrupteur reste allumé. Le jour où une seconde structure est
+       immatriculée, elles relèvent du numéro du formateur : on l'éteint, et
+       elles sortent du BPF de l'organisme pour rejoindre le sien.
+       L'identité ci-dessous est préremplie avec celle de l'organisme, parce
+       qu'aujourd'hui c'est la même. Elle est enregistrée à part précisément
+       pour survivre au jour où celle de l'organisme changera — c'est ce jour-là
+       qu'on en aura besoin, et il sera trop tard pour la retrouver. */
+    $ext_identite = $this->get_external_declarant_identity();
+    $ext_inclus   = ( '0' !== (string) get_option( 'acdc_of_bpf_include_external', '1' ) );
+    $ext_champs   = array(
+      'enterprise'                  => 'Raison sociale',
+      'siret_identification'        => 'SIRET',
+      'activity_declaration_number' => 'N° de déclaration d’activité',
+      'legal_form'                  => 'Forme juridique',
+      'address'                     => 'Adresse',
+      'postal_code'                 => 'Code postal',
+      'city'                        => 'Ville',
+    );
+    ?>
+    <details class="acdc-panel" style="margin-bottom:20px;padding:0;">
+      <summary style="cursor:pointer;padding:16px 18px;font-weight:600;color:#0C2D52;">
+        Déclarant et rattachement au BPF
+        <span style="font-weight:400;color:#5a6577;font-size:13px;">
+          — <?php echo $ext_inclus ? 'ces prestations entrent dans le BPF de l’organisme' : 'ces prestations ont leur propre BPF'; ?>
+        </span>
+      </summary>
+      <div style="padding:0 18px 18px;">
+        <form method="post" action="<?php echo esc_url( add_query_arg( array( 'tab' => 'external_missions', 'ext_action' => 'save_identity' ), $base_url ) ); ?>">
+          <?php wp_nonce_field( 'acdc_save_external_identity' ); ?>
+          <p class="acdc-checkbox-line">
+            <label class="acdc-switch">
+              <input type="checkbox" name="bpf_include_external" value="1" <?php checked( $ext_inclus ); ?>>
+              <span class="acdc-switch-slider"></span>
+            </label>
+            <span>Inclure ces prestations dans le BPF de l’organisme</span>
+          </p>
+          <p class="acdc-help" style="margin:0 0 14px;">
+            À laisser allumé tant qu’un seul numéro de déclaration d’activité couvre les deux activités.
+            À éteindre le jour où une seconde structure est immatriculée : ces prestations sortiront alors
+            du BPF de l’organisme, et le bouton ci-dessous produira le vôtre.
+          </p>
+          <div class="acdc-grid-2cols">
+            <?php foreach ( $ext_champs as $cle => $libelle ) : ?>
+              <p>
+                <label><?php echo esc_html( $libelle ); ?></label>
+                <input type="text" name="declarant[<?php echo esc_attr( $cle ); ?>]" value="<?php echo esc_attr( (string) ( $ext_identite[ $cle ] ?? '' ) ); ?>">
+              </p>
+            <?php endforeach; ?>
+          </div>
+          <div class="acdc-inline-wrap" style="margin-top:12px;">
+            <button type="submit" class="acdc-button acdc-button-primary">Enregistrer</button>
+            <a class="acdc-button acdc-button-soft"
+               href="<?php echo esc_url( wp_nonce_url( add_query_arg( array( 'action' => 'acdc_generate_external_bpf' ), admin_url( 'admin-post.php' ) ), 'acdc_generate_external_bpf' ) ); ?>">
+              Générer mon BPF (Cerfa)
+            </a>
+          </div>
+        </form>
+      </div>
+    </details>
 
     <!-- Cartes récapitulatives -->
     <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:14px;margin-bottom:20px;">

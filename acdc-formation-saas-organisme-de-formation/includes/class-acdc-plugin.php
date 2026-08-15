@@ -572,6 +572,9 @@ class ACDC_Formation_SAAS_Plugin {
     add_action( 'admin_post_acdc_save_external_mission',          array( $this, 'handle_save_external_mission' ) );
     add_action( 'admin_post_acdc_delete_external_mission',        array( $this, 'handle_delete_external_mission' ) );
     add_action( 'admin_post_acdc_import_external_missions_csv',   array( $this, 'handle_import_external_missions_csv' ) );
+    /* ACDC 3.25.283 — L'identité déclarante du formateur, et son propre Cerfa. */
+    add_action( 'admin_post_acdc_save_external_identity',         array( $this, 'handle_save_external_identity' ) );
+    add_action( 'admin_post_acdc_generate_external_bpf',          array( $this, 'handle_generate_external_bpf' ) );
     add_action( 'init', array( $this, 'maybe_import_notion_external_missions' ), 20 );
     add_action( 'init', array( $this, 'maybe_clean_bpf_andrea_titles' ), 21 );
     add_action( 'init', array( $this, 'maybe_fix_bpf_accounting_dates' ), 22 );

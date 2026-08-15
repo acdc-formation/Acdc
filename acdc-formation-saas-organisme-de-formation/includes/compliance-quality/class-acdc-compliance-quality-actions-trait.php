@@ -168,10 +168,29 @@ trait ACDC_Compliance_Quality_Actions_Trait {
 
     $nb_apprenants_total = count( $bpf_learner_ids );
 
-    // ACDC 3.21.75 — Agréger les prestations extérieures (formateur indépendant)
-    $ext_summary = method_exists( $this, 'get_external_missions_bpf_summary' )
+    /* ACDC 3.25.283 — LES PRESTATIONS EXTÉRIEURES ENTRENT, OU N'ENTRENT PAS.
+     *
+     * Elles étaient agrégées d'office dans ce BPF depuis la 3.21.75, et c'était
+     * juste : un seul numéro de déclaration d'activité, donc une seule
+     * déclaration couvrant les deux activités.
+     *
+     * Ça cesse de l'être le jour où une seconde structure est immatriculée. Les
+     * interventions faites pour d'autres organismes relèvent alors du numéro du
+     * formateur, pas de celui de la structure — et les déclarer ici les ferait
+     * compter deux fois.
+     *
+     * L'interrupteur est ALLUMÉ par défaut : installer cette version ne change
+     * donc rien à un BPF déjà produit. Il s'éteint le jour de l'immatriculation,
+     * d'un geste, sans qu'il ait fallu deviner une date à l'avance.
+     *
+     * Neutraliser la source plutôt que ses six usages : une agrégation à zéro
+     * traverse tout le calcul sans qu'aucune ligne n'ait à connaître la règle,
+     * et un septième usage ajouté demain sera couvert sans qu'on y pense. */
+    $inclure_prestations = ( '0' !== (string) get_option( 'acdc_of_bpf_include_external', '1' ) );
+    $ext_vide = array( 'heures' => 0, 'heures_formateur' => 0, 'ca' => 0, 'nb_stag' => 0, 'nb_missions' => 0, 'rows' => array() );
+    $ext_summary = ( $inclure_prestations && method_exists( $this, 'get_external_missions_bpf_summary' ) )
       ? $this->get_external_missions_bpf_summary( $start_sql, $end_sql )
-      : array( 'heures' => 0, 'ca' => 0, 'nb_stag' => 0, 'nb_missions' => 0, 'rows' => array() );
+      : $ext_vide;
 
     // Cadre E : les prestations extérieures (formateur indépendant = vous-même dispensant hors OF)
     // Vous êtes "Personnes de votre organisme dispensant des heures" → nb_internes / h_internes
@@ -942,6 +961,207 @@ trait ACDC_Compliance_Quality_Actions_Trait {
     $this->redirect_to_portal( 'ancillary_services', 'Prestation annexe créée.', 'success' );
   }
   // ACDC 3.21.75 — Prestations extérieures
+
+  /**
+   * L'identité sous laquelle le formateur déclare ses prestations extérieures.
+   *
+   * ACDC 3.25.283 — Elle est préremplie avec celle de l'organisme, parce
+   * qu'aujourd'hui c'est la même personne. Elle est enregistrée SÉPARÉMENT
+   * précisément pour survivre au jour où celle de l'organisme changera : c'est
+   * ce jour-là qu'on en aura besoin, et il sera alors trop tard pour la
+   * retrouver ailleurs.
+   *
+   * @return array<string,string>
+   */
+  public function get_external_declarant_identity() {
+    $enregistre = get_option( 'acdc_of_external_declarant', array() );
+    if ( ! is_array( $enregistre ) ) {
+      $enregistre = array();
+    }
+    $organisme = method_exists( $this, 'get_company_profile_options' )
+      ? (array) $this->get_company_profile_options()
+      : array();
+
+    $champs = array(
+      'enterprise', 'siret_identification', 'activity_declaration_number',
+      'legal_form', 'address', 'postal_code', 'city',
+      'enterprise_contact_phone', 'enterprise_contact_email', 'naf_code',
+    );
+    $out = array();
+    foreach ( $champs as $cle ) {
+      /* Une valeur saisie ici prime toujours. Tant qu'elle est vide, on lit
+         celle de l'organisme : c'est vrai aujourd'hui, et ça évite d'exiger une
+         double saisie de coordonnées identiques. */
+      $out[ $cle ] = ( isset( $enregistre[ $cle ] ) && '' !== trim( (string) $enregistre[ $cle ] ) )
+        ? (string) $enregistre[ $cle ]
+        : (string) ( $organisme[ $cle ] ?? '' );
+    }
+    return $out;
+  }
+
+  /**
+   * ACDC 3.25.283 — Enregistre l'identité déclarante et la règle de
+   * rattachement des prestations au BPF de l'organisme.
+   */
+  public function handle_save_external_identity() {
+    if ( ! current_user_can( 'manage_options' ) ) { wp_die( esc_html( 'Accès refusé.' ) ); }
+    check_admin_referer( 'acdc_save_external_identity' );
+
+    $saisi = isset( $_POST['declarant'] ) && is_array( $_POST['declarant'] )
+      ? wp_unslash( $_POST['declarant'] )
+      : array();
+
+    $propre = array();
+    foreach ( $saisi as $cle => $valeur ) {
+      $propre[ sanitize_key( $cle ) ] = sanitize_text_field( (string) $valeur );
+    }
+    update_option( 'acdc_of_external_declarant', $propre, false );
+
+    /* Une case décochée n'est pas transmise : c'est bien son absence qui vaut
+       « non », et non une valeur qu'on irait chercher. */
+    update_option( 'acdc_of_bpf_include_external', empty( $_POST['bpf_include_external'] ) ? '0' : '1', false );
+
+    $this->redirect_to_portal(
+      'external_missions',
+      empty( $_POST['bpf_include_external'] )
+        ? 'Enregistré. Ces prestations sont désormais hors du BPF de l’organisme et disposent du leur.'
+        : 'Enregistré. Ces prestations restent intégrées au BPF de l’organisme.',
+      'success'
+    );
+  }
+
+  /**
+   * ACDC 3.25.283 — LE BPF DU FORMATEUR, SUR LE MÊME CERFA QUE CELUI DE
+   * L'ORGANISME.
+   *
+   * Deux numéros de déclaration d'activité, deux déclarations, un seul
+   * formulaire officiel : on réutilise donc le générateur existant, avec une
+   * autre identité et d'autres chiffres. Écrire un second composeur de PDF
+   * ferait diverger deux rendus du même document dès la première correction.
+   *
+   * Le cadre D — les charges — reste vide : elles viennent de la comptabilité
+   * du déclarant, que cette application ne tient pas. Une case vide se voit et
+   * se complète ; une case remplie d'un chiffre inventé ne se voit pas.
+   */
+  public function handle_generate_external_bpf() {
+    if ( ! current_user_can( 'manage_options' ) ) { wp_die( esc_html( 'Accès refusé.' ) ); }
+    check_admin_referer( 'acdc_generate_external_bpf' );
+
+    $annee = isset( $_REQUEST['bpf_year'] ) ? sanitize_text_field( wp_unslash( $_REQUEST['bpf_year'] ) ) : date_i18n( 'Y' );
+    $annee = preg_match( '/^\d{4}$/', $annee ) ? $annee : date_i18n( 'Y' );
+    $debut = $annee . '-01-01';
+    $fin   = $annee . '-12-31';
+
+    $records = \ACDC\Support\ExternalBpf::forPeriod(
+      (array) get_option( 'acdc_of_external_mission_records', array() ),
+      $debut,
+      $fin
+    );
+    if ( empty( $records ) ) {
+      $this->redirect_to_portal( 'external_missions', 'Aucune prestation sur l’exercice ' . $annee . ' : rien à déclarer.', 'error' );
+      return;
+    }
+
+    $c = \ACDC\Support\ExternalBpf::frameC( $records );
+    $e = \ACDC\Support\ExternalBpf::frameE( $records );
+    $f = \ACDC\Support\ExternalBpf::frameF( $records );
+    $g = \ACDC\Support\ExternalBpf::frameG( $records );
+
+    $id = $this->get_external_declarant_identity();
+
+    $payload = array(
+      'org'    => array(
+        'nda'               => (string) ( $id['activity_declaration_number'] ?? '' ),
+        'siret'             => (string) ( $id['siret_identification'] ?? '' ),
+        'naf_code'          => (string) ( $id['naf_code'] ?? '' ),
+        'legal_form'        => (string) ( $id['legal_form'] ?? '' ),
+        'enterprise'        => (string) ( $id['enterprise'] ?? '' ),
+        'address'           => trim( ( $id['address'] ?? '' ) . ' ' . ( $id['postal_code'] ?? '' ) . ' ' . ( $id['city'] ?? '' ) ),
+        'phone'             => (string) ( $id['enterprise_contact_phone'] ?? '' ),
+        'email'             => (string) ( $id['enterprise_contact_email'] ?? '' ),
+        'city'              => (string) ( $id['city'] ?? '' ),
+        'dirigeant_nom'     => (string) ( $id['enterprise'] ?? '' ),
+        'dirigeant_qualite' => (string) ( $id['legal_form'] ?? '' ),
+      ),
+      'period' => array(
+        'start'           => '01/01/' . $annee,
+        'end'             => '31/12/' . $annee,
+        'date_generation' => date_i18n( 'd/m/Y' ),
+      ),
+      'data'   => array(
+        'has_distance'    => true,
+        'c1'  => round( $c['c1'], 0 ),  'ca' => 0, 'cb' => 0, 'cc' => 0, 'cd' => 0,
+        'ce'  => 0, 'cf' => 0, 'cg' => 0, 'ch' => 0, 'c2' => 0, 'c3' => 0, 'c4' => 0,
+        'c5'  => 0, 'c6' => 0,
+        'c7'  => round( $c['c7'], 0 ),
+        'c8'  => 0,
+        'c9'  => round( $c['c9'], 0 ),
+        'c10' => round( $c['c10'], 0 ),
+        'c11' => round( $c['c11'], 0 ),
+        'c_total' => round( $c['total'], 0 ),
+        'pct_ca'  => 100,
+        /* Le cadre D vient de la comptabilité du déclarant : on ne l'invente
+           pas. Vide, il se voit et se complète à la main. */
+        'd_total' => 0, 'd_salaires' => 0, 'd_achats' => 0,
+        'e_nb_internes' => (int) $e['nb_internes'],
+        'e_h_internes'  => round( $e['heures_internes'], 0 ),
+        'e_nb_externes' => 0,
+        'e_h_externes'  => 0,
+        'f1_salaries'     => (int) $f['salaries'],
+        'f1_apprentis'    => (int) $f['apprentis'],
+        'f1_demandeurs'   => (int) $f['demandeurs'],
+        'f1_particuliers' => (int) $f['particuliers'],
+        'f1_independants' => (int) $f['independants'],
+        'f1_autres'       => (int) $f['autres'],
+        'f1_total_heures' => round( $f['heures'], 0 ),
+        /* La ventilation par spécialité n'est pas tenue sur ces fiches : la
+           case reste vide plutôt que de porter une spécialité supposée. */
+        'f4' => array(),
+        'g_nb_stag' => (int) $g['nb_stagiaires'],
+        'g_heures'  => round( $g['heures'], 0 ),
+      ),
+    );
+
+    $generateur = plugin_dir_path( dirname( dirname( __FILE__ ) ) ) . 'assets/cerfa/cerfa_bpf_generator.php';
+    if ( ! file_exists( $generateur ) ) {
+      $this->redirect_to_portal( 'external_missions', 'Le composeur de Cerfa est introuvable.', 'error' );
+      return;
+    }
+    require_once $generateur;
+
+    $blank_url  = method_exists( $this, 'get_bpf_cerfa_blank_url' ) ? $this->get_bpf_cerfa_blank_url() : '';
+    $blank_path = '';
+    if ( ! empty( $blank_url ) ) {
+      $uploads    = wp_upload_dir();
+      $base_up    = trailingslashit( $uploads['baseurl'] );
+      $base_site  = trailingslashit( site_url() );
+      if ( 0 === strpos( $blank_url, $base_up ) ) {
+        $blank_path = $uploads['basedir'] . '/' . ltrim( substr( $blank_url, strlen( $base_up ) ), '/' );
+      } elseif ( 0 === strpos( $blank_url, $base_site ) ) {
+        $blank_path = ABSPATH . ltrim( substr( $blank_url, strlen( $base_site ) ), '/' );
+      }
+    }
+    if ( '' === $blank_path || ! file_exists( $blank_path ) ) {
+      $this->redirect_to_portal( 'external_missions', 'Le Cerfa vierge est introuvable : déposez-le dans les réglages du BPF.', 'error' );
+      return;
+    }
+
+    $uploads_c = wp_upload_dir();
+    $dir_path  = trailingslashit( $uploads_c['basedir'] ) . 'acdc-bpf/';
+    $dir_url   = trailingslashit( $uploads_c['baseurl'] ) . 'acdc-bpf/';
+    wp_mkdir_p( $dir_path );
+    $sortie = $dir_path . 'cerfa-bpf-prestations-' . sanitize_file_name( $annee ) . '-' . date_i18n( 'Ymd-His' ) . '.pdf';
+
+    $gen = new ACDC_Cerfa_BPF_Generator();
+    $gen->parent_instance = $this;
+    if ( ! $gen->generate( $blank_path, $payload, $sortie ) ) {
+      $this->redirect_to_portal( 'external_missions', 'La composition du Cerfa a échoué.', 'error' );
+      return;
+    }
+
+    wp_safe_redirect( $dir_url . basename( $sortie ) );
+    exit;
+  }
 
   public function handle_save_external_mission() {
     if ( ! current_user_can( 'manage_options' ) ) { wp_die( esc_html( 'Accès refusé.' ) ); }
