@@ -311,7 +311,7 @@ trait ACDC_Sessions_Render_Trait {
                       $is_absent_s = 'absent' === $el_s->status;
                       $is_late_s   = $is_signed_s && (int) $el_s->late_minutes > 0;
                       if ( $is_absent_s ) { $pill_bg_s = '#f8d7da'; $pill_c_s = '#721c24'; $pill_txt_s = 'Absent'; }
-                      elseif ( $is_late_s ) { $pill_bg_s = '#fff3cd'; $pill_c_s = '#856404'; $pill_txt_s = 'Retard ' . $el_s->late_minutes . 'min'; }
+                      elseif ( $is_late_s ) { $pill_bg_s = '#fff3cd'; $pill_c_s = '#856404'; $pill_txt_s = \ACDC\Support\Duree::retard( $el_s->late_minutes ); }
                       elseif ( $is_signed_s ) { $pill_bg_s = '#d4edda'; $pill_c_s = '#155724'; $pill_txt_s = 'Présent'; }
                       else { $pill_bg_s = '#e2e3e5'; $pill_c_s = '#383d41'; $pill_txt_s = 'En attente'; }
                   ?>

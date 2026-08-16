@@ -41,6 +41,40 @@ trait ACDC_Workflow_Engine_Trait {
     $this->acdc_wf_execute_due_steps();
   }
 
+  /**
+   * ACDC 3.25.310 — LE MOTEUR TOURNAIT AU RYTHME DES VISITEURS.
+   *
+   * Il est planté sur un rendez-vous au quart d'heure. Mais le cron de WordPress
+   * n'est pas une horloge : il ne se déclenche QUE lorsque quelqu'un charge une
+   * page du site. Sur un organisme dont le site public reçoit peu de monde, le
+   * quart d'heure devient une demi-journée, et un envoi programmé « dans deux
+   * heures » part le lendemain. C'est un rendez-vous affiché que rien ne tient.
+   *
+   * L'exploitant, lui, est dans l'administration plusieurs fois par jour. Chaque
+   * chargement de page d'admin devient donc une occasion de faire tourner le
+   * moteur — au plus une fois toutes les 30 secondes, pour qu'une navigation
+   * rapide ne relance pas dix fois le même travail.
+   *
+   * LE RENDEZ-VOUS AU QUART D'HEURE EST CONSERVÉ. Ceci ne le remplace pas : il
+   * couvre les nuits et les week-ends, quand personne n'ouvre l'administration.
+   * Les deux chemins appellent la même fonction, donc il n'y a pas deux moteurs.
+   */
+  public function acdc_wf_cron_en_admin() {
+    if ( ! is_admin() || wp_doing_ajax() || wp_doing_cron() ) {
+      return;
+    }
+    if ( ! current_user_can( 'manage_options' ) ) {
+      return;
+    }
+    if ( get_transient( 'acdc_of_wf_dernier_passage' ) ) {
+      return;
+    }
+    /* Le verrou est posé AVANT le travail : si le moteur est lent, deux onglets
+       ouverts en même temps ne le lancent pas deux fois en parallèle. */
+    set_transient( 'acdc_of_wf_dernier_passage', 1, 30 );
+    $this->acdc_wf_cron();
+  }
+
   /* =====================================================================
    * Ouverture des parcours
    * ===================================================================== */

@@ -2090,7 +2090,10 @@ public function handle_save_quiz() {
 
     global $wpdb;
     $contract = $wpdb->get_row( $wpdb->prepare(
-      "SELECT id, trainer_id, contract_pdf_url, signed_document_url FROM {$this->trainer_contract_table} WHERE id = %d",
+      /* ACDC 3.25.310 — « created_at » ajoutée : le nom proposé au
+         téléchargement porte la date de la mission, et une colonne qu'on
+         n'a pas chargée ne peut rien nommer. */
+      "SELECT id, trainer_id, contract_pdf_url, signed_document_url, created_at FROM {$this->trainer_contract_table} WHERE id = %d",
       $contract_id
     ) );
     if ( ! $contract ) {
@@ -2106,7 +2109,22 @@ public function handle_save_quiz() {
     while ( ob_get_level() ) { ob_end_clean(); }
     nocache_headers();
     header( 'Content-Type: application/pdf' );
-    header( 'Content-Disposition: inline; filename="' . basename( $real_path ) . '"' );
+    /* ACDC 3.25.310 — DEUX NOMS POUR LE MÊME OCTET.
+       Le fichier stocké garde son condensat, qui le rend impossible à deviner
+       de l'extérieur : cette protection ne se négocie pas. Mais ce qui arrivait
+       dans le dossier « Téléchargements » de David s'appelait
+       « contrat-formateur-4-5-a3f19c2b8e04d7615caa.pdf ». Le nom PROPOSÉ au
+       téléchargement peut être lisible sans rien affaiblir. */
+    $__tr        = $this->get_trainer( (int) $contract->trainer_id );
+    $__formateur = $__tr ? trim( (string) ( $__tr->first_name ?? '' ) . ' ' . (string) ( $__tr->last_name ?? '' ) ) : '';
+    $__instant     = strtotime( (string) ( $contract->created_at ?? '' ) );
+    $__nom_lisible = \ACDC\Support\NomDocument::composer(
+      'contrat formateur' . ( $signed ? ' signe' : '' ),
+      (string) $__formateur,
+      $__instant ? wp_date( 'd-m-Y', $__instant ) : wp_date( 'd-m-Y' ),
+      'pdf'
+    );
+    header( 'Content-Disposition: inline; filename="' . sanitize_file_name( $__nom_lisible ) . '"' );
     header( 'Content-Length: ' . filesize( $real_path ) );
     readfile( $real_path ); // phpcs:ignore WordPress.WP.AlternativeFunctions.file_system_operations_readfile
     exit;

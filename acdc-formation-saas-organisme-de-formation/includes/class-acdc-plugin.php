@@ -317,6 +317,12 @@ class ACDC_Formation_SAAS_Plugin {
     add_action( 'admin_post_acdc_retry_upgrade', array( $this, 'handle_retry_upgrade' ) );
     /* ACDC 3.25.185 — Workflow : cron d'orchestration et écrans de pilotage. */
     add_action( 'acdc_of_workflow_cron', array( $this, 'acdc_wf_cron' ) );
+    /* ACDC 3.25.310 — Le cron de WordPress ne se déclenche qu'au passage d'un
+       visiteur : sur un site peu fréquenté, le rendez-vous au quart d'heure
+       devient une demi-journée. Chaque page d'administration ouverte donne au
+       moteur une occasion de tourner, au plus une fois toutes les 30 secondes.
+       Le rendez-vous au quart d'heure reste : il couvre les nuits. */
+    add_action( 'admin_init', array( $this, 'acdc_wf_cron_en_admin' ) );
     add_action( 'admin_post_acdc_wf_save_settings', array( $this, 'acdc_wf_handle_save_settings' ) );
     add_action( 'admin_post_acdc_wf_dismiss_task', array( $this, 'acdc_wf_handle_dismiss_task' ) );
     add_action( 'admin_post_acdc_wf_purge_orphan_emargements', array( $this, 'acdc_wf_handle_purge_orphan_emargements' ) );

@@ -1334,24 +1334,76 @@ trait ACDC_Learner_Portal_Core_Trait {
     return null;
   }
 
+  /**
+   * ACDC 3.25.310 — TOUTES LES SÉANCES DU PARCOURS D'UN APPRENANT.
+   *
+   * On part de la séance inscrite sur sa ligne, et on lui adjoint les autres
+   * séances de la MÊME formation : ce sont les journées et demi-journées d'une
+   * même action, fabriquées à partir de la même convention.
+   *
+   * DEUX GARDE-FOUS, parce qu'une formation au catalogue peut être vendue à
+   * plusieurs clients :
+   *   — le commanditaire doit être le même quand les deux séances en portent un ;
+   *   — les séances en brouillon restent invisibles : elles ne sont pas encore
+   *     annoncées à l'apprenant, et le brouillon existe précisément pour ça.
+   *
+   * @param array $item Un élément d'accès (registration, learner, session…).
+   * @return array Objets séance, la séance d'ancrage comprise.
+   */
+  private function learner_portal_seances_du_parcours( $item ) {
+    $ancre = $item['session'];
+    $out   = array( (int) $ancre->id => $ancre );
+    if ( empty( $ancre->formation_id ) ) {
+      return array_values( $out );
+    }
+    global $wpdb;
+    $voisines = (array) $wpdb->get_results( $wpdb->prepare(
+      "SELECT id, formation_id, company_id, start_date, start_at, end_at, end_date, trainer_id
+         FROM {$this->session_table}
+        WHERE formation_id = %d
+          AND ( is_draft IS NULL OR is_draft = 0 )",
+      (int) $ancre->formation_id
+    ) );
+    $commanditaire = isset( $item['registration']->company_id ) ? (int) $item['registration']->company_id : 0;
+    foreach ( $voisines as $s ) {
+      $sc = isset( $s->company_id ) ? (int) $s->company_id : 0;
+      if ( $commanditaire && $sc && $sc !== $commanditaire ) {
+        continue;
+      }
+      $out[ (int) $s->id ] = $s;
+    }
+    return array_values( $out );
+  }
+
   private function learner_portal_get_upcoming_sessions( $email, $limit = 5 ) {
     $items = array();
     foreach ( $this->learner_portal_get_access_items_for_email( $email ) as $item ) {
       if ( empty( $item['session'] ) ) {
         continue;
       }
-      $session = $item['session'];
-      $start_ref = ! empty( $session->start_at ) ? $session->start_at : ( ! empty( $session->start_date ) ? $session->start_date . ' 08:00:00' : '' );
-      $ts = $this->learner_portal_parse_mysql_time( $start_ref );
-      if ( $ts < current_time( 'timestamp' ) - DAY_IN_SECONDS ) {
-        continue;
+      /* ACDC 3.25.310 — « MON PLANNING » N'EN MONTRAIT QU'UNE.
+         Une ligne apprenant ne porte QU'UN identifiant de séance. Or une
+         formation de deux jours produit deux séances, et une convention
+         découpée en demi-journées davantage encore. L'apprenant inscrit à une
+         formation de quatre séances voyait donc « Mon planning » avec une seule
+         ligne — et concluait, raisonnablement, que le reste n'était pas encore
+         programmé.
+         Un planning montre le parcours entier : toutes les séances de la
+         formation à laquelle l'apprenant est inscrit. La séance pointée par sa
+         ligne reste le point d'ancrage, elle n'est plus la seule affichée. */
+      foreach ( $this->learner_portal_seances_du_parcours( $item ) as $session ) {
+        $start_ref = ! empty( $session->start_at ) ? $session->start_at : ( ! empty( $session->start_date ) ? $session->start_date . ' 08:00:00' : '' );
+        $ts = $this->learner_portal_parse_mysql_time( $start_ref );
+        if ( $ts < current_time( 'timestamp' ) - DAY_IN_SECONDS ) {
+          continue;
+        }
+        $items[ (int) $session->id ] = array(
+          'session'    => $session,
+          'formation'  => $item['formation'],
+          'trainer'    => $this->learner_portal_get_trainer_label_for_session( (int) $session->id ),
+          'registration_id' => (int) $item['registration']->id,
+        );
       }
-      $items[ (int) $session->id ] = array(
-        'session'    => $session,
-        'formation'  => $item['formation'],
-        'trainer'    => $item['trainer_label'],
-        'registration_id' => (int) $item['registration']->id,
-      );
     }
 
     usort( $items, function( $a, $b ) {
@@ -1695,30 +1747,36 @@ trait ACDC_Learner_Portal_Core_Trait {
         'url' => ! empty( $registration->convocation_document_url ) ? $this->learner_portal_get_document_download_url( $registration->id, 'convocation' ) : '',
       ) );
 
-      $groups['results']['items'][] = array_merge( $base, array(
-        'label' => 'Résultat du positionnement',
-        'document_type' => 'positioning_result',
-        'doc_index' => 0,
-        'available' => ! empty( $registration->positioning_result_document_url ),
-        'url' => ! empty( $registration->positioning_result_document_url ) ? $this->learner_portal_get_document_download_url( $registration->id, 'positioning_result' ) : '',
-      ) );
-      /* ACDC 3.25.280 — L'apprenant voit son résultat d'évaluation diagnostique
-         au même endroit que les deux autres. Il existait dans le module quiz,
-         mais pas dans l'espace où l'apprenant vient chercher ses pièces. */
-      $groups['results']['items'][] = array_merge( $base, array(
-        'label' => 'Résultat de l’évaluation diagnostique',
-        'document_type' => 'diagnostic_result',
-        'doc_index' => 0,
-        'available' => ! empty( $registration->diagnostic_result_document_url ),
-        'url' => ! empty( $registration->diagnostic_result_document_url ) ? $this->learner_portal_get_document_download_url( $registration->id, 'diagnostic_result' ) : ''
-      ) );
-      $groups['results']['items'][] = array_merge( $base, array(
-        'label' => 'Résultat de l’évaluation des acquis',
-        'document_type' => 'evaluation_result',
-        'doc_index' => 0,
-        'available' => ! empty( $registration->evaluation_result_document_url ),
-        'url' => ! empty( $registration->evaluation_result_document_url ) ? $this->learner_portal_get_document_download_url( $registration->id, 'evaluation_result' ) : '',
-      ) );
+      /* ACDC 3.25.310 — ON NE PROMET QUE CE QUI EST PRÉVU.
+         Ces trois lignes étaient posées sans condition. Une formation sans test
+         de positionnement affichait donc, à son apprenant, « Résultat du
+         positionnement — Bientôt disponible », indéfiniment. « Bientôt » est un
+         engagement : employé pour une pièce qui n'arrivera jamais, il fait
+         croire à un oubli de l'organisme, et l'apprenant finit par le
+         reprocher — ou par écrire pour la réclamer.
+         Une ligne n'apparaît donc que si la pièce EXISTE, ou si l'évaluation
+         correspondante est réellement rattachée au parcours de cet apprenant. */
+      $__prevus = $this->learner_portal_evaluations_prevues( (int) $registration->id );
+      $__resultats = array(
+        array( 'positioning_result', 'positioning', 'Résultat du positionnement', $registration->positioning_result_document_url ?? '' ),
+        /* ACDC 3.25.280 — L'apprenant voit son résultat d'évaluation
+           diagnostique au même endroit que les deux autres. */
+        array( 'diagnostic_result', 'diagnostic', 'Résultat de l’évaluation diagnostique', $registration->diagnostic_result_document_url ?? '' ),
+        array( 'evaluation_result', 'assessment', 'Résultat de l’évaluation des acquis', $registration->evaluation_result_document_url ?? '' ),
+      );
+      foreach ( $__resultats as $__r ) {
+        list( $__type, $__purpose, $__label, $__url ) = $__r;
+        if ( empty( $__url ) && ! in_array( $__purpose, $__prevus, true ) ) {
+          continue;
+        }
+        $groups['results']['items'][] = array_merge( $base, array(
+          'label' => $__label,
+          'document_type' => $__type,
+          'doc_index' => 0,
+          'available' => ! empty( $__url ),
+          'url' => ! empty( $__url ) ? $this->learner_portal_get_document_download_url( $registration->id, $__type ) : '',
+        ) );
+      }
 
       // Résultats de quiz (positionnement, live, évaluation) — générés automatiquement
       if ( ! empty( $registration->id ) ) {
@@ -1972,6 +2030,35 @@ trait ACDC_Learner_Portal_Core_Trait {
    * existe et qu'elle attend une date. Employer le même mot pour les deux
    * laisse l'apprenant croire à un oubli de l'organisme.
    */
+  /**
+   * ACDC 3.25.310 — LES ÉVALUATIONS RÉELLEMENT RATTACHÉES À CET APPRENANT.
+   *
+   * Sert à ne promettre que ce qui est prévu. On lit les quiz auxquels
+   * l'apprenant est effectivement inscrit — pas les réglages généraux de
+   * l'organisme, qui disent ce qui est possible et non ce qui est planifié.
+   *
+   * @return array Intentions de quiz : positioning, diagnostic, assessment, live.
+   */
+  private function learner_portal_evaluations_prevues( $registration_id ) {
+    global $wpdb;
+    $registration_id = (int) $registration_id;
+    if ( ! $registration_id ) {
+      return array();
+    }
+    $tbl_p = $wpdb->prefix . 'acdc_of_qz_participants';
+    $tbl_s = $wpdb->prefix . 'acdc_of_qz_sessions';
+    $tbl_q = $wpdb->prefix . 'acdc_of_qz_quizzes';
+    $lignes = $wpdb->get_col( $wpdb->prepare(
+      "SELECT DISTINCT qq.quiz_purpose
+         FROM {$tbl_p} qp
+         INNER JOIN {$tbl_s} qs ON qs.id = qp.session_id
+         INNER JOIN {$tbl_q} qq ON qq.id = qs.quiz_id
+        WHERE qp.registration_id = %d",
+      $registration_id
+    ) );
+    return array_values( array_filter( array_map( 'strval', (array) $lignes ) ) );
+  }
+
   private function learner_portal_document_status_label( $doc ) {
     if ( ! empty( $doc['available'] ) ) {
       return 'Disponible';
@@ -2016,6 +2103,12 @@ trait ACDC_Learner_Portal_Core_Trait {
             break;
           }
         }
+      }
+      /* ACDC 3.25.310 — Un groupe SANS AUCUNE pièce prévue ne dit plus
+         « Bientôt disponible » : il ne dit rien du tout. Promettre une pièce
+         qui n'est pas au programme, c'est appeler une réclamation. */
+      if ( empty( $groups[ $group_key ]['items'] ) ) {
+        continue;
       }
       $summary[] = $label . ' : ' . ( $available ? 'Disponible' : 'Bientôt disponible' );
     }

@@ -522,9 +522,14 @@ trait ACDC_Trainer_Portal_Quizzes_Render_Trait {
 
         // Tentative 1 : quiz visible si formation animée par le formateur via au moins une session
         $quiz = $wpdb->get_row( $wpdb->prepare(
+            /* ACDC 3.25.310 — Le périmètre du formateur est UNE règle, écrite
+               dans acdc_sql_seance_animee_par() : elle connaît l'attribution
+               directe ET le rattachement par groupe. Recopiée ici sans sa
+               seconde moitié, elle fermait le quiz au formateur d'un groupe. */
             'SELECT q.* FROM ' . $tbl_quizzes . ' q WHERE q.id = %d AND EXISTS '
-            . '(SELECT 1 FROM ' . $tbl_sessions . ' s WHERE s.formation_id = q.formation_id AND s.trainer_id = %d) LIMIT 1',
-            $quiz_id, $trainer_id
+            . '(SELECT 1 FROM ' . $tbl_sessions . ' s WHERE s.formation_id = q.formation_id AND '
+            . $this->acdc_sql_seance_animee_par( 's' ) . ') LIMIT 1',
+            $quiz_id, $trainer_id, $trainer_id
         ) );
 
         // Tentative 2 (fallback) : si trainer_id pas encore propagé sur les sessions, on autorise
@@ -535,8 +540,9 @@ trait ACDC_Trainer_Portal_Quizzes_Render_Trait {
         if ( ! $quiz ) {
             $has_filtered_quizzes = (int) $wpdb->get_var( $wpdb->prepare(
                 'SELECT COUNT(*) FROM ' . $tbl_quizzes . ' q WHERE EXISTS '
-                . '(SELECT 1 FROM ' . $tbl_sessions . ' s WHERE s.formation_id = q.formation_id AND s.trainer_id = %d) LIMIT 1',
-                $trainer_id
+                . '(SELECT 1 FROM ' . $tbl_sessions . ' s WHERE s.formation_id = q.formation_id AND '
+                . $this->acdc_sql_seance_animee_par( 's' ) . ') LIMIT 1',
+                $trainer_id, $trainer_id
             ) );
             if ( 0 === $has_filtered_quizzes ) {
                 // Aucune session animée explicitement → mode fallback : on accepte tout quiz existant.

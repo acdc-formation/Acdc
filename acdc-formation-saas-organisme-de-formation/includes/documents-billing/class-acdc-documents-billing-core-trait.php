@@ -438,7 +438,17 @@ trait ACDC_Documents_Billing_Core_Trait {
         @unlink( $old_path );
       }
     }
-    $filename = 'devis-' . (int) $quote->id . '-' . time() . '.html';
+    /* ACDC 3.25.310 — « devis-12-1755374400.html » : le second nombre était un
+       horodatage Unix, présent pour forcer le navigateur à recharger. Il reste
+       nécessaire — deux versions du même devis doivent avoir deux URL — mais le
+       numéro du devis et le client passent devant, pour que le fichier se
+       reconnaisse dans une liste. */
+    $filename = \ACDC\Support\NomDocument::composer(
+      'devis ' . ( $quote->number ?? '' ),
+      (string) ( $quote->client_company ?: $quote->apprenant_name ),
+      (string) time(),
+      'html'
+    );
     $filepath = $dir . $filename;
     $fileurl  = $url_base . $filename;
     $html     = $this->get_quote_document_html( $row );

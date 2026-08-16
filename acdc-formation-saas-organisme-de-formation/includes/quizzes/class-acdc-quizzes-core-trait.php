@@ -3860,6 +3860,30 @@ trait ACDC_Quizzes_Core_Trait {
      * @param bool   $with_session_filter  Si true, applique le EXISTS sur sessions.trainer_id.
      * @return array
      */
+    /**
+     * ACDC 3.25.310 — « CE FORMATEUR ANIME-T-IL CETTE SÉANCE ? », ÉCRIT UNE FOIS.
+     *
+     * LE DÉFAUT QU'ELLE FERME. Trois requêtes répondaient à cette question. Celle
+     * qui liste les FORMATIONS de l'extranet formateur regardait deux choses :
+     * la séance lui est-elle attribuée, ou fait-il partie d'un de ses groupes.
+     * Les deux qui gouvernent les QUIZ n'en regardaient qu'une — l'attribution
+     * directe. Un formateur rattaché par un groupe voyait donc ses formations, et
+     * aucun de leurs quiz : l'extranet lui affirmait qu'il n'y en avait pas.
+     *
+     * La règle vit désormais ici. L'appelant fournit DEUX FOIS l'identifiant du
+     * formateur, dans cet ordre, car la condition l'interroge deux fois.
+     *
+     * @param string $alias Alias SQL de la table des séances.
+     * @return string Condition SQL, deux marqueurs %d à alimenter.
+     */
+    private function acdc_sql_seance_animee_par( $alias ) {
+        global $wpdb;
+        $g = $wpdb->prefix . 'acdc_of_groups';
+        return '( ' . $alias . '.trainer_id = %d'
+            . ' OR EXISTS ( SELECT 1 FROM ' . $g . ' g'
+            . ' WHERE g.session_id = ' . $alias . '.id AND g.trainer_id = %d ) )';
+    }
+
     private function qz_query_quizzes_for_trainer_internal( $trainer_id, $args, $orderby, $order, $with_session_filter ) {
         global $wpdb;
         $tbl_quizzes  = $this->get_qz_table( 'quizzes' );
@@ -3883,7 +3907,7 @@ trait ACDC_Quizzes_Core_Trait {
                 ? $this->acdc_qz_visibility_window()
                 : array( 'avant' => 1, 'apres' => 2 );
             $where[]  = 'EXISTS (SELECT 1 FROM ' . $tbl_sessions . ' s'
-                . ' WHERE s.formation_id = q.formation_id AND s.trainer_id = %d'
+                . ' WHERE s.formation_id = q.formation_id AND ' . $this->acdc_sql_seance_animee_par( 's' )
                 . "   AND COALESCE(s.status,'') NOT IN ('Annulée','Annulee')"
                 . '   AND DATE(COALESCE(s.start_date, DATE(s.start_at))) <= %s'
                 . '   AND DATE(COALESCE(s.end_date, DATE(s.end_at), s.start_date, DATE(s.start_at))) >= %s )';
@@ -3891,6 +3915,8 @@ trait ACDC_Quizzes_Core_Trait {
                requête ne fait que comparer. Une règle écrite en SQL ne se teste
                pas, et celle-ci est réglable. */
             $bornes   = \ACDC\Support\QuizWindow::bounds( current_time( 'Y-m-d' ), $fenetre['avant'], $fenetre['apres'] );
+            /* Deux fois : la règle interroge la séance ET son groupe. */
+            $params[] = $trainer_id;
             $params[] = $trainer_id;
             $params[] = $bornes['debut_au_plus_tard'];
             $params[] = $bornes['fin_au_plus_tot'];
@@ -3980,7 +4006,7 @@ trait ACDC_Quizzes_Core_Trait {
                 ? $this->acdc_qz_visibility_window()
                 : array( 'avant' => 1, 'apres' => 2 );
             $where[]  = 'EXISTS (SELECT 1 FROM ' . $tbl_sessions . ' s'
-                . ' WHERE s.formation_id = q.formation_id AND s.trainer_id = %d'
+                . ' WHERE s.formation_id = q.formation_id AND ' . $this->acdc_sql_seance_animee_par( 's' )
                 . "   AND COALESCE(s.status,'') NOT IN ('Annulée','Annulee')"
                 . '   AND DATE(COALESCE(s.start_date, DATE(s.start_at))) <= %s'
                 . '   AND DATE(COALESCE(s.end_date, DATE(s.end_at), s.start_date, DATE(s.start_at))) >= %s )';
@@ -3988,6 +4014,8 @@ trait ACDC_Quizzes_Core_Trait {
                requête ne fait que comparer. Une règle écrite en SQL ne se teste
                pas, et celle-ci est réglable. */
             $bornes   = \ACDC\Support\QuizWindow::bounds( current_time( 'Y-m-d' ), $fenetre['avant'], $fenetre['apres'] );
+            /* Deux fois : la règle interroge la séance ET son groupe. */
+            $params[] = $trainer_id;
             $params[] = $trainer_id;
             $params[] = $bornes['debut_au_plus_tard'];
             $params[] = $bornes['fin_au_plus_tot'];

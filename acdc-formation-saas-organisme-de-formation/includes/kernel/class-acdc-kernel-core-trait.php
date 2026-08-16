@@ -6735,15 +6735,24 @@ private function acdc_nom_fichier_sauvegarde( $quand = null ) {
   }  private function get_training_convocation_display_file_name( $registration, $context = array(), $document = array() ) {
     $context = is_array( $context ) ? $context : array();
     $document = is_array( $document ) ? $document : array();
-    if ( ! empty( $document['url'] ) ) {
-      $path = wp_parse_url( (string) $document['url'], PHP_URL_PATH );
-      if ( $path ) {
-        return basename( (string) $path );
-      }
-    }
-    $learner = isset( $context['learner_name'] ) ? (string) $context['learner_name'] : ( ! empty( $registration->learner_label ) ? (string) $registration->learner_label : 'apprenant' );
-    $formation = isset( $context['formation_title'] ) ? (string) $context['formation_title'] : ( ! empty( $registration->formation_title ) ? (string) $registration->formation_title : 'formation' );
-    return sanitize_file_name( 'convocation-' . $learner . '-' . $formation . '.pdf' );
+    /* ACDC 3.25.310 — CETTE FONCTION RENDAIT LE NOM DE STOCKAGE.
+       Elle s'appelle « display file name » et sa toute première action était de
+       rendre le basename de l'URL, c'est-à-dire
+       « convocation-87-9d2e01ba4c73f8e5601a.pdf » — le condensat qui protège le
+       fichier sur le disque. Le nom lisible juste en dessous n'était donc jamais
+       atteint : il ne servait qu'au cas, impossible, où le PDF n'existerait pas
+       encore. Un an de code mort sous un nom qui promettait le contraire.
+       Le nom de stockage reste ce qu'il est — c'est une protection. Ce que
+       l'exploitant reçoit dans son dossier de téléchargements est lisible. */
+    $learner = isset( $context['learner_name'] ) ? (string) $context['learner_name'] : ( ! empty( $registration->learner_label ) ? (string) $registration->learner_label : '' );
+    $formation = isset( $context['formation_title'] ) ? (string) $context['formation_title'] : ( ! empty( $registration->formation_title ) ? (string) $registration->formation_title : '' );
+    $instant = ! empty( $registration->start_date ) ? strtotime( (string) $registration->start_date ) : false;
+    return sanitize_file_name( \ACDC\Support\NomDocument::composer(
+      'convocation ' . $formation,
+      $learner,
+      $instant ? wp_date( 'd-m-Y', $instant ) : '',
+      'pdf'
+    ) );
   }  private function get_training_convocation_download_url( $registration, $mode = 'attachment' ) {
     if ( ! $registration || empty( $registration->id ) ) {
       return '';

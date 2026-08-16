@@ -89,11 +89,10 @@ class ACDC_Sig_PDF {
         $instant = ! empty( $request->signed_at ) ? strtotime( (string) $request->signed_at ) : false;
         $date    = $instant ? wp_date( 'd-m-Y', $instant ) : wp_date( 'd-m-Y' );
 
-        $morceaux = array_filter( array( 'certificat', $nature, $entite, $date ) );
-        $base     = sanitize_file_name( sanitize_title( implode( '-', $morceaux ) ) );
-        if ( '' === $base ) {
-            $base = 'certificat-' . (int) $request->id;
-        }
+        /* La règle est commune à toutes les pièces téléchargeables du plugin :
+           elle vit dans ACDC\Support\NomDocument, pas ici. */
+        $nom  = \ACDC\Support\NomDocument::composer( 'certificat ' . $nature, $entite, $date, 'pdf' );
+        $base = substr( $nom, 0, -4 );
 
         if ( file_exists( $sig_dir . $base . '.pdf' ) ) {
             $base .= '-' . (int) $request->id;

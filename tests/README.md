@@ -72,6 +72,8 @@ lancent sans WordPress, en quelques secondes.
     php tests/test-demi-journees.php # la pause déjeuner n'est jamais comptée comme du temps de formation
     php tests/test-tva-regime.php # les régimes de TVA, leurs mentions, et le passé qui ne se réécrit pas
     php tests/scan-tva-branchee.php # un seul réglage de TVA, figé sur le document, jamais écrit en dur
+    php tests/test-nom-document.php # noms de fichiers lisibles, durées lisibles
+    php tests/scan-recette-ecrans.php # les cinq défauts d'écran de la recette de bout en bout
 
 Le dernier balaie tout le plugin et signale les fonctions qui utilisent `$wpdb`
 sans l'avoir importé — la faute qui a produit l'erreur fatale de la 3.25.236.

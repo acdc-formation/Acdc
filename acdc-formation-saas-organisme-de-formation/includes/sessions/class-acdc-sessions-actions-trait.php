@@ -110,8 +110,17 @@ trait ACDC_Sessions_Actions_Trait {
       'session_format' => $this->acdc_session_preserved_field( 'session_format', $acdc_existing_session, '' ),
       'start_at'   => $acdc_start_at,
       'end_at'    => $acdc_end_at,
-      'start_date'  => isset( $_POST['start_date'] ) ? sanitize_text_field( wp_unslash( $_POST['start_date'] ) ) : null,
-      'end_date'   => isset( $_POST['end_date'] ) ? sanitize_text_field( wp_unslash( $_POST['end_date'] ) ) : null,
+      /* ACDC 3.25.310 — LA RÈGLE ÉNONCÉE JUSTE AU-DESSUS ÉTAIT ENFREINTE ICI.
+         Le formulaire de séance porte « Date de début ». Il ne porte PAS « Date
+         de fin » : « end_date » était donc réécrite à NULL à chaque
+         enregistrement, y compris sur une séance qui en avait une. Une séance
+         de trois jours, rouverte et enregistrée sans rien changer, perdait sa
+         date de fin — et disparaissait des vues qui bornent sur elle.
+         Ces deux colonnes se déduisent de start_at / end_at, qui sont, eux,
+         toujours transmis. On ne les efface plus jamais : à défaut de saisie, on
+         les recalcule ; à défaut de tout, on garde ce qui était en base. */
+      'start_date'  => $this->acdc_session_date_du_jour( $_POST['start_date'] ?? null, $acdc_start_at, $acdc_existing_session, 'start_date' ),
+      'end_date'   => $this->acdc_session_date_du_jour( $_POST['end_date'] ?? null, $acdc_end_at, $acdc_existing_session, 'end_date' ),
       'location'   => isset( $_POST['location'] ) ? sanitize_text_field( wp_unslash( $_POST['location'] ) ) : '',
       'remote_link' => isset( $_POST['remote_link'] ) ? esc_url_raw( wp_unslash( $_POST['remote_link'] ) ) : '',
       'status'    => $acdc_reste_brouillon
@@ -189,6 +198,33 @@ trait ACDC_Sessions_Actions_Trait {
    * Ne remplace la valeur en base que si la requête la transmet. À la création,
    * faute de valeur existante, on retombe sur le défaut.
    */
+  /**
+   * ACDC 3.25.310 — LA DATE D'UN JOUR DE SÉANCE, DANS CET ORDRE DE PRÉFÉRENCE.
+   *
+   * 1. ce que le formulaire transmet, s'il transmet quelque chose ;
+   * 2. sinon la journée de l'horaire correspondant, qui est toujours transmis ;
+   * 3. sinon ce que la séance portait déjà.
+   *
+   * On ne rend jamais NULL quand une valeur existe quelque part : c'est
+   * exactement ce qui effaçait la date de fin d'une séance de plusieurs jours à
+   * chaque enregistrement.
+   *
+   * @param mixed       $poste    Valeur du formulaire, ou null s'il n'a pas ce champ.
+   * @param string      $horaire  « AAAA-MM-JJ HH:MM:SS » correspondant.
+   * @param object|null $existant La séance telle qu'elle est en base.
+   * @param string      $colonne  Nom de la colonne, pour le repli.
+   */
+  private function acdc_session_date_du_jour( $poste, $horaire, $existant, $colonne ) {
+    if ( null !== $poste && '' !== trim( (string) $poste ) ) {
+      return sanitize_text_field( wp_unslash( $poste ) );
+    }
+    $ts = $horaire ? strtotime( (string) $horaire ) : false;
+    if ( $ts ) {
+      return gmdate( 'Y-m-d', $ts );
+    }
+    return ( $existant && ! empty( $existant->$colonne ) ) ? (string) $existant->$colonne : null;
+  }
+
   private function acdc_session_preserved_field( $key, $existing, $default = '' ) {
     if ( isset( $_POST[ $key ] ) ) {
       return sanitize_text_field( wp_unslash( $_POST[ $key ] ) );

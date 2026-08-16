@@ -2235,7 +2235,13 @@ trait ACDC_Kernel_Render_Trait {
               <tr><th>Intitulé</th><td><?php echo esc_html( $registration->title ); ?></td></tr>
               <tr><th>Inscription</th><td><?php echo esc_html( $subject ); ?></td></tr>
               <tr><th>Formation</th><td><?php echo esc_html( $registration->formation_title ? $registration->formation_title : '—' ); ?></td></tr>
-              <tr><th>Entreprise</th><td><?php echo esc_html( $registration->company_label ? $registration->company_label : '—' ); ?></td></tr>
+              <?php
+              /* ACDC 3.25.310 — « Entreprise » supposait que tout commanditaire
+                 en est une. Un particulier qui finance sa propre formation
+                 voyait « Entreprise : — », comme s'il manquait une donnée : le
+                 dossier semblait incomplet alors qu'il ne l'était pas. */
+              ?>
+              <tr><th>Commanditaire</th><td><?php echo esc_html( $registration->company_label ? $registration->company_label : ( $subject ? $subject : '—' ) ); ?></td></tr>
               <tr><th>Type</th><td><?php echo esc_html( 'Oui' === $registration->belongs_to_group ? 'Groupe' : 'Individuel' ); ?></td></tr>
               <tr><th>Statut</th><td><?php echo esc_html( $this->get_training_file_status_label( $registration ) ); ?></td></tr>
               <?php
@@ -3601,7 +3607,7 @@ trait ACDC_Kernel_Render_Trait {
                 <?php if ( 'apprenants' !== $trf_view ) : ?><th>Intitulé</th><?php endif; ?>
                 <th><?php echo 'apprenants' === $trf_view ? 'Nom et prénom' : 'Inscription'; ?></th>
                 <th>Formation</th>
-                <th>Entreprise</th>
+                <th>Commanditaire</th>
                 <th>Statut</th>
                 <th>Modifié le</th>
                 <th>Actions</th>
@@ -3614,7 +3620,8 @@ trait ACDC_Kernel_Render_Trait {
                   <?php if ( 'apprenants' !== $trf_view ) : ?><td><?php echo esc_html( $entry->title ); ?></td><?php endif; ?>
                   <td><?php echo esc_html( $row['subject'] ); ?></td>
                   <td><?php echo esc_html( $this->acdc_formation_cell( $entry ) ); ?></td>
-                  <td><?php echo esc_html( $entry->company_label ? $entry->company_label : '—' ); ?></td>
+                  <?php /* ACDC 3.25.310 — Le commanditaire, entreprise OU personne. */ ?>
+                  <td><?php echo esc_html( $entry->company_label ? $entry->company_label : ( ! empty( $entry->learner_label ) ? $entry->learner_label : '—' ) ); ?></td>
                   <td><span class="acdc-status-badge"><?php echo esc_html( $row['status_label'] ); ?></span></td>
                   <td><?php echo esc_html( mysql2date( 'j F Y à H\hi', $entry->updated_at ) ); ?></td>
                   <td class="acdc-actions-cell-icons">
@@ -6187,9 +6194,21 @@ trait ACDC_Kernel_Render_Trait {
                     ?></div><?php
 
                   elseif ( 'consentement' === $t ) :
+                    /* ACDC 3.25.310 — LE CONSENTEMENT ÉTAIT ÉCRIT DEUX FOIS.
+                       Le libellé de la question s'affiche quelques lignes plus
+                       haut — « … et personnaliser mon parcours » — puis une
+                       SECONDE phrase, écrite en dur ici, s'affichait à côté de
+                       la case : « … et adapter la proposition pédagogique ».
+                       Deux formulations différentes du même engagement, l'une
+                       sous l'autre. Sur un consentement RGPD, c'est plus qu'une
+                       maladresse : la personne ne sait pas laquelle des deux
+                       elle accepte en cochant, et l'exploitant qui corrige le
+                       texte dans le catalogue voit l'autre lui survivre.
+                       La case porte désormais le libellé de la question — celui
+                       que l'exploitant peut modifier, et le seul qui existe. */
                     ?><div class="nad-consent">
-                      <input type="checkbox" name="<?php echo $nm; ?>" value="1"<?php echo $value ? ' checked' : ''; ?><?php echo $req; ?>>
-                      <span class="nad-consent-text">J'accepte que mes réponses soient utilisées pour analyser mon besoin de formation et adapter la proposition pédagogique.</span>
+                      <input type="checkbox" id="<?php echo esc_attr( 'nad-consent-' . $q->code ); ?>" name="<?php echo $nm; ?>" value="1"<?php echo $value ? ' checked' : ''; ?><?php echo $req; ?>>
+                      <label class="nad-consent-text" for="<?php echo esc_attr( 'nad-consent-' . $q->code ); ?>">J’accepte</label>
                     </div><?php
 
                   else :
@@ -6491,7 +6510,7 @@ trait ACDC_Kernel_Render_Trait {
           <thead>
             <tr>
               <th>Date</th>
-              <th>Entreprise</th>
+              <th>Commanditaire</th>
               <th>Contact</th>
               <th>Thématique</th>
               <th>Interlocuteur ACDC</th>
@@ -10744,7 +10763,7 @@ trait ACDC_Kernel_Render_Trait {
               $is_absent = 'absent' === $el->status;
               $is_late   = $is_signed && (int) $el->late_minutes > 0;
               if ( $is_absent ) { $pill_bg = '#f8d7da'; $pill_c = '#721c24'; $pill_txt = 'Absent'; }
-              elseif ( $is_late ) { $pill_bg = '#fff3cd'; $pill_c = '#856404'; $pill_txt = 'Retard ' . $el->late_minutes . 'min'; }
+              elseif ( $is_late ) { $pill_bg = '#fff3cd'; $pill_c = '#856404'; $pill_txt = \ACDC\Support\Duree::retard( $el->late_minutes ); }
               elseif ( $is_signed ) { $pill_bg = '#d4edda'; $pill_c = '#155724'; $pill_txt = 'Présent'; }
               else { $pill_bg = '#e2e3e5'; $pill_c = '#383d41'; $pill_txt = 'En attente'; }
           ?>
@@ -10776,7 +10795,7 @@ trait ACDC_Kernel_Render_Trait {
                   $is_absent2 = 'absent' === $el2->status;
                   $is_late2   = $is_signed2 && (int) $el2->late_minutes > 0;
                   if ( $is_absent2 ) { $pill_bg2 = '#f8d7da'; $pill_c2 = '#721c24'; $pill_txt2 = 'Absent'; }
-                  elseif ( $is_late2 ) { $pill_bg2 = '#fff3cd'; $pill_c2 = '#856404'; $pill_txt2 = 'Retard ' . $el2->late_minutes . 'min'; }
+                  elseif ( $is_late2 ) { $pill_bg2 = '#fff3cd'; $pill_c2 = '#856404'; $pill_txt2 = \ACDC\Support\Duree::retard( $el2->late_minutes ); }
                   elseif ( $is_signed2 ) { $pill_bg2 = '#d4edda'; $pill_c2 = '#155724'; $pill_txt2 = 'Présent'; }
                   else { $pill_bg2 = '#e2e3e5'; $pill_c2 = '#383d41'; $pill_txt2 = 'En attente'; }
               ?>

@@ -454,7 +454,7 @@ function initCanvas(canvasId) {
         }
         if ( isset( $_GET['signed'] ) ) {
             $late = (int) ( $_GET['late'] ?? 0 );
-            $msg  = $late > 0 ? "✅ Signature enregistrée — Retard : {$late} minutes." : '✅ Signature enregistrée avec succès.';
+            $msg  = $late > 0 ? '✅ Signature enregistrée — ' . \ACDC\Support\Duree::retard( $late ) . '.' : '✅ Signature enregistrée avec succès.';
             echo '<div class="emarg-alert emarg-alert-success">' . esc_html( $msg ) . '</div>';
         }
         ?>
@@ -487,7 +487,7 @@ function initCanvas(canvasId) {
                     $is_signed = 'signe' === $lr->status;
                     $is_absent = 'absent' === $lr->status;
                     $is_late   = $is_signed && (int) $lr->late_minutes > 0;
-                    if ( $is_late ) { $status_class = 'status-late'; $status_label = 'Retard ' . $lr->late_minutes . ' min'; }
+                    if ( $is_late ) { $status_class = 'status-late'; $status_label = \ACDC\Support\Duree::retard( $lr->late_minutes ); }
                     elseif ( $is_signed ) { $status_class = 'status-signed'; $status_label = 'Présent'; }
                     elseif ( $is_absent ) { $status_class = 'status-absent'; $status_label = 'Absent'; }
                     else { $status_class = 'status-pending'; $status_label = 'En attente'; }
