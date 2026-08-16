@@ -279,11 +279,37 @@ trait ACDC_Settings_Catalog_Render_Trait {
             <?php $this->render_company_profile_field( 'bank_iban', 'IBAN', isset( $profile['bank_iban'] ) ? $profile['bank_iban'] : '' ); ?>
             <?php $this->render_company_profile_field( 'bank_bic', 'BIC', isset( $profile['bank_bic'] ) ? $profile['bank_bic'] : '' ); ?>
             <div class="acdc-span-2">
-              <p><label style="font-weight:600;">Régime de TVA</label>
-              <select name="company_profile[vat_rate_default]">
-                <option value="0" <?php selected( isset( $profile['vat_rate_default'] ) ? (string) $profile['vat_rate_default'] : '0', '0' ); ?>>0 % — Exonéré (article 293 B du CGI — net de TVA)</option>
-                <option value="20" <?php selected( isset( $profile['vat_rate_default'] ) ? (string) $profile['vat_rate_default'] : '0', '20' ); ?>>20 % — Assujetti (affichage HT et TTC)</option>
+              <?php
+              /* ACDC 3.25.308 — L'ANCIENNE LISTE ÉCRIVAIT LA MAUVAISE MENTION.
+                 Elle proposait « 0 % — Exonéré (article 293 B du CGI) ». Or le
+                 293 B est la FRANCHISE EN BASE, qui dépend du chiffre
+                 d'affaires. Un organisme de formation qui obtient une
+                 exonération l'obtient au titre de son ACTIVITÉ — article
+                 261-4-4°a — et doit porter CETTE mention. Les deux ne se
+                 remplacent pas : une facture portant la mauvaise référence
+                 légale est une facture fausse.
+                 Et ce réglage n'était lu nulle part : le taux des documents
+                 venait de « 20 » écrit en dur. */
+              $__regimes = \ACDC\Support\VatRegime::options();
+              $__actuel  = isset( $profile['vat_regime'] ) && \ACDC\Support\VatRegime::existe( $profile['vat_regime'] )
+                ? (string) $profile['vat_regime']
+                : \ACDC\Support\VatRegime::DEFAUT;
+              ?>
+              <p><label style="font-weight:600;" for="acdc_vat_regime">Régime de TVA</label>
+              <select id="acdc_vat_regime" name="company_profile[vat_regime]">
+                <?php foreach ( $__regimes as $__cle => $__libelle ) : ?>
+                  <option value="<?php echo esc_attr( $__cle ); ?>" <?php selected( $__actuel, $__cle ); ?>><?php echo esc_html( $__libelle ); ?></option>
+                <?php endforeach; ?>
               </select></p>
+              <?php $__mention = \ACDC\Support\VatRegime::mention( $__actuel ); ?>
+              <p class="acdc-help">
+                <?php if ( '' !== $__mention ) : ?>
+                  Mention portée sur vos documents : <strong><?php echo esc_html( $__mention ); ?></strong>
+                <?php else : ?>
+                  Aucune mention légale particulière : le taux figure sur le document.
+                <?php endif; ?>
+                <br>Ce régime s’applique aux documents <strong>à venir</strong>. Les devis, conventions et factures déjà émis gardent le régime sous lequel ils ont été établis — un document réimprimé doit dire ce qu’il disait à son destinataire.
+              </p>
             </div>
           </div>
           <div class="acdc-form-actions">

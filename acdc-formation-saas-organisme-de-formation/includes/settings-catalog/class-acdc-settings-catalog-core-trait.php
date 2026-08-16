@@ -100,7 +100,15 @@ trait ACDC_Settings_Catalog_Core_Trait {
       'bank_domiciliation' => '',
       'bank_iban'         => '',
       'bank_bic'          => '',
+      /* ACDC 3.25.308 — « vat_rate_default » disait 0 pendant que « vat_rate »
+         disait 20.00%, et aucun des deux n'était lu : le taux des documents
+         venait d'une valeur écrite en dur. Deux réglages qui se contredisaient
+         sans commander quoi que ce soit.
+         Le régime est désormais UN seul réglage, nommé, et porteur de sa mention
+         légale. L'ancien reste ici le temps que les profils existants soient
+         relus : il n'est plus proposé à l'écran et ne sert plus à rien. */
       'vat_rate_default'  => '0',
+      'vat_regime'        => \ACDC\Support\VatRegime::DEFAUT,
     );
   }
 
