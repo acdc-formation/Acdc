@@ -15680,7 +15680,20 @@ private function render_admin_gdrive_panel() {
     echo '<p class="description">Enregistrez d’abord l’identifiant et le secret client pour pouvoir connecter le Drive.</p>';
   }
 
-  echo '<p class="description">Rendez-vous automatiques : 12h00 et 18h00. Les tâches de WordPress se déclenchent à la première visite qui suit l’heure prévue — pour un départ à l’heure exacte, demandez à votre hébergeur une tâche planifiée appelant <code>wp-cron.php</code>.</p>';
+  /* ACDC 3.25.296 — CET ÉCRAN AFFIRMAIT « 12h00 et 18h00 » SANS RIEN LIRE.
+     Il l'aurait écrit même si les rendez-vous avaient été posés à 14h00 — et
+     ils l'étaient. On affiche désormais l'heure que WordPress a réellement
+     retenue : si elle ne correspond pas à l'annonce, elle le montrera
+     elle-même, au lieu de laisser croire. */
+  $rdv_lignes = array();
+  foreach ( $this->acdc_gdrive_heures_rdv() as $rdv => $heure ) {
+    $quand = wp_next_scheduled( $rdv );
+    $rdv_lignes[] = $quand
+      ? sprintf( '%02dh00 (prochain : %s)', (int) $heure, wp_date( 'd/m/Y à H\hi', (int) $quand ) )
+      : sprintf( '%02dh00 — <strong>non programmé</strong>', (int) $heure );
+  }
+  echo '<p class="description">Rendez-vous automatiques, tels que WordPress les a enregistrés : ' . implode( ' — ', $rdv_lignes ) . '.<br>';
+  echo 'Les tâches de WordPress se déclenchent à la première visite qui suit l’heure prévue — pour un départ à l’heure exacte, demandez à votre hébergeur une tâche planifiée appelant <code>wp-cron.php</code>.</p>';
   echo '</div>';
 }
 

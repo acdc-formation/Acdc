@@ -329,6 +329,10 @@ class ACDC_Formation_SAAS_Plugin {
     add_action( 'acdc_of_gdrive_backup_soir', array( $this, 'cron_gdrive_backup' ) );
     add_action( 'admin_init', array( $this, 'acdc_gdrive_maybe_handle_callback' ) );
     add_action( 'admin_init', array( $this, 'acdc_gdrive_veiller_en_admin' ) );
+    /* register_cron_events() est accroché à « wp », qui ne se déclenche pas dans
+       l'administration : sans ce second appel, un rendez-vous mal posé attendrait
+       la prochaine visite du site public pour être redressé. */
+    add_action( 'admin_init', array( $this, 'acdc_gdrive_planifier' ) );
     add_action( 'admin_post_acdc_save_gdrive', array( $this, 'handle_save_gdrive' ) );
     add_action( 'admin_post_acdc_gdrive_test', array( $this, 'handle_gdrive_test' ) );
     add_action( 'wp_ajax_acdc_save_global_column_width', array( $this, 'ajax_save_global_column_width' ) );

@@ -7193,15 +7193,7 @@ public function handle_purge_plugin_data() {
        mais à la première visite qui suit. Sur un site peu fréquenté, la
        sauvegarde de midi peut donc partir à 12h40. Pour qu'elle parte à l'heure,
        il faut une tâche planifiée côté hébergeur qui appelle wp-cron.php. */
-    foreach ( array( 'acdc_of_gdrive_backup_midi' => '12:00', 'acdc_of_gdrive_backup_soir' => '18:00' ) as $rdv => $heure ) {
-      if ( ! wp_next_scheduled( $rdv ) ) {
-        $prochain = strtotime( 'today ' . $heure );
-        if ( ! $prochain || $prochain <= time() ) {
-          $prochain = strtotime( 'tomorrow ' . $heure );
-        }
-        wp_schedule_event( $prochain ?: time(), 'daily', $rdv );
-      }
-    }
+    $this->acdc_gdrive_planifier();
     /* Cron rapport de rétention RGPD (1×/jour, lecture seule — ne supprime rien). */
     if ( ! wp_next_scheduled( 'acdc_of_retention_scan_cron' ) ) {
       $retention_time = strtotime( 'tomorrow 3:30am' );

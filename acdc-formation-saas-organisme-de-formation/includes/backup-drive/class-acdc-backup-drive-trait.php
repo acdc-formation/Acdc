@@ -488,6 +488,61 @@ trait ACDC_Backup_Drive_Trait {
 		$this->acdc_gdrive_veiller();
 	}
 
+	/* ── LES RENDEZ-VOUS ───────────────────────────────────────────────── */
+
+	/** Les deux heures annoncées, telles que l'exploitant les lit. */
+	public function acdc_gdrive_heures_rdv() {
+		return array( 'acdc_of_gdrive_backup_midi' => 12, 'acdc_of_gdrive_backup_soir' => 18 );
+	}
+
+	/**
+	 * Poser — et redresser — les rendez-vous de 12h00 et 18h00.
+	 *
+	 * ACDC 3.25.296 — ILS N'ÉTAIENT PAS À L'HEURE DITE.
+	 *
+	 * La 3.25.294 les calculait avec strtotime('today 12:00'). WordPress règle le
+	 * fuseau de PHP sur UTC au démarrage : cette expression donnait donc midi
+	 * UTC, c'est-à-dire QUATORZE HEURES à Paris l'été. L'écran annonçait 12h00 et
+	 * 18h00, les sauvegardes seraient parties à 14h00 et 20h00, et rien n'aurait
+	 * signalé l'écart — l'archive serait bien arrivée, deux heures plus tard,
+	 * tous les jours. C'est la troisième forme prise aujourd'hui par le même
+	 * défaut : une heure écrite dans un fuseau, relue dans un autre.
+	 *
+	 * wp_timezone() est l'horloge de l'exploitant. On calcule dedans, et on ne
+	 * rend à WordPress qu'un instant vrai — ce qu'il attend.
+	 *
+	 * ET ON REDRESSE L'EXISTANT. Un simple « s'il n'est pas déjà posé » aurait
+	 * laissé en place, sur les installations de la 3.25.294, un rendez-vous à
+	 * 14h00 que personne n'aurait jamais vu bouger. On compare donc l'heure
+	 * réelle du prochain déclenchement à l'heure voulue, et on la corrige.
+	 */
+	public function acdc_gdrive_planifier() {
+		foreach ( $this->acdc_gdrive_heures_rdv() as $rdv => $heure ) {
+			$actuel = wp_next_scheduled( $rdv );
+			if ( $actuel && (int) wp_date( 'G', (int) $actuel ) !== (int) $heure ) {
+				wp_unschedule_event( (int) $actuel, $rdv );
+				$actuel = false;
+			}
+			if ( ! $actuel ) {
+				wp_schedule_event( $this->acdc_gdrive_prochain_passage( $heure ), 'daily', $rdv );
+			}
+		}
+	}
+
+	/** Le prochain passage à cette heure-là, dans le fuseau du site. */
+	private function acdc_gdrive_prochain_passage( $heure ) {
+		try {
+			$zone  = wp_timezone();
+			$cible = ( new DateTimeImmutable( 'now', $zone ) )->setTime( (int) $heure, 0, 0 );
+			if ( $cible->getTimestamp() <= time() ) {
+				$cible = $cible->modify( '+1 day' );
+			}
+			return $cible->getTimestamp();
+		} catch ( \Exception $e ) {
+			return time() + HOUR_IN_SECONDS;
+		}
+	}
+
 	/* ── LA VEILLE ─────────────────────────────────────────────────────── */
 
 	/**

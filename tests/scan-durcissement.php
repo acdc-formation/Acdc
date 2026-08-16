@@ -476,7 +476,36 @@ if ( is_readable( $drive ) ) {
     }
 }
 
-/* ── 11. L'EXCEPTION AU MODE RECETTE RESTE UNE IMPASSE ──────────────────── */
+/* ── 11. LES RENDEZ-VOUS SONT À L'HEURE, ET L'ÉCRAN LES LIT ─────────────── */
+
+/* strtotime('today 12:00') donne midi UTC — WordPress règle le fuseau de PHP sur
+   UTC au démarrage —, c'est-à-dire quatorze heures à Paris l'été. L'écran
+   annonçait 12h00 et 18h00 ; les sauvegardes seraient parties à 14h00 et 20h00,
+   tous les jours, sans que rien ne signale l'écart : l'archive arrivait bien.
+   Et l'écran l'aurait écrit même si les rendez-vous avaient été posés à
+   n'importe quelle heure — il ne lisait rien. */
+if ( is_readable( $drive ) ) {
+    $src_drive = (string) file_get_contents( $drive );
+    if ( false === strpos( $src_drive, 'function acdc_gdrive_planifier' ) ) {
+        $hits[] = 'la pose des rendez-vous de sauvegarde a disparu : plus rien ne garantit qu’ils existent, ni à quelle heure.';
+    } else {
+        $pose = $corps( $src_drive, 'acdc_gdrive_prochain_passage' );
+        if ( false === strpos( $pose, 'wp_timezone()' ) ) {
+            $hits[] = 'l’heure des rendez-vous n’est plus calculée dans le fuseau du site : « 12h00 » redeviendrait midi UTC, soit 14h00 à Paris l’été, et l’archive arriverait quand même — deux heures trop tard, tous les jours.';
+        }
+        $planif = $corps( $src_drive, 'acdc_gdrive_planifier' );
+        if ( false === strpos( $planif, "wp_unschedule_event" ) ) {
+            $hits[] = 'un rendez-vous déjà posé à la mauvaise heure n’est plus redressé : les installations existantes garderaient indéfiniment l’horaire fautif.';
+        }
+    }
+}
+if ( '' !== $rendu ) {
+    if ( false === strpos( $rendu, 'wp_next_scheduled( $rdv )' ) ) {
+        $hits[] = 'l’écran n’interroge plus WordPress sur l’heure réelle des rendez-vous : il réaffirmerait « 12h00 et 18h00 » sans avoir rien lu, quelle que soit l’heure réellement enregistrée.';
+    }
+}
+
+/* ── 12. L'EXCEPTION AU MODE RECETTE RESTE UNE IMPASSE ──────────────────── */
 
 /* L'alerte de sauvegarde doit percer le mode recette — la faire retenir
    reviendrait à taire l'avertissement qui prévient qu'on ne s'avertit plus.
