@@ -108,6 +108,15 @@ trait ACDC_Learner_Portal_Core_Trait {
   }
 
   private function learner_portal_log_event( $account_id, $event_type, $event_data = array(), $learner_id = 0 ) {
+    /* ACDC 3.25.299 — LE PONT VERS LE JOURNAL QUE L'EXPLOITANT PEUT OUVRIR.
+       Sept journaux coexistaient dans ce plugin ; l'écran « Journal des actions »
+       n'en montrait qu'un. La traçabilité existait donc en morceaux, et l'écran
+       qui prétendait la donner en montrait un septième — sans le dire. Chaque
+       journal garde son usage propre ; il verse en plus au journal commun. */
+    if ( method_exists( $this, 'log_action_event' ) ) {
+      $this->log_action_event( 'portail_apprenant_' . (string) $event_type, 'learner_portal', (int) $learner_id ?: (int) $account_id, 'success', (array) $event_data );
+    }
+
     global $wpdb;
 
     if ( empty( $this->learner_portal_log_table ) ) {

@@ -733,6 +733,15 @@ ACDC-Formation",
 
 
   private function add_marketing_log( $message, $type = 'info', $context = array() ) {
+    /* ACDC 3.25.299 — LE PONT VERS LE JOURNAL QUE L'EXPLOITANT PEUT OUVRIR.
+       Sept journaux coexistaient dans ce plugin ; l'écran « Journal des actions »
+       n'en montrait qu'un. La traçabilité existait donc en morceaux, et l'écran
+       qui prétendait la donner en montrait un septième — sans le dire. Chaque
+       journal garde son usage propre ; il verse en plus au journal commun. */
+    if ( method_exists( $this, 'log_action_event' ) ) {
+      $this->log_action_event( 'marketing', 'marketing', 0, ( 'error' === $type ? 'error' : 'success' ), array( 'message' => $message, 'contexte' => $context ) );
+    }
+
     $logs = $this->get_marketing_store( 'logs', array() );
     array_unshift( $logs, array(
       'id' => uniqid( 'log_', true ),

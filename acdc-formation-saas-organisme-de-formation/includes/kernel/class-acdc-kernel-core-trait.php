@@ -4341,6 +4341,19 @@ dbDelta( $sql_companies );
    * savoir d'où venait l'action, une règle de conservation, et un écran pour la
    * relire. Les trois sont arrivées avec cette version ; l'option, elle, s'en va.
    */
+  /**
+   * ACDC 3.25.299 — LA PORTE PUBLIQUE DU JOURNAL.
+   *
+   * log_action_event() est privée. Les modules signature et émargement sont des
+   * CLASSES AUTONOMES : ils ne composent pas le plugin et ne peuvent donc pas
+   * l'appeler. Faute de porte, leurs suppressions et leurs envois ne laissaient
+   * aucune trace — exactement le trou qu'avait déjà creusé l'absence de porte
+   * commune pour les e-mails, et pour la même raison.
+   */
+  public function acdc_journaliser( $action, $object_type, $object_id = 0, $result = 'success', $extra = array() ) {
+    $this->log_action_event( $action, $object_type, $object_id, $result, $extra );
+  }
+
   private function log_action_event( $action, $object_type, $object_id = 0, $result = 'success', $extra = array() ) {
     $entry = array(
       'timestamp'   => current_time( 'mysql' ),

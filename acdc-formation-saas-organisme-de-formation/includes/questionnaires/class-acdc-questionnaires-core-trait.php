@@ -6950,6 +6950,15 @@ private function maybe_auto_create_questionnaire_actions_from_response( $session
   }
 
   private function append_quality_audit_log_event( $scope, $event, $detail, $status = 'Enregistré' ) {
+    /* ACDC 3.25.299 — LE PONT VERS LE JOURNAL QUE L'EXPLOITANT PEUT OUVRIR.
+       Sept journaux coexistaient dans ce plugin ; l'écran « Journal des actions »
+       n'en montrait qu'un. La traçabilité existait donc en morceaux, et l'écran
+       qui prétendait la donner en montrait un septième — sans le dire. Chaque
+       journal garde son usage propre ; il verse en plus au journal commun. */
+    if ( method_exists( $this, 'log_action_event' ) ) {
+      $this->log_action_event( 'qualite_' . sanitize_key( (string) $scope ), 'quality', 0, 'success', array( 'evenement' => $event, 'detail' => $detail, 'etat' => $status ) );
+    }
+
     $rows = $this->get_quality_audit_log_records();
     array_unshift( $rows, array(
       'date'   => current_time( 'mysql' ),
@@ -8367,6 +8376,15 @@ private function maybe_auto_create_questionnaire_actions_from_response( $session
 
 
   private function log_questionnaire_event( $data ) {
+    /* ACDC 3.25.299 — LE PONT VERS LE JOURNAL QUE L'EXPLOITANT PEUT OUVRIR.
+       Sept journaux coexistaient dans ce plugin ; l'écran « Journal des actions »
+       n'en montrait qu'un. La traçabilité existait donc en morceaux, et l'écran
+       qui prétendait la donner en montrait un septième — sans le dire. Chaque
+       journal garde son usage propre ; il verse en plus au journal commun. */
+    if ( method_exists( $this, 'log_action_event' ) && is_array( $data ) ) {
+      $this->log_action_event( 'questionnaire_' . (string) ( $data['event_type'] ?? 'evenement' ), 'questionnaire', (int) ( $data['session_id'] ?? 0 ), 'success', $data );
+    }
+
     global $wpdb;
     if ( empty( $this->questionnaire_log_table ) ) {
       return false;

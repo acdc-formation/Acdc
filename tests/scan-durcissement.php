@@ -508,7 +508,42 @@ if ( '' !== $rendu ) {
     }
 }
 
-/* ── 12. L'EXCEPTION AU MODE RECETTE RESTE UNE IMPASSE ──────────────────── */
+/* ── 12. UN SEUL JOURNAL SE LIT, TOUS DOIVENT Y VERSER ──────────────────── */
+
+/* Sept journaux coexistaient. L'écran « Journal des actions » n'en montrait
+   qu'un : la traçabilité existait en morceaux, et l'écran qui prétendait la
+   donner en montrait un septième — sans le dire. Chaque module garde son
+   journal propre, qui lui sert ; il verse EN PLUS au journal commun. Qu'un seul
+   pont tombe et une famille entière d'événements redevient invisible, sans que
+   rien ne manque à l'écran : il affichera simplement moins de lignes. */
+$ponts = array(
+    'includes/quizzes/class-acdc-quizzes-core-trait.php'                    => array( 'log_qz_event', 'les événements de quiz' ),
+    'includes/learner-portal/core/class-acdc-learner-portal-core-trait.php' => array( 'learner_portal_log_event', 'les connexions et gestes du portail apprenant' ),
+    'includes/trainer-portal/core/class-acdc-trainer-portal-core-trait.php' => array( 'trainer_portal_log_event', 'les connexions et gestes du portail formateur' ),
+    'includes/questionnaires/class-acdc-questionnaires-core-trait.php'      => array( 'log_questionnaire_event', 'les envois et retours de questionnaires' ),
+    'includes/marketing/class-acdc-marketing-core-trait.php'                => array( 'add_marketing_log', 'les campagnes et envois marketing' ),
+);
+foreach ( $ponts as $fichier => $quoi ) {
+    $src = $lire( $fichier );
+    if ( '' === $src ) {
+        continue;
+    }
+    $c = $corps( $src, $quoi[0] );
+    if ( '' === $c ) {
+        $hits[] = sprintf( '%s() est introuvable : le pont vers le journal commun ne peut plus être vérifié.', $quoi[0] );
+    } elseif ( false === strpos( $c, '$this->log_action_event(' ) ) {
+        /* On exige L'APPEL, pas le nom. Une première version cherchait
+           « log_action_event » et le trouvait dans la garde
+           method_exists( $this, 'log_action_event' ) : couper l'appel en
+           laissant la garde passait le contrôle. C'est le sabotage qui l'a dit. */
+        $hits[] = sprintf( '%s() ne verse plus au journal des actions : %s disparaissent du seul journal que l’exploitant peut ouvrir, sans que l’écran signale quoi que ce soit.', $quoi[0], $quoi[1] );
+    }
+}
+if ( '' !== $noyau && false === strpos( $noyau, 'public function acdc_journaliser(' ) ) {
+    $hits[] = 'la porte publique du journal a disparu : les modules signature et émargement sont des classes autonomes, ils ne peuvent plus rien tracer du tout.';
+}
+
+/* ── 13. L'EXCEPTION AU MODE RECETTE RESTE UNE IMPASSE ──────────────────── */
 
 /* L'alerte de sauvegarde doit percer le mode recette — la faire retenir
    reviendrait à taire l'avertissement qui prévient qu'on ne s'avertit plus.

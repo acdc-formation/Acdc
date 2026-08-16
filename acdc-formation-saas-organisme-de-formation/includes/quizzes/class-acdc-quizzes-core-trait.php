@@ -1098,6 +1098,21 @@ trait ACDC_Quizzes_Core_Trait {
      * @return int|false ID inséré ou false en cas d'échec.
      */
     public function log_qz_event( $data ) {
+    /* ACDC 3.25.299 — LE PONT VERS LE JOURNAL QUE L'EXPLOITANT PEUT OUVRIR.
+       Sept journaux coexistaient dans ce plugin ; l'écran « Journal des actions »
+       n'en montrait qu'un. La traçabilité existait donc en morceaux, et l'écran
+       qui prétendait la donner en montrait un septième — sans le dire. Chaque
+       journal garde son usage propre ; il verse en plus au journal commun. */
+    if ( method_exists( $this, 'log_action_event' ) && is_array( $data ) ) {
+        $this->log_action_event(
+            'quiz_' . (string) ( $data['event_type'] ?? $data['action'] ?? 'evenement' ),
+            'quiz',
+            (int) ( $data['quiz_id'] ?? $data['session_id'] ?? 0 ),
+            'success',
+            $data
+        );
+    }
+
         global $wpdb;
         if ( empty( $this->qz_tables ) ) {
             $this->init_quizzes_module_tables();
