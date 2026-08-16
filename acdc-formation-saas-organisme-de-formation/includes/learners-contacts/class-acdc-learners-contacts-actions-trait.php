@@ -96,7 +96,11 @@ trait ACDC_Learners_Contacts_Actions_Trait {
       $this->redirect_to_portal( 'contacts', 'Suppression impossible : ce contact est lié à des documents.', 'error' );
     }
 
-    $wpdb->delete( $this->contact_table, array( 'id' => $contact_id ) );
+    $__acdc_supprime = $wpdb->delete( $this->contact_table, array( 'id' => $contact_id ) );
+    /* ACDC 3.25.300 — La trace est posée sur la suppression, pas sur la
+       redirection : une page qui annonce « supprimé » ne prouve pas qu'une
+       ligne l'ait été. Le résultat écrit ici est celui de la base. */
+    $this->log_action_event( 'suppression_contact', 'contact', (int) $contact_id, $__acdc_supprime ? 'success' : 'error', array( 'lignes' => (int) $__acdc_supprime ) );
     $this->redirect_to_portal( 'contacts', 'Contact supprimé.', 'success' );
   }
 
@@ -196,7 +200,11 @@ trait ACDC_Learners_Contacts_Actions_Trait {
     }
     check_admin_referer( 'acdc_delete_learner_' . $learner_id );
     global $wpdb;
-    $wpdb->delete( $this->learner_table, array( 'id' => $learner_id ) );
+    $__acdc_supprime = $wpdb->delete( $this->learner_table, array( 'id' => $learner_id ) );
+    /* ACDC 3.25.300 — La trace est posée sur la suppression, pas sur la
+       redirection : une page qui annonce « supprimé » ne prouve pas qu'une
+       ligne l'ait été. Le résultat écrit ici est celui de la base. */
+    $this->log_action_event( 'suppression_learner', 'learner', (int) $learner_id, $__acdc_supprime ? 'success' : 'error', array( 'lignes' => (int) $__acdc_supprime ) );
     if ( is_admin() && isset( $_GET['page'] ) && 'acdc-of-learners' === $_GET['page'] ) {
       $this->redirect_to_admin_page( 'acdc-of-learners', 'Apprenant supprimé.', 'success' );
     }

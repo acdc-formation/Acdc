@@ -1036,10 +1036,16 @@ A noter : Certaines des questions peuvent être évaluées sur une échelle de 1
 
   private function delete_mid_survey_record( $id ) {
     $surveys = $this->maybe_normalize_survey_option_records( 'acdc_of_mid_surveys', 'mid' );
+    $__acdc_avant = count( (array) $surveys );
     $surveys = array_values( array_filter( $surveys, function( $survey ) use ( $id ) {
       return (int) ( $survey['id'] ?? 0 ) !== (int) $id;
     } ) );
     update_option( 'acdc_of_mid_surveys', $surveys, false );
+    /* ACDC 3.25.300 — La trace est posée ICI, dans la fonction qui retire
+       réellement la fiche, et non chez ses appelants : elle sert tous les
+       chemins d'un coup, et elle compare le nombre avant et après. Une fiche
+       introuvable produit donc « error », pas une suppression imaginaire. */
+    $this->log_action_event( 'suppression_mid_survey', 'mid_survey', (int) $id, count( (array) $surveys ) < $__acdc_avant ? 'success' : 'error', array( 'restants' => count( (array) $surveys ) ) );
   }
 
 
@@ -1881,10 +1887,16 @@ A noter : Certaines des questions peuvent être évaluées sur une échelle de 1
 
   private function delete_hot_survey_record( $id ) {
     $surveys = $this->maybe_normalize_survey_option_records( 'acdc_of_hot_surveys', 'hot' );
+    $__acdc_avant = count( (array) $surveys );
     $surveys = array_values( array_filter( $surveys, function( $survey ) use ( $id ) {
       return (int) ( $survey['id'] ?? 0 ) !== (int) $id;
     } ) );
     update_option( 'acdc_of_hot_surveys', $surveys, false );
+    /* ACDC 3.25.300 — La trace est posée ICI, dans la fonction qui retire
+       réellement la fiche, et non chez ses appelants : elle sert tous les
+       chemins d'un coup, et elle compare le nombre avant et après. Une fiche
+       introuvable produit donc « error », pas une suppression imaginaire. */
+    $this->log_action_event( 'suppression_hot_survey', 'hot_survey', (int) $id, count( (array) $surveys ) < $__acdc_avant ? 'success' : 'error', array( 'restants' => count( (array) $surveys ) ) );
   }
 
 
@@ -2000,10 +2012,16 @@ A noter : Certaines des questions peuvent être évaluées sur une échelle de 1
 
   private function delete_cold_survey_record( $id ) {
     $surveys = $this->normalize_legacy_survey_collection( get_option( 'acdc_of_cold_surveys', array() ) );
+    $__acdc_avant = count( (array) $surveys );
     $surveys = array_values( array_filter( $surveys, function( $survey ) use ( $id ) {
       return (int) ( $survey['id'] ?? 0 ) !== (int) $id;
     } ) );
     update_option( 'acdc_of_cold_surveys', $surveys, false );
+    /* ACDC 3.25.300 — La trace est posée ICI, dans la fonction qui retire
+       réellement la fiche, et non chez ses appelants : elle sert tous les
+       chemins d'un coup, et elle compare le nombre avant et après. Une fiche
+       introuvable produit donc « error », pas une suppression imaginaire. */
+    $this->log_action_event( 'suppression_cold_survey', 'cold_survey', (int) $id, count( (array) $surveys ) < $__acdc_avant ? 'success' : 'error', array( 'restants' => count( (array) $surveys ) ) );
   }
 
 
@@ -2182,10 +2200,16 @@ Vos réponses nous permettront d’évaluer nos pratiques, d’identifier des ax
 
   private function delete_trainer_survey_record( $id ) {
     $surveys = $this->normalize_legacy_survey_collection( get_option( 'acdc_of_trainer_surveys', array() ) );
+    $__acdc_avant = count( (array) $surveys );
     $surveys = array_values( array_filter( $surveys, function( $survey ) use ( $id ) {
       return (int) ( $survey['id'] ?? 0 ) !== (int) $id;
     } ) );
     update_option( 'acdc_of_trainer_surveys', $surveys, false );
+    /* ACDC 3.25.300 — La trace est posée ICI, dans la fonction qui retire
+       réellement la fiche, et non chez ses appelants : elle sert tous les
+       chemins d'un coup, et elle compare le nombre avant et après. Une fiche
+       introuvable produit donc « error », pas une suppression imaginaire. */
+    $this->log_action_event( 'suppression_trainer_survey', 'trainer_survey', (int) $id, count( (array) $surveys ) < $__acdc_avant ? 'success' : 'error', array( 'restants' => count( (array) $surveys ) ) );
   }
 
 
@@ -2310,10 +2334,16 @@ Vos réponses nous permettront d’évaluer nos pratiques, d’identifier des ax
 
   private function delete_company_survey_record( $id ) {
     $surveys = $this->normalize_legacy_survey_collection( get_option( 'acdc_of_company_surveys', array() ) );
+    $__acdc_avant = count( (array) $surveys );
     $surveys = array_values( array_filter( $surveys, function( $survey ) use ( $id ) {
       return (int) ( $survey['id'] ?? 0 ) !== (int) $id;
     } ) );
     update_option( 'acdc_of_company_surveys', $surveys, false );
+    /* ACDC 3.25.300 — La trace est posée ICI, dans la fonction qui retire
+       réellement la fiche, et non chez ses appelants : elle sert tous les
+       chemins d'un coup, et elle compare le nombre avant et après. Une fiche
+       introuvable produit donc « error », pas une suppression imaginaire. */
+    $this->log_action_event( 'suppression_company_survey', 'company_survey', (int) $id, count( (array) $surveys ) < $__acdc_avant ? 'success' : 'error', array( 'restants' => count( (array) $surveys ) ) );
   }
 
 
@@ -2489,10 +2519,16 @@ Vos réponses nous permettront d’évaluer nos pratiques, d’identifier des ax
 
   private function delete_funder_survey_record( $id ) {
     $surveys = $this->normalize_legacy_survey_collection( get_option( 'acdc_of_funder_surveys', array() ) );
+    $__acdc_avant = count( (array) $surveys );
     $surveys = array_values( array_filter( $surveys, function( $survey ) use ( $id ) {
       return (int) ( $survey['id'] ?? 0 ) !== (int) $id;
     } ) );
     update_option( 'acdc_of_funder_surveys', $surveys, false );
+    /* ACDC 3.25.300 — La trace est posée ICI, dans la fonction qui retire
+       réellement la fiche, et non chez ses appelants : elle sert tous les
+       chemins d'un coup, et elle compare le nombre avant et après. Une fiche
+       introuvable produit donc « error », pas une suppression imaginaire. */
+    $this->log_action_event( 'suppression_funder_survey', 'funder_survey', (int) $id, count( (array) $surveys ) < $__acdc_avant ? 'success' : 'error', array( 'restants' => count( (array) $surveys ) ) );
   }
 
 

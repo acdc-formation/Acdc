@@ -973,6 +973,10 @@ trait ACDC_Quizzes_Actions_Trait {
         $wpdb->delete( $tbl_p, array( 'session_id' => $session_id ), array( '%d' ) );
         // Supprimer la session
         $ok = (bool) $wpdb->delete( $tbl_s, array( 'id' => $session_id ), array( '%d' ) );
+        /* ACDC 3.25.300 — La trace est posée sur la suppression, pas sur la
+           redirection : une page qui annonce « supprimé » ne prouve pas qu'une
+           ligne l'ait été. Le résultat écrit ici est celui de la base. */
+        $this->log_action_event( 'suppression_session', 'session', (int) $session_id, $ok ? 'success' : 'error' );
 
         // Rediriger vers la liste
         $redirect_url = $this->portal_page_url( array( 'tab' => $tab ?: 'qz_results_live' ) );
@@ -1168,6 +1172,10 @@ trait ACDC_Quizzes_Actions_Trait {
         $wpdb->delete( $tbl_pa, array( 'session_id' => $session_id ), array( '%d' ) );
         $wpdb->delete( $tbl_p,  array( 'session_id' => $session_id ), array( '%d' ) );
         $ok = (bool) $wpdb->delete( $tbl_s, array( 'id' => $session_id ), array( '%d' ) );
+        /* ACDC 3.25.300 — La trace est posée sur la suppression, pas sur la
+           redirection : une page qui annonce « supprimé » ne prouve pas qu'une
+           ligne l'ait été. Le résultat écrit ici est celui de la base. */
+        $this->log_action_event( 'suppression_session', 'session', (int) $session_id, $ok ? 'success' : 'error' );
 
         if ( $ok ) {
             wp_send_json_success( array( 'deleted' => $session_id ) );

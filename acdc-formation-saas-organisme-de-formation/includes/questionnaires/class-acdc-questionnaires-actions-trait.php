@@ -1252,7 +1252,11 @@ trait ACDC_Questionnaires_Actions_Trait {
     global $wpdb;
     $wpdb->delete( $this->questionnaire_answer_table, array( 'session_id' => $session_id ) );
     $wpdb->delete( $this->questionnaire_participant_table, array( 'session_id' => $session_id ) );
-    $wpdb->delete( $this->questionnaire_session_table, array( 'id' => $session_id ) );
+    $__acdc_supprime = $wpdb->delete( $this->questionnaire_session_table, array( 'id' => $session_id ) );
+    /* ACDC 3.25.300 — La trace est posée sur la suppression, pas sur la
+       redirection : une page qui annonce « supprimé » ne prouve pas qu'une
+       ligne l'ait été. Le résultat écrit ici est celui de la base. */
+    $this->log_action_event( 'suppression_questionnaire_session', 'questionnaire_session', (int) $session_id, $__acdc_supprime ? 'success' : 'error', array( 'lignes' => (int) $__acdc_supprime ) );
     $redirect = $this->acdc_questionnaire_return_url( 'acdc-of-questionnaire-sessions', 'questionnaire_sessions', array( 'notice' => rawurlencode( 'Session questionnaire supprimée.' ), 'notice_type' => 'success' ) ); if ( ! empty( $_GET['source_type'] ) ) { $redirect = add_query_arg( array( 'source_type' => sanitize_text_field( wp_unslash( $_GET['source_type'] ) ) ), $redirect ); } if ( ! empty( $_GET['source_id'] ) ) { $redirect = add_query_arg( array( 'source_id' => absint( wp_unslash( $_GET['source_id'] ) ) ), $redirect ); } wp_safe_redirect( $redirect ); exit;
   }
 

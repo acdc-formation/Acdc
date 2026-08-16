@@ -240,7 +240,11 @@ trait ACDC_Documents_Billing_Actions_Trait {
     }
 
     $scope = (string) $quote->scope;
-    $wpdb->delete( $this->quote_table, array( 'id' => $quote_id ) );
+    $__acdc_supprime = $wpdb->delete( $this->quote_table, array( 'id' => $quote_id ) );
+    /* ACDC 3.25.300 — La trace est posée sur la suppression, pas sur la
+       redirection : une page qui annonce « supprimé » ne prouve pas qu'une
+       ligne l'ait été. Le résultat écrit ici est celui de la base. */
+    $this->log_action_event( 'suppression_quote', 'quote', (int) $quote_id, $__acdc_supprime ? 'success' : 'error', array( 'lignes' => (int) $__acdc_supprime ) );
     $this->redirect_to_portal( 'quotes', 'Devis supprimé.', 'success', array( 'scope' => $scope ) );
   }
 
@@ -695,7 +699,11 @@ trait ACDC_Documents_Billing_Actions_Trait {
     if ( in_array( (string) $inv->status, $issued_statuses, true ) ) {
       $this->redirect_to_portal( 'invoices_credit_notes', 'Une facture émise ne peut être supprimée ; créez un avoir.', 'error', array( 'scope' => $scope ) );
     }
-    $wpdb->delete( $this->invoice_table, array( 'id' => $invoice_id ) );
+    $__acdc_supprime = $wpdb->delete( $this->invoice_table, array( 'id' => $invoice_id ) );
+    /* ACDC 3.25.300 — La trace est posée sur la suppression, pas sur la
+       redirection : une page qui annonce « supprimé » ne prouve pas qu'une
+       ligne l'ait été. Le résultat écrit ici est celui de la base. */
+    $this->log_action_event( 'suppression_invoice', 'invoice', (int) $invoice_id, $__acdc_supprime ? 'success' : 'error', array( 'lignes' => (int) $__acdc_supprime ) );
     $this->redirect_to_portal( 'invoices_credit_notes', 'Facture supprimée.', 'success', array( 'scope' => $scope ) );
   }
 
@@ -1158,7 +1166,11 @@ trait ACDC_Documents_Billing_Actions_Trait {
       wp_delete_file( $document->file_path );
     }
 
-    $wpdb->delete( $this->document_table, array( 'id' => $document_id ) );
+    $__acdc_supprime = $wpdb->delete( $this->document_table, array( 'id' => $document_id ) );
+    /* ACDC 3.25.300 — La trace est posée sur la suppression, pas sur la
+       redirection : une page qui annonce « supprimé » ne prouve pas qu'une
+       ligne l'ait été. Le résultat écrit ici est celui de la base. */
+    $this->log_action_event( 'suppression_document', 'document', (int) $document_id, $__acdc_supprime ? 'success' : 'error', array( 'lignes' => (int) $__acdc_supprime ) );
     $this->redirect_to_portal( 'documents', 'Document supprimé.', 'success' );
   }
 

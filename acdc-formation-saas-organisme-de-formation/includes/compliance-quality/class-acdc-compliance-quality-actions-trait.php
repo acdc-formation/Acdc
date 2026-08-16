@@ -1636,6 +1636,7 @@ trait ACDC_Compliance_Quality_Actions_Trait {
     $front_redirect = ! empty( $_POST['_front_redirect'] ) ? esc_url_raw( wp_unslash( $_POST['_front_redirect'] ) ) : '';
     if ( $id !== '' ) {
       $records = $this->get_continuous_improvement_records();
+      $__acdc_avant = count( (array) $records );
       /* Chercher par id ou par clé */
       foreach ( $records as $k => $r ) {
         if ( ( isset( $r['id'] ) && (string) $r['id'] === $id ) || (string) $k === $id ) {
@@ -1644,6 +1645,9 @@ trait ACDC_Compliance_Quality_Actions_Trait {
         }
       }
       $this->save_continuous_improvement_records( $records );
+      /* ACDC 3.25.300 — On compare le nombre avant et après : une fiche
+         introuvable produit « error », pas une suppression imaginaire. */
+      $this->log_action_event( 'suppression_improvement', 'improvement', 0, count( (array) $records ) < $__acdc_avant ? 'success' : 'error', array( 'reference' => (string) $id, 'restants' => count( (array) $records ) ) );
     }
     wp_safe_redirect( $front_redirect ? $front_redirect : $this->portal_page_url( array( 'tab' => 'continuous_improvement' ) ) );
     exit;
@@ -1693,8 +1697,12 @@ trait ACDC_Compliance_Quality_Actions_Trait {
       exit;
     }
     $records = $this->get_perfectionnement_members();
+    $__acdc_avant = count( (array) $records );
     $records = array_values( array_filter( $records, function( $r ) use ( $mid ) { return (string) ( $r['id'] ?? '' ) !== $mid; } ) );
     $this->save_perfectionnement_members( $records );
+    /* ACDC 3.25.300 — On compare le nombre avant et après : une fiche
+       introuvable produit « error », pas une suppression imaginaire. */
+    $this->log_action_event( 'suppression_perfectionnement_member', 'perfectionnement_member', 0, count( (array) $records ) < $__acdc_avant ? 'success' : 'error', array( 'reference' => (string) $mid, 'restants' => count( (array) $records ) ) );
     $this->redirect_to_portal( 'conseil_perfectionnement', 'Membre supprimé.', 'success' );
   }
 
@@ -1744,8 +1752,12 @@ trait ACDC_Compliance_Quality_Actions_Trait {
       exit;
     }
     $records = $this->get_perfectionnement_meetings();
+    $__acdc_avant = count( (array) $records );
     $records = array_values( array_filter( $records, function( $r ) use ( $rid ) { return (string) ( $r['id'] ?? '' ) !== $rid; } ) );
     $this->save_perfectionnement_meetings( $records );
+    /* ACDC 3.25.300 — On compare le nombre avant et après : une fiche
+       introuvable produit « error », pas une suppression imaginaire. */
+    $this->log_action_event( 'suppression_perfectionnement_meeting', 'perfectionnement_meeting', 0, count( (array) $records ) < $__acdc_avant ? 'success' : 'error', array( 'reference' => (string) $rid, 'restants' => count( (array) $records ) ) );
     $this->redirect_to_portal( 'conseil_perfectionnement', 'Réunion supprimée.', 'success' );
   }
 
@@ -1802,8 +1814,12 @@ trait ACDC_Compliance_Quality_Actions_Trait {
       exit;
     }
     $records = $this->get_psh_partners();
+    $__acdc_avant = count( (array) $records );
     $records = array_values( array_filter( $records, function( $r ) use ( $pid ) { return (string) ( $r['id'] ?? '' ) !== $pid; } ) );
     $this->save_psh_partners( $records );
+    /* ACDC 3.25.300 — On compare le nombre avant et après : une fiche
+       introuvable produit « error », pas une suppression imaginaire. */
+    $this->log_action_event( 'suppression_psh_partner', 'psh_partner', 0, count( (array) $records ) < $__acdc_avant ? 'success' : 'error', array( 'reference' => (string) $pid, 'restants' => count( (array) $records ) ) );
     $this->redirect_to_portal( 'psh_partners', 'Partenaire supprimé.', 'success' );
   }
 

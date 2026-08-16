@@ -335,7 +335,11 @@ public function handle_delete_training_registration() {
   check_admin_referer( 'acdc_delete_training_registration_' . $registration_id );
 
   global $wpdb;
-  $wpdb->delete( $this->training_registration_table, array( 'id' => $registration_id ) );
+  $__acdc_supprime = $wpdb->delete( $this->training_registration_table, array( 'id' => $registration_id ) );
+  /* ACDC 3.25.300 — La trace est posée sur la suppression, pas sur la
+     redirection : une page qui annonce « supprimé » ne prouve pas qu'une
+     ligne l'ait été. Le résultat écrit ici est celui de la base. */
+  $this->log_action_event( 'suppression_training_registration', 'training_registration', (int) $registration_id, $__acdc_supprime ? 'success' : 'error', array( 'lignes' => (int) $__acdc_supprime ) );
 
   $return_tab = isset( $_GET['return_tab'] ) ? sanitize_key( wp_unslash( $_GET['return_tab'] ) ) : 'register_training';
   if ( ! in_array( $return_tab, array( 'register_training', 'registrations_pending', 'registrations' ), true ) ) {
@@ -366,7 +370,11 @@ public function handle_delete_training_file( $nonce_already_verified = false ) {
     $wpdb->delete( $this->registration_contract_table, array( 'id' => (int) $reg->autofill_contract_id ) );
   }
   $wpdb->delete( $this->need_analysis_table, array( 'dossier_id' => $registration_id ) );
-  $wpdb->delete( $this->training_registration_table, array( 'id' => $registration_id ) );
+  $__acdc_supprime = $wpdb->delete( $this->training_registration_table, array( 'id' => $registration_id ) );
+  /* ACDC 3.25.300 — La trace est posée sur la suppression, pas sur la
+     redirection : une page qui annonce « supprimé » ne prouve pas qu'une
+     ligne l'ait été. Le résultat écrit ici est celui de la base. */
+  $this->log_action_event( 'suppression_training_file', 'training_file', (int) $registration_id, $__acdc_supprime ? 'success' : 'error', array( 'lignes' => (int) $__acdc_supprime ) );
   if ( is_admin() ) {
     $this->redirect_to_admin_page( 'acdc-of-register-training', 'Dossier supprimé.', 'success', array( 'tab' => 'registrations' ) );
   }
@@ -807,7 +815,11 @@ public function handle_delete_registration_contract() {
     return;
   }
 
-  $wpdb->delete( $this->registration_contract_table, array( 'id' => $contract_id ) );
+  $__acdc_supprime = $wpdb->delete( $this->registration_contract_table, array( 'id' => $contract_id ) );
+  /* ACDC 3.25.300 — La trace est posée sur la suppression, pas sur la
+     redirection : une page qui annonce « supprimé » ne prouve pas qu'une
+     ligne l'ait été. Le résultat écrit ici est celui de la base. */
+  $this->log_action_event( 'suppression_registration_contract', 'registration_contract', (int) $contract_id, $__acdc_supprime ? 'success' : 'error', array( 'lignes' => (int) $__acdc_supprime ) );
   if ( is_admin() && isset( $_REQUEST['page'] ) && 'acdc-of-registration-contract' === $_REQUEST['page'] ) {
     wp_safe_redirect( admin_url( 'admin.php?page=acdc-of-registration-contract&notice=' . rawurlencode( 'Convention / contrat supprimé.' ) . '&notice_type=success' ) );
     exit;

@@ -389,7 +389,11 @@ trait ACDC_Sessions_Actions_Trait {
       exit;
     }
 
-    $wpdb->delete( $this->session_table, array( 'id' => $session_id ) );
+    $__acdc_supprime = $wpdb->delete( $this->session_table, array( 'id' => $session_id ) );
+    /* ACDC 3.25.300 — La trace est posée sur la suppression, pas sur la
+       redirection : une page qui annonce « supprimé » ne prouve pas qu'une
+       ligne l'ait été. Le résultat écrit ici est celui de la base. */
+    $this->log_action_event( 'suppression_session', 'session', (int) $session_id, $__acdc_supprime ? 'success' : 'error', array( 'lignes' => (int) $__acdc_supprime ) );
     $this->redirect_to_portal( $return_tab, 'Session supprimée.', 'success' );
   }
 

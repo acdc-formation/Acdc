@@ -427,7 +427,11 @@ trait ACDC_Crm_Commercial_Activity_Trait {
 
 		if ( $activity_id && $prospect_id ) {
 			global $wpdb;
-			$wpdb->delete( $this->prospect_activity_table, array( 'id' => $activity_id, 'prospect_id' => $prospect_id ) );
+			$__acdc_supprime = $wpdb->delete( $this->prospect_activity_table, array( 'id' => $activity_id, 'prospect_id' => $prospect_id ) );
+			/* ACDC 3.25.300 — La trace est posée sur la suppression, pas sur la
+			   redirection : une page qui annonce « supprimé » ne prouve pas qu'une
+			   ligne l'ait été. Le résultat écrit ici est celui de la base. */
+			$this->log_action_event( 'suppression_prospect_activity', 'prospect_activity', (int) $activity_id, $__acdc_supprime ? 'success' : 'error', array( 'lignes' => (int) $__acdc_supprime ) );
 		}
 
 		$this->redirect_to_portal( 'prospect_followup', 'Interaction supprimée du journal.', 'success', $back_args );

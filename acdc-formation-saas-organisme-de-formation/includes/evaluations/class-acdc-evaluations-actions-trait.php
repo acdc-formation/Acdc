@@ -103,7 +103,11 @@ trait ACDC_Evaluations_Actions_Trait {
     }
     check_admin_referer( 'acdc_delete_evaluation_' . $evaluation_id );
     global $wpdb;
-    $wpdb->delete( $this->evaluation_table, array( 'id' => $evaluation_id ) );
+    $__acdc_supprime = $wpdb->delete( $this->evaluation_table, array( 'id' => $evaluation_id ) );
+    /* ACDC 3.25.300 — La trace est posée sur la suppression, pas sur la
+       redirection : une page qui annonce « supprimé » ne prouve pas qu'une
+       ligne l'ait été. Le résultat écrit ici est celui de la base. */
+    $this->log_action_event( 'suppression_evaluation', 'evaluation', (int) $evaluation_id, $__acdc_supprime ? 'success' : 'error', array( 'lignes' => (int) $__acdc_supprime ) );
     if ( is_admin() && isset( $_GET['page'] ) && 'acdc-of-evaluations' === $_GET['page'] ) {
       wp_safe_redirect( admin_url( 'admin.php?page=acdc-of-evaluations&notice=' . rawurlencode( 'Évaluation des acquis supprimée.' ) . '&notice_type=success' ) ); exit;
     }

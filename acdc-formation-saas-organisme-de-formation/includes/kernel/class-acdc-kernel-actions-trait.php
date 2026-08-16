@@ -243,7 +243,11 @@ public function handle_save_quiz() {
     if ( ! $quiz_id ) { $this->redirect_to_portal( 'quiz', 'Quiz introuvable.', 'error' ); }
     check_admin_referer( 'acdc_delete_quiz_' . $quiz_id );
     global $wpdb;
-    $wpdb->delete( $this->quiz_table, array( 'id' => $quiz_id ) );
+    $__acdc_supprime = $wpdb->delete( $this->quiz_table, array( 'id' => $quiz_id ) );
+    /* ACDC 3.25.300 — La trace est posée sur la suppression, pas sur la
+       redirection : une page qui annonce « supprimé » ne prouve pas qu'une
+       ligne l'ait été. Le résultat écrit ici est celui de la base. */
+    $this->log_action_event( 'suppression_quiz', 'quiz', (int) $quiz_id, $__acdc_supprime ? 'success' : 'error', array( 'lignes' => (int) $__acdc_supprime ) );
     if ( is_admin() && isset( $_GET['page'] ) && 'acdc-of-quiz' === $_GET['page'] ) {
       wp_safe_redirect( admin_url( 'admin.php?page=acdc-of-quiz&notice=' . rawurlencode( 'Quiz supprimé.' ) . '&notice_type=success' ) ); exit;
     }
@@ -843,7 +847,11 @@ public function handle_save_quiz() {
       $this->redirect_to_portal( 'companies', 'Suppression impossible : cette entreprise est encore liée à des données.', 'error' );
     }
 
-    $wpdb->delete( $this->company_table, array( 'id' => $company_id ) );
+    $__acdc_supprime = $wpdb->delete( $this->company_table, array( 'id' => $company_id ) );
+    /* ACDC 3.25.300 — La trace est posée sur la suppression, pas sur la
+       redirection : une page qui annonce « supprimé » ne prouve pas qu'une
+       ligne l'ait été. Le résultat écrit ici est celui de la base. */
+    $this->log_action_event( 'suppression_company', 'company', (int) $company_id, $__acdc_supprime ? 'success' : 'error', array( 'lignes' => (int) $__acdc_supprime ) );
     $this->redirect_to_portal( 'companies', 'Entreprise supprimée.', 'success' );
   }  private function handle_optional_upload( $file_key ) {
     if ( empty( $_FILES[ $file_key ] ) || empty( $_FILES[ $file_key ]['name'] ) ) {
@@ -1391,7 +1399,11 @@ public function handle_save_quiz() {
       $this->redirect_to_portal( 'formations', 'Suppression impossible : cette formation est liée à des sessions.', 'error' );
     }
 
-    $wpdb->delete( $this->formation_table, array( 'id' => $formation_id ) );
+    $__acdc_supprime = $wpdb->delete( $this->formation_table, array( 'id' => $formation_id ) );
+    /* ACDC 3.25.300 — La trace est posée sur la suppression, pas sur la
+       redirection : une page qui annonce « supprimé » ne prouve pas qu'une
+       ligne l'ait été. Le résultat écrit ici est celui de la base. */
+    $this->log_action_event( 'suppression_formation', 'formation', (int) $formation_id, $__acdc_supprime ? 'success' : 'error', array( 'lignes' => (int) $__acdc_supprime ) );
     $this->redirect_to_portal( 'formations', 'Formation supprimée.', 'success' );
   }  public function handle_save_trainer() {
     if ( ! current_user_can( 'manage_options' ) ) {
@@ -1601,7 +1613,11 @@ public function handle_save_quiz() {
     }
     $wpdb->delete( $this->trainer_portal_account_table, array( 'trainer_id' => $trainer_id ), array( '%d' ) );
 
-    $wpdb->delete( $this->trainer_table, array( 'id' => $trainer_id ) );
+    $__acdc_supprime = $wpdb->delete( $this->trainer_table, array( 'id' => $trainer_id ) );
+    /* ACDC 3.25.300 — La trace est posée sur la suppression, pas sur la
+       redirection : une page qui annonce « supprimé » ne prouve pas qu'une
+       ligne l'ait été. Le résultat écrit ici est celui de la base. */
+    $this->log_action_event( 'suppression_trainer', 'trainer', (int) $trainer_id, $__acdc_supprime ? 'success' : 'error', array( 'lignes' => (int) $__acdc_supprime ) );
     $this->redirect_to_portal( 'trainers', 'Formateur supprimé.', 'success' );
   }
 
@@ -1757,7 +1773,11 @@ public function handle_save_quiz() {
       exit;
     }
 
-    $wpdb->delete( $this->trainer_contract_table, array( 'id' => $contract_id, 'trainer_id' => $trainer_id ) );
+    $__acdc_supprime = $wpdb->delete( $this->trainer_contract_table, array( 'id' => $contract_id, 'trainer_id' => $trainer_id ) );
+    /* ACDC 3.25.300 — La trace est posée sur la suppression, pas sur la
+       redirection : une page qui annonce « supprimé » ne prouve pas qu'une
+       ligne l'ait été. Le résultat écrit ici est celui de la base. */
+    $this->log_action_event( 'suppression_trainer_contract', 'trainer_contract', (int) $contract_id, $__acdc_supprime ? 'success' : 'error', array( 'lignes' => (int) $__acdc_supprime ) );
     /* ACDC 3.25.148 — F11 : les PDF ne doivent pas survivre à la mission supprimée. */
     $this->acdc_purge_trainer_contract_files( $contract_id );
     $msg = 'Mission supprimée.';
@@ -3385,7 +3405,11 @@ public function handle_save_quiz() {
     }
 
     // 2. Suppression BD.
-    $wpdb->delete( $this->trainer_document_table, array( 'id' => (int) $document_id ) );
+    $__acdc_supprime = $wpdb->delete( $this->trainer_document_table, array( 'id' => (int) $document_id ) );
+    /* ACDC 3.25.300 — La trace est posée sur la suppression, pas sur la
+       redirection : une page qui annonce « supprimé » ne prouve pas qu'une
+       ligne l'ait été. Le résultat écrit ici est celui de la base. */
+    $this->log_action_event( 'suppression_trainer_document', 'trainer_document', (int) $document_id, $__acdc_supprime ? 'success' : 'error', array( 'lignes' => (int) $__acdc_supprime ) );
 
     $this->redirect_back_to_trainer_edit( (int) $doc->trainer_id, 'Document supprimé.', 'success' );
   }
@@ -3632,7 +3656,11 @@ public function handle_save_quiz() {
   check_admin_referer( 'acdc_delete_need_analysis_' . $analysis_id );
   global $wpdb;
   if ( $analysis_id ) {
-    $wpdb->delete( $this->need_analysis_table, array( 'id' => $analysis_id ) );
+    $__acdc_supprime = $wpdb->delete( $this->need_analysis_table, array( 'id' => $analysis_id ) );
+    /* ACDC 3.25.300 — La trace est posée sur la suppression, pas sur la
+       redirection : une page qui annonce « supprimé » ne prouve pas qu'une
+       ligne l'ait été. Le résultat écrit ici est celui de la base. */
+    $this->log_action_event( 'suppression_need_analysis', 'need_analysis', (int) $analysis_id, $__acdc_supprime ? 'success' : 'error', array( 'lignes' => (int) $__acdc_supprime ) );
   }
   if ( is_admin() && isset( $_REQUEST['page'] ) && 'acdc-of-need-analyses' === $_REQUEST['page'] ) {
     wp_safe_redirect( admin_url( 'admin.php?page=acdc-of-need-analyses&notice=' . rawurlencode( 'Analyse du besoin supprimée.' ) . '&notice_type=success' ) );
@@ -4442,7 +4470,11 @@ public function handle_delete_need() {
         $this->redirect_to_portal( 'needs', $msg, 'error' );
       }
     }
-    $wpdb->delete( $this->need_table, array( 'id' => $need_id ) );
+    $__acdc_supprime = $wpdb->delete( $this->need_table, array( 'id' => $need_id ) );
+    /* ACDC 3.25.300 — La trace est posée sur la suppression, pas sur la
+       redirection : une page qui annonce « supprimé » ne prouve pas qu'une
+       ligne l'ait été. Le résultat écrit ici est celui de la base. */
+    $this->log_action_event( 'suppression_need', 'need', (int) $need_id, $__acdc_supprime ? 'success' : 'error', array( 'lignes' => (int) $__acdc_supprime ) );
   }
   if ( is_admin() && isset( $_REQUEST['page'] ) && 'acdc-of-needs' === $_REQUEST['page'] ) {
     wp_safe_redirect( admin_url( 'admin.php?page=acdc-of-needs&notice=' . rawurlencode( 'Recueil supprimé.' ) . '&notice_type=success' ) );
@@ -4574,7 +4606,11 @@ public function handle_delete_need() {
   }
   check_admin_referer( 'acdc_delete_group_' . $group_id );
   global $wpdb;
-  $wpdb->delete( $this->group_table, array( 'id' => $group_id ) );
+  $__acdc_supprime = $wpdb->delete( $this->group_table, array( 'id' => $group_id ) );
+  /* ACDC 3.25.300 — La trace est posée sur la suppression, pas sur la
+     redirection : une page qui annonce « supprimé » ne prouve pas qu'une
+     ligne l'ait été. Le résultat écrit ici est celui de la base. */
+  $this->log_action_event( 'suppression_group', 'group', (int) $group_id, $__acdc_supprime ? 'success' : 'error', array( 'lignes' => (int) $__acdc_supprime ) );
   if ( is_admin() && isset( $_GET['page'] ) && 'acdc-of-groups' === $_GET['page'] ) {
     wp_safe_redirect( admin_url( 'admin.php?page=acdc-of-groups&tab=groups&notice=' . rawurlencode( 'Groupe supprimé.' ) . '&notice_type=success' ) );
     exit;
@@ -4779,7 +4815,11 @@ public function handle_delete_need() {
   check_admin_referer( 'acdc_delete_funder_' . $funder_id );
   global $wpdb;
   if ( $funder_id ) {
-    $wpdb->delete( $this->funder_table, array( 'id' => $funder_id ) );
+    $__acdc_supprime = $wpdb->delete( $this->funder_table, array( 'id' => $funder_id ) );
+    /* ACDC 3.25.300 — La trace est posée sur la suppression, pas sur la
+       redirection : une page qui annonce « supprimé » ne prouve pas qu'une
+       ligne l'ait été. Le résultat écrit ici est celui de la base. */
+    $this->log_action_event( 'suppression_funder', 'funder', (int) $funder_id, $__acdc_supprime ? 'success' : 'error', array( 'lignes' => (int) $__acdc_supprime ) );
   }
   if ( is_admin() && isset( $_REQUEST['page'] ) && 'acdc-of-funders' === $_REQUEST['page'] ) {
     wp_safe_redirect( admin_url( 'admin.php?page=acdc-of-funders&notice=' . rawurlencode( 'Financeur supprimé.' ) . '&notice_type=success' ) );
@@ -4873,7 +4913,11 @@ public function handle_delete_need() {
     }
     check_admin_referer( 'acdc_delete_pre_meeting_' . $pre_meeting_id );
     global $wpdb;
-    $wpdb->delete( $this->pre_meeting_table, array( 'id' => $pre_meeting_id ) );
+    $__acdc_supprime = $wpdb->delete( $this->pre_meeting_table, array( 'id' => $pre_meeting_id ) );
+    /* ACDC 3.25.300 — La trace est posée sur la suppression, pas sur la
+       redirection : une page qui annonce « supprimé » ne prouve pas qu'une
+       ligne l'ait été. Le résultat écrit ici est celui de la base. */
+    $this->log_action_event( 'suppression_pre_meeting', 'pre_meeting', (int) $pre_meeting_id, $__acdc_supprime ? 'success' : 'error', array( 'lignes' => (int) $__acdc_supprime ) );
     $target = ( isset( $_GET['page'] ) && 'acdc-of-pre-meetings' === $_GET['page'] )
       ? admin_url( 'admin.php?page=acdc-of-pre-meetings' )
       : $this->portal_page_url( array( 'tab' => 'pre_meetings' ) );
@@ -5600,7 +5644,11 @@ public function handle_purge_plugin_data() {
       $this->redirect_to_nad( '', $is_admin_page, array( 'nad_subtab' => 'block_detail', 'nad_block_id' => $bloc_id, 'notice' => rawurlencode( 'Question introuvable.' ), 'notice_type' => 'error' ) );
       return;
     }
-    $wpdb->delete( $this->need_question_table, array( 'id' => $question_id ) );
+    $__acdc_supprime = $wpdb->delete( $this->need_question_table, array( 'id' => $question_id ) );
+    /* ACDC 3.25.300 — La trace est posée sur la suppression, pas sur la
+       redirection : une page qui annonce « supprimé » ne prouve pas qu'une
+       ligne l'ait été. Le résultat écrit ici est celui de la base. */
+    $this->log_action_event( 'suppression_need_question', 'need_question', (int) $question_id, $__acdc_supprime ? 'success' : 'error', array( 'lignes' => (int) $__acdc_supprime ) );
     $this->redirect_to_nad( '', $is_admin_page, array( 'nad_subtab' => 'block_detail', 'nad_block_id' => (int) $q->bloc_id, 'notice' => rawurlencode( 'Question supprimée.' ), 'notice_type' => 'success' ) );
   }
 
@@ -5901,7 +5949,11 @@ public function handle_purge_plugin_data() {
       exit;
     }
 
-    $wpdb->delete( $this->thematique_table, array( 'id' => $tid ) );
+    $__acdc_supprime = $wpdb->delete( $this->thematique_table, array( 'id' => $tid ) );
+    /* ACDC 3.25.300 — La trace est posée sur la suppression, pas sur la
+       redirection : une page qui annonce « supprimé » ne prouve pas qu'une
+       ligne l'ait été. Le résultat écrit ici est celui de la base. */
+    $this->log_action_event( 'suppression_thematique', 'thematique', (int) $tid, $__acdc_supprime ? 'success' : 'error', array( 'lignes' => (int) $__acdc_supprime ) );
     wp_safe_redirect( add_query_arg( array( 'notice' => rawurlencode( 'Thématique supprimée.' ), 'notice_type' => 'success' ), $base_url ) );
     exit;
   }
@@ -7158,7 +7210,11 @@ public function handle_purge_plugin_data() {
     if ( ! $eval_id || ! $trainer_id ) { $this->redirect_to_portal( 'trainers', 'Bilan introuvable.', 'error' ); return; }
     check_admin_referer( 'acdc_delete_trainer_evaluation_' . $eval_id );
     global $wpdb;
-    $wpdb->delete( $this->trainer_evaluation_table, array( 'id' => $eval_id, 'trainer_id' => $trainer_id ), array( '%d', '%d' ) );
+    $__acdc_supprime = $wpdb->delete( $this->trainer_evaluation_table, array( 'id' => $eval_id, 'trainer_id' => $trainer_id ), array( '%d', '%d' ) );
+    /* ACDC 3.25.300 — La trace est posée sur la suppression, pas sur la
+       redirection : une page qui annonce « supprimé » ne prouve pas qu'une
+       ligne l'ait été. Le résultat écrit ici est celui de la base. */
+    $this->log_action_event( 'suppression_trainer_evaluation', 'trainer_evaluation', (int) $eval_id, $__acdc_supprime ? 'success' : 'error', array( 'lignes' => (int) $__acdc_supprime ) );
     $is_admin_ctx = isset( $_GET['page'] ) && 'acdc-of-trainers' === $_GET['page'];
     $redirect = $is_admin_ctx ? admin_url( 'admin.php?page=acdc-of-trainers&action=edit&item_id=' . $trainer_id . '&notice=' . rawurlencode( 'Bilan supprimé.' ) . '&notice_type=success' ) : $this->portal_page_url( array( 'tab' => 'trainers', 'action' => 'edit', 'item_id' => $trainer_id, 'notice' => rawurlencode( 'Bilan supprimé.' ), 'notice_type' => 'success' ) );
     wp_safe_redirect( $redirect );

@@ -305,7 +305,11 @@ public function handle_delete_prospect() {
       $this->redirect_to_portal( 'prospects', $msg, 'error' );
     }
     $wpdb->delete( $this->prospect_rdv_table, array( 'prospect_id' => $prospect_id ) );
-    $wpdb->delete( $this->prospect_table, array( 'id' => $prospect_id ) );
+    $__acdc_supprime = $wpdb->delete( $this->prospect_table, array( 'id' => $prospect_id ) );
+    /* ACDC 3.25.300 — La trace est posée sur la suppression, pas sur la
+       redirection : une page qui annonce « supprimé » ne prouve pas qu'une
+       ligne l'ait été. Le résultat écrit ici est celui de la base. */
+    $this->log_action_event( 'suppression_prospect', 'prospect', (int) $prospect_id, $__acdc_supprime ? 'success' : 'error', array( 'lignes' => (int) $__acdc_supprime ) );
   }
   if ( is_admin() && isset( $_REQUEST['page'] ) && 'acdc-of-prospects' === $_REQUEST['page'] ) {
     wp_safe_redirect( admin_url( 'admin.php?page=acdc-of-prospects&notice=' . rawurlencode( 'Prospect supprimé.' ) . '&notice_type=success' ) );
