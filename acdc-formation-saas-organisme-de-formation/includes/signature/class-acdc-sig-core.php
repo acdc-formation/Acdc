@@ -90,6 +90,15 @@ class ACDC_Sig_Core {
             signer_name   VARCHAR(190) NOT NULL DEFAULT '',
             signer_email  VARCHAR(190) NOT NULL DEFAULT '',
             signer_role   VARCHAR(100) NOT NULL DEFAULT '',
+            /* ACDC 3.25.309 — DE QUI EST CETTE PIÈCE, et non plus seulement qui
+               l'a signée. Les trois certificats de signature d'un même dossier
+               s'appelaient « certificat-12-1755374400.pdf » : trois fichiers
+               qu'on ne distinguait qu'en les ouvrant. Le nom du signataire ne
+               suffit pas — une convention est signée par une personne au nom
+               d'une entreprise, et c'est l'entreprise qu'on cherche dans un
+               dossier. Vide quand il n'y a pas d'entité : on retombe alors sur
+               le signataire, qui est bien la partie concernée. */
+            entity_label  VARCHAR(190) NOT NULL DEFAULT '',
             session_id    BIGINT UNSIGNED DEFAULT NULL,
             learner_id    BIGINT UNSIGNED DEFAULT NULL,
             doc_url       TEXT,
@@ -173,6 +182,9 @@ class ACDC_Sig_Core {
             'signer_name'  => '',
             'signer_email' => '',
             'signer_role'  => '',
+            /* ACDC 3.25.309 — Voir la colonne : l'entité pour laquelle la pièce
+               est établie (entreprise commanditaire, formateur…). */
+            'entity_label' => '',
             'doc_type'     => 'emargement',
             'sig_level'    => 'simple',
             'session_id'   => null,
@@ -200,6 +212,7 @@ class ACDC_Sig_Core {
             'signer_name'  => $a['signer_name'],
             'signer_email' => $a['signer_email'],
             'signer_role'  => $a['signer_role'],
+            'entity_label' => mb_substr( trim( (string) $a['entity_label'] ), 0, 190 ),
             'session_id'   => $a['session_id'] ?: null,
             'learner_id'   => $a['learner_id'] ?: null,
             'doc_url'      => $a['doc_url'],

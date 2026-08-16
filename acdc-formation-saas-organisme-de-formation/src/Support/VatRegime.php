@@ -140,6 +140,30 @@ final class VatRegime {
     }
 
     /**
+     * Le régime qu'un taux seul désigne SANS AMBIGUÏTÉ, ou une chaîne vide.
+     *
+     * Sert à reprendre les documents antérieurs au régime : ils ne portent qu'un
+     * nombre. 20, 10, 5,5 et 2,1 ne désignent qu'un régime chacun — la reprise
+     * est certaine. ZÉRO N'EN DÉSIGNE AUCUN : autoliquidation, exonération de
+     * l'article 261-4-4°a et franchise de l'article 293 B affichent toutes 0 %
+     * et imposent trois mentions différentes. Deviner reviendrait à imprimer une
+     * référence légale fausse sur une facture — on rend une chaîne vide, et le
+     * document garde son absence de mention.
+     */
+    public static function parTaux( $taux ) {
+        $taux = round( (float) str_replace( ',', '.', (string) $taux ), 2 );
+        if ( $taux <= 0.0 ) {
+            return '';
+        }
+        foreach ( self::regimes() as $cle => $r ) {
+            if ( abs( (float) $r['taux'] - $taux ) < 0.001 && (float) $r['taux'] > 0.0 ) {
+                return $cle;
+            }
+        }
+        return '';
+    }
+
+    /**
      * Le régime figé sur un document déjà émis.
      *
      * LA RÈGLE QUI PROTÈGE LE PASSÉ. Le profil ne fournit le régime qu'aux

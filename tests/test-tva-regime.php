@@ -70,6 +70,17 @@ verifie( 'document neuf : il prend le régime du profil',
 verifie( 'régime figé devenu inconnu : le profil reprend la main',
     'exoneration_261', V::pourDocument( 'regime_supprime', 'exoneration_261' )['cle'] );
 
+/* --- LA REPRISE DES DOCUMENTS ANTÉRIEURS ---
+   Ils ne portent qu'un nombre. On n'inscrit un régime que lorsque le nombre
+   n'en désigne qu'un seul. */
+verifie( 'un document à 20 % : régime certain', 'tva_20', V::parTaux( '20.00' ) );
+verifie( 'écrit « 20,00 » : même régime', 'tva_20', V::parTaux( '20,00' ) );
+verifie( 'un document à 5,5 %', 'tva_5_5', V::parTaux( 5.5 ) );
+verifie( 'un document à 2,1 %', 'tva_2_1', V::parTaux( '2,10' ) );
+verifie( 'UN DOCUMENT À 0 % : ON NE DEVINE PAS', '', V::parTaux( '0,00' ) );
+verifie( '  ni pour un champ vide', '', V::parTaux( '' ) );
+verifie( 'un taux qui ne correspond à rien : aucun régime', '', V::parTaux( '17,50' ) );
+
 /* --- Le calcul, arrondi une seule fois --- */
 $c = V::calculer( 2400, 'tva_20' );
 verifie( 'HT 2400 à 20 % : TVA', 480.0, $c['tva'] );

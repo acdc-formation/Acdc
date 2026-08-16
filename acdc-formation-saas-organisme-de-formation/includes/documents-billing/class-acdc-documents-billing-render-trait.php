@@ -444,15 +444,18 @@ trait ACDC_Documents_Billing_Render_Trait {
         'formation_full' => '', 'formation' => '', 'formation_title' => '',
         'start_date' => '', 'end_date' => '', 'trained_headcount' => '',
         'emission_date' => wp_date( 'd/m/Y' ), 'expiration_date' => wp_date( 'd/m/Y', strtotime( '+' . $quote_validity_days . ' days' ) ),
-        /* ACDC 3.25.291 — « vat_rate » figurait DEUX FOIS dans ce tableau : la
-           seconde valeur écrasait silencieusement la première. Le taux fixe à
-           20,00 ne servait donc à rien — seul le réglage comptait, ce qui est le
-           comportement voulu, mais que cette ligne contredisait à la lecture.
-           Une seule clé désormais, celle qui lit le réglage. */
+        /* ACDC 3.25.309 — L'APERÇU DIT CE QUE LE DEVIS PORTERA.
+           Cet écran lisait « vat_rate_default », un réglage qui n'était plus
+           proposé nulle part et qui, resté à 0, annonçait « 0,00 % » sur un
+           devis qui s'enregistrait ensuite à 20 %. L'aperçu montre désormais le
+           régime que save_quote() figera réellement. */
         'tarif_ht_value' => '', 'tarif_ttc_value' => '0',
         'quantity' => '1,00', 'designation' => "Dates de l'action de formation : à définir",
         'format' => 'Présentiel', 'validity_days' => (string) $quote_validity_days,
-        'vat_rate' => ( isset( $profile_q['vat_rate_default'] ) && '20' === (string) $profile_q['vat_rate_default'] ) ? '20,00' : '0,00',
+        'vat_regime' => $this->acdc_regime_tva_profil(),
+        'vat_regime_label' => \ACDC\Support\VatRegime::get( $this->acdc_regime_tva_profil() )['libelle'],
+        'vat_mention' => \ACDC\Support\VatRegime::mention( $this->acdc_regime_tva_profil() ),
+        'vat_rate' => $this->format_quote_money_value( \ACDC\Support\VatRegime::taux( $this->acdc_regime_tva_profil() ) ),
         /* ACDC 3.25.290 — Plus d'IBAN de repli : un compte bancaire faux est
            infiniment pire qu'un compte bancaire manquant. */
         'iban' => ! empty( $profile_q['bank_iban'] ) ? (string) $profile_q['bank_iban'] : '',
@@ -581,15 +584,13 @@ trait ACDC_Documents_Billing_Render_Trait {
             ? number_format( (float) $prefill_proposal->formation_total, 2, ',', '' )
             : '';
           /*
-           * ACDC 3.25.116 — Propagation TVA proposition→devis : NON forcée (comportement inchangé).
-           * La table des propositions (wp_acdc_of_proposals) ne comporte AUCUN champ de régime TVA
-           * exploitable (pas de tva_applicable / vat_exempt / formation_tva / vat_rate). Les montants
-           * y sont affichés « net de TVA » et les gabarits (proposal-html/mpdf, render-trait) codent en
-           * dur « TVA non applicable - article 293 B du CGI » : c'est une constante de gabarit, pas une
-           * donnée par-proposition, donc pas une source fiable pour dériver un taux variable.
-           * Le taux du devis reste piloté par le défaut profil ($profile_q['vat_rate_default'], plus haut).
-           * TODO : si un jour la proposition porte un vrai champ TVA (ex. vat_rate / vat_exempt), le
-           *        propager ici : $row['vat_rate'] = <taux proposition, 0 si exonéré>.
+           * ACDC 3.25.309 — LA PROPOSITION NE PORTE PAS DE RÉGIME, ET N'A PLUS À
+           * EN PORTER. La table des propositions n'a aucun champ de TVA : ses
+           * gabarits écrivaient la référence légale en dur. Proposition et devis
+           * lisent maintenant le même régime — celui de l'organisme, dans le
+           * profil d'entreprise — la proposition à l'instant où on l'imprime, le
+           * devis figé à sa création. Il n'y a donc plus rien à propager d'un
+           * document à l'autre : ils partent de la même source.
            */
           $row['objectives']          = ! empty( $prefill_proposal->custom_objectives )
             ? wp_strip_all_tags( (string) $prefill_proposal->custom_objectives )
@@ -756,7 +757,28 @@ trait ACDC_Documents_Billing_Render_Trait {
       </div>
       <div class="acdc-contract-label">Quantité</div><div><input type="text" name="quote[quantity]" value="<?php echo esc_attr( $row['quantity'] ?? '1,00' ); ?>"></div>
       <div class="acdc-contract-label">Tarif HT (€) <span class="acdc-required">*</span></div><div><input type="text" name="quote[tarif_ht]" value="<?php echo esc_attr( $row['tarif_ht_value'] ?? '' ); ?>" placeholder="ex: 900,00" required></div>
-      <div class="acdc-contract-label">Taux de TVA (%)</div><div><input type="text" name="quote[vat_rate]" value="<?php echo esc_attr( $row['vat_rate'] ?? '20,00' ); ?>"></div>
+      <?php
+      /* ACDC 3.25.309 — LE CHAMP « TAUX DE TVA » EST SUPPRIMÉ DU FORMULAIRE.
+         Il proposait un taux par document alors que le régime est celui de
+         l'organisme, choisi dans le profil d'entreprise et figé sur le document
+         à sa création. Deux endroits pour un même chiffre, c'est deux vérités :
+         celle qu'on tape ici et celle qui s'imprime. Le taux s'affiche donc, il
+         ne se saisit plus — et il ne bouge plus une fois le devis créé. */
+      $__regime_lbl = '';
+      if ( ! empty( $row['vat_regime_label'] ) ) {
+        $__regime_lbl = (string) $row['vat_regime_label'];
+      } elseif ( ! empty( $row['vat_regime'] ) ) {
+        $__regime_lbl = \ACDC\Support\VatRegime::get( $row['vat_regime'] )['libelle'];
+      }
+      ?>
+      <div class="acdc-contract-label">Régime de TVA</div>
+      <div>
+        <p style="margin:0;font-weight:600;"><?php echo esc_html( '' !== $__regime_lbl ? $__regime_lbl : ( ( $row['vat_rate'] ?? '0,00' ) . ' %' ) ); ?></p>
+        <?php if ( ! empty( $row['vat_mention'] ) ) : ?>
+          <p class="description" style="margin:4px 0 0;"><?php echo esc_html( (string) $row['vat_mention'] ); ?></p>
+        <?php endif; ?>
+        <p class="description" style="margin:4px 0 0;">Figé à la création du devis. Le régime en vigueur se choisit dans le profil de l’entreprise et ne s’applique qu’aux documents suivants.</p>
+      </div>
       <div class="acdc-contract-label">Frais de transport</div><div><label class="acdc-switch"><input type="checkbox" name="quote[transport_fees_enabled]" value="1" <?php checked( ! empty( $row['transport_fees_enabled'] ) ); ?>><span class="acdc-switch-slider"></span></label></div>
       <div class="acdc-contract-label">Montant transport HT (€)</div><div><input type="text" name="quote[transport_fees_ht]" value="<?php echo esc_attr( $row['transport_fees_ht'] ?? '0,00' ); ?>"></div>
       <div class="acdc-contract-label">Frais restauration / hébergement</div><div><label class="acdc-switch"><input type="checkbox" name="quote[meal_fees_enabled]" value="1" <?php checked( ! empty( $row['meal_fees_enabled'] ) ); ?>><span class="acdc-switch-slider"></span></label></div>

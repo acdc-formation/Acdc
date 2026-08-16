@@ -232,7 +232,10 @@ trait ACDC_Settings_Catalog_Render_Trait {
               'website_url' => array( 'label' => 'Site Web', 'type' => 'text' ),
               'email_subject' => array( 'label' => 'Objet e-mail', 'type' => 'text' ),
               'timezone_label' => array( 'label' => 'Fuseau horaire', 'type' => 'text' ),
-              'vat_rate' => array( 'label' => 'Taux de TVA (%)', 'type' => 'text' ),
+              /* ACDC 3.25.309 — Champ retiré : le régime de TVA, plus bas dans
+                 ce même formulaire, porte le taux. Un champ libre à côté d'une
+                 liste déroulante sur le même sujet, c'est la contradiction
+                 assurée le jour où l'un des deux change. */
               'training_rules_url' => array( 'label' => 'Règlement intérieur de la formation (URL ou PDF)', 'type' => 'upload_pdf_url' ),
               'welcome_booklet_url' => array( 'label' => 'Livret d’accueil (URL ou PDF)', 'type' => 'upload_pdf_url' ),
               'cgv_url' => array( 'label' => 'Conditions générales de vente (URL)', 'type' => 'text' ),
@@ -379,7 +382,9 @@ trait ACDC_Settings_Catalog_Render_Trait {
           $this->render_company_profile_row( 'Site Web', $profile['website_url'], 'website' );
           $this->render_company_profile_row( 'Objet e-mail', $profile['email_subject'] );
           $this->render_company_profile_row( 'Fuseau horaire', $profile['timezone_label'] );
-          $this->render_company_profile_row( 'Taux de TVA (%)', $profile['vat_rate'] );
+          /* ACDC 3.25.309 — « Taux de TVA (%) » retiré d'ici : c'était le
+             TROISIÈME endroit où la TVA se disait, avec sa propre valeur.
+             Le régime, plus bas, est le seul réglage. */
           $this->render_company_profile_row( 'Règlement intérieur de la formation', array(
             'url' => $profile['training_rules_url'],
             'title' => 'Règlement intérieur',
@@ -442,8 +447,18 @@ trait ACDC_Settings_Catalog_Render_Trait {
           $this->render_company_profile_row( 'Domiciliation', isset( $profile['bank_domiciliation'] ) ? $profile['bank_domiciliation'] : '' );
           $this->render_company_profile_row( 'IBAN', isset( $profile['bank_iban'] ) ? $profile['bank_iban'] : '' );
           $this->render_company_profile_row( 'BIC', isset( $profile['bank_bic'] ) ? $profile['bank_bic'] : '' );
-          $vat_label = ( isset( $profile['vat_rate_default'] ) && '20' === (string) $profile['vat_rate_default'] ) ? '20 % — Assujetti' : '0 % — Exonéré (net de TVA)';
-          $this->render_company_profile_row( 'Régime de TVA', $vat_label );
+          /* ACDC 3.25.309 — CETTE LIGNE CONTREDISAIT LE FORMULAIRE.
+             Elle lisait « vat_rate_default », resté à 0, et affichait donc
+             « 0 % — Exonéré » pendant que le formulaire de modification, juste
+             à côté, montrait « TVA 20 % ». Deux écrans, deux vérités, sur la
+             seule donnée qui décide de ce qui s'imprime sur une facture.
+             Les deux lisent désormais le même régime. */
+          $__cle_regime = $this->acdc_regime_tva_profil();
+          $this->render_company_profile_row( 'Régime de TVA', \ACDC\Support\VatRegime::get( $__cle_regime )['libelle'] );
+          $__mention_profil = \ACDC\Support\VatRegime::mention( $__cle_regime );
+          if ( '' !== $__mention_profil ) {
+            $this->render_company_profile_row( 'Mention portée sur les documents', $__mention_profil );
+          }
           ?>
         </div>
       </div>
@@ -543,8 +558,18 @@ trait ACDC_Settings_Catalog_Render_Trait {
         <div class="acdc-contract-grid">
           <div class="acdc-contract-label">Adresse d'émission <span class="acdc-required">*</span></div>
           <div><textarea name="billing_settings[billing][issue_address]" rows="4"><?php echo esc_textarea( $settings['billing']['issue_address'] ); ?></textarea><p class="acdc-help">Indiquez ici l'adresse d'émission de vos devis, factures et avoirs. Vous pouvez également ajouter d'autres détails comme une adresse e-mail par exemple.</p></div>
-          <div class="acdc-contract-label">Mention TVA 0% (facultatif)</div>
-          <div><textarea name="billing_settings[billing][vat_0_mention]" rows="4"><?php echo esc_textarea( $settings['billing']['vat_0_mention'] ); ?></textarea><p class="acdc-help">Cette mention apparaîtra sur les devis et les factures uniquement si votre TVA est à 0%.</p></div>
+          <?php
+          /* ACDC 3.25.309 — CHAMP « MENTION TVA 0% » RETIRÉ.
+             Il promettait noir sur blanc : « Cette mention apparaîtra sur les
+             devis et les factures uniquement si votre TVA est à 0% ». Elle
+             n'apparaissait nulle part : aucun document ne lisait ce réglage. Ce
+             qui s'imprimait réellement était « article 293 B », écrit en dur.
+             Un champ qui annonce un effet qu'il n'a pas est pire qu'un champ
+             absent — celui-ci aurait fait croire à David que sa mention
+             d'exonération était en place.
+             La mention est désormais portée par le régime de TVA, dans le profil
+             de l'entreprise, et elle s'imprime vraiment. */
+          ?>
           <div class="acdc-contract-label">Cachet de signature</div>
           <div><label class="acdc-switch"><input type="checkbox" name="billing_settings[billing][signature_stamp]" value="1" <?php checked( ! empty( $settings['billing']['signature_stamp'] ) ); ?>><span class="acdc-switch-slider"></span></label><p class="acdc-help">En activant cette option, votre cachet de signature sera apposé aux devis et factures générés.</p></div>
         </div>

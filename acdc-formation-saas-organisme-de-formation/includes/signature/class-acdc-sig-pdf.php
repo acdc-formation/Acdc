@@ -31,7 +31,7 @@ class ACDC_Sig_PDF {
         $sig_dir      = $upload_dir['basedir'] . '/acdc-signatures/' . $request->id . '/';
         $sig_url_base = $upload_dir['baseurl']  . '/acdc-signatures/' . $request->id . '/';
 
-        $filename = 'certificat-' . $request->id . '-' . time() . '.pdf';
+        $filename = $this->build_audit_pdf_filename( $request, $sig_dir );
         $filepath = $sig_dir . $filename;
         $fileurl  = $sig_url_base . $filename;
 
@@ -44,6 +44,61 @@ class ACDC_Sig_PDF {
         }
 
         return array( 'url' => $fileurl, 'path' => $filepath );
+    }
+
+    /* -----------------------------------------------------------------------
+     * ACDC 3.25.309 — LE NOM DU CERTIFICAT DIT CE QU'IL CONTIENT.
+     *
+     * CE QU'IL DISAIT AVANT : « certificat-12-1755374400.pdf ». Sur un seul
+     * dossier de formation, trois certificats sont produits — la convention, le
+     * devis, le contrat du formateur — et les trois portaient ce même moule.
+     * Trois fichiers dans le même dossier de téléchargement, qu'il fallait
+     * ouvrir un par un pour savoir lequel classer où. Le second nombre était un
+     * horodatage Unix, illisible pour un humain et sans rapport avec la date
+     * qui compte, celle de la signature.
+     *
+     * CE QU'IL DIT MAINTENANT :
+     *   certificat-convention-de-formation-acme-sarl-16-08-2026.pdf
+     * la nature de la pièce, l'entité pour qui elle est établie, la date.
+     *
+     * L'ENTITÉ, PAS LE SIGNATAIRE. Une convention est signée par une personne au
+     * nom d'une entreprise ; c'est l'entreprise qu'on cherche en classant un
+     * dossier. Quand aucune entité n'est connue — un émargement de stagiaire,
+     * une demande créée à la main — on retombe sur le signataire, qui est alors
+     * bien la partie concernée. Jamais sur rien.
+     *
+     * L'UNICITÉ N'EST PAS SACRIFIÉE À LA LISIBILITÉ. Deux certificats de même
+     * nature, même entité, même jour existent (un avenant signé le matin et le
+     * soir). Le premier garde le nom lisible ; le suivant reçoit le numéro de la
+     * demande en fin de nom. On ne préfixe donc jamais par un numéro « au cas
+     * où » : on ne le pose que lorsqu'il sert vraiment.
+     * -------------------------------------------------------------------- */
+
+    private function build_audit_pdf_filename( $request, $sig_dir ) {
+        $types = ACDC_Sig_Core::DOC_TYPES;
+        $type  = isset( $request->doc_type ) ? (string) $request->doc_type : '';
+        $nature = isset( $types[ $type ] ) ? $types[ $type ] : 'signature';
+
+        $entite = isset( $request->entity_label ) ? trim( (string) $request->entity_label ) : '';
+        if ( '' === $entite ) {
+            $entite = isset( $request->signer_name ) ? trim( (string) $request->signer_name ) : '';
+        }
+
+        /* La date qui compte est celle de la signature ; à défaut, celle du
+           jour où le certificat est produit. */
+        $instant = ! empty( $request->signed_at ) ? strtotime( (string) $request->signed_at ) : false;
+        $date    = $instant ? wp_date( 'd-m-Y', $instant ) : wp_date( 'd-m-Y' );
+
+        $morceaux = array_filter( array( 'certificat', $nature, $entite, $date ) );
+        $base     = sanitize_file_name( sanitize_title( implode( '-', $morceaux ) ) );
+        if ( '' === $base ) {
+            $base = 'certificat-' . (int) $request->id;
+        }
+
+        if ( file_exists( $sig_dir . $base . '.pdf' ) ) {
+            $base .= '-' . (int) $request->id;
+        }
+        return $base . '.pdf';
     }
 
     /* -----------------------------------------------------------------------

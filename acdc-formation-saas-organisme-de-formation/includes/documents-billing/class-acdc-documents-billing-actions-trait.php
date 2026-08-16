@@ -109,7 +109,11 @@ trait ACDC_Documents_Billing_Actions_Trait {
       'designation'             => $designation_in,
       'quantity'                => sanitize_text_field( $input['quantity'] ?? '1,00' ),
       'tarif_ht'                => $tarif_ht,
-      'vat_rate'                => (float) str_replace( ',', '.', preg_replace( '/[^0-9,.]/', '', $input['vat_rate'] ?? '20' ) ),
+      /* ACDC 3.25.309 — LE TAUX N'EST PLUS UNE SAISIE NI UNE CONSTANTE.
+         « ?? '20' » écrivait 20 % sur tout devis dont le formulaire ne portait
+         pas le champ, quel que soit le régime de l'organisme. Le régime vient
+         désormais du profil, une seule fois, dans save_quote() ; les deux
+         colonnes y sont écrites ensemble et n'en bougent plus. */
       'transport_fees_enabled'  => ! empty( $input['transport_fees_enabled'] ) ? 1 : 0,
       'transport_fees_ht'       => round( (float) str_replace( ',', '.', preg_replace( '/[^0-9,.]/', '', $input['transport_fees_ht'] ?? '0' ) ), 2 ),
       'meal_fees_enabled'       => ! empty( $input['meal_fees_enabled'] ) ? 1 : 0,
@@ -454,7 +458,12 @@ trait ACDC_Documents_Billing_Actions_Trait {
           // cohérent avec la facture d'origine. Utiliser tarif_ht_value (tarif de base seul)
           // gonflait la TVA de l'avoir du montant des frais (transport/repas/lignes annexes).
           'tarif_ht_value'  => $row['tarif_ht_number'] ?? ( $row['tarif_ht_value'] ?? '0' ),
-          'vat_rate'        => $row['vat_rate'] ?? '20,00',
+          /* ACDC 3.25.309 — L'avoir portait un repli à 20 % : l'avoir d'une
+             facture exonérée aurait crédité une TVA qui n'avait jamais été
+             facturée. Il reprend le taux de la facture, quel qu'il soit. */
+          'vat_rate'        => $row['vat_rate'] ?? '0,00',
+          'vat_regime'      => $row['vat_regime'] ?? '',
+          'vat_mention'     => $row['vat_mention'] ?? '',
           'tarif_ttc_value' => $row['tarif_ttc_value'] ?? '0',
           'payment_methods' => $row['payment_methods'] ?? '',
         );
@@ -581,7 +590,8 @@ trait ACDC_Documents_Billing_Actions_Trait {
       'designation'             => sanitize_textarea_field( $input['designation'] ?? '' ),
       'quantity'                => sanitize_text_field( $input['quantity'] ?? '1,00' ),
       'tarif_ht'                => $tarif_ht,
-      'vat_rate'                => (float) str_replace( ',', '.', preg_replace( '/[^0-9,.]/', '', $input['vat_rate'] ?? '20' ) ),
+      /* ACDC 3.25.309 — Idem devis : le taux est la projection du régime, écrite
+         dans save_invoice(). Une facture émise ne change plus de taux. */
       'payment_methods'         => sanitize_textarea_field( $input['payment_methods'] ?? '' ),
       'iban'                    => sanitize_text_field( $input['iban'] ?? '' ),
       'bic'                     => sanitize_text_field( $input['bic'] ?? '' ),
@@ -1250,6 +1260,10 @@ trait ACDC_Documents_Billing_Actions_Trait {
       'signer_name'  => $signer_name,
       'signer_email' => $signer_email,
       'signer_role'  => 'Commanditaire — devis de formation',
+      /* ACDC 3.25.309 — L'entité pour qui le devis est établi, qui donnera son
+         nom au certificat de signature. L'entreprise quand il y en a une, la
+         personne sinon. */
+      'entity_label' => (string) ( $quote->client_company ?: $quote->apprenant_name ),
       'doc_type'     => 'devis',
       'sig_level'    => ACDC_Sig_Core::LEVEL_RENFORCE,
       'doc_url'      => $doc_url,

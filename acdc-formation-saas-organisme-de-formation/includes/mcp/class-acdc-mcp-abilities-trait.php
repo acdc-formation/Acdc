@@ -485,7 +485,10 @@ trait ACDC_Mcp_Abilities_Trait {
 			'trained_headcount'  => array( 'type' => 'string' ),
 			'quantity'           => array( 'type' => 'string', 'default' => '1,00' ),
 			'tarif_ht'           => array( 'type' => 'string', 'description' => 'Montant HT (ex. « 1800 » ou « 1800,00 »).' ),
-			'vat_rate'           => array( 'type' => 'string', 'description' => 'Taux TVA en % (ex. « 0 » ou « 20 »).' ),
+			/* ACDC 3.25.309 — « vat_rate » retiré de l'interface MCP : le taux est
+			   celui du régime de l'organisme, figé à la création du document.
+			   Continuer à l'annoncer aurait laissé croire qu'on peut le fixer par
+			   appel, alors que save_quote() l'écrase. */
 			'designation'        => array( 'type' => 'string' ),
 			'validity_days'      => array( 'type' => 'integer', 'minimum' => 1, 'maximum' => 365 ),
 			'status'             => array( 'type' => 'string', 'description' => 'brouillon, envoye, a_signer, signe, refuse, expire.' ),
@@ -684,7 +687,6 @@ trait ACDC_Mcp_Abilities_Trait {
 		if ( isset( $input['start_date'] ) && '' !== (string) $input['start_date'] ) { $data['start_date'] = sanitize_text_field( (string) $input['start_date'] ); }
 		if ( isset( $input['end_date'] ) && '' !== (string) $input['end_date'] ) { $data['end_date'] = sanitize_text_field( (string) $input['end_date'] ); }
 		if ( isset( $input['tarif_ht'] ) ) { $data['tarif_ht'] = round( (float) str_replace( ',', '.', preg_replace( '/[^0-9,.]/', '', (string) $input['tarif_ht'] ) ), 2 ); }
-		if ( isset( $input['vat_rate'] ) ) { $data['vat_rate'] = (float) str_replace( ',', '.', preg_replace( '/[^0-9,.]/', '', (string) $input['vat_rate'] ) ); }
 		if ( isset( $input['validity_days'] ) ) { $data['validity_days'] = absint( $input['validity_days'] ); }
 		if ( isset( $input['status'] ) && array_key_exists( (string) $input['status'], $this->get_quote_status_labels() ) ) {
 			$data['status'] = (string) $input['status'];

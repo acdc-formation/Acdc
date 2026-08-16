@@ -987,6 +987,7 @@ private function acdc_send_transactional_email( $to, $subject, $template_args = 
           $this->retire_legacy_positioning_test_module();
           $this->backfill_org_identity_from_code();
           $this->acdc_reprise_demi_journees_manquantes();
+          $this->acdc_reprise_regimes_tva();
 
           delete_option( 'acdc_of_upgrade_blocked' );
           $upgrade_done = true;
@@ -1484,6 +1485,52 @@ private function acdc_send_transactional_email( $to, $subject, $template_args = 
     update_option( 'acdc_of_demi_journees_reprises', '1', false );
     if ( $reprises > 0 ) {
       $this->log_action_event( 'reprise_demi_journees', 'session', 0, 'success', array( 'seances' => $reprises ) );
+    }
+  }
+
+  /**
+   * ACDC 3.25.309 — LES DOCUMENTS DÉJÀ ÉMIS REÇOIVENT LE RÉGIME QU'ILS PORTAIENT.
+   *
+   * POURQUOI CETTE REPRISE EST NÉCESSAIRE. Sans elle, tous les devis, factures
+   * et conventions existants gardent une colonne « vat_regime » vide. Ils
+   * afficheraient encore leur taux — la lecture retombe dessus — mais ils
+   * seraient à jamais sans mention, et surtout : le jour où l'exonération sera
+   * accordée, rien ne prouverait dans la base sous quel régime ils avaient été
+   * établis. On inscrit donc noir sur blanc ce qu'ils disaient déjà.
+   *
+   * CE QU'ELLE NE FAIT PAS. Elle ne touche AUCUN document à 0 % : autoliquidation,
+   * exonération de l'article 261-4-4°a et franchise de l'article 293 B affichent
+   * toutes 0 % et imposent trois mentions différentes. Deviner reviendrait à
+   * inscrire une référence légale fausse. Ces documents gardent leur taux et
+   * restent sans mention, exactement comme aujourd'hui.
+   *
+   * Elle ne change RIEN à l'écran : un devis à 20 % reste à 20 %.
+   */
+  private function acdc_reprise_regimes_tva() {
+    if ( '1' === get_option( 'acdc_of_regimes_tva_repris' ) ) {
+      return;
+    }
+    global $wpdb;
+    $tables = array();
+    if ( ! empty( $this->quote_table ) )                 { $tables[] = $this->quote_table; }
+    if ( ! empty( $this->invoice_table ) )               { $tables[] = $this->invoice_table; }
+    if ( ! empty( $this->registration_contract_table ) ) { $tables[] = $this->registration_contract_table; }
+
+    $reprises = 0;
+    foreach ( $tables as $table ) {
+      $lignes = (array) $wpdb->get_results( "SELECT id, vat_rate FROM {$table} WHERE vat_regime = '' OR vat_regime IS NULL" );
+      foreach ( $lignes as $ligne ) {
+        $cle = \ACDC\Support\VatRegime::parTaux( $ligne->vat_rate );
+        if ( '' === $cle ) {
+          continue;
+        }
+        $wpdb->update( $table, array( 'vat_regime' => $cle ), array( 'id' => (int) $ligne->id ) );
+        $reprises++;
+      }
+    }
+    update_option( 'acdc_of_regimes_tva_repris', '1', false );
+    if ( $reprises > 0 ) {
+      $this->log_action_event( 'reprise_regimes_tva', 'document', 0, 'success', array( 'documents' => $reprises ) );
     }
   }
 
@@ -2517,6 +2564,7 @@ private function acdc_send_transactional_email( $to, $subject, $template_args = 
       cancellation_terms LONGTEXT,
       price_ht VARCHAR(50) DEFAULT '',
       vat_rate VARCHAR(20) DEFAULT '',
+      vat_regime VARCHAR(32) NOT NULL DEFAULT '',
       deposit_enabled TINYINT(1) NOT NULL DEFAULT 0,
       deposit_amount_ht VARCHAR(50) DEFAULT '',
       public_funding VARCHAR(50) DEFAULT '',

@@ -876,7 +876,12 @@ $pg_contact     = $_pg_num++;
       </tr>
     </table>
 
-    <p style="margin-top:6px;color:#475569">TVA non applicable – article 293 B du CGI</p>
+    <?php
+    /* ACDC 3.25.309 — Voir proposal-mpdf.php : référence légale écrite en dur,
+       remplacée par le régime réel de l'organisme. */
+    $acdc_mention_tva = method_exists( $this, 'acdc_mention_tva_profil' ) ? $this->acdc_mention_tva_profil() : '';
+    ?>
+    <?php if ( '' !== $acdc_mention_tva ) : ?><p style="margin-top:6px;color:#475569"><?php echo esc_html( $acdc_mention_tva ); ?></p><?php endif; ?>
     <p style="margin-top:3px;color:#475569">Déclaration d'activité enregistrée sous le numéro <?php echo esc_html( $acdc['nda'] ); ?> auprès du préfet de région PACA.<br>Cet enregistrement ne vaut pas agrément de l'État.</p>
     <p style="font-weight:700;text-align:right;margin-top:8px;color:#0f2c52">PROPOSITION VALABLE <?php echo (int) $p->proposal_validity_months ?: 3; ?> MOIS</p>
   </div>

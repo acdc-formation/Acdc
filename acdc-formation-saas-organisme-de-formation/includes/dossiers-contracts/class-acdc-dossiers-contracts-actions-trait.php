@@ -539,7 +539,15 @@ public function handle_save_registration_contract() {
     'implementation_followup_evaluation' => isset( $input['implementation_followup_evaluation'] ) ? wp_kses_post( $input['implementation_followup_evaluation'] ) : '',
     'cancellation_terms' => isset( $input['cancellation_terms'] ) ? wp_kses_post( $input['cancellation_terms'] ) : '',
     'price_ht' => isset( $input['price_ht'] ) ? sanitize_text_field( $input['price_ht'] ) : '',
-    'vat_rate' => isset( $input['vat_rate'] ) ? sanitize_text_field( $input['vat_rate'] ) : '',
+    /* ACDC 3.25.309 — LE RÉGIME DE TVA DE L'ORGANISME, PAS UNE SAISIE.
+       Cette ligne lisait « $input['vat_rate'] », un champ texte du formulaire.
+       Le champ a disparu — le taux est celui du régime, choisi une fois dans le
+       profil d'entreprise — et sans lui cette ligne écrivait une chaîne vide sur
+       toute convention enregistrée. Les deux valeurs sont posées ici, ensemble,
+       et retirées plus bas sur une convention existante : ce qui a été signé ne
+       se réécrit pas. */
+    'vat_regime' => $this->acdc_regime_tva_profil(),
+    'vat_rate' => number_format( \ACDC\Support\VatRegime::taux( $this->acdc_regime_tva_profil() ), 2, ',', '' ),
     'deposit_enabled' => ! empty( $input['deposit_enabled'] ) ? 1 : 0,
     'deposit_amount_ht' => isset( $input['deposit_amount_ht'] ) ? sanitize_text_field( $input['deposit_amount_ht'] ) : '',
     'public_funding'             => isset( $input['public_funding'] ) ? sanitize_text_field( $input['public_funding'] ) : '',
@@ -567,9 +575,15 @@ public function handle_save_registration_contract() {
   );
 
   if ( $contract_id ) {
+    /* ACDC 3.25.309 — Le régime et son taux ne se réécrivent pas sur une
+       convention existante : c'est la pièce que le commanditaire a signée.
+       Même règle que save_quote() / save_invoice(). */
+    unset( $data['vat_regime'], $data['vat_rate'] );
     $result = $wpdb->update( $this->registration_contract_table, $data, array( 'id' => $contract_id ) );
     $message = 'Convention / contrat mis à jour.';
   } else {
+    /* Le régime est déjà dans $data, posé plus haut : une convention neuve le
+       fige au moment où elle naît. */
     $data['created_at'] = $this->now_mysql();
     $result = $wpdb->insert( $this->registration_contract_table, $data );
     $contract_id = (int) $wpdb->insert_id;

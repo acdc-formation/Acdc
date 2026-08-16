@@ -71,7 +71,9 @@ trait ACDC_Settings_Catalog_Core_Trait {
       'website_url' => $this->get_company_default_public_website(),
       'email_subject' => $branding['company_name'],
       'timezone_label' => ( wp_timezone_string() ? wp_timezone_string() : 'Europe/Paris' ),
-      'vat_rate' => '20.00%',
+      /* ACDC 3.25.309 — « vat_rate » retiré : troisième réglage de TVA du profil,
+         champ texte libre (« 20.00% ») que chaque module nettoyait à sa façon.
+         Le régime le remplace. */
       'training_rules_url' => home_url( '/reglement-interieur/' ),
       'welcome_booklet_url' => '',
       'cgv_url' => home_url( '/conditions-generales-de-vente-cgv/' ),
@@ -107,7 +109,6 @@ trait ACDC_Settings_Catalog_Core_Trait {
          Le régime est désormais UN seul réglage, nommé, et porteur de sa mention
          légale. L'ancien reste ici le temps que les profils existants soient
          relus : il n'est plus proposé à l'écran et ne sert plus à rien. */
-      'vat_rate_default'  => '0',
       'vat_regime'        => \ACDC\Support\VatRegime::DEFAUT,
     );
   }
@@ -134,6 +135,62 @@ trait ACDC_Settings_Catalog_Core_Trait {
       $profile['website_url'] = esc_url_raw( $website_url );
     }
     return $profile;
+  }
+
+  /**
+   * ACDC 3.25.309 — LE RÉGIME DE TVA DE L'ORGANISME, LU À UN SEUL ENDROIT.
+   *
+   * C'est la porte que tout document neuf franchit pour connaître le régime en
+   * vigueur. Elle existe pour qu'aucun module n'ait à deviner : le devis, la
+   * facture et la convention posaient chacun leur propre « 20 » écrit en dur.
+   */
+  private function acdc_regime_tva_profil() {
+    $profil = $this->get_company_profile_options();
+    $cle    = isset( $profil['vat_regime'] ) ? (string) $profil['vat_regime'] : '';
+    return \ACDC\Support\VatRegime::existe( $cle ) ? $cle : \ACDC\Support\VatRegime::DEFAUT;
+  }
+
+  /**
+   * ACDC 3.25.309 — LA MENTION LÉGALE EN VIGUEUR, POUR LES DOCUMENTS SANS RÉGIME
+   * PROPRE (la proposition commerciale, qui ne fige rien).
+   *
+   * Ces documents imprimaient « TVA non applicable – article 293 B du CGI » en
+   * dur, pendant que le devis du même dossier facturait 20 %. Deux documents,
+   * deux vérités, envoyés au même prospect à trois jours d'intervalle.
+   */
+  private function acdc_mention_tva_profil() {
+    return \ACDC\Support\VatRegime::mention( $this->acdc_regime_tva_profil() );
+  }
+
+  /**
+   * ACDC 3.25.309 — LE RÉGIME D'UN DOCUMENT DÉJÀ ÉMIS.
+   *
+   * LA RÈGLE QUI PROTÈGE LE PASSÉ. Le régime du profil ne s'applique qu'aux
+   * documents NEUFS. Un document qui porte son régime le garde ; le profil n'est
+   * jamais consulté ici, sans quoi le jour où David obtiendra son exonération,
+   * toutes ses factures déjà envoyées se réécriraient d'elles-mêmes.
+   *
+   * DOCUMENT ANTÉRIEUR AU RÉGIME (colonne vide) : il garde le taux qu'il portait
+   * en base, et AUCUNE mention. Un « 0 % » ancien ne dit pas laquelle des deux
+   * exonérations s'applique — l'article 261-4-4°a de l'organisme de formation ou
+   * la franchise de l'article 293 B — et imprimer la mauvaise référence légale
+   * sur une facture est pire que n'en imprimer aucune.
+   *
+   * @param string $regime_fige     Le régime enregistré sur le document.
+   * @param mixed  $taux_enregistre Le taux enregistré sur le document.
+   * @return array cle, libelle, taux, mention.
+   */
+  private function acdc_regime_tva_document( $regime_fige, $taux_enregistre ) {
+    $fige = trim( (string) $regime_fige );
+    if ( '' !== $fige && \ACDC\Support\VatRegime::existe( $fige ) ) {
+      return \ACDC\Support\VatRegime::get( $fige );
+    }
+    return array(
+      'cle'     => '',
+      'libelle' => '',
+      'taux'    => (float) str_replace( ',', '.', (string) $taux_enregistre ),
+      'mention' => '',
+    );
   }
 
   private function get_company_static_document_definitions() {
@@ -203,7 +260,8 @@ trait ACDC_Settings_Catalog_Core_Trait {
         'company_name' => 'ACDC FORMATION',
         'guide_button_label' => "Afficher le guide d'utilisation",
         'issue_address' => "68 Via Nova - Pôle d'excellence Jean Louis - Immeuble le Triangle\n83600, Fréjus, FR",
-        'vat_0_mention' => 'Par défaut : Exonération de TVA, article 261-4-4° du CGI',
+        /* ACDC 3.25.309 — « vat_0_mention » retiré : réglage jamais lu par aucun
+           document. La mention vient du régime de TVA. */
         'signature_stamp' => 0,
       ),
       'quotes' => array(

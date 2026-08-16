@@ -1150,12 +1150,14 @@ trait ACDC_Dossiers_Contracts_Core_Trait {
   }
 
 
+  /**
+   * ACDC 3.25.309 — Le taux par défaut d'une convention neuve vient du RÉGIME,
+   * plus d'un champ texte libre du profil qui pouvait contenir n'importe quoi
+   * (« 20.00% », « 20 », vide) et que trois modules interprétaient chacun à leur
+   * façon.
+   */
   private function get_default_vat_rate_for_contract() {
-    $profile  = $this->get_company_profile_options();
-    $vat_raw  = isset( $profile['vat_rate'] ) ? (string) $profile['vat_rate'] : '20';
-    $vat_clean = str_replace( array( '%', ' ' ), '', $vat_raw );
-    $vat_clean = str_replace( '.', ',', $vat_clean );
-    return '' !== $vat_clean ? $vat_clean : '20,00';
+    return number_format( \ACDC\Support\VatRegime::taux( $this->acdc_regime_tva_profil() ), 2, ',', '' );
   }
 
   /**
@@ -1964,6 +1966,11 @@ trait ACDC_Dossiers_Contracts_Core_Trait {
       'signer_name' => ! empty( $recipient['signatory_name'] ) ? $recipient['signatory_name'] : $recipient['to_name'],
       'signer_email' => $to,
       'signer_role' => 'Signataire convention / contrat',
+      /* ACDC 3.25.309 — LE COMMANDITAIRE DONNE SON NOM AU CERTIFICAT, pas son
+         signataire. Une convention signée par un dirigeant au nom de son
+         entreprise se classe sous l'entreprise. Quand le commanditaire est un
+         particulier, les deux se confondent, et c'est très bien ainsi. */
+      'entity_label' => (string) ( $this->get_registration_contract_display_company_name( $contract, $context ) ?: $recipient['to_name'] ),
       'doc_type' => $doc_type,
       'sig_level' => ACDC_Sig_Core::LEVEL_RENFORCE,
       'doc_url' => $package['contract_file']['url'],
@@ -2972,9 +2979,23 @@ private function get_contract_pdf_context( $request ) {
   $contract_price_num = (float) $this->normalize_price_number( $raw_contract_price_ht, 2 );
   $formation_price_num = (float) $this->normalize_price_number( $raw_formation_price_ht, 2 );
   $price_ht = ( '' !== $raw_contract_price_ht && $contract_price_num > 0 ) ? $raw_contract_price_ht : $raw_formation_price_ht;
-  $vat_rate = $contract && '' !== (string) $contract->vat_rate ? (string) $contract->vat_rate : ( $profile['vat_rate'] ?? '20.00%' );
+  /* ACDC 3.25.309 — LA CONVENTION LIT LE RÉGIME, PLUS UN TAUX LIBRE.
+     Elle retombait sur « vat_rate » du profil — un champ texte libre à côté de
+     deux autres réglages de TVA, qu'aucun des trois documents ne lisait de la
+     même façon. Le régime figé sur la convention fait foi ; à défaut de régime,
+     le taux qu'elle porte ; à défaut des deux, le régime en vigueur, car la
+     convention est alors en train d'être établie. */
+  $__regime_conv = $this->acdc_regime_tva_document(
+    $contract && isset( $contract->vat_regime ) ? $contract->vat_regime : '',
+    $contract && '' !== (string) $contract->vat_rate ? $contract->vat_rate : \ACDC\Support\VatRegime::taux( $this->acdc_regime_tva_profil() )
+  );
+  if ( '' === (string) $__regime_conv['cle'] && ( ! $contract || '' === (string) $contract->vat_rate ) ) {
+    $__regime_conv = \ACDC\Support\VatRegime::get( $this->acdc_regime_tva_profil() );
+  }
+  $vat_rate     = number_format( (float) $__regime_conv['taux'], 2, ',', '' );
+  $vat_mention  = (string) $__regime_conv['mention'];
   $price_ht_num = (float) $this->normalize_price_number( $price_ht, 2 );
-  $vat_rate_num = (float) $this->normalize_price_number( $vat_rate, 2 );
+  $vat_rate_num = (float) $__regime_conv['taux'];
   $transport_num = $contract && ! empty( $contract->transport_fees_enabled ) ? (float) $this->normalize_price_number( $contract->transport_fees_amount_ht, 2 ) : 0.0;
   $meal_num = $contract && ! empty( $contract->meal_fees_enabled ) ? (float) $this->normalize_price_number( $contract->meal_fees_amount_ht, 2 ) : 0.0;
   $deposit_num = $contract && ! empty( $contract->deposit_enabled ) ? (float) $this->normalize_price_number( $contract->deposit_amount_ht, 2 ) : 0.0;
@@ -3005,6 +3026,7 @@ private function get_contract_pdf_context( $request ) {
       'apprenants_count' => (string) $apprenants_count,
       'apprenants_list' => $apprenants_list,
       'contract_vat_rate' => $vat_rate,
+      'contract_vat_mention' => $vat_mention,
       'contract_price_ht' => number_format( $total_ht, 2, '.', '' ),
       'contract_price_ttc' => number_format( $total_ttc, 2, '.', '' ),
       'contract_total_general' => number_format( $total_ttc, 2, '.', '' ),
@@ -3221,8 +3243,10 @@ private function build_contract_pdf_pages( $context ) {
   $commanditaire_qualite = $normalize( $contract_vars['commanditaire_qualite'] ?? '', 'Non renseignée' );
   $apprenants_count = $normalize( $contract_vars['apprenants_count'] ?? '', '0' );
   $apprenants_list = $normalize( $contract_vars['apprenants_list'] ?? '', 'Non renseigné' );
-  $vat_rate = $normalize( $contract_vars['contract_vat_rate'] ?? '', $normalize( $profile['vat_rate'] ?? '', '20,00' ) );
-  $vat_rate = str_replace( '%', '', $vat_rate );
+  /* ACDC 3.25.309 — Plus de repli sur « profile['vat_rate'] » : ce champ libre
+     n'existe plus. Le régime est résolu en amont, une seule fois. */
+  $vat_rate = str_replace( '%', '', $normalize( $contract_vars['contract_vat_rate'] ?? '', '0,00' ) );
+  $vat_mention = (string) ( $contract_vars['contract_vat_mention'] ?? '' );
   $price_ht = $normalize( $contract_vars['contract_price_ht'] ?? '', '0.00' );
   $price_ttc = $normalize( $contract_vars['contract_price_ttc'] ?? '', '0.00' );
   $total_general = $normalize( $contract_vars['contract_total_general'] ?? '', $price_ttc );
@@ -3574,7 +3598,17 @@ private function build_contract_pdf_pages( $context ) {
      document signé ne disait pas qui payait, ni à quel titre, ni si la
      subrogation avait été accordée. Or c'est cette convention qui justifie,
      devant le financeur, la facture qu'on lui adresse ensuite. */
-  $article5_lines = array( $article5_intro, 'Frais pédagogiques : ' . $price_ht . ' €', 'Taux de TVA : ' . $vat_rate . ' %', 'Prix total TTC : ' . $price_ttc . ' €', 'TOTAL GÉNÉRAL : ' . $total_general . ' €' );
+  /* ACDC 3.25.309 — Quand le régime n'appelle pas de TVA, la ligne « Taux de
+     TVA : 0 % » ne dit rien au commanditaire : c'est la mention légale qui doit
+     figurer, et elle seule. Quand la TVA s'applique, le taux suffit. */
+  $article5_lines = array( $article5_intro, 'Frais pédagogiques : ' . $price_ht . ' €' );
+  if ( (float) str_replace( ',', '.', $vat_rate ) > 0.0 ) {
+    $article5_lines[] = 'Taux de TVA : ' . $vat_rate . ' %';
+  } elseif ( '' !== $vat_mention ) {
+    $article5_lines[] = $vat_mention;
+  }
+  $article5_lines[] = 'Prix total TTC : ' . $price_ttc . ' €';
+  $article5_lines[] = 'TOTAL GÉNÉRAL : ' . $total_general . ' €';
   $funding_ctx    = method_exists( $this, 'acdc_contract_funding_context' ) ? $this->acdc_contract_funding_context( $contract ) : array();
   if ( ! empty( $funding_ctx['funder_label'] ) ) {
     $article5_lines[] = 'Financeur : ' . $funding_ctx['funder_label'] . ( ! empty( $funding_ctx['reference'] ) ? ' — accord de prise en charge ' . $funding_ctx['reference'] : '' );

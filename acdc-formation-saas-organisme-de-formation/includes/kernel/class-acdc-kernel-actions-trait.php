@@ -1894,6 +1894,9 @@ public function handle_save_quiz() {
       'signer_name'  => $tr_name,
       'signer_email' => $tr_email,
       'signer_role'  => 'Formateur — contrat de sous-traitance',
+      /* ACDC 3.25.309 — Ici l'entité EST le formateur : c'est lui la partie au
+         contrat, et c'est son nom qu'on cherche en classant la pièce. */
+      'entity_label' => (string) $tr_name,
       'doc_type'     => 'contrat_formateur',
       'sig_level'    => ACDC_Sig_Core::LEVEL_RENFORCE,
       'doc_url'      => $doc_url,

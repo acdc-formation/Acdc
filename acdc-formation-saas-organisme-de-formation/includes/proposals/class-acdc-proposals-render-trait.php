@@ -914,7 +914,11 @@ startxref
       array( 'type' => 'text', 'x' => 56, 'y' => $h - 254, 'text' => 'TOTAL DE LA PROPOSITION', 'font' => 'bold', 'size' => 11, 'color' => '#0f2c52' ),
       array( 'type' => 'text', 'x' => $w - 56, 'y' => $h - 254, 'text' => $total . ' EUR net de TVA', 'font' => 'bold', 'size' => 11, 'color' => '#C5A253', 'align' => 'right' ),
       // Mentions
-      array( 'type' => 'text', 'x' => 42, 'y' => $h - 295, 'text' => 'TVA non applicable - article 293 B du CGI', 'font' => 'regular', 'size' => 9, 'color' => '#4b5d76' ),
+      /* ACDC 3.25.309 — La référence légale était écrite en dur : le 293 B
+         (franchise en base) s'imprimait même sur un organisme assujetti à 20 %.
+         Elle vient du régime du profil. Ce gabarit dessine en positions fixes et
+         sans accents : la mention est repliée en ASCII comme ses voisines. */
+      array( 'type' => 'text', 'x' => 42, 'y' => $h - 295, 'text' => str_replace( '—', '-', remove_accents( $this->acdc_mention_tva_profil() ) ), 'font' => 'regular', 'size' => 9, 'color' => '#4b5d76' ),
       array( 'type' => 'text', 'x' => 42, 'y' => $h - 310, 'text' => 'Declaration sous le n deg ' . $acdc_nda . ' aupres du prefet de region PACA.', 'font' => 'regular', 'size' => 9, 'color' => '#4b5d76' ),
       array( 'type' => 'text', 'x' => $w / 2, 'y' => $h - 335, 'text' => 'PROPOSITION VALABLE 3 MOIS', 'font' => 'bold', 'size' => 11, 'color' => '#C5A253', 'align' => 'center' ),
     );

@@ -52,6 +52,7 @@ trait ACDC_Documents_Billing_Core_Trait {
       quantity VARCHAR(20) DEFAULT '1,00',
       tarif_ht DECIMAL(12,2) NOT NULL DEFAULT 0,
       vat_rate DECIMAL(5,2) NOT NULL DEFAULT 20.00,
+      vat_regime VARCHAR(32) NOT NULL DEFAULT '',
       transport_fees_enabled TINYINT(1) NOT NULL DEFAULT 0,
       transport_fees_ht DECIMAL(12,2) NOT NULL DEFAULT 0,
       meal_fees_enabled TINYINT(1) NOT NULL DEFAULT 0,
@@ -201,9 +202,15 @@ trait ACDC_Documents_Billing_Core_Trait {
     unset( $data['id'] );
     $data['updated_at'] = $now;
     if ( $id ) {
+      /* ACDC 3.25.309 — LE RÉGIME ET SON TAUX NE SE RÉÉCRIVENT PAS.
+         Un devis émis à 20 % garde son taux et sa mention. La règle est posée
+         ICI, dans l'unique porte d'écriture, et non chez les appelants : une
+         règle recopiée à cinq endroits finit toujours par diverger. */
+      unset( $data['vat_regime'], $data['vat_rate'] );
       $wpdb->update( $this->quote_table, $data, array( 'id' => $id ) );
       return $id;
     }
+    $data = $this->acdc_figer_regime_tva( $data );
     $data['created_at']  = $now;
     $data['created_by']  = get_current_user_id();
     // Numérotation atomique : verrou nommé + réattribution du numéro juste avant
@@ -296,7 +303,11 @@ trait ACDC_Documents_Billing_Core_Trait {
     $logo_url  = ! empty( $branding['logo_url'] ) ? (string) $branding['logo_url'] : '';
 
     $tarif_ht  = (float) $q->tarif_ht;
-    $vat_rate  = (float) $q->vat_rate;
+    /* ACDC 3.25.309 — Le taux vient du régime figé sur le devis ; à défaut de
+       régime (devis antérieurs), du taux enregistré, sans aucune mention. Le
+       profil n'est jamais consulté ici : un devis déjà envoyé ne se réécrit pas. */
+    $__regime  = $this->acdc_regime_tva_document( isset( $q->vat_regime ) ? $q->vat_regime : '', $q->vat_rate );
+    $vat_rate  = (float) $__regime['taux'];
     $transport = (float) ( $q->transport_fees_enabled ? $q->transport_fees_ht : 0 );
     $meal      = (float) ( $q->meal_fees_enabled ? $q->meal_fees_ht : 0 );
     $extra_total = 0;
@@ -378,6 +389,9 @@ trait ACDC_Documents_Billing_Core_Trait {
       'tva_total_number'    => $this->format_quote_money_value( $tva_amount ),
       'vat_rate'            => $this->format_quote_money_value( $vat_rate ),
       'vat_rate_number'     => $this->format_quote_money_value( $vat_rate ),
+      'vat_regime'          => (string) $__regime['cle'],
+      'vat_regime_label'    => (string) $__regime['libelle'],
+      'vat_mention'         => (string) $__regime['mention'],
       'quantity_number'     => $this->normalize_price_number( $q->quantity ?: '1,00' ),
       'transport_fees_enabled' => (int) $q->transport_fees_enabled,
       'transport_fees_ht'   => $this->format_quote_money_value( $transport ),
@@ -482,6 +496,7 @@ trait ACDC_Documents_Billing_Core_Trait {
       quantity VARCHAR(20) DEFAULT '1,00',
       tarif_ht DECIMAL(12,2) NOT NULL DEFAULT 0,
       vat_rate DECIMAL(5,2) NOT NULL DEFAULT 20.00,
+      vat_regime VARCHAR(32) NOT NULL DEFAULT '',
       transport_fees_enabled TINYINT(1) NOT NULL DEFAULT 0,
       transport_fees_ht DECIMAL(12,2) NOT NULL DEFAULT 0,
       meal_fees_enabled TINYINT(1) NOT NULL DEFAULT 0,
@@ -549,6 +564,47 @@ trait ACDC_Documents_Billing_Core_Trait {
     return $wpdb->get_row( $wpdb->prepare( "SELECT * FROM {$this->invoice_table} WHERE id = %d", (int) $id ) );
   }
 
+  /**
+   * ACDC 3.25.309 — LA MENTION LÉGALE D'UN DOCUMENT, TELLE QU'IL LA PORTE.
+   *
+   * LE DÉFAUT QU'ELLE FERME. Les documents écrivaient « TVA non applicable,
+   * art. 293 B CGI » EN DUR, à quatre endroits, dès que le taux tombait à zéro.
+   * L'article 293 B est la franchise en base, qui dépend du chiffre d'affaires.
+   * David va demander l'exonération de l'article 261-4-4°a, qui dépend de son
+   * activité d'organisme de formation. Le jour où elle lui est accordée, ses
+   * devis et ses factures auraient porté la mauvaise référence légale — et une
+   * facture qui cite le mauvais article est une facture fausse.
+   *
+   * DOCUMENT SANS RÉGIME (antérieur) : aucune mention. On ne devine pas laquelle
+   * des trois exonérations à 0 % s'appliquait.
+   */
+  private function acdc_mention_tva_document( $row ) {
+    if ( ! empty( $row['vat_mention'] ) ) {
+      return (string) $row['vat_mention'];
+    }
+    if ( ! empty( $row['vat_regime'] ) ) {
+      return \ACDC\Support\VatRegime::mention( $row['vat_regime'] );
+    }
+    return '';
+  }
+
+  /**
+   * ACDC 3.25.309 — LE RÉGIME DE TVA, POSÉ UNE FOIS SUR UN DOCUMENT NEUF.
+   *
+   * Le taux n'est plus une saisie ni une constante : il est la projection
+   * chiffrée du régime, écrite au même instant que lui. Deux colonnes, une
+   * seule vérité — le taux sert à l'arithmétique, le régime porte la mention.
+   */
+  private function acdc_figer_regime_tva( $data ) {
+    $cle = isset( $data['vat_regime'] ) ? trim( (string) $data['vat_regime'] ) : '';
+    if ( '' === $cle || ! \ACDC\Support\VatRegime::existe( $cle ) ) {
+      $cle = $this->acdc_regime_tva_profil();
+    }
+    $data['vat_regime'] = $cle;
+    $data['vat_rate']   = \ACDC\Support\VatRegime::taux( $cle );
+    return $data;
+  }
+
   private function save_invoice( $data ) {
     global $wpdb;
     $now = current_time( 'mysql' );
@@ -556,9 +612,13 @@ trait ACDC_Documents_Billing_Core_Trait {
     unset( $data['id'] );
     $data['updated_at'] = $now;
     if ( $id ) {
+      /* ACDC 3.25.309 — Même règle que pour le devis : une facture envoyée ne
+         change plus de taux ni de mention. Voir save_quote(). */
+      unset( $data['vat_regime'], $data['vat_rate'] );
       $wpdb->update( $this->invoice_table, $data, array( 'id' => $id ) );
       return $id;
     }
+    $data = $this->acdc_figer_regime_tva( $data );
     $data['created_at'] = $now;
     $data['created_by'] = get_current_user_id();
     // Numérotation atomique : verrou nommé + réattribution du numéro juste avant
@@ -815,7 +875,10 @@ trait ACDC_Documents_Billing_Core_Trait {
     $branding  = $this->get_branding_options();
     $org_name  = ! empty( $branding['company_name'] ) ? (string) $branding['company_name'] : 'ACDC Formation';
     $tarif_ht  = (float) $inv->tarif_ht;
-    $vat_rate  = (float) $inv->vat_rate;
+    /* ACDC 3.25.309 — Voir build_quote_row_from_record() : le régime figé fait
+       foi, le profil n'entre jamais ici. */
+    $__regime  = $this->acdc_regime_tva_document( isset( $inv->vat_regime ) ? $inv->vat_regime : '', $inv->vat_rate );
+    $vat_rate  = (float) $__regime['taux'];
     $transport = (float) ( $inv->transport_fees_enabled ? $inv->transport_fees_ht : 0 );
     $meal      = (float) ( $inv->meal_fees_enabled ? $inv->meal_fees_ht : 0 );
     $extra_total = 0;
@@ -877,6 +940,9 @@ trait ACDC_Documents_Billing_Core_Trait {
       'tarif_ttc_number'    => $this->format_quote_money_value( $total_ttc ),
       'vat_rate'            => $this->format_quote_money_value( $vat_rate ),
       'vat_rate_number'     => $this->format_quote_money_value( $vat_rate ),
+      'vat_regime'          => (string) $__regime['cle'],
+      'vat_regime_label'    => (string) $__regime['libelle'],
+      'vat_mention'         => (string) $__regime['mention'],
       'quantity_number'     => $this->normalize_price_number( $inv->quantity ?: '1,00', 2 ),
       'tarif_ht_value'      => $this->format_quote_money_value( $tarif_ht ),
       'tarif_ttc_value'     => $this->format_quote_money_value( $total_ttc ),
@@ -1019,6 +1085,12 @@ trait ACDC_Documents_Billing_Core_Trait {
       'quantity'               => (string) $quote->quantity,
       'tarif_ht'               => (float) $quote->tarif_ht,
       'vat_rate'               => (float) $quote->vat_rate,
+      /* ACDC 3.25.309 — LA FACTURE HÉRITE DU RÉGIME DU DEVIS, PAS DU PROFIL.
+         Un devis signé en mars sous un régime, converti en facture en octobre
+         après un changement de régime, doit facturer ce qui a été accepté. */
+      'vat_regime'             => isset( $quote->vat_regime ) && '' !== (string) $quote->vat_regime
+        ? (string) $quote->vat_regime
+        : \ACDC\Support\VatRegime::parTaux( $quote->vat_rate ),
       'transport_fees_enabled' => (int) $quote->transport_fees_enabled,
       'transport_fees_ht'      => (float) $quote->transport_fees_ht,
       'meal_fees_enabled'      => (int) $quote->meal_fees_enabled,
@@ -1356,10 +1428,11 @@ trait ACDC_Documents_Billing_Core_Trait {
     $description_modalite = ! empty( $row['description_modalite'] ) ? $row['description_modalite'] : $row['scope_label'];
     $tot_ht = ! empty( $row['tarif_ht_number'] ) ? $row['tarif_ht_number'] : $this->normalize_price_number( $row['tarif_ht'] ?? '0' );
     $tot_ttc = ! empty( $row['tarif_ttc_number'] ) ? $row['tarif_ttc_number'] : $this->normalize_price_number( $row['tarif_ttc'] ?? '0' );
-    $vat_rate = ! empty( $row['vat_rate_number'] ) ? $row['vat_rate_number'] : $this->normalize_price_number( $row['vat_rate'] ?? '20,00' );
+    $vat_rate = ! empty( $row['vat_rate_number'] ) ? $row['vat_rate_number'] : $this->normalize_price_number( $row['vat_rate'] ?? '0,00' );
     $tva_total = ! empty( $row['tva_total_number'] ) ? $row['tva_total_number'] : $this->format_quote_money_value( (float) str_replace( ',', '.', $tot_ttc ) - (float) str_replace( ',', '.', $tot_ht ) );
     $quantity = ! empty( $row['quantity_number'] ) ? $row['quantity_number'] : $this->normalize_price_number( $row['quantity'] ?? '1,00' );
     $is_vat_exempt = ( (float) str_replace( ',', '.', $vat_rate ) == 0.0 );
+    $vat_mention   = $this->acdc_mention_tva_document( $row );
     // ACDC 3.24.99 — Images inlinées en base64 pour HTML autoportant (iframe signature, client externe)
     $sig_img_url  = 'https://acdcformation.com/wp-content/uploads/2026/04/Cachet-et-signature.png';
     $sig2_img_url = 'https://acdcformation.com/wp-content/uploads/2026/04/Signature-seule-David-scaled.png';
@@ -1465,7 +1538,7 @@ trait ACDC_Documents_Billing_Core_Trait {
         </div>
         <div class="total-row" style="font-size:7.3pt;color:#374151;">
           <?php if ( $is_vat_exempt ) : ?>
-          <div style="grid-column:1/-1;">Devis valable <?php echo $this->quote_html( $row['validity_days'] ?? '30' ); ?> jours. Prix nets de TVA. TVA non applicable, art. 293 B CGI. Certifié Qualiopi.</div>
+          <div style="grid-column:1/-1;">Devis valable <?php echo $this->quote_html( $row['validity_days'] ?? '30' ); ?> jours. Prix nets de TVA.<?php echo '' !== $vat_mention ? ' ' . $this->quote_html( $vat_mention ) . '.' : ''; ?> Certifié Qualiopi.</div>
           <?php else : ?>
           <div style="grid-column:1/-1;">Devis valable <?php echo $this->quote_html( $row['validity_days'] ?? '30' ); ?> jours. Prix HT et TTC. TVA en vigueur. Certifié Qualiopi.</div>
           <?php endif; ?>
@@ -1474,7 +1547,7 @@ trait ACDC_Documents_Billing_Core_Trait {
       <div class="totals" style="margin-left:0;margin-top:0;">
         <?php if ( $is_vat_exempt ) : ?>
         <div class="total-row grand"><div><strong>Total net (€)</strong></div><div><?php echo $this->quote_html( $tot_ht ); ?> €</div></div>
-        <div class="total-row"><div style="font-size:11px;color:#6b7280;">TVA non applicable — article 293 B du CGI</div><div style="font-size:11px;color:#6b7280;">Net de TVA</div></div>
+        <?php if ( '' !== $vat_mention ) : ?><div class="total-row"><div style="font-size:11px;color:#6b7280;"><?php echo $this->quote_html( $vat_mention ); ?></div><div style="font-size:11px;color:#6b7280;">Net de TVA</div></div><?php endif; ?>
         <?php else : ?>
         <div class="total-row"><div><strong>Total HT (€)</strong></div><div><?php echo $this->quote_html( $tot_ht ); ?> €</div></div>
         <div class="total-row"><div><strong>Total TVA (€)</strong></div><div><?php echo $this->quote_html( $tva_total ); ?> €</div></div>
@@ -1559,10 +1632,11 @@ trait ACDC_Documents_Billing_Core_Trait {
     $formation      = ! empty( $row['formation_full'] ) ? $row['formation_full'] : $row['formation'];
     $tot_ht         = ! empty( $row['tarif_ht_number'] ) ? $row['tarif_ht_number'] : $this->normalize_price_number( $row['tarif_ht'] ?? '0' );
     $tot_ttc        = ! empty( $row['tarif_ttc_number'] ) ? $row['tarif_ttc_number'] : $this->normalize_price_number( $row['tarif_ttc'] ?? '0' );
-    $vat_rate       = ! empty( $row['vat_rate_number'] ) ? $row['vat_rate_number'] : $this->normalize_price_number( $row['vat_rate'] ?? '20,00' );
+    $vat_rate       = ! empty( $row['vat_rate_number'] ) ? $row['vat_rate_number'] : $this->normalize_price_number( $row['vat_rate'] ?? '0,00' );
     $tva_total      = ! empty( $row['tva_total_number'] ) ? $row['tva_total_number'] : $this->format_quote_money_value( (float) str_replace( ',', '.', $tot_ttc ) - (float) str_replace( ',', '.', $tot_ht ) );
     $quantity       = ! empty( $row['quantity_number'] ) ? $row['quantity_number'] : $this->normalize_price_number( $row['quantity'] ?? '1,00' );
     $is_vat_exempt  = ( (float) str_replace( ',', '.', $vat_rate ) == 0.0 );
+    $vat_mention    = $this->acdc_mention_tva_document( $row );
 
     $sig_img_url   = 'https://acdcformation.com/wp-content/uploads/2026/04/Cachet-et-signature.png';
     $logo_img_url  = ! empty( $row['_org_logo'] ) ? (string) $row['_org_logo'] : 'https://acdcformation.com/wp-content/uploads/2026/03/Logo-ACDC.png';
@@ -1698,7 +1772,7 @@ trait ACDC_Documents_Billing_Core_Trait {
         <br />
         <div class="mentions">
           <?php if ( $is_vat_exempt ) : ?>
-          Devis valable <?php echo $this->quote_html( $row['validity_days'] ?? '30' ); ?> jours. Prix nets de TVA. TVA non applicable, art. 293 B CGI. Certifié Qualiopi.
+          Devis valable <?php echo $this->quote_html( $row['validity_days'] ?? '30' ); ?> jours. Prix nets de TVA.<?php echo '' !== $vat_mention ? ' ' . $this->quote_html( $vat_mention ) . '.' : ''; ?> Certifié Qualiopi.
           <?php else : ?>
           Devis valable <?php echo $this->quote_html( $row['validity_days'] ?? '30' ); ?> jours. Prix HT et TTC. TVA en vigueur. Certifié Qualiopi.
           <?php endif; ?>
@@ -1708,7 +1782,7 @@ trait ACDC_Documents_Billing_Core_Trait {
         <table class="totals" cellpadding="0" cellspacing="0">
           <?php if ( $is_vat_exempt ) : ?>
           <tr class="grand"><td>Total net (€)</td><td align="right"><?php echo $this->quote_html( $tot_ht ); ?> €</td></tr>
-          <tr><td colspan="2" style="font-size:7.5pt;color:#6b7280;">TVA non applicable — article 293 B du CGI</td></tr>
+          <?php if ( '' !== $vat_mention ) : ?><tr><td colspan="2" style="font-size:7.5pt;color:#6b7280;"><?php echo $this->quote_html( $vat_mention ); ?></td></tr><?php endif; ?>
           <?php else : ?>
           <tr><td><strong>Total HT (€)</strong></td><td align="right"><?php echo $this->quote_html( $tot_ht ); ?> €</td></tr>
           <tr><td><strong>Total TVA (€)</strong></td><td align="right"><?php echo $this->quote_html( $tva_total ); ?> €</td></tr>
@@ -2005,7 +2079,11 @@ trait ACDC_Documents_Billing_Core_Trait {
     $formation = ! empty( $row['formation_full'] ) ? $row['formation_full'] : $row['formation'];
     $tot_ht = $is_credit ? $this->normalize_price_number( $row['credit_note']['tarif_ht_value'] ?? '0' ) : ( $row['tarif_ht_number'] ?? $this->normalize_price_number( $row['tarif_ht_value'] ?? '0' ) );
     $tot_ttc = $is_credit ? $this->normalize_price_number( $row['credit_note']['tarif_ttc_value'] ?? '0' ) : ( $row['tarif_ttc_number'] ?? $this->normalize_price_number( $row['tarif_ttc_value'] ?? '0' ) );
-    $vat_rate = $is_credit ? $this->normalize_price_number( $row['credit_note']['vat_rate'] ?? '20,00' ) : ( $row['vat_rate_number'] ?? $this->normalize_price_number( $row['vat_rate'] ?? '20,00' ) );
+    /* ACDC 3.25.309 — L'avoir suit le régime de la facture qu'il annule : c'est
+       la même opération, en sens inverse. Le repli à « 20,00 » facturait 20 % de
+       TVA sur l'avoir d'une facture exonérée. */
+    $vat_rate = $is_credit ? $this->normalize_price_number( $row['credit_note']['vat_rate'] ?? ( $row['vat_rate'] ?? '0,00' ) ) : ( $row['vat_rate_number'] ?? $this->normalize_price_number( $row['vat_rate'] ?? '0,00' ) );
+    $vat_mention = $this->acdc_mention_tva_document( $row );
     $tva_total = $this->format_quote_money_value( (float) str_replace( ',', '.', $tot_ttc ) - (float) str_replace( ',', '.', $tot_ht ) );
     $quantity = $is_credit ? $this->normalize_price_number( $row['credit_note']['quantity'] ?? '1,00', 2 ) : ( $row['quantity_number'] ?? $this->normalize_price_number( $row['quantity'] ?? '1,00', 2 ) );
     $methods = $is_credit ? ( $row['credit_note']['payment_methods'] ?? '' ) : ( $row['payment_methods'] ?? '' );

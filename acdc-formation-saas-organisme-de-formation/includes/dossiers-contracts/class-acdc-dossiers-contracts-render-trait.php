@@ -1800,7 +1800,26 @@ trait ACDC_Dossiers_Contracts_Render_Trait {
           </div>
           <div class="acdc-contract-grid">
             <div class="acdc-contract-label">Taux de TVA associé (%) <span class="acdc-required">*</span></div>
-            <div><input type="text" name="registration_contract[vat_rate]" value="<?php echo esc_attr( isset( $contract->vat_rate ) ? $contract->vat_rate : $this->get_default_vat_rate_for_contract() ); ?>"<?php echo $readonly ? ' readonly' : ''; ?>></div>
+            <?php
+            /* ACDC 3.25.309 — Champ de saisie remplacé par un affichage : le
+               taux vient du régime de l'organisme, figé à la création de la
+               convention. Un champ libre ici aurait permis de taper un taux que
+               la facture issue de cette convention n'aurait pas repris. */
+            $__reg_conv = $this->acdc_regime_tva_document(
+              isset( $contract->vat_regime ) ? $contract->vat_regime : '',
+              isset( $contract->vat_rate ) ? $contract->vat_rate : ''
+            );
+            if ( '' === (string) $__reg_conv['cle'] && ( ! isset( $contract->vat_rate ) || '' === (string) $contract->vat_rate ) ) {
+              $__reg_conv = \ACDC\Support\VatRegime::get( $this->acdc_regime_tva_profil() );
+            }
+            ?>
+            <div>
+              <p style="margin:0;font-weight:600;"><?php echo esc_html( '' !== (string) $__reg_conv['libelle'] ? (string) $__reg_conv['libelle'] : number_format( (float) $__reg_conv['taux'], 2, ',', '' ) . ' %' ); ?></p>
+              <?php if ( '' !== (string) $__reg_conv['mention'] ) : ?>
+                <p class="description" style="margin:4px 0 0;"><?php echo esc_html( (string) $__reg_conv['mention'] ); ?></p>
+              <?php endif; ?>
+              <p class="description" style="margin:4px 0 0;">Régime de l’organisme, choisi dans le profil de l’entreprise et figé à la création de la convention.</p>
+            </div>
           </div>
         </div>
         <div class="acdc-contract-grid">

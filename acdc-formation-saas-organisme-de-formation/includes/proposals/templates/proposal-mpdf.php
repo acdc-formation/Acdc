@@ -430,7 +430,16 @@ $_pg_fin = 10 + $prog_days;
   <tr><td>Frais de déplacement</td><td style="font-weight:bold;"><?php echo $p->travel_costs_label?$e($p->travel_costs_label):'Offertes';?></td><td></td><td></td><td></td></tr>
   <tr class="tot"><td colspan="4" style="text-align:right;">TOTAL DE LA PROPOSITION</td><td><?php echo $e(number_format((float)$p->formation_total,0,',',' '));?>&nbsp;€ net de TVA</td></tr>
 </table>
-<p style="font-size:8pt;color:#6b7280;margin-bottom:3pt;">TVA non applicable – article 293 B du CGI</p>
+<?php
+/* ACDC 3.25.309 — La référence légale était écrite en dur ici : l'article 293 B
+   (franchise en base) s'imprimait quel que soit le régime réel de l'organisme,
+   et pendant que le devis du même dossier facturait 20 %. Elle vient désormais
+   du régime choisi dans le profil de l'entreprise, et disparaît quand la TVA
+   s'applique. */
+$acdc_mention_tva = method_exists( $this, 'acdc_mention_tva_profil' ) ? $this->acdc_mention_tva_profil() : '';
+if ( '' !== $acdc_mention_tva ) : ?>
+<p style="font-size:8pt;color:#6b7280;margin-bottom:3pt;"><?php echo $e( $acdc_mention_tva ); ?></p>
+<?php endif; ?>
 <p style="font-size:8pt;color:#6b7280;">Déclaration d'activité enregistrée sous le numéro <?php echo $e($acdc['nda']);?> auprès du préfet de région Provence-Alpes-Côte d'Azur.</p>
 <p style="text-align:center;font-weight:bold;color:#113860;text-decoration:underline;margin-top:10pt;">PROPOSITION VALABLE <?php echo $p->proposal_validity_months?$e($p->proposal_validity_months):'3';?> MOIS</p>
 </div>
