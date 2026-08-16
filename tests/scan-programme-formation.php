@@ -62,6 +62,25 @@ foreach ( $rii as $f ) {
     }
 }
 
+/* ── LE LIEN DU PROGRAMME NE DÉPEND PAS DE LA PIÈCE JOINTE ─────────────── */
+
+/* ACDC 3.25.305 — Tout le bloc qui compose l'e-mail de convention était gardé
+   par « si le fichier a été retrouvé sur le disque ». Un programme consultable
+   par son adresse mais introuvable localement disparaissait ENTIÈREMENT de
+   l'e-mail : ni joint, ni mentionné. Le programme doit être porté à la
+   connaissance du bénéficiaire avant l'entrée en formation, et c'est cet e-mail
+   qui le prouve. Le LIEN ne dépend que de l'adresse ; seule la PIÈCE JOINTE
+   dépend du fichier et de son poids. */
+$__dossier = $root . '/includes/dossiers-contracts/class-acdc-dossiers-contracts-core-trait.php';
+if ( is_readable( $__dossier ) ) {
+    $__src = (string) file_get_contents( $__dossier );
+    if ( false !== strpos( $__src, 'if ( \'\' !== $program[\'path\'] ) {' ) ) {
+        $hits[] = 'le lien du programme dépend de nouveau du fichier retrouvé sur le disque : un programme consultable par son adresse disparaîtrait de l’e-mail de convention, ni joint ni mentionné.';
+    } elseif ( false === strpos( $__src, 'if ( \'\' !== $program[\'url\'] ) {' ) ) {
+        $hits[] = 'la composition du programme dans l’e-mail de convention a changé de forme : elle n’est plus vérifiable.';
+    }
+}
+
 if ( $hits ) {
     echo "Lecture directe de program_file_url (utiliser le résolveur du noyau) :\n";
     foreach ( $hits as $h ) { echo '  ' . $h . "\n"; }

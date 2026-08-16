@@ -1789,13 +1789,24 @@ trait ACDC_Dossiers_Contracts_Core_Trait {
         $program = $this->acdc_formation_programme_file( $program_row );
       }
     }
-    if ( '' !== $program['path'] ) {
+    /* ACDC 3.25.305 — LE LIEN DU PROGRAMME DÉPENDAIT DE LA PIÈCE JOINTE.
+       Tout ce bloc était gardé par « si le fichier a été retrouvé sur le
+       disque ». Un programme parfaitement consultable par son adresse, mais
+       dont le chemin local ne se résout pas — hébergement externe, dossier
+       déplacé, adresse saisie à la main — disparaissait donc ENTIÈREMENT de
+       l'e-mail de convention : ni joint, ni même mentionné.
+       C'est un manquement Qualiopi : le programme doit être porté à la
+       connaissance du bénéficiaire avant l'entrée en formation, et l'e-mail de
+       convention est le moment où cela se prouve.
+       La condition testait la mauvaise chose. Le LIEN ne dépend que de
+       l'adresse ; seule la PIÈCE JOINTE dépend du fichier et de son poids. */
+    if ( '' !== $program['url'] ) {
       /* Un e-mail trop lourd n'arrive pas : passé ce poids, le programme reste
          accessible par son lien mais ne voyage plus en pièce jointe — et la
          phrase d'introduction, qui se construit sur `path`, cesse de l'annoncer
          comme joint. La convention, elle, part toujours : c'est la pièce qui
          engage. */
-      $program_size = (int) @filesize( $program['path'] );
+      $program_size = ( '' !== $program['path'] ) ? (int) @filesize( $program['path'] ) : 0;
       if ( $program_size > 0 && $program_size <= 4 * 1024 * 1024 ) {
         $package['program_file'] = array( 'path' => $program['path'], 'url' => $program['url'], 'label' => 'Programme de formation' );
         $package['attachments'][] = $program['path'];

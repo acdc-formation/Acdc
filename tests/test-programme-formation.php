@@ -90,5 +90,45 @@ $t( 'à défaut, la page du portail',
 $t( 'colonne vide : la page du portail aussi',
     programme_lien( '', array() ), 'https://site.fr/portail?fm_action=programme_pdf&fm_formation_id=12' );
 
-printf( "13 contrôles, %d échec(s)\n", $ko );
+/* --- CE QUE L'E-MAIL DE CONVENTION EMPORTE ------------------------------
+ *
+ * ACDC 3.25.305. Le lien du programme n'était ajouté à l'e-mail que si le
+ * FICHIER avait été retrouvé sur le disque. Un programme parfaitement
+ * consultable par son adresse — hébergement externe, dossier déplacé, adresse
+ * saisie à la main — disparaissait donc entièrement : ni joint, ni mentionné.
+ * C'est un manquement Qualiopi, le programme devant être porté à la
+ * connaissance du bénéficiaire avant l'entrée en formation.
+ *
+ * Reproduit la règle : le LIEN ne dépend que de l'adresse, la PIÈCE JOINTE du
+ * fichier et de son poids.
+ */
+function paquet_convention( array $programme, $poids ) {
+    $paquet = array( 'liens' => array(), 'jointes' => array() );
+    if ( '' === (string) $programme['url'] ) {
+        return $paquet;
+    }
+    if ( '' !== (string) $programme['path'] && $poids > 0 && $poids <= 4 * 1024 * 1024 ) {
+        $paquet['jointes'][] = $programme['path'];
+    }
+    $paquet['liens'][] = 'Programme de formation';
+    return $paquet;
+}
+
+$externe = programme_fichier( 'https://autre-site.fr/programme.pdf', array() );
+$t( 'programme externe : le lien part quand même',
+    count( paquet_convention( $externe, 0 )['liens'] ), 1 );
+$t( 'programme externe : rien en pièce jointe',
+    count( paquet_convention( $externe, 0 )['jointes'] ), 0 );
+
+$local = programme_fichier( $VRAI, array( $VRAI ) );
+$t( 'programme local léger : lien ET pièce jointe',
+    count( paquet_convention( $local, 500 * 1024 )['jointes'] ), 1 );
+$t( 'programme local trop lourd : le lien reste',
+    count( paquet_convention( $local, 6 * 1024 * 1024 )['liens'] ), 1 );
+$t( 'programme local trop lourd : pas de pièce jointe',
+    count( paquet_convention( $local, 6 * 1024 * 1024 )['jointes'] ), 0 );
+$t( 'aucun programme : aucun lien',
+    count( paquet_convention( array( 'path' => '', 'url' => '' ), 0 )['liens'] ), 0 );
+
+printf( "19 contrôles, %d échec(s)\n", $ko );
 exit( 0 === $ko ? 0 : 1 );
