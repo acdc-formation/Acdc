@@ -63,6 +63,24 @@ trait ACDC_Workflow_Engine_Trait {
     if ( ! is_admin() || wp_doing_ajax() || wp_doing_cron() ) {
       return;
     }
+    /* ACDC 3.25.311 — PAS PENDANT UN ENREGISTREMENT.
+       « admin_init » se déclenche AUSSI sur admin-post.php et admin-ajax.php,
+       c'est-à-dire au tout début du traitement de chaque formulaire enregistré.
+       Le moteur y aurait tourné AVANT le gestionnaire du formulaire : balayages
+       en base et envois d'e-mails intercalés dans une sauvegarde de convention,
+       et surtout, le moindre caractère émis avant le wp_redirect() final le fait
+       échouer — l'exploitant reste sur une page blanche, sans savoir si son
+       enregistrement a eu lieu.
+       Le moteur tourne sur les pages qu'on CONSULTE, jamais sur celles qui
+       ÉCRIVENT. wp_doing_ajax() ne couvre pas admin-post.php : il faut nommer
+       les deux. */
+    $__script = isset( $_SERVER['SCRIPT_NAME'] ) ? basename( (string) $_SERVER['SCRIPT_NAME'] ) : '';
+    if ( in_array( $__script, array( 'admin-post.php', 'admin-ajax.php' ), true ) ) {
+      return;
+    }
+    if ( ! empty( $_POST ) ) {
+      return;
+    }
     if ( ! current_user_can( 'manage_options' ) ) {
       return;
     }

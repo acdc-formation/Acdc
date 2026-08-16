@@ -20,7 +20,24 @@ class ACDC_Sig_Core {
      * Constantes
      * -------------------------------------------------------------------- */
 
-    const VERSION         = '2.0.0';
+    /* ACDC 3.25.311 — 2.0.0 → 2.1.0 POUR LA COLONNE « entity_label ».
+       maybe_upgrade() ne relance dbDelta QUE si ce numéro change. La colonne
+       avait été ajoutée au CREATE TABLE sans toucher à cette ligne : sur une
+       installation existante, elle n'aurait jamais été créée, et
+       create_signature_request() — qui l'écrit à chaque appel — aurait échoué
+       en silence. Plus une seule demande de signature n'aurait abouti : ni
+       convention, ni devis, ni contrat formateur, ni émargement.
+       Toute colonne ajoutée ci-dessous exige d'incrémenter ce numéro.
+
+       Le commentaire qui décrivait la colonne a été déplacé hors du CREATE
+       TABLE : dbDelta analyse la définition ligne par ligne et aurait pris
+       chaque ligne de commentaire pour une colonne à créer.
+
+       De qui est la pièce, et non plus seulement qui l'a signée : une
+       convention est signée par une personne au nom d'une entreprise, et c'est
+       l'entreprise qu'on cherche en classant un dossier. Vide quand il n'y a
+       pas d'entité — on retombe alors sur le signataire. */
+    const VERSION         = '2.1.0';
     const OPTION_DB_VER   = 'acdc_sig_db_version';
     const OPTION_PAGE     = 'acdc_sig_page_id';
     const OPTION_SETTINGS = 'acdc_sig_settings';
@@ -90,14 +107,6 @@ class ACDC_Sig_Core {
             signer_name   VARCHAR(190) NOT NULL DEFAULT '',
             signer_email  VARCHAR(190) NOT NULL DEFAULT '',
             signer_role   VARCHAR(100) NOT NULL DEFAULT '',
-            /* ACDC 3.25.309 — DE QUI EST CETTE PIÈCE, et non plus seulement qui
-               l'a signée. Les trois certificats de signature d'un même dossier
-               s'appelaient « certificat-12-1755374400.pdf » : trois fichiers
-               qu'on ne distinguait qu'en les ouvrant. Le nom du signataire ne
-               suffit pas — une convention est signée par une personne au nom
-               d'une entreprise, et c'est l'entreprise qu'on cherche dans un
-               dossier. Vide quand il n'y a pas d'entité : on retombe alors sur
-               le signataire, qui est bien la partie concernée. */
             entity_label  VARCHAR(190) NOT NULL DEFAULT '',
             session_id    BIGINT UNSIGNED DEFAULT NULL,
             learner_id    BIGINT UNSIGNED DEFAULT NULL,

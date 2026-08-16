@@ -94,10 +94,21 @@ class ACDC_Sig_PDF {
         $nom  = \ACDC\Support\NomDocument::composer( 'certificat ' . $nature, $entite, $date, 'pdf' );
         $base = substr( $nom, 0, -4 );
 
-        if ( file_exists( $sig_dir . $base . '.pdf' ) ) {
-            $base .= '-' . (int) $request->id;
-        }
-        return $base . '.pdf';
+        /* ACDC 3.25.311 — LISIBLE NE VEUT PAS DIRE DEVINABLE.
+           L'horodatage que ce nom portait avant n'était pas là pour dire la
+           date : il rendait l'adresse du fichier impossible à deviner. En le
+           retirant, j'avais rendu ce PDF atteignable par quiconque connaît le
+           nom de l'entreprise et la date approximative — le dossier
+           « acdc-signatures/<numéro>/ » est numéroté en séquence, et son
+           .htaccess ne protège QUE le sous-dossier des pièces d'identité, pas
+           le certificat lui-même. Or ce certificat porte le nom du signataire,
+           son adresse e-mail, son adresse IP et l'image de sa signature.
+           On garde donc les deux : la partie lisible devant, et un condensat
+           dérivé des clés du site derrière. Déterministe — une régénération
+           retrouve le même fichier — et impossible à deviner de l'extérieur.
+           Même procédé que pour les contrats formateur. */
+        $empreinte = substr( wp_hash( 'acdc-sig-certificat-' . (int) $request->id . '-' . $base ), 0, 16 );
+        return $base . '-' . $empreinte . '.pdf';
     }
 
     /* -----------------------------------------------------------------------

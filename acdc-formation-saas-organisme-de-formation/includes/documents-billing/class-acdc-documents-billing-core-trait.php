@@ -607,9 +607,26 @@ trait ACDC_Documents_Billing_Core_Trait {
    */
   private function acdc_figer_regime_tva( $data ) {
     $cle = isset( $data['vat_regime'] ) ? trim( (string) $data['vat_regime'] ) : '';
-    if ( '' === $cle || ! \ACDC\Support\VatRegime::existe( $cle ) ) {
-      $cle = $this->acdc_regime_tva_profil();
+    if ( '' !== $cle && \ACDC\Support\VatRegime::existe( $cle ) ) {
+      $data['vat_regime'] = $cle;
+      $data['vat_rate']   = \ACDC\Support\VatRegime::taux( $cle );
+      return $data;
     }
+    /* ACDC 3.25.311 — UN TAUX HÉRITÉ NE SE FAIT PAS ÉCRASER PAR LE PROFIL.
+       Le cas qui coûtait cher : un devis ANCIEN à 0 %, sans régime — parce que
+       zéro ne dit pas laquelle des trois exonérations s'applique, et qu'on
+       refuse de le deviner. Converti en facture, il tombait sur le profil, donc
+       sur 20 %, et le client recevait une facture 20 % plus chère que le devis
+       qu'il avait accepté.
+       Quand l'appelant transmet un taux, ce taux fait foi : il vient d'une
+       pièce que quelqu'un a signée. Le régime reste vide — on ne sait toujours
+       pas lequel c'était — et le document n'affichera donc aucune mention, ce
+       qui est exactement ce qu'il affichait avant. */
+    if ( isset( $data['vat_rate'] ) && '' !== (string) $data['vat_rate'] ) {
+      $data['vat_regime'] = '';
+      return $data;
+    }
+    $cle = $this->acdc_regime_tva_profil();
     $data['vat_regime'] = $cle;
     $data['vat_rate']   = \ACDC\Support\VatRegime::taux( $cle );
     return $data;

@@ -1517,8 +1517,18 @@ private function acdc_send_transactional_email( $to, $subject, $template_args = 
     if ( ! empty( $this->registration_contract_table ) ) { $tables[] = $this->registration_contract_table; }
 
     $reprises = 0;
+    $echecs   = 0;
     foreach ( $tables as $table ) {
       $lignes = (array) $wpdb->get_results( "SELECT id, vat_rate FROM {$table} WHERE vat_regime = '' OR vat_regime IS NULL" );
+      /* ACDC 3.25.311 — Une table qui refuse la question n'est pas une table
+         sans documents à reprendre. $wpdb rend un tableau vide dans les deux
+         cas ; seule l'erreur les distingue. Sans ce contrôle, une reprise qui
+         échoue — colonne pas encore créée, table absente — poserait quand même
+         son drapeau « c'est fait » et ne serait plus jamais retentée. */
+      if ( '' !== (string) $wpdb->last_error ) {
+        $echecs++;
+        continue;
+      }
       foreach ( $lignes as $ligne ) {
         $cle = \ACDC\Support\VatRegime::parTaux( $ligne->vat_rate );
         if ( '' === $cle ) {
@@ -1528,9 +1538,17 @@ private function acdc_send_transactional_email( $to, $subject, $template_args = 
         $reprises++;
       }
     }
-    update_option( 'acdc_of_regimes_tva_repris', '1', false );
-    if ( $reprises > 0 ) {
-      $this->log_action_event( 'reprise_regimes_tva', 'document', 0, 'success', array( 'documents' => $reprises ) );
+    if ( 0 === $echecs ) {
+      update_option( 'acdc_of_regimes_tva_repris', '1', false );
+    }
+    if ( $reprises > 0 || $echecs > 0 ) {
+      $this->log_action_event(
+        'reprise_regimes_tva',
+        'document',
+        0,
+        $echecs > 0 ? 'error' : 'success',
+        array( 'documents' => $reprises, 'tables_en_echec' => $echecs )
+      );
     }
   }
 
@@ -3306,6 +3324,20 @@ dbDelta( $sql_companies );
     dbDelta( $sql_questionnaire_actions );
     dbDelta( $sql_questionnaire_logs );
 
+    /* ACDC 3.25.311 — COMMENTAIRE SORTI DU CREATE TABLE.
+       Il vivait à l'intérieur de la définition, entre deux colonnes, depuis la
+       3.25.292. dbDelta n'est pas un moteur SQL : il découpe la définition ligne
+       par ligne et prend chaque ligne pour une colonne. Ces cinq lignes de
+       commentaire étaient donc cinq colonnes à créer, rejouées à chaque mise à
+       jour — sur la table du journal, précisément celle qu'on ouvre quand on
+       veut savoir ce qui s'est passé.
+
+       Ce que disait ce commentaire, et qui reste vrai : sans l'origine d'une
+       action, un journal dit ce qui a été fait mais pas d'où — impossible de
+       distinguer une manipulation depuis le bureau d'une manipulation depuis
+       ailleurs. Les journaux des portails apprenant et formateur enregistraient
+       déjà les deux ; celui du plugin, non. L'adresse est effacée au bout d'un
+       an — voir purge_system_logs(). */
     $sql_system_logs = "CREATE TABLE {$this->system_log_table} (
       id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
       log_level VARCHAR(20) NOT NULL DEFAULT 'info',
@@ -3318,11 +3350,6 @@ dbDelta( $sql_companies );
       message TEXT NULL,
       context_json LONGTEXT NULL,
       source VARCHAR(40) NOT NULL DEFAULT 'plugin',
-      /* ACDC 3.25.292 — Sans l'origine d'une action, un journal dit ce qui a été
-         fait mais pas d'où : impossible de distinguer une manipulation depuis le
-         bureau d'une manipulation depuis ailleurs. Les journaux des portails
-         apprenant et formateur enregistraient déjà les deux ; celui du plugin,
-         non. L'adresse est effacée au bout d'un an — voir purge_system_logs(). */
       ip_address VARCHAR(45) NULL,
       user_agent VARCHAR(255) NULL,
       created_at DATETIME NOT NULL,

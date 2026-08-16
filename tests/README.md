@@ -74,6 +74,7 @@ lancent sans WordPress, en quelques secondes.
     php tests/scan-tva-branchee.php # un seul réglage de TVA, figé sur le document, jamais écrit en dur
     php tests/test-nom-document.php # noms de fichiers lisibles, durées lisibles
     php tests/scan-recette-ecrans.php # les cinq défauts d'écran de la recette de bout en bout
+    php tests/scan-migrations-schema.php # une colonne ajoutée sans migration ne sort jamais
 
 Le dernier balaie tout le plugin et signale les fonctions qui utilisent `$wpdb`
 sans l'avoir importé — la faute qui a produit l'erreur fatale de la 3.25.236.

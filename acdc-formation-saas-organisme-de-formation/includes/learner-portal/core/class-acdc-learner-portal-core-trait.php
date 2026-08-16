@@ -1361,13 +1361,26 @@ trait ACDC_Learner_Portal_Core_Trait {
       "SELECT id, formation_id, company_id, start_date, start_at, end_at, end_date, trainer_id
          FROM {$this->session_table}
         WHERE formation_id = %d
-          AND ( is_draft IS NULL OR is_draft = 0 )",
+          AND ( is_draft IS NULL OR is_draft = 0 )
+          /* ACDC 3.25.311 — Une séance annulée n'est pas au planning de
+             quelqu'un : l'y laisser fait déplacer des gens pour rien. */
+          AND COALESCE( status, '' ) NOT IN ( 'Annulée', 'Annulee' )",
       (int) $ancre->formation_id
     ) );
+    /* ACDC 3.25.311 — L'ÉGALITÉ DOIT ÊTRE STRICTE, Y COMPRIS SUR L'ABSENCE.
+       Le premier filtre ne se déclenchait que si les DEUX séances portaient un
+       commanditaire non nul. Or « company_id » est nullable : une séance sans
+       commanditaire passait le filtre quoi qu'il arrive. Sur une formation du
+       catalogue vendue à deux entreprises, l'apprenant de l'une voyait les
+       séances de l'autre apparaître dans son planning — avec leurs dates et le
+       nom de leur formateur. Une fuite entre clients.
+       On exige désormais la MÊME valeur des deux côtés : deux séances sans
+       commanditaire vont ensemble, une séance sans commanditaire ne rejoint
+       jamais le parcours d'un dossier qui en a un. */
     $commanditaire = isset( $item['registration']->company_id ) ? (int) $item['registration']->company_id : 0;
     foreach ( $voisines as $s ) {
       $sc = isset( $s->company_id ) ? (int) $s->company_id : 0;
-      if ( $commanditaire && $sc && $sc !== $commanditaire ) {
+      if ( $sc !== $commanditaire ) {
         continue;
       }
       $out[ (int) $s->id ] = $s;
@@ -1756,7 +1769,10 @@ trait ACDC_Learner_Portal_Core_Trait {
          reprocher — ou par écrire pour la réclamer.
          Une ligne n'apparaît donc que si la pièce EXISTE, ou si l'évaluation
          correspondante est réellement rattachée au parcours de cet apprenant. */
-      $__prevus = $this->learner_portal_evaluations_prevues( (int) $registration->id );
+      $__prevus = $this->learner_portal_evaluations_prevues(
+        (int) $registration->id,
+        isset( $item['learner']->id ) ? (int) $item['learner']->id : 0
+      );
       $__resultats = array(
         array( 'positioning_result', 'positioning', 'Résultat du positionnement', $registration->positioning_result_document_url ?? '' ),
         /* ACDC 3.25.280 — L'apprenant voit son résultat d'évaluation
@@ -2039,22 +2055,32 @@ trait ACDC_Learner_Portal_Core_Trait {
    *
    * @return array Intentions de quiz : positioning, diagnostic, assessment, live.
    */
-  private function learner_portal_evaluations_prevues( $registration_id ) {
+  private function learner_portal_evaluations_prevues( $registration_id, $learner_id = 0 ) {
     global $wpdb;
     $registration_id = (int) $registration_id;
-    if ( ! $registration_id ) {
+    $learner_id      = (int) $learner_id;
+    if ( ! $registration_id && ! $learner_id ) {
       return array();
     }
     $tbl_p = $wpdb->prefix . 'acdc_of_qz_participants';
     $tbl_s = $wpdb->prefix . 'acdc_of_qz_sessions';
     $tbl_q = $wpdb->prefix . 'acdc_of_qz_quizzes';
+    /* ACDC 3.25.311 — ON INTERROGE AUSSI L'APPRENANT, PAS SEULEMENT SON DOSSIER.
+       « registration_id » n'est PAS renseigné à l'invitation : il n'est écrit
+       qu'au moment où le résultat est fabriqué, donc APRÈS que l'apprenant a
+       passé le quiz. Chercher sur cette seule colonne revenait à ne trouver que
+       les évaluations DÉJÀ FAITES — et donc à masquer « Bientôt disponible »
+       précisément dans le cas où il est juste : une évaluation prévue, pas
+       encore passée. C'est l'inverse exact du défaut qu'on corrigeait.
+       « learner_id », lui, est posé dès l'invitation. */
     $lignes = $wpdb->get_col( $wpdb->prepare(
       "SELECT DISTINCT qq.quiz_purpose
          FROM {$tbl_p} qp
          INNER JOIN {$tbl_s} qs ON qs.id = qp.session_id
          INNER JOIN {$tbl_q} qq ON qq.id = qs.quiz_id
-        WHERE qp.registration_id = %d",
-      $registration_id
+        WHERE ( %d > 0 AND qp.registration_id = %d )
+           OR ( %d > 0 AND qp.learner_id = %d )",
+      $registration_id, $registration_id, $learner_id, $learner_id
     ) );
     return array_values( array_filter( array_map( 'strval', (array) $lignes ) ) );
   }
