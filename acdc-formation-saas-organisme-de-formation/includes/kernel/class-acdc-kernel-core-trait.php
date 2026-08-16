@@ -559,7 +559,21 @@ private function acdc_send_transactional_email( $to, $subject, $template_args = 
        Le contrôle est donc remonté ici, au point de passage commun. Un envoi
        refusé est journalisé nommément : un blocage silencieux ferait chercher
        pendant des heures un e-mail qui n'est jamais parti. */
-    if ( method_exists( $this, 'acdc_wf_may_send_to' ) && ! $this->acdc_wf_may_send_to( $to ) ) {
+    /* ACDC 3.25.295 — UNE SEULE EXCEPTION, ET ELLE NE SORT PAS DE LA MAISON.
+       Le mode recette existe pour qu'aucun courrier n'atteigne un TIERS — un
+       apprenant, un financeur, un formateur. L'exploitant qui reçoit une alerte
+       sur ses propres sauvegardes n'est pas un tiers, et cette alerte est
+       précisément celle qui doit percer le silence : la faire retenir par la
+       recette reviendrait à taire l'avertissement qui prévient qu'on ne
+       s'avertit plus.
+       L'exception est donc doublement fermée : il faut que l'appelant l'ait
+       demandée explicitement ET que le destinataire soit l'adresse
+       d'administration du site. Aucune combinaison ne permet d'atteindre
+       quelqu'un d'autre. */
+    $alerte_exploitant = ! empty( $header_args['alerte_exploitant'] )
+      && strtolower( $to ) === strtolower( (string) get_option( 'admin_email' ) );
+
+    if ( ! $alerte_exploitant && method_exists( $this, 'acdc_wf_may_send_to' ) && ! $this->acdc_wf_may_send_to( $to ) ) {
       $this->insert_system_log( array(
         'log_level'   => 'warning',
         'event_type'  => 'email_blocked_test_mode',
@@ -4719,7 +4733,15 @@ dbDelta( $sql_companies );
  * protège rien.
  */
 private function acdc_nom_sauvegarde( $quand = null ) {
-  $quand = ( null === $quand ) ? current_time( 'timestamp' ) : ( is_numeric( $quand ) ? (int) $quand : strtotime( (string) $quand ) );
+  /* ACDC 3.25.295 — LE DÉCALAGE ÉTAIT COMPTÉ DEUX FOIS.
+     current_time('timestamp') ne rend PAS un instant : il rend time() auquel le
+     décalage du site a déjà été ajouté. wp_date() attend l'inverse — un instant
+     vrai, qu'il convertit lui-même à l'heure du site. Les deux enchaînés
+     ajoutaient donc le décalage une seconde fois : l'archive déposée à 13h11
+     s'appelait « 15h10mn », et l'écran affichait les deux chiffres à quelques
+     lignes d'intervalle sans que rien ne signale la contradiction.
+     C'est un relevé de l'agent de recette qui l'a vu. */
+  $quand = ( null === $quand ) ? time() : ( is_numeric( $quand ) ? (int) $quand : strtotime( (string) $quand ) );
   if ( (int) $quand <= 0 ) {
     return 'Sauvegarde';
   }
@@ -4728,7 +4750,7 @@ private function acdc_nom_sauvegarde( $quand = null ) {
 
 /** Le même nom, utilisable comme nom de fichier partout. */
 private function acdc_nom_fichier_sauvegarde( $quand = null ) {
-  $quand = ( null === $quand ) ? current_time( 'timestamp' ) : ( is_numeric( $quand ) ? (int) $quand : strtotime( (string) $quand ) );
+  $quand = ( null === $quand ) ? time() : ( is_numeric( $quand ) ? (int) $quand : strtotime( (string) $quand ) );
   return 'sauvegarde-du-' . wp_date( 'd-m-Y-H\hi\m\n', (int) $quand );
 }
 
@@ -4737,7 +4759,7 @@ private function acdc_nom_fichier_sauvegarde( $quand = null ) {
     if ( '' === $base ) {
       return '';
     }
-    $timestamp = current_time( 'timestamp' );
+    $timestamp = time();
     $stamp = wp_date( 'Ymd-His', $timestamp );
     $slug = sanitize_file_name( strtolower( (string) $label ) );
     $dir = trailingslashit( $base ) . $stamp . '-' . $slug;

@@ -177,6 +177,29 @@ accepte avec le compte davidcontal@gmail.com.
 Si le retour échoue, note le message EXACT affiché par Google ou par le plugin
 et rapporte-le tel quel : c'est lui qui dit quoi corriger.
 
+CE QUI S'EST DÉJÀ PRODUIT ICI, LE 16 AOÛT 2026, ET QUI PEUT RECOMMENCER.
+Le retour de Google a d'abord été refusé par le serveur lui-même : une page
+« 403 Forbidden » servie par LiteSpeed, donc par le pare-feu de l'hébergement,
+pas par Google. Puis le plugin a affiché « jeton d'état invalide ».
+
+La cause probable : Google ajoute à l'adresse de retour un paramètre
+« scope=https://www.googleapis.com/auth/drive.file ». Un paramètre de requête
+qui contient une URL complète est l'un des motifs les plus classiquement
+bloqués par ModSecurity — la famille de règles anti-inclusion distante — et
+ces règles sont plus sévères sur /wp-admin/ que sur le reste du site.
+
+Depuis la 3.25.295, le plugin distingue trois pannes au lieu d'une. Recopie la
+phrase EXACTE, elle désigne l'endroit à regarder :
+  - « arrivé SANS son jeton d'état […] retiré en chemin » → c'est le pare-feu
+    ou le cache de l'hébergement, pas un réglage ;
+  - « a expiré » → plus de quinze minutes se sont écoulées, ou l'écran a été
+    rechargé entre-temps : recommencer, sans passer par un onglet resté ouvert ;
+  - « ne correspond pas » → le retour ne vient pas de la demande faite ici.
+
+Dans le premier cas, le journal ModSecurity de N0C donne le numéro de la règle
+qui a bloqué, avec l'horodatage et l'adresse IP. En LECTURE SEULE : tu relèves
+le numéro et l'heure, tu ne modifies aucun réglage de sécurité.
+
 ════════════════════════════════════════════════
 TEMPS 3 — PROUVER QUE ÇA MARCHE
 ════════════════════════════════════════════════

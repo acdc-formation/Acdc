@@ -15637,7 +15637,7 @@ private function render_admin_gdrive_panel() {
   /* L'état, en une phrase, avant tout formulaire. */
   if ( '' !== $o['refresh_token'] && '' !== $o['folder_id'] ) {
     echo '<p style="color:#1e7e34;"><strong>Drive connecté.</strong> ';
-    echo esc_html( '' !== $o['dernier_envoi'] ? sprintf( 'Dernier envoi réussi le %s.', mysql2date( 'd/m/Y à H:i', $o['dernier_envoi'] ) ) : 'Aucun envoi pour le moment.' );
+    echo esc_html( '' !== $o['dernier_envoi'] ? sprintf( 'Dernier envoi réussi le %s.', get_date_from_gmt( $o['dernier_envoi'], 'd/m/Y à H:i' ) ) : 'Aucun envoi pour le moment.' );
     echo '</p>';
   } else {
     echo '<p><strong>Drive non connecté</strong> — les sauvegardes restent sur le serveur.</p>';

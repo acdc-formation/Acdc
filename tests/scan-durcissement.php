@@ -305,11 +305,72 @@ if ( ! is_readable( $drive ) ) {
         if ( false === strpos( $m[0], "current_user_can( 'manage_options' )" ) ) {
             $hits[] = 'le retour de Google ne vérifie plus le droit d’administration : n’importe quel visiteur pourrait déclencher l’échange qui enregistre un jeton d’accès au Drive.';
         }
-        if ( false === strpos( $m[0], "wp_verify_nonce( \$etat, 'acdc_gdrive_state' )" ) ) {
-            $hits[] = 'le retour de Google ne vérifie plus le jeton d’état : un lien préparé ailleurs pourrait faire enregistrer au plugin un Drive qui n’est pas celui de l’exploitant.';
+        if ( false === strpos( $m[0], 'hash_equals( $etat_pose, $etat_recu )' ) ) {
+            $hits[] = 'le retour de Google ne compare plus le jeton d’état : un lien préparé ailleurs pourrait faire enregistrer au plugin un Drive qui n’est pas celui de l’exploitant.';
+        }
+        if ( false === strpos( $m[0], "delete_transient( 'acdc_of_gdrive_state' )" ) ) {
+            $hits[] = 'le jeton d’état n’est plus consommé à la lecture : il resterait valable quinze minutes durant, et un même retour pourrait être rejoué.';
+        }
+        /* Trois pannes, trois phrases. Les confondre, c'était renvoyer
+           l'exploitant chercher un réglage quand le fautif était le pare-feu. */
+        $distinctes = 0;
+        foreach ( array( "'' === \$etat_recu", "'' === \$etat_pose", '! hash_equals(' ) as $cas ) {
+            if ( false !== strpos( $m[0], $cas ) ) {
+                $distinctes++;
+            }
+        }
+        if ( $distinctes < 3 ) {
+            $hits[] = 'les échecs du jeton d’état ne sont plus distingués : « retiré en chemin », « expiré » et « ne correspond pas » ne se corrigent pas au même endroit, et une seule phrase pour les trois renvoie chercher là où il n’y a rien.';
         }
     } else {
         $hits[] = 'le retour de Google est introuvable : la connexion du Drive ne peut plus aboutir.';
+    }
+
+    if ( preg_match( '/function acdc_gdrive_auth_url\(.*?\n\t\}/s', $src_drive, $m ) ) {
+        if ( false === strpos( $m[0], "set_transient( 'acdc_of_gdrive_state'" ) ) {
+            $hits[] = 'le jeton d’état n’est plus posé côté serveur : on retombe sur un jeton lié à la session, qui échoue au retour pour dix raisons étrangères à la sécurité.';
+        }
+    }
+
+    /* L'archive pèse 178 Mo. La fabriquer avant de savoir si elle peut partir,
+       c'est deux fois par jour de disque et de temps dépensés pour rien. */
+    if ( preg_match( '/function acdc_gdrive_sauvegarder_et_envoyer\(.*?\n\t\}/s', $src_drive, $m ) ) {
+        $pos_pret = strpos( $m[0], 'acdc_gdrive_pret()' );
+        $pos_faire = strpos( $m[0], 'create_manual_backup_snapshot(' );
+        if ( false === $pos_pret || false === $pos_faire || $pos_pret > $pos_faire ) {
+            $hits[] = 'la sauvegarde est de nouveau fabriquée AVANT de vérifier que le Drive est connecté : le serveur produirait 178 Mo deux fois par jour pour ne rien envoyer.';
+        }
+        /* Compter, et non chercher : une première version exigeait « au moins
+           trois traces » là où il y en a cinq. Supprimer celle du Drive non
+           connecté — exactement la régression qu'on veut interdire — en
+           laissait quatre, et le contrôle passait. On exige donc qu'AUCUN
+           chemin ne sorte sans avoir écrit : autant de traces que de sorties. */
+        $sorties = substr_count( $m[0], "return array( 'ok' => false" ) + 1; /* + la réussite */
+        if ( substr_count( $m[0], "log_action_event( 'gdrive_upload'" ) < $sorties ) {
+            $hits[] = 'un chemin d’échec de l’envoi ne laisse plus de trace au journal : la panne la plus probable redeviendrait la seule invisible.';
+        }
+    }
+
+    /* La veille n'a de valeur que branchée sur l'ÂGE du dernier succès : un
+       contrôle qui attend une erreur ne voit pas la tâche qui ne part jamais. */
+    if ( preg_match( '/function acdc_gdrive_veiller\(.*?\n\t\}/s', $src_drive, $m ) ) {
+        if ( false === strpos( $m[0], "\$o['dernier_envoi'] : \$o['connecte_le']" ) ) {
+            $hits[] = 'la veille ne se règle plus sur la date du dernier envoi réussi : un Drive connecté et jamais utilisé n’aurait aucune date à comparer, et son silence passerait pour normal.';
+        }
+        if ( false === strpos( $m[0], '36 * HOUR_IN_SECONDS' ) ) {
+            $hits[] = 'le délai d’alerte de la veille a changé : en dessous de deux rendez-vous manqués, l’alerte se déclenche pour un simple retard de wp-cron et devient le bruit qu’on n’écoute plus.';
+        }
+        /* Les DEUX courriers doivent porter la déclaration — l'alerte et le
+           retour à la normale. Chercher la mention une seule fois laissait
+           passer le sabotage de l'autre, et c'est l'alerte qui serait tombée. */
+        if ( substr_count( $m[0], "'alerte_exploitant' => true" ) < substr_count( $m[0], 'acdc_send_branded_email' ) ) {
+            $hits[] = 'un courrier de la veille ne se déclare plus comme alerte d’exploitation : le mode recette le retiendrait, et c’est exactement l’avertissement qui prévient qu’on ne s’avertit plus.';
+        }
+    } else {
+        $hits[] = 'la veille des sauvegardes a disparu : un envoi qui cesse ne se signalerait plus à personne.';
+    }
+    if ( false === strpos( $src_drive, 'function acdc_gdrive_veiller_en_admin' ) ) {
+        $hits[] = 'la veille ne passe plus par l’administration : si les tâches planifiées s’arrêtent, plus rien ne peut signaler qu’elles se sont arrêtées.';
     }
 
     /* Ce qui efface doit être borné par le haut comme par le bas : « conserver
@@ -323,6 +384,114 @@ if ( ! is_readable( $drive ) ) {
         }
     } else {
         $hits[] = 'acdc_gdrive_appliquer_conservation() est introuvable : les archives s’accumuleraient sans fin sur le Drive.';
+    }
+}
+
+/* ── 10. UNE SEULE HORLOGE ──────────────────────────────────────────────── */
+
+/* current_time('timestamp') ne rend PAS un instant : il rend time() auquel le
+   décalage du site a déjà été ajouté. wp_date() attend l'inverse — un instant
+   vrai, qu'il convertit lui-même. Enchaîner les deux ajoute le décalage une
+   seconde fois. L'archive déposée à 13h11 s'appelait « 15h10mn », et l'écran
+   affichait les deux chiffres à quelques lignes d'intervalle.
+
+   Le motif existe encore ailleurs dans le plugin, et certaines de ces lignes
+   calculent des DATES D'EXPIRATION de liens d'accès : un jeton annoncé pour
+   quinze minutes vivrait deux heures de plus. On ne les corrige pas dans une
+   livraison consacrée aux sauvegardes — ce serait un autre changement, avec un
+   autre risque. On les COMPTE, et on interdit qu'il y en ait une de plus. */
+$plafond_horloge = 16;
+$doubles = array();
+$fichiers_php = array();
+if ( is_dir( $root . '/includes' ) ) {
+    foreach ( new RecursiveIteratorIterator( new RecursiveDirectoryIterator( $root . '/includes' ) ) as $f ) {
+        if ( 'php' === $f->getExtension() ) {
+            $fichiers_php[] = $f->getPathname();
+        }
+    }
+}
+foreach ( $fichiers_php as $chemin ) {
+    $relatif = str_replace( $root . '/', '', $chemin );
+    foreach ( file( $chemin ) as $i => $ligne ) {
+        if ( preg_match( '/wp_date\(.*current_time\(\s*.timestamp.\s*\)/', $ligne ) ) {
+            $doubles[] = $relatif . ':' . ( $i + 1 );
+        }
+    }
+}
+if ( count( $doubles ) > $plafond_horloge ) {
+    $hits[] = sprintf(
+        'le décalage horaire est compté deux fois à %d endroits, soit %d de plus que la dette connue : une date affichée ou une expiration de lien serait fausse de la valeur du décalage. Dernier ajout : %s',
+        count( $doubles ),
+        count( $doubles ) - $plafond_horloge,
+        implode( ', ', array_slice( $doubles, $plafond_horloge ) )
+    );
+}
+/* Et le chemin des sauvegardes, lui, n'a plus le droit d'y figurer : c'est là
+   qu'on l'a vu, et c'est là que la date sert de preuve. On désigne les
+   fonctions, pas le fichier : une première version interdisait tout le noyau et
+   accusait un calcul de bilans à douze mois, où deux heures d'écart ne changent
+   rien. Un contrôle qui crie à côté finit par ne plus être lu. */
+/* La découpe s'arrête à la fonction SUIVANTE, pas à la première accolade de
+   bon niveau : l'indentation n'est pas uniforme dans ce fichier, et une découpe
+   naïve débordait — le contrôle voyait bien le défaut mais accusait la fonction
+   d'à côté. Envoyer chercher au mauvais endroit vaut à peine mieux que se
+   taire. */
+$corps = function ( $source, $fonction ) {
+    $debut = strpos( $source, 'function ' . $fonction . '(' );
+    if ( false === $debut ) {
+        return '';
+    }
+    $suivante = preg_match( '/\n\s*(?:private|public|protected)\s+function\s/', $source, $m, PREG_OFFSET_CAPTURE, $debut + 1 )
+        ? $m[0][1]
+        : strlen( $source );
+    return substr( $source, $debut, $suivante - $debut );
+};
+if ( '' !== $noyau ) {
+    foreach ( array( 'acdc_nom_sauvegarde', 'acdc_nom_fichier_sauvegarde', 'get_backup_run_directory' ) as $fonction ) {
+        if ( false !== strpos( $corps( $noyau, $fonction ), "current_time( 'timestamp' )" ) ) {
+            $hits[] = sprintf( '%s() compte de nouveau le décalage horaire deux fois : le nom de l’archive et l’écran se contrediraient, comme le 16 août 2026.', $fonction );
+        }
+    }
+}
+foreach ( $doubles as $ou ) {
+    if ( false !== strpos( $ou, 'backup-drive/' ) ) {
+        $hits[] = sprintf( '%s — le décalage est compté deux fois sur le chemin du dépôt : l’âge du dernier envoi, dont dépend l’alerte, deviendrait faux.', $ou );
+    }
+}
+
+/* Les dates de la veille s'écrivent en UTC. Une seule qui repasse à l'heure du
+   site, et l'âge du dernier envoi redevient faux de la valeur du décalage —
+   l'alerte partirait deux heures trop tôt, ou pas du tout. */
+if ( is_readable( $drive ) ) {
+    $src_drive = (string) file_get_contents( $drive );
+    foreach ( array( 'dernier_envoi', 'connecte_le', 'alerte_le' ) as $champ ) {
+        if ( preg_match( "/'" . $champ . "'\s*=>\s*current_time\(([^)]*)\)/", $src_drive, $m ) ) {
+            if ( false === strpos( $m[1], 'true' ) ) {
+                $hits[] = sprintf( 'la date « %s » n’est plus écrite en UTC : elle serait relue avec une autre horloge que celle qui l’a écrite, et l’âge du dernier envoi deviendrait faux.', $champ );
+            }
+        }
+    }
+    if ( false === strpos( $src_drive, "strtotime( \$date . ' UTC' )" ) ) {
+        $hits[] = 'la veille ne relit plus ses dates comme de l’UTC : elle repasserait par les réglages du site, dont les deux sources de décalage peuvent diverger — c’est ce qui a été constaté en production.';
+    }
+}
+
+/* ── 11. L'EXCEPTION AU MODE RECETTE RESTE UNE IMPASSE ──────────────────── */
+
+/* L'alerte de sauvegarde doit percer le mode recette — la faire retenir
+   reviendrait à taire l'avertissement qui prévient qu'on ne s'avertit plus.
+   Mais l'exception doit rester doublement fermée : il faut que l'appelant l'ait
+   demandée ET que le destinataire soit l'adresse d'administration. Retirer
+   l'une des deux conditions rouvrirait, au nom d'une alerte technique, la porte
+   par laquelle une analyse du besoin NOMINATIVE était déjà partie vers un
+   domaine étranger. */
+if ( '' !== $noyau ) {
+    if ( preg_match( '/\$alerte_exploitant\s*=(.*?);\n/s', $noyau, $m ) ) {
+        if ( false === strpos( $m[1], "\$header_args['alerte_exploitant']" ) || false === strpos( $m[1], "get_option( 'admin_email' )" ) ) {
+            $hits[] = 'l’exception au mode recette ne repose plus sur ses DEUX conditions : un envoi pourrait de nouveau atteindre un tiers alors que la recette est censée retenir le courrier.';
+        }
+    } elseif ( false !== strpos( $noyau, 'alerte_exploitant' ) ) {
+        $hits[] = 'l’exception au mode recette a changé de forme : elle n’est plus vérifiable, donc plus tenable.';
     }
 }
 

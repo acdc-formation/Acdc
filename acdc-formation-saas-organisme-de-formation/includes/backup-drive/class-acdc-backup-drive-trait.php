@@ -50,6 +50,8 @@ trait ACDC_Backup_Drive_Trait {
 			'actif'         => 0,
 			'dernier_envoi' => '',
 			'derniere_erreur' => '',
+			'connecte_le'   => '',
+			'alerte_le'     => '',
 		);
 		$o = array_merge( $defauts, $o );
 		foreach ( array( 'client_id', 'client_secret', 'refresh_token' ) as $secret ) {
@@ -76,12 +78,33 @@ trait ACDC_Backup_Drive_Trait {
 
 	/* ── AUTORISATION ──────────────────────────────────────────────────── */
 
-	/** L'adresse vers laquelle envoyer l'exploitant pour qu'il autorise l'accès. */
+	/**
+	 * L'adresse vers laquelle envoyer l'exploitant pour qu'il autorise l'accès.
+	 *
+	 * ACDC 3.25.295 — LE JETON D'ÉTAT N'EST PLUS UN NONCE WORDPRESS.
+	 *
+	 * C'était le réflexe, et c'était le mauvais outil. Un nonce est lié à la
+	 * session, au navigateur et à une fenêtre de douze heures. Or ce jeton-là
+	 * part faire un aller-retour de plusieurs minutes par un écran de
+	 * consentement Google, en traversant au passage un cache de page et le
+	 * pare-feu d'un hébergement mutualisé. Il échoue donc pour une dizaine de
+	 * raisons qui n'ont rien à voir avec une tentative d'attaque — et, en
+	 * échouant, il disait toujours la même phrase : « jeton d'état invalide ».
+	 * L'exploitant se retrouvait devant une panne sans cause lisible.
+	 *
+	 * Un jeton tiré au hasard et rangé côté serveur pour quinze minutes protège
+	 * exactement contre la même chose — qu'un retour fabriqué ailleurs passe
+	 * pour le nôtre — sans dépendre ni des cookies, ni du cache, ni de l'heure.
+	 * Et il permet de distinguer les trois pannes, qui ne se corrigent pas au
+	 * même endroit : rien n'est revenu, c'est trop tard, ce n'est pas le bon.
+	 */
 	private function acdc_gdrive_auth_url() {
 		$o = $this->acdc_gdrive_settings();
 		if ( '' === $o['client_id'] ) {
 			return '';
 		}
+		$etat = wp_generate_password( 32, false );
+		set_transient( 'acdc_of_gdrive_state', $etat, 15 * MINUTE_IN_SECONDS );
 		return 'https://accounts.google.com/o/oauth2/v2/auth?' . http_build_query( array(
 			'client_id'     => $o['client_id'],
 			'redirect_uri'  => $this->acdc_gdrive_redirect_uri(),
@@ -92,7 +115,7 @@ trait ACDC_Backup_Drive_Trait {
 			'scope'         => 'https://www.googleapis.com/auth/drive.file',
 			'access_type'   => 'offline',
 			'prompt'        => 'consent',
-			'state'         => wp_create_nonce( 'acdc_gdrive_state' ),
+			'state'         => $etat,
 		), '', '&', PHP_QUERY_RFC3986 );
 	}
 
@@ -110,9 +133,25 @@ trait ACDC_Backup_Drive_Trait {
 		if ( ! isset( $_GET['acdc_gdrive'] ) || 'callback' !== sanitize_key( wp_unslash( $_GET['acdc_gdrive'] ) ) ) {
 			return;
 		}
-		$etat = isset( $_GET['state'] ) ? sanitize_text_field( wp_unslash( $_GET['state'] ) ) : '';
-		if ( ! wp_verify_nonce( $etat, 'acdc_gdrive_state' ) ) {
-			$this->acdc_gdrive_save_settings( array( 'derniere_erreur' => 'Retour Google non reconnu (jeton d’état invalide).' ) );
+		/* Trois pannes distinctes se cachaient derrière une seule phrase. Elles
+		   ne se corrigent pas au même endroit : la première est chez
+		   l'hébergeur, la deuxième dans l'ordre des gestes, la troisième est la
+		   seule qui mérite qu'on s'inquiète. */
+		$etat_recu = isset( $_GET['state'] ) ? sanitize_text_field( wp_unslash( $_GET['state'] ) ) : '';
+		$etat_pose = (string) get_transient( 'acdc_of_gdrive_state' );
+		/* Usage unique : consommé dès qu'il est lu, quel que soit le verdict. */
+		delete_transient( 'acdc_of_gdrive_state' );
+
+		if ( '' === $etat_recu ) {
+			$this->acdc_gdrive_save_settings( array( 'derniere_erreur' => 'Le retour de Google est arrivé SANS son jeton d’état : il a été retiré en chemin. Ce n’est pas un réglage à corriger — regardez le pare-feu (ModSecurity) et le cache de l’hébergement, qui filtrent les paramètres des adresses de /wp-admin/.' ) );
+			return;
+		}
+		if ( '' === $etat_pose ) {
+			$this->acdc_gdrive_save_settings( array( 'derniere_erreur' => 'Le jeton d’état a expiré : plus de quinze minutes se sont écoulées entre le clic sur « Connecter mon Drive » et le retour, ou cet écran a été rechargé entre-temps. Recommencez, sans passer par un onglet resté ouvert.' ) );
+			return;
+		}
+		if ( ! hash_equals( $etat_pose, $etat_recu ) ) {
+			$this->acdc_gdrive_save_settings( array( 'derniere_erreur' => 'Le jeton d’état renvoyé ne correspond pas à celui posé par cet écran : ce retour ne vient pas de la demande faite ici. Rien n’a été enregistré.' ) );
 			return;
 		}
 		if ( isset( $_GET['error'] ) ) {
@@ -151,6 +190,11 @@ trait ACDC_Backup_Drive_Trait {
 			'refresh_token'   => (string) $jeton['refresh_token'],
 			'actif'           => 1,
 			'derniere_erreur' => '',
+			/* Point de départ de la veille : sans lui, un Drive connecté et
+			   jamais utilisé n'aurait aucune date à laquelle comparer, et le
+			   silence passerait pour normal. */
+			'connecte_le'     => current_time( 'mysql', true ),
+			'alerte_le'       => '',
 		) );
 		$this->log_action_event( 'gdrive_connect', 'settings', 0, 'success' );
 	}
@@ -368,16 +412,25 @@ trait ACDC_Backup_Drive_Trait {
 	 * @return array{ok:bool,message:string}
 	 */
 	public function acdc_gdrive_sauvegarder_et_envoyer() {
+		/* ACDC 3.25.295 — L'ORDRE ÉTAIT INVERSÉ, ET IL COÛTAIT CHER.
+		   Cette fonction fabriquait l'archive complète — 178 Mo, 451 fichiers de
+		   preuve, 62 tables — PUIS constatait que le Drive n'était pas connecté.
+		   Deux fois par jour, le serveur produisait donc 178 Mo pour rien.
+		   Pire : c'était le seul chemin d'échec qui n'écrivait pas dans le
+		   journal. Tous les autres y laissaient une trace ; celui qui allait se
+		   produire tous les jours tant que le Drive n'était pas branché, non. La
+		   panne la plus probable était la seule invisible. */
+		if ( ! $this->acdc_gdrive_pret() ) {
+			$message = 'Drive non connecté : aucune archive n’a été fabriquée et rien n’est parti. Rendez-vous dans « Données & maintenance » pour terminer la connexion.';
+			$this->acdc_gdrive_save_settings( array( 'derniere_erreur' => $message ) );
+			$this->log_action_event( 'gdrive_upload', 'settings', 0, 'error', array( 'message' => $message ) );
+			return array( 'ok' => false, 'message' => $message );
+		}
 		$resultat = $this->create_manual_backup_snapshot( 'planifiee', array( 'origine' => 'cron' ) );
 		if ( empty( $resultat['success'] ) || empty( $resultat['manifest'] ) ) {
 			$message = 'La sauvegarde n’a pas pu être créée : rien n’a été envoyé.';
 			$this->acdc_gdrive_save_settings( array( 'derniere_erreur' => $message ) );
 			$this->log_action_event( 'gdrive_upload', 'settings', 0, 'error', array( 'message' => $message ) );
-			return array( 'ok' => false, 'message' => $message );
-		}
-		if ( ! $this->acdc_gdrive_pret() ) {
-			$message = 'Sauvegarde créée sur le serveur. Drive non connecté : elle n’est pas partie.';
-			$this->acdc_gdrive_save_settings( array( 'derniere_erreur' => $message ) );
 			return array( 'ok' => false, 'message' => $message );
 		}
 
@@ -413,7 +466,8 @@ trait ACDC_Backup_Drive_Trait {
 
 		$purge = $this->acdc_gdrive_appliquer_conservation();
 		$this->acdc_gdrive_save_settings( array(
-			'dernier_envoi'   => current_time( 'mysql' ),
+			/* ACDC 3.25.295 — Écrit en UTC, sans exception. Voir acdc_gdrive_veiller(). */
+			'dernier_envoi'   => current_time( 'mysql', true ),
 			'derniere_erreur' => '',
 		) );
 		$this->log_action_event( 'gdrive_upload', 'settings', 0, 'success', array(
@@ -431,5 +485,134 @@ trait ACDC_Backup_Drive_Trait {
 			$this->acdc_gdrive_save_settings( array( 'derniere_erreur' => 'Interruption : ' . $e->getMessage() ) );
 			$this->log_error( 'gdrive_cron', $e->getMessage() );
 		}
+		$this->acdc_gdrive_veiller();
+	}
+
+	/* ── LA VEILLE ─────────────────────────────────────────────────────── */
+
+	/**
+	 * L'alerte se déclenche sur l'ÂGE DU DERNIER SUCCÈS, pas sur l'erreur.
+	 *
+	 * C'est tout le sujet. Une alerte branchée sur « une erreur est survenue »
+	 * ne verrait pas la panne la plus probable de cet hébergement : les tâches
+	 * de WordPress ne partent qu'à la visite suivante, et sur un site peu
+	 * fréquenté à midi elles peuvent ne pas partir du tout. Alors rien
+	 * n'échoue. Il n'y a aucune erreur à signaler. L'écran affiche toujours
+	 * « Dernier envoi réussi le… » avec une date qui vieillit doucement, dans
+	 * une page que personne n'ouvre — et le jour où l'on en a besoin, la
+	 * dernière copie des émargements signés a trois mois.
+	 *
+	 * Une date trop vieille, elle, couvre les deux pannes d'un seul contrôle :
+	 * l'envoi qui échoue et l'envoi qui n'a jamais eu lieu.
+	 *
+	 * DEUX DÉCLENCHEURS, PARCE QU'UN SEUL SE SERAIT TU AVEC LE RESTE. La veille
+	 * est appelée après chaque tâche planifiée, et aussi à l'ouverture de
+	 * l'administration (une fois par heure au plus). Si le cron est mort, la
+	 * simple visite d'un écran suffit à donner l'alerte. Reste un cas qu'aucun
+	 * code ne peut couvrir depuis l'intérieur : personne ne visite le site ET
+	 * le cron ne tourne plus. Là, seule une surveillance extérieure verrait
+	 * quelque chose — c'est une limite, elle est écrite ici pour ne pas être
+	 * confondue avec une garantie.
+	 */
+	/**
+	 * L'instant vrai derrière une date de la veille — lue comme de l'UTC.
+	 *
+	 * ACDC 3.25.295 — DEUX HORLOGES, DEUX VÉRITÉS. La date était écrite avec
+	 * current_time('mysql'), qui applique l'option « gmt_offset », et relue avec
+	 * mysql2date(), qui applique wp_timezone() — laquelle se règle sur
+	 * « timezone_string ». Ces deux réglages sont censés s'accorder ; ils
+	 * peuvent diverger, et sur ce site ils divergent : la même sauvegarde
+	 * s'affichait à 13h11 sur une ligne et à 15h10 deux lignes plus bas.
+	 *
+	 * Une veille qui déclenche sur un ÂGE ne peut pas reposer là-dessus : deux
+	 * heures d'écart, et l'alerte part deux heures trop tôt ou deux heures trop
+	 * tard — ou pas du tout. On écrit donc en UTC, on compare en UTC, et on ne
+	 * convertit qu'au dernier moment, pour l'œil humain. Aucun réglage de site
+	 * ne s'interpose plus entre l'écriture et la lecture.
+	 */
+	private function acdc_gdrive_instant( $date ) {
+		$date = trim( (string) $date );
+		if ( '' === $date ) {
+			return 0;
+		}
+		$ts = strtotime( $date . ' UTC' );
+		return $ts ? (int) $ts : 0;
+	}
+
+	public function acdc_gdrive_veiller() {
+		$o = $this->acdc_gdrive_settings();
+
+		/* Tant que le Drive n'est pas connecté, l'écran le dit en toutes lettres
+		   et l'exploitant est en train de s'en occuper : un courrier quotidien
+		   ne lui apprendrait rien et lui apprendrait à ne plus les lire. */
+		if ( ! $this->acdc_gdrive_pret() ) {
+			return;
+		}
+
+		$reference = '' !== $o['dernier_envoi'] ? $o['dernier_envoi'] : $o['connecte_le'];
+		if ( '' === $reference ) {
+			return;
+		}
+		$age     = time() - $this->acdc_gdrive_instant( $reference );
+		$limite  = 36 * HOUR_IN_SECONDS; /* Deux rendez-vous manqués, pas un. */
+		$destinataire = sanitize_email( (string) get_option( 'admin_email' ) );
+		if ( '' === $destinataire ) {
+			return;
+		}
+
+		/* Le retour à la normale se dit, sinon le silence resterait ambigu :
+		   « je n'ai rien reçu » ne distingue pas « tout va bien » de « l'alerte
+		   elle-même est en panne ». */
+		if ( $age <= $limite ) {
+			if ( '' !== $o['alerte_le'] ) {
+				$this->acdc_gdrive_save_settings( array( 'alerte_le' => '' ) );
+				$this->acdc_send_branded_email(
+					$destinataire,
+					'Sauvegardes ACDC : le dépôt sur Drive a repris',
+					array(
+						'intro_html' => '<p>Les sauvegardes repartent normalement vers Google Drive.</p>',
+						'body_html'  => '<p>Dernier dépôt réussi : <strong>' . esc_html( get_date_from_gmt( $o['dernier_envoi'], 'd/m/Y à H:i' ) ) . '</strong>.</p>',
+					),
+					array( 'alerte_exploitant' => true, 'email_category' => 'exploitation' )
+				);
+			}
+			return;
+		}
+
+		/* Une alerte par jour au plus : la panne dure, le rappel ne doit pas
+		   devenir le bruit qui la fait ignorer. */
+		if ( '' !== $o['alerte_le'] && ( time() - $this->acdc_gdrive_instant( $o['alerte_le'] ) ) < DAY_IN_SECONDS ) {
+			return;
+		}
+
+		$heures = (int) floor( $age / HOUR_IN_SECONDS );
+		$quoi   = '' !== $o['dernier_envoi']
+			? 'Dernier dépôt réussi : <strong>' . esc_html( get_date_from_gmt( $o['dernier_envoi'], 'd/m/Y à H:i' ) ) . '</strong>.'
+			: '<strong>Aucun dépôt n’a jamais abouti</strong> depuis la connexion du Drive.';
+		$cause = '' !== $o['derniere_erreur']
+			? '<p>Dernière erreur enregistrée : ' . esc_html( $o['derniere_erreur'] ) . '</p>'
+			: '<p>Aucune erreur n’a été enregistrée : l’envoi n’a donc pas échoué, il n’a pas eu lieu. Les tâches de WordPress ne partent qu’à la première visite qui suit l’heure prévue — vérifiez la tâche planifiée de votre hébergeur.</p>';
+
+		$this->acdc_send_branded_email(
+			$destinataire,
+			sprintf( 'Sauvegardes ACDC : rien n’est parti sur Drive depuis %d heures', $heures ),
+			array(
+				'intro_html' => '<p>Vos sauvegardes ne quittent plus le serveur.</p>',
+				'body_html'  => '<p>' . $quoi . '</p>' . $cause
+					. '<p>Tant que ce message revient, la seule copie de vos données — apprenants, conventions, émargements signés, factures — est sur le disque qu’elle est censée protéger.</p>',
+			),
+			array( 'alerte_exploitant' => true, 'email_category' => 'exploitation' )
+		);
+		$this->acdc_gdrive_save_settings( array( 'alerte_le' => current_time( 'mysql', true ) ) );
+		$this->log_action_event( 'gdrive_veille', 'settings', 0, 'error', array( 'heures' => $heures ) );
+	}
+
+	/** La veille passe aussi par l'administration : un cron mort ne s'auto-signale pas. */
+	public function acdc_gdrive_veiller_en_admin() {
+		if ( ! current_user_can( 'manage_options' ) || get_transient( 'acdc_of_gdrive_veille' ) ) {
+			return;
+		}
+		set_transient( 'acdc_of_gdrive_veille', 1, HOUR_IN_SECONDS );
+		$this->acdc_gdrive_veiller();
 	}
 }
