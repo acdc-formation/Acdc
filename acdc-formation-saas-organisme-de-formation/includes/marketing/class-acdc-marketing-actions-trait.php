@@ -486,22 +486,53 @@ trait ACDC_Marketing_Actions_Trait {
     if ( ! empty( $entry['bcc'] ) && is_array( $entry['bcc'] ) ) {
       $headers[] = 'Bcc: ' . implode( ',', array_map( 'sanitize_email', $entry['bcc'] ) );
     }
-    $headers[] = 'X-ACDC-Source-Module: ' . ( ! empty( $entry['source_module'] ) ? sanitize_key( $entry['source_module'] ) : 'archive' );
-    $headers[] = 'X-ACDC-Source-Action: resend_archive';
-    if ( ! empty( $entry['related_entity_type'] ) ) {
-      $headers[] = 'X-ACDC-Related-Entity-Type: ' . sanitize_key( $entry['related_entity_type'] );
-      $headers[] = 'X-ACDC-Related-Entity-Id: ' . absint( $entry['related_entity_id'] );
+    /* ACDC 3.25.298 — CE RENVOI NE CONSULTAIT PAS LE MODE RECETTE.
+     *
+     * C'était le dernier appel direct à wp_mail() du plugin, et le balayage le
+     * tolérait sous l'étiquette « campagnes : mise en page propre ». Or ce n'est
+     * pas une campagne : c'est le renvoi d'un e-mail ARCHIVÉ, à son destinataire
+     * d'ORIGINE, avec son corps d'origine. L'exemption décrivait autre chose que
+     * ce que le code faisait — une liste tenue à la main qui avait dérivé.
+     *
+     * Conséquence concrète : recette cochée, un clic sur « Renvoyer » repartait
+     * pour de bon vers l'apprenant, le financeur ou le prospect d'origine. C'est
+     * exactement la panne de la 3.25.218, sur une porte qu'on avait oubliée.
+     *
+     * La porte commune accepte un HTML déjà composé depuis la 3.25.246 : la mise
+     * en page archivée est donc rendue à l'identique, et le garde-fou
+     * s'applique. Deux différences assumées : l'expéditeur est celui de
+     * l'organisme AUJOURD'HUI — réexpédier sous une ancienne identité serait un
+     * défaut, pas une fidélité — et un destinataire retenu par la recette est
+     * journalisé nommément par la porte.
+     */
+    $entetes_sup = array();
+    foreach ( $headers as $ligne ) {
+      /* La porte pose elle-même Content-Type, From et Reply-To. */
+      if ( preg_match( '/^(Content-Type|From|Reply-To):/i', (string) $ligne ) ) {
+        continue;
+      }
+      $entetes_sup[] = $ligne;
     }
-    if ( ! empty( $entry['category'] ) ) {
-      $headers[] = 'X-ACDC-Email-Category: ' . sanitize_key( $entry['category'] );
+    $destinataires = array_filter( array_map( 'trim', (array) ( $entry['to'] ?? array() ) ) );
+    $sujet = ! empty( $entry['subject'] ) ? $entry['subject'] : trim( 'E-mail ' . $this->acdc_org_identity()['raison_sociale'] );
+    $sent  = false;
+    foreach ( $destinataires as $destinataire ) {
+      $parti = $this->acdc_send_branded_email(
+        $destinataire,
+        $sujet,
+        array( 'raw_html' => ! empty( $entry['body'] ) ? $entry['body'] : '' ),
+        array(
+          'source_module'       => ! empty( $entry['source_module'] ) ? $entry['source_module'] : 'archive',
+          'source_action'       => 'resend_archive',
+          'related_entity_type' => $entry['related_entity_type'] ?? '',
+          'related_entity_id'   => $entry['related_entity_id'] ?? '',
+          'email_category'      => $entry['category'] ?? '',
+          'extra_headers'       => $entetes_sup,
+        ),
+        ! empty( $entry['attachments'] ) ? (array) $entry['attachments'] : array()
+      );
+      $sent = $sent || $parti;
     }
-    $sent = wp_mail(
-      ! empty( $entry['to'] ) ? $entry['to'] : array(),
-      ! empty( $entry['subject'] ) ? $entry['subject'] : trim( 'E-mail ' . $this->acdc_org_identity()['raison_sociale'] ),
-      ! empty( $entry['body'] ) ? $entry['body'] : '',
-      $headers,
-      ! empty( $entry['attachments'] ) ? (array) $entry['attachments'] : array()
-    );
     if ( $sent ) {
       $this->touch_marketing_archive_resend( $archive_id );
       $this->redirect_to_portal( 'marketing_email_archive', 'E-mail renvoyé.', 'success', array( 'action' => 'view', 'archive_id' => $archive_id ) );
