@@ -14,6 +14,23 @@ if ( ! defined( 'ABSPATH' ) ) {
 
 trait ACDC_Sessions_Actions_Trait {
 
+  /**
+   * Les demi-journées d'une séance qui n'en déclare pas.
+   *
+   * ACDC 3.25.304. La règle elle-même vit dans src/Support/HalfDaySplit.php,
+   * hors de WordPress et vérifiée par 22 cas : ici on ne fait que lui donner
+   * les horaires de pause de l'organisme, et rendre du JSON.
+   */
+  private function acdc_deduire_demi_journees( $start_at, $end_at ) {
+    $reglages = get_option( 'acdc_of_settings', array() );
+    $pause_d  = is_array( $reglages ) && ! empty( $reglages['default_am_end'] )   ? (string) $reglages['default_am_end']   : \ACDC\Support\HalfDaySplit::PAUSE_DEBUT_DEFAUT;
+    $pause_f  = is_array( $reglages ) && ! empty( $reglages['default_pm_start'] ) ? (string) $reglages['default_pm_start'] : \ACDC\Support\HalfDaySplit::PAUSE_FIN_DEFAUT;
+    $creneaux = \ACDC\Support\HalfDaySplit::decouper( (string) $start_at, (string) $end_at, $pause_d, $pause_f );
+    /* Aucun découpage possible — dates absentes ou incohérentes : on n'écrit
+       rien plutôt qu'un planning vide, qui passerait pour une déclaration. */
+    return $creneaux ? wp_json_encode( $creneaux ) : null;
+  }
+
   public function handle_save_session() {
     $this->require_admin_manager_nonce( 'acdc_save_session' );
 
@@ -72,6 +89,10 @@ trait ACDC_Sessions_Actions_Trait {
 
     $acdc_reste_brouillon = $acdc_etait_brouillon && ! $acdc_veut_valider;
 
+    $acdc_start_at = $this->acdc_session_datetime_field( 'start', $acdc_existing_session );
+
+    $acdc_end_at   = $this->acdc_session_datetime_field( 'end', $acdc_existing_session );
+
     $data = array(
       'formation_id' => isset( $_POST['formation_id'] ) && absint( wp_unslash( $_POST['formation_id'] ) ) ? absint( wp_unslash( $_POST['formation_id'] ) ) : null,
       'company_id'  => isset( $_POST['company_id'] ) && absint( wp_unslash( $_POST['company_id'] ) ) ? absint( wp_unslash( $_POST['company_id'] ) ) : null,
@@ -87,8 +108,8 @@ trait ACDC_Sessions_Actions_Trait {
       'session_type' => $this->acdc_session_preserved_field( 'session_type', $acdc_existing_session, '' ),
       'attendance_method' => $this->acdc_session_preserved_field( 'attendance_method', $acdc_existing_session, '' ),
       'session_format' => $this->acdc_session_preserved_field( 'session_format', $acdc_existing_session, '' ),
-      'start_at'   => $this->acdc_session_datetime_field( 'start', $acdc_existing_session ),
-      'end_at'    => $this->acdc_session_datetime_field( 'end', $acdc_existing_session ),
+      'start_at'   => $acdc_start_at,
+      'end_at'    => $acdc_end_at,
       'start_date'  => isset( $_POST['start_date'] ) ? sanitize_text_field( wp_unslash( $_POST['start_date'] ) ) : null,
       'end_date'   => isset( $_POST['end_date'] ) ? sanitize_text_field( wp_unslash( $_POST['end_date'] ) ) : null,
       'location'   => isset( $_POST['location'] ) ? sanitize_text_field( wp_unslash( $_POST['location'] ) ) : '',
@@ -101,9 +122,21 @@ trait ACDC_Sessions_Actions_Trait {
       /* ACDC 3.25.188 — Le planning détaillé n'est pas envoyé par le formulaire de
          modification : l'écraser par NULL détruisait les demi-journées d'une
          séance née d'une proposition. On ne remplace que ce qui est transmis. */
+      /* ACDC 3.25.304 — UNE SÉANCE NÉE À LA MAIN NAISSAIT SANS SES DEMI-JOURNÉES.
+         Aucun formulaire n'envoie schedule_json : seule une séance née d'une
+         convention le recevait. Toutes les autres restaient à NULL — et tout ce
+         qui compte des heures retombe alors sur « début → fin », PAUSE DÉJEUNER
+         COMPRISE. D'où « Heures de formation dispensées : 16:00:00 » pour deux
+         journées qui en font 14, et le même écart sur le BPF et les
+         statistiques du formateur.
+         On ne fabrique pas d'horaires : on coupe la plage annoncée là où
+         l'organisme situe sa pause, et seulement si elle l'enjambe. Les bornes
+         restent celles de la séance. */
       'schedule_json' => isset( $_POST['schedule_json'] )
         ? wp_json_encode( wp_unslash( $_POST['schedule_json'] ) )
-        : ( $acdc_existing_session ? $acdc_existing_session->schedule_json : null ),
+        : ( ( $acdc_existing_session && ! empty( $acdc_existing_session->schedule_json ) )
+            ? $acdc_existing_session->schedule_json
+            : $this->acdc_deduire_demi_journees( $acdc_start_at, $acdc_end_at ) ),
       'notes'    => isset( $_POST['notes'] ) ? sanitize_textarea_field( wp_unslash( $_POST['notes'] ) ) : '',
       'updated_at'  => $this->now_mysql(),
     );

@@ -986,6 +986,7 @@ private function acdc_send_transactional_email( $to, $subject, $template_args = 
           $this->backfill_qualiopi_toggles_default_state();
           $this->retire_legacy_positioning_test_module();
           $this->backfill_org_identity_from_code();
+          $this->acdc_reprise_demi_journees_manquantes();
 
           delete_option( 'acdc_of_upgrade_blocked' );
           $upgrade_done = true;
@@ -1436,6 +1437,56 @@ private function acdc_send_transactional_email( $to, $subject, $template_args = 
    * était magique devient modifiable. C'est le dernier endroit du plugin où
    * ces valeurs figurent, et elles y figurent pour pouvoir en disparaître.
    */
+  /**
+   * Les séances qui n'ont jamais reçu leurs demi-journées.
+   *
+   * ACDC 3.25.304. Aucun formulaire n'envoyait schedule_json : seules les
+   * séances nées d'une convention l'avaient. Toutes les autres comptaient la
+   * pause déjeuner comme du temps de formation — d'où « 16:00:00 » sur deux
+   * journées qui en font 14, et le même écart sur le BPF.
+   *
+   * CETTE REPRISE NE REMPLIT QUE LE VIDE. Elle n'écrase aucun planning existant,
+   * ne touche ni aux horaires de la séance, ni aux signatures, ni à quoi que ce
+   * soit d'autre : elle ajoute la lecture qui manquait. Un planning déjà saisi —
+   * fût-il inhabituel — est une décision, pas un oubli à corriger.
+   */
+  private function acdc_reprise_demi_journees_manquantes() {
+    if ( '1' === get_option( 'acdc_of_demi_journees_reprises' ) ) {
+      return;
+    }
+    global $wpdb;
+    if ( empty( $this->session_table ) ) {
+      return;
+    }
+    $reglages = get_option( 'acdc_of_settings', array() );
+    $pause_d  = is_array( $reglages ) && ! empty( $reglages['default_am_end'] )   ? (string) $reglages['default_am_end']   : \ACDC\Support\HalfDaySplit::PAUSE_DEBUT_DEFAUT;
+    $pause_f  = is_array( $reglages ) && ! empty( $reglages['default_pm_start'] ) ? (string) $reglages['default_pm_start'] : \ACDC\Support\HalfDaySplit::PAUSE_FIN_DEFAUT;
+
+    $lignes = (array) $wpdb->get_results(
+      "SELECT id, start_at, end_at FROM {$this->session_table}
+        WHERE ( schedule_json IS NULL OR schedule_json = '' OR schedule_json = 'null' OR schedule_json = '[]' )
+          AND start_at IS NOT NULL AND end_at IS NOT NULL
+        LIMIT 500"
+    );
+    $reprises = 0;
+    foreach ( $lignes as $ligne ) {
+      $creneaux = \ACDC\Support\HalfDaySplit::decouper( (string) $ligne->start_at, (string) $ligne->end_at, $pause_d, $pause_f );
+      if ( empty( $creneaux ) ) {
+        continue;
+      }
+      $wpdb->update(
+        $this->session_table,
+        array( 'schedule_json' => wp_json_encode( $creneaux ) ),
+        array( 'id' => (int) $ligne->id )
+      );
+      $reprises++;
+    }
+    update_option( 'acdc_of_demi_journees_reprises', '1', false );
+    if ( $reprises > 0 ) {
+      $this->log_action_event( 'reprise_demi_journees', 'session', 0, 'success', array( 'seances' => $reprises ) );
+    }
+  }
+
   private function backfill_org_identity_from_code() {
     if ( '1' === get_option( 'acdc_of_saas_identity_backfilled' ) ) {
       return;
