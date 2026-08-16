@@ -9533,7 +9533,148 @@ private function maybe_auto_create_questionnaire_actions_from_response( $session
     return 'Aucun apprenant de cette séance n’a d’adresse e-mail valide.';
   }
 
-  public function process_scheduled_survey_dispatches() {
+  /**
+   * ACDC 3.25.312 — LES DATES D'UNE SÉANCE ONT BOUGÉ : LE PLAN EST REFAIT.
+   *
+   * LE DÉFAUT QU'ELLE FERME. Une échéance d'enquête est calculée UNE FOIS, à la
+   * création, à partir des dates de la séance — et plus jamais relue. Le code le
+   * disait sans détour : si une échéance existe déjà pour cette séance, on
+   * passe. Une formation créée avec des dates de mai gardait donc des rendez-vous
+   * de mai, quoi qu'il advienne ensuite de ses dates. C'est la famille que nous
+   * traquons depuis le début, à l'envers : une valeur CONSERVÉE là où elle
+   * devait être RECALCULÉE.
+   *
+   * ON NE RECALCULE PAS, ON REFAIT. Les six fabriques d'enquêtes savent déjà
+   * calculer juste, chacune selon sa règle. Plutôt que de recopier ces six
+   * calculs ici — et de les voir diverger un jour — on retire le plan périmé :
+   * les fabriques le reconstruisent au passage suivant, avec les nouvelles
+   * dates.
+   *
+   * CE QU'ON NE TOUCHE JAMAIS : une enquête DÉJÀ ENVOYÉE, ou créée à la main.
+   * Seules disparaissent les échéances automatiques encore en attente — celles
+   * qui n'ont rien produit et que personne n'a vues. La suppression est tracée,
+   * comme toutes les autres.
+   *
+   * @param int $seance_id La séance dont les dates viennent de changer.
+   * @return int Nombre d'échéances retirées.
+   */
+  public function acdc_replanifier_enquetes_de_seance( $seance_id ) {
+    global $wpdb;
+    $seance_id = (int) $seance_id;
+    if ( ! $seance_id || empty( $this->questionnaire_session_table ) ) {
+      return 0;
+    }
+    $lignes = (array) $wpdb->get_results( $wpdb->prepare(
+      "SELECT id, session_settings_json FROM {$this->questionnaire_session_table}
+        WHERE seance_id = %d AND is_survey_session = 1 AND status = %s",
+      $seance_id,
+      'planifiee'
+    ) );
+    $retirees = 0;
+    foreach ( $lignes as $ligne ) {
+      $reglages = json_decode( (string) $ligne->session_settings_json, true );
+      /* Une enquête posée à la main n'a pas d'origine d'automatisation : elle
+         représente une décision, et une décision ne se défait pas toute seule. */
+      if ( ! is_array( $reglages ) || empty( $reglages['automation_origin'] ) ) {
+        continue;
+      }
+      $supprime = $wpdb->delete( $this->questionnaire_session_table, array( 'id' => (int) $ligne->id ), array( '%d' ) );
+      if ( $supprime ) {
+        $retirees++;
+        $this->log_action_event( 'enquete_replanifiee', 'questionnaire_session', (int) $ligne->id, 'success', array(
+          'seance_id' => $seance_id,
+          'origine'   => (string) $reglages['automation_origin'],
+          'motif'     => 'dates de la séance modifiées — échéance à recalculer',
+        ) );
+      }
+    }
+    return $retirees;
+  }
+
+  /**
+   * ACDC 3.25.312 — Les adresses réellement visées par une enquête.
+   *
+   * Sert à ne pas servir deux fois la même personne dans un même passage. On
+   * normalise en minuscules : « David@… » et « david@… » sont la même boîte, et
+   * une comparaison sensible à la casse laisserait passer la rafale.
+   */
+  private function acdc_adresses_des_cibles( $targets ) {
+    $out = array();
+    foreach ( (array) $targets as $cible ) {
+      $adresse = '';
+      if ( is_array( $cible ) ) {
+        $adresse = isset( $cible['email'] ) ? (string) $cible['email'] : '';
+      } elseif ( is_object( $cible ) ) {
+        $adresse = isset( $cible->email ) ? (string) $cible->email : '';
+      } elseif ( is_string( $cible ) ) {
+        $adresse = $cible;
+      }
+      $adresse = strtolower( trim( $adresse ) );
+      if ( '' !== $adresse ) {
+        $out[] = $adresse;
+      }
+    }
+    return array_values( array_unique( $out ) );
+  }
+
+  /**
+   * ACDC 3.25.312 — Cette enquête a-t-elle trop attendu pour être crédible ?
+   *
+   * On mesure le retard sur la date d'envoi PRÉVUE, pas sur la date de la
+   * formation : c'est bien le rendez-vous manqué qu'on juge.
+   */
+  private function acdc_enquete_trop_tardive( $session, $retard_max_jours ) {
+    $retard_max_jours = (int) $retard_max_jours;
+    if ( $retard_max_jours <= 0 || empty( $session->scheduled_at ) ) {
+      return false;
+    }
+    $prevu = strtotime( (string) $session->scheduled_at . ' UTC' );
+    $now   = strtotime( (string) $this->now_mysql() . ' UTC' );
+    if ( ! $prevu || ! $now ) {
+      return false;
+    }
+    return ( $now - $prevu ) > ( $retard_max_jours * DAY_IN_SECONDS );
+  }
+
+  /**
+   * ACDC 3.25.312 — Le statut visible d'une enquête écartée pour retard.
+   *
+   * Elle n'est ni envoyée ni supprimée : elle attend une décision, et elle dit
+   * pourquoi. Même principe que « sans destinataire » posé en 3.25.302 — un
+   * dossier qu'on peut vérifier plutôt qu'un dossier faussement rassurant.
+   */
+  private function acdc_marquer_enquete_tardive( $session, $retard_max_jours ) {
+    global $wpdb;
+    $settings = $this->get_questionnaire_session_settings_array( $session );
+    $jours    = (int) floor( ( strtotime( (string) $this->now_mysql() . ' UTC' ) - strtotime( (string) $session->scheduled_at . ' UTC' ) ) / DAY_IN_SECONDS );
+    $settings['dispatch_motif'] = sprintf(
+      'Envoi prévu le %s, soit %d jours de retard — au-delà des %d jours admis. La question posée ne correspondrait plus à ce que la personne a vécu : à vous de décider de l’envoyer ou de l’abandonner.',
+      mysql2date( 'd/m/Y', (string) $session->scheduled_at ),
+      $jours,
+      (int) $retard_max_jours
+    );
+    $wpdb->update(
+      $this->questionnaire_session_table,
+      array(
+        'status' => 'trop_tardive',
+        'session_settings_json' => wp_json_encode( $settings ),
+        'updated_at' => $this->now_mysql(),
+      ),
+      array( 'id' => (int) $session->id ),
+      array( '%s', '%s', '%s' ),
+      array( '%d' )
+    );
+    $this->log_action_event( 'enquete_trop_tardive', 'questionnaire_session', (int) $session->id, 'error', array(
+      'type'  => (string) $session->source_type,
+      'jours' => $jours,
+    ) );
+  }
+
+  /**
+   * @param int $lot              Nombre maximal d'enquêtes traitées par passage.
+   * @param int $retard_max_jours Au-delà, l'enquête est signalée et non envoyée.
+   */
+  public function process_scheduled_survey_dispatches( $lot = 10, $retard_max_jours = 7 ) {
     $this->ensure_mid_survey_automation_sessions();
     $this->ensure_hot_survey_automation_sessions();
     $this->ensure_cold_survey_automation_sessions();
@@ -9542,15 +9683,53 @@ private function maybe_auto_create_questionnaire_actions_from_response( $session
     $this->ensure_funder_survey_automation_sessions();
     global $wpdb;
     $sessions = $wpdb->get_results( $wpdb->prepare(
-      "SELECT * FROM {$this->questionnaire_session_table} WHERE is_survey_session = %d AND status = %s AND scheduled_at IS NOT NULL AND scheduled_at <= %s ORDER BY scheduled_at ASC",
+      /* ACDC 3.25.312 — UN PLAFOND, LÀ OÙ IL N'Y EN AVAIT AUCUN.
+         Cette requête ramassait TOUT ce qui était en retard, sans limite, et la
+         boucle vidait la pile d'un trait. Le 16 août, une formation dont les
+         dates étaient restées en mai a fait naître six échéances déjà périmées
+         de trois mois : elles sont parties ensemble, à 17h00, DOUZE MESSAGES EN
+         UNE SECONDE vers trois adresses du même domaine. Authentification
+         parfaite — SPF, DKIM et DMARC au vert, 9,6/10 chez mail-tester — et
+         pourtant tout en indésirables. Un filtre ne juge pas un message, il juge
+         un motif, et douze messages quasi identiques en une seconde EST le
+         motif qu'il cherche.
+         Les étapes du workflow avaient déjà un lot de 30 ; les enquêtes, rien. */
+      "SELECT * FROM {$this->questionnaire_session_table} WHERE is_survey_session = %d AND status = %s AND scheduled_at IS NOT NULL AND scheduled_at <= %s ORDER BY scheduled_at ASC LIMIT %d",
       1,
       'planifiee',
-      $this->now_mysql()
+      $this->now_mysql(),
+      (int) $lot
     ) );
+    /* Les destinataires déjà servis pendant CE passage. Vide à chaque appel. */
+    $__servis = array();
     foreach ( (array) $sessions as $session ) {
+      /* ACDC 3.25.312 — UNE ENQUÊTE TROP EN RETARD NE PART PAS TOUTE SEULE.
+         Une enquête « à chaud » expédiée trois mois après la formation ne pose
+         pas une question en retard : elle pose une question fausse. La personne
+         ne se souvient plus, et le document qu'on en tire ne prouve rien.
+         Elle n'est donc pas envoyée, ni perdue : elle prend un statut visible à
+         l'écran, et l'exploitant décide. Un envoi qu'on choisit vaut mieux qu'un
+         envoi qu'on subit. */
+      if ( $this->acdc_enquete_trop_tardive( $session, $retard_max_jours ) ) {
+        $this->acdc_marquer_enquete_tardive( $session, $retard_max_jours );
+        continue;
+      }
       $source = $this->get_questionnaire_source_data( $session->source_type, $session->source_id );
       $targets = $this->get_questionnaire_delivery_targets( $session );
+      /* ACDC 3.25.312 — UN SEUL MESSAGE PAR DESTINATAIRE ET PAR PASSAGE.
+         C'est la règle qui casse la rafale, et elle ne coûte rien : en marche
+         normale un apprenant n'a jamais deux enquêtes dues au même instant, donc
+         elle ne se déclenche jamais. Elle ne mord qu'au rattrapage — exactement
+         là où il faut. L'enquête écartée reste « planifiée » et partira au
+         passage suivant. */
+      $__adresses = $this->acdc_adresses_des_cibles( $targets );
+      if ( array_intersect( $__adresses, $__servis ) ) {
+        continue;
+      }
       $result = $this->send_questionnaire_session_emails( $session, $source, $targets );
+      if ( (int) ( $result['sent'] ?? 0 ) > 0 ) {
+        $__servis = array_merge( $__servis, $__adresses );
+      }
       $settings = $this->get_questionnaire_session_settings_array( $session );
       $settings['last_email_sent_at'] = $this->now_mysql();
       $settings['last_email_sent_count'] = (int) ( $result['sent'] ?? 0 );

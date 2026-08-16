@@ -4476,6 +4476,38 @@ dbDelta( $sql_companies );
    * aucune trace — exactement le trou qu'avait déjà creusé l'absence de porte
    * commune pour les e-mails, et pour la même raison.
    */
+  /**
+   * ACDC 3.25.312 — LA VERSION TEXTE, POSÉE SUR L'OBJET D'ENVOI.
+   *
+   * Branché sur « phpmailer_init », donc APRÈS que le message est composé et
+   * juste AVANT qu'il parte. C'est le seul point de passage obligé : les e-mails
+   * du plugin, mais aussi ceux de WordPress lui-même et de tout autre greffon,
+   * y viennent tous.
+   *
+   * TROIS PRÉCAUTIONS. On ne touche qu'aux messages HTML — un message déjà en
+   * texte n'a rien à recevoir. On n'écrase jamais une version texte existante :
+   * si quelqu'un a pris la peine d'en écrire une, elle vaut mieux que la nôtre.
+   * Et on ne pose rien si la conversion ne rend rien : une version texte vide
+   * est un défaut de plus, pas un de moins.
+   *
+   * @param object $phpmailer L'objet PHPMailer, passé par référence par WordPress.
+   */
+  public function acdc_poser_version_texte( $phpmailer ) {
+    if ( ! is_object( $phpmailer ) ) {
+      return;
+    }
+    if ( empty( $phpmailer->ContentType ) || false === stripos( (string) $phpmailer->ContentType, 'html' ) ) {
+      return;
+    }
+    if ( ! empty( $phpmailer->AltBody ) ) {
+      return;
+    }
+    $texte = \ACDC\Support\TexteAlternatif::depuisHtml( (string) $phpmailer->Body );
+    if ( '' !== $texte ) {
+      $phpmailer->AltBody = $texte;
+    }
+  }
+
   public function acdc_journaliser( $action, $object_type, $object_id = 0, $result = 'success', $extra = array() ) {
     $this->log_action_event( $action, $object_type, $object_id, $result, $extra );
   }

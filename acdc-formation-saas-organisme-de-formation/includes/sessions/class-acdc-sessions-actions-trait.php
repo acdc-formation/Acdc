@@ -151,12 +151,33 @@ trait ACDC_Sessions_Actions_Trait {
     );
 
     if ( $session_id ) {
+      /* ACDC 3.25.312 — On retient les dates AVANT l'écriture : après, il est
+         trop tard pour savoir si elles ont bougé. */
+      $__acdc_ancien_debut = $acdc_existing_session && isset( $acdc_existing_session->start_at ) ? (string) $acdc_existing_session->start_at : '';
+      $__acdc_ancienne_fin = $acdc_existing_session && isset( $acdc_existing_session->end_at ) ? (string) $acdc_existing_session->end_at : '';
+
       $result = $wpdb->update( $this->session_table, $data, array( 'id' => $session_id ) );
       if ( false === $result ) {
         $this->acdc_store_form_state( 'session', $_POST );
         $this->redirect_to_portal( 'sessions', 'Erreur lors de la mise à jour. Veuillez réessayer.', 'error', array( 'action' => 'edit', 'item_id' => $session_id ) );
       }
       $message = 'Session mise à jour.';
+
+      /* ACDC 3.25.312 — LES ENQUÊTES SUIVENT LES DATES DE LA SÉANCE.
+         Leurs échéances étaient calculées une fois, à la création, et plus
+         jamais relues : déplacer une séance laissait des rendez-vous d'envoi
+         accrochés à l'ancienne date. Le 16 août, six échéances nées avec des
+         dates de mai sont parties ensemble en août, douze messages en une
+         seconde, et tout est tombé en indésirables.
+         On efface le plan périmé : les fabriques le refont, avec les bonnes
+         dates. Rien n'est touché si les dates n'ont pas changé. */
+      if ( ( $__acdc_ancien_debut !== (string) $acdc_start_at || $__acdc_ancienne_fin !== (string) $acdc_end_at )
+        && method_exists( $this, 'acdc_replanifier_enquetes_de_seance' ) ) {
+        $__acdc_replanifiees = (int) $this->acdc_replanifier_enquetes_de_seance( $session_id );
+        if ( $__acdc_replanifiees > 0 ) {
+          $message .= sprintf( ' %d enquête(s) automatique(s) replanifiée(s) sur les nouvelles dates.', $__acdc_replanifiees );
+        }
+      }
       if ( $acdc_etait_brouillon && $acdc_veut_valider ) {
         $message = 'Séance validée : elle rejoint le calendrier des séances, et la convocation retenue partira d’elle-même.';
       } elseif ( $acdc_reste_brouillon ) {

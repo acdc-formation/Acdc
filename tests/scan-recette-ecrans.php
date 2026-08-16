@@ -161,6 +161,58 @@ if ( false === strpos( $src_wf, "set_transient( 'acdc_of_wf_dernier_passage'" ) 
 }
 
 /* --------------------------------------------------------------------------
+ * 6bis. LA RAFALE D'ENVOIS NE PEUT PAS REVENIR
+ *
+ * Le 16 août, DOUZE messages sont partis en UNE SECONDE vers trois adresses du
+ * même domaine — six échéances d'enquête nées avec des dates vieilles de trois
+ * mois, ramassées d'un coup par un répartiteur sans plafond. Authentification
+ * parfaite, et tout en indésirables : un filtre ne juge pas un message, il juge
+ * un motif.
+ * ----------------------------------------------------------------------- */
+$src_q = (string) file_get_contents( $racine . '/includes/questionnaires/class-acdc-questionnaires-core-trait.php' );
+$deb_q = strpos( $src_q, 'function process_scheduled_survey_dispatches(' );
+if ( false === $deb_q ) {
+    $signale( 'includes/questionnaires/class-acdc-questionnaires-core-trait.php', 0,
+        "le répartiteur d'enquêtes a disparu." );
+} else {
+    $corps_q = substr( $src_q, $deb_q, 4000 );
+    if ( false === strpos( $corps_q, 'LIMIT %d' ) ) {
+        $signale( 'includes/questionnaires/class-acdc-questionnaires-core-trait.php', 0,
+            "le répartiteur d'enquêtes n'a plus de plafond : il reviderait toute la pile des retards d'un seul trait, comme le 16 août." );
+    }
+    if ( ! preg_match( '/array_intersect\(\s*\$__adresses\s*,\s*\$__servis\s*\)/', $corps_q ) ) {
+        $signale( 'includes/questionnaires/class-acdc-questionnaires-core-trait.php', 0,
+            "la règle « un seul message par destinataire et par passage » a disparu : c'est elle qui casse la rafale." );
+    }
+    if ( ! preg_match( '/acdc_enquete_trop_tardive\(\s*\$session/', $corps_q ) ) {
+        $signale( 'includes/questionnaires/class-acdc-questionnaires-core-trait.php', 0,
+            "une enquête trop en retard repartirait en aveugle : elle poserait une question à laquelle la personne ne peut plus répondre honnêtement." );
+    }
+}
+if ( false === strpos( $src_q, 'function acdc_replanifier_enquetes_de_seance(' ) ) {
+    $signale( 'includes/questionnaires/class-acdc-questionnaires-core-trait.php', 0,
+        "les échéances d'enquête ne suivent plus les dates de la séance : déplacer une séance laisserait des rendez-vous accrochés à l'ancienne date." );
+}
+$src_s = (string) file_get_contents( $racine . '/includes/sessions/class-acdc-sessions-actions-trait.php' );
+if ( false === strpos( $src_s, '$this->acdc_replanifier_enquetes_de_seance( $session_id )' ) ) {
+    $signale( 'includes/sessions/class-acdc-sessions-actions-trait.php', 0,
+        "l'enregistrement d'une séance n'appelle plus la replanification : la règle existerait sans que personne ne l'invoque." );
+}
+
+/* --------------------------------------------------------------------------
+ * 6ter. AUCUN E-MAIL NE PART SANS SA VERSION TEXTE
+ * ----------------------------------------------------------------------- */
+$src_k = (string) file_get_contents( $racine . '/includes/kernel/class-acdc-kernel-core-trait.php' );
+if ( false === strpos( $src_k, 'function acdc_poser_version_texte(' ) ) {
+    $signale( 'includes/kernel/class-acdc-kernel-core-trait.php', 0,
+        "la pose de la version texte a disparu : les e-mails repartiraient en HTML pur, l'un des signaux relevés par la recette du 16 août." );
+}
+if ( false === strpos( $src_plug, "add_action( 'phpmailer_init', array( \$this, 'acdc_poser_version_texte' ) )" ) ) {
+    $signale( 'includes/class-acdc-plugin.php', 0,
+        "la version texte n'est plus branchée : la fonction existerait sans que rien ne l'appelle." );
+}
+
+/* --------------------------------------------------------------------------
  * 6. LE PORTAIL APPRENANT NE PROMET QUE CE QUI EST PRÉVU
  * ----------------------------------------------------------------------- */
 $src_ap = (string) file_get_contents( $racine . '/includes/learner-portal/core/class-acdc-learner-portal-core-trait.php' );

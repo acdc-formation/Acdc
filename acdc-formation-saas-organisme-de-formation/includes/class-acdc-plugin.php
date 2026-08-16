@@ -316,6 +316,15 @@ class ACDC_Formation_SAAS_Plugin {
     add_action( 'admin_notices', array( $this, 'acdc_render_upgrade_blocked_notice' ) );
     add_action( 'admin_post_acdc_retry_upgrade', array( $this, 'handle_retry_upgrade' ) );
     /* ACDC 3.25.185 — Workflow : cron d'orchestration et écrans de pilotage. */
+    /* ACDC 3.25.312 — TOUT E-MAIL PART DÉSORMAIS AVEC SA VERSION TEXTE.
+       Le plugin n'envoyait que du HTML. C'est l'un des signaux qu'un filtre
+       regarde, et la recette du 16 août l'a relevé sur des enquêtes pourtant
+       parfaitement authentifiées (SPF, DKIM et DMARC au vert, 9,6/10 chez
+       mail-tester) mais classées en indésirables.
+       On agit au dernier moment, sur l'objet d'envoi lui-même : c'est le seul
+       endroit par lequel TOUS les e-mails passent, y compris ceux qu'un autre
+       greffon enverrait. Et on ne remplace jamais une version texte déjà posée. */
+    add_action( 'phpmailer_init', array( $this, 'acdc_poser_version_texte' ) );
     add_action( 'acdc_of_workflow_cron', array( $this, 'acdc_wf_cron' ) );
     /* ACDC 3.25.310 — Le cron de WordPress ne se déclenche qu'au passage d'un
        visiteur : sur un site peu fréquenté, le rendez-vous au quart d'heure
