@@ -251,6 +251,81 @@ if ( '' !== $noyau ) {
     }
 }
 
+/* ── 9. L'ENVOI VERS LE DRIVE NE S'ÉLARGIT PAS TOUT SEUL ────────────────── */
+
+/* Une archive qui sort de la machine emporte tout : les apprenants, les
+   émargements signés, les factures. Trois choses la protègent, et chacune est
+   du genre à se défaire lors d'une modification faite ailleurs — sans que rien
+   ne se voie à l'écran, puisque l'envoi continuerait de réussir.
+
+     — LA PORTÉE. « drive.file » ne donne accès QU'AUX fichiers déposés par
+       l'application. Le remplacer par « auth/drive » tout court ouvrirait la
+       totalité du Drive de l'exploitant, en lecture ET en suppression, pour un
+       plugin qui n'a besoin que d'y écrire une archive.
+     — LES SECRETS AU REPOS. Le secret client et le jeton de rafraîchissement
+       sont chiffrés dans la base. Sans cela, un export de base — c'est-à-dire
+       une sauvegarde — contiendrait les clés d'accès au Drive où elle part.
+     — LE RETOUR DE GOOGLE. Il vaut acceptation : il exige donc à la fois le
+       droit d'administration et le jeton d'état. */
+
+$drive = $root . '/includes/backup-drive/class-acdc-backup-drive-trait.php';
+if ( ! is_readable( $drive ) ) {
+    $hits[] = 'l’envoi des sauvegardes vers le Drive a disparu : les archives ne quittent plus le serveur qu’elles protègent.';
+} else {
+    $src_drive = (string) file_get_contents( $drive );
+
+    if ( preg_match( "#'scope'\s*=>\s*'([^']+)'#", $src_drive, $m ) ) {
+        if ( 'https://www.googleapis.com/auth/drive.file' !== $m[1] ) {
+            $hits[] = sprintf(
+                'la portée demandée à Google est « %s » : le plugin réclame plus que le droit de déposer ses propres archives, et peut atteindre des fichiers qui ne sont pas les siens.',
+                $m[1]
+            );
+        }
+    } else {
+        $hits[] = 'aucune portée n’est déclarée dans la demande d’autorisation Google : impossible de savoir ce que le plugin réclame.';
+    }
+
+    /* On exige le chiffrement là où il compte : à L'ÉCRITURE. Un déchiffrement
+       à la lecture sans chiffrement à l'écriture laisserait les clés en clair
+       dans la base sans que rien ne s'en aperçoive. */
+    if ( preg_match( '/function acdc_gdrive_save_settings\(.*?\n\t\}/s', $src_drive, $m ) ) {
+        if ( false === strpos( $m[0], 'acdc_secret_encrypt' ) ) {
+            $hits[] = 'les réglages du Drive sont écrits sans chiffrement : le secret client et le jeton d’accès figureraient en clair dans la base — donc dans les sauvegardes elles-mêmes.';
+        }
+        foreach ( array( 'client_secret', 'refresh_token' ) as $secret ) {
+            if ( false === strpos( $m[0], "'" . $secret . "'" ) ) {
+                $hits[] = sprintf( 'le réglage « %s » n’est plus chiffré à l’écriture : une clé d’accès au Drive resterait lisible dans un export de base.', $secret );
+            }
+        }
+    } else {
+        $hits[] = 'acdc_gdrive_save_settings() est introuvable : on ne peut plus vérifier que les secrets du Drive sont chiffrés.';
+    }
+
+    if ( preg_match( '/function acdc_gdrive_maybe_handle_callback\(.*?\n\t\}/s', $src_drive, $m ) ) {
+        if ( false === strpos( $m[0], "current_user_can( 'manage_options' )" ) ) {
+            $hits[] = 'le retour de Google ne vérifie plus le droit d’administration : n’importe quel visiteur pourrait déclencher l’échange qui enregistre un jeton d’accès au Drive.';
+        }
+        if ( false === strpos( $m[0], "wp_verify_nonce( \$etat, 'acdc_gdrive_state' )" ) ) {
+            $hits[] = 'le retour de Google ne vérifie plus le jeton d’état : un lien préparé ailleurs pourrait faire enregistrer au plugin un Drive qui n’est pas celui de l’exploitant.';
+        }
+    } else {
+        $hits[] = 'le retour de Google est introuvable : la connexion du Drive ne peut plus aboutir.';
+    }
+
+    /* Ce qui efface doit être borné par le haut comme par le bas : « conserver
+       0 » viderait le dossier à l'envoi suivant. */
+    if ( preg_match( '/function acdc_gdrive_appliquer_conservation\(.*?\n\t\}/s', $src_drive, $m ) ) {
+        if ( false === strpos( $m[0], "max( 1, (int) \$o['conserver'] )" ) ) {
+            $hits[] = 'le nombre d’archives conservées n’est plus borné à 1 minimum : un réglage à zéro effacerait toutes les sauvegardes du dossier Drive.';
+        }
+        if ( false === strpos( $m[0], "in parents" ) ) {
+            $hits[] = 'la purge des anciennes archives n’est plus limitée au dossier de destination : elle porterait sur ce que le plugin n’a pas déposé.';
+        }
+    } else {
+        $hits[] = 'acdc_gdrive_appliquer_conservation() est introuvable : les archives s’accumuleraient sans fin sur le Drive.';
+    }
+}
+
 /* ── VERDICT ────────────────────────────────────────────────────────────── */
 
 if ( $hits ) {
@@ -260,5 +335,5 @@ if ( $hits ) {
     printf( "%d alerte(s)\n", count( $hits ) );
     exit( 1 );
 }
-echo "Durcissement : pièces jointes retrouvées, réinitialisations limitées, propositions non listables, droits vérifiés, traces de suppression exactes, journal lisible, sauvegarde complète et qui dit ce qu’elle laisse.\n";
+echo "Durcissement : pièces jointes retrouvées, réinitialisations limitées, propositions non listables, droits vérifiés, traces de suppression exactes, journal lisible, sauvegarde complète et qui dit ce qu’elle laisse, envoi Drive au périmètre le plus étroit et secrets chiffrés.\n";
 exit( 0 );

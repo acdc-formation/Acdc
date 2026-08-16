@@ -81,6 +81,7 @@ class ACDC_Formation_SAAS_Plugin {
   use ACDC_Workflow_Actions_Trait;
   use ACDC_Workflow_Render_Trait;
   use ACDC_Watch_Core_Trait;
+  use ACDC_Backup_Drive_Trait;
   use ACDC_Watch_AI_Trait;
   use ACDC_Watch_Actions_Trait;
   use ACDC_Watch_Render_Trait;
@@ -321,6 +322,14 @@ class ACDC_Formation_SAAS_Plugin {
     add_action( 'admin_post_acdc_wf_purge_orphan_emargements', array( $this, 'acdc_wf_handle_purge_orphan_emargements' ) );
     add_action( 'admin_post_acdc_wf_replay_simulated', array( $this, 'acdc_wf_handle_replay_simulated' ) );
     add_action( 'admin_post_acdc_wf_run_now', array( $this, 'acdc_wf_handle_run_now' ) );
+    /* ACDC 3.25.294 — Sauvegarde vers Google Drive : deux rendez-vous par jour,
+       et le retour d'autorisation de Google, qui n'arrive que sur l'écran de
+       maintenance d'un administrateur connecté. */
+    add_action( 'acdc_of_gdrive_backup_midi', array( $this, 'cron_gdrive_backup' ) );
+    add_action( 'acdc_of_gdrive_backup_soir', array( $this, 'cron_gdrive_backup' ) );
+    add_action( 'admin_init', array( $this, 'acdc_gdrive_maybe_handle_callback' ) );
+    add_action( 'admin_post_acdc_save_gdrive', array( $this, 'handle_save_gdrive' ) );
+    add_action( 'admin_post_acdc_gdrive_test', array( $this, 'handle_gdrive_test' ) );
     add_action( 'wp_ajax_acdc_save_global_column_width', array( $this, 'ajax_save_global_column_width' ) );
     add_action( 'wp_ajax_acdc_save_global_column_widths', array( $this, 'ajax_save_global_column_widths' ) );
     /* ACDC 3.20.67 — Verrouillage des largeurs par tableau métier. */

@@ -63,6 +63,10 @@ lancent sans WordPress, en quelques secondes.
     php tests/scan-interrupteur-branche.php # un automatisme Qualiopi qui ne commande rien
     php tests/scan-demarrage-plugin.php # une migration ne fait jamais taire l'extranet
     php tests/scan-preuve-quiz.php # un résultat de quiz arrive toujours sur un dossier
+    php tests/scan-quiz-live-habille.php # une classe posée par le quiz live sans règle de style
+    php tests/scan-identite-unique.php # SIRET, NDA et coordonnées : appelés, jamais recopiés
+    php tests/test-identite-organisme.php # fiche entreprise et marque : qui gagne, champ par champ
+    php tests/scan-durcissement.php # les huit durcissements de la 3.25.291, plus l'envoi vers le Drive
 
 Le dernier balaie tout le plugin et signale les fonctions qui utilisent `$wpdb`
 sans l'avoir importé — la faute qui a produit l'erreur fatale de la 3.25.236.

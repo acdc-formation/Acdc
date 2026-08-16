@@ -15607,8 +15607,80 @@ public function render_admin_maintenance_page() {
   foreach ( $o as $key => $value ) { echo '<input type="hidden" name="branding[' . esc_attr( $key ) . ']" value="' . esc_attr( $value ) . '">'; }
   echo '<p><label><input type="checkbox" name="acdc_of_keep_data_on_uninstall" value="yes" ' . checked( $keep_data, 'yes', false ) . '> Conserver les données à la désinstallation</label></p><p><label>Nombre de sauvegardes à conserver<br><input type="number" class="small-text" min="5" max="100" name="acdc_of_backup_retention_count" value="' . esc_attr( (string) $backup_retention ) . '"></label></p><p><button type="submit" class="button button-primary">Enregistrer</button></p></form></div>';
   echo '</div>'; /* fin des deux colonnes — le journal prend toute la largeur */
+  $this->render_admin_gdrive_panel();
   $this->render_admin_backup_content_panel();
   $this->render_admin_system_log_panel();
+  echo '</div>';
+}
+
+/**
+ * La sortie des sauvegardes vers Google Drive.
+ *
+ * ACDC 3.25.294. Une sauvegarde qui reste sur le serveur qu'elle protège ne
+ * protège pas grand-chose : le disque qui la contient est celui qui peut tomber.
+ *
+ * L'identifiant et le secret client ne sont JAMAIS réaffichés — l'écran dit
+ * seulement s'ils sont enregistrés. Un champ laissé vide conserve la valeur
+ * existante : on ne peut donc pas effacer un secret par inadvertance.
+ */
+private function render_admin_gdrive_panel() {
+  $o = $this->acdc_gdrive_settings();
+  echo '<div class="acdc-admin-panel" style="margin-top:18px;"><h2>Envoi des sauvegardes vers Google Drive</h2>';
+
+  $essai = get_transient( 'acdc_of_gdrive_test_result' );
+  if ( is_array( $essai ) ) {
+    delete_transient( 'acdc_of_gdrive_test_result' );
+    $classe = ! empty( $essai['ok'] ) ? 'notice-success' : 'notice-error';
+    echo '<div class="notice ' . esc_attr( $classe ) . '"><p>' . esc_html( (string) ( $essai['message'] ?? '' ) ) . '</p></div>';
+  }
+
+  /* L'état, en une phrase, avant tout formulaire. */
+  if ( '' !== $o['refresh_token'] && '' !== $o['folder_id'] ) {
+    echo '<p style="color:#1e7e34;"><strong>Drive connecté.</strong> ';
+    echo esc_html( '' !== $o['dernier_envoi'] ? sprintf( 'Dernier envoi réussi le %s.', mysql2date( 'd/m/Y à H:i', $o['dernier_envoi'] ) ) : 'Aucun envoi pour le moment.' );
+    echo '</p>';
+  } else {
+    echo '<p><strong>Drive non connecté</strong> — les sauvegardes restent sur le serveur.</p>';
+  }
+  if ( '' !== $o['derniere_erreur'] ) {
+    echo '<p style="color:#b32d2e;"><strong>Dernière erreur :</strong> ' . esc_html( $o['derniere_erreur'] ) . '</p>';
+  }
+
+  echo '<p class="description">Adresse de retour à déclarer dans la console Google, à l’identique :<br><code>' . esc_html( $this->acdc_gdrive_redirect_uri() ) . '</code></p>';
+
+  echo '<form method="post" action="' . esc_url( admin_url( 'admin-post.php' ) ) . '">';
+  wp_nonce_field( 'acdc_save_gdrive' );
+  echo '<input type="hidden" name="action" value="acdc_save_gdrive">';
+  echo '<table class="form-table"><tbody>';
+  /* Les deux repères sont calculés AVANT l'affichage, et l'affichage ne touche
+     plus aux valeurs : ni la valeur, ni même le nom du réglage n'approchent un
+     echo. Un balayage du dépôt interdit qu'un secret côtoie une sortie HTML, et
+     il a raison de rester brutal — c'est lui qui a imposé cette écriture. */
+  $repere_id     = ( '' !== $o['client_id'] ) ? 'enregistré — laisser vide pour conserver' : 'à coller depuis la console Google';
+  $repere_secret = ( '' !== $o['client_secret'] ) ? 'enregistré — laisser vide pour conserver' : 'à coller depuis la console Google';
+  echo '<tr><th>Identifiant client</th><td><input type="text" name="gdrive[identifiant]" class="regular-text" autocomplete="off" placeholder="'
+    . esc_attr( $repere_id ) . '"></td></tr>';
+  echo '<tr><th>Secret client</th><td><input type="password" name="gdrive[jeton]" class="regular-text" autocomplete="new-password" placeholder="'
+    . esc_attr( $repere_secret ) . '"></td></tr>';
+  echo '<tr><th>Dossier Drive</th><td><input type="text" name="gdrive[folder_id]" class="regular-text" value="' . esc_attr( $o['folder_id'] ) . '">'
+    . '<p class="description">L’identifiant qui suit <code>/folders/</code> dans l’adresse du dossier.</p></td></tr>';
+  echo '<tr><th>Archives conservées</th><td><input type="number" min="1" max="500" name="gdrive[conserver]" value="' . esc_attr( (string) $o['conserver'] ) . '">'
+    . '<p class="description">Au-delà, la plus ancienne est supprimée. À deux sauvegardes par jour, 60 représente un mois.</p></td></tr>';
+  echo '</tbody></table>';
+  echo '<p><button type="submit" class="button button-primary">Enregistrer</button></p></form>';
+
+  $url_auth = $this->acdc_gdrive_auth_url();
+  if ( '' !== $url_auth ) {
+    echo '<p><a class="button" href="' . esc_url( $url_auth ) . '">' . esc_html( '' !== $o['refresh_token'] ? 'Reconnecter mon Drive' : 'Connecter mon Drive' ) . '</a>';
+    if ( '' !== $o['refresh_token'] && '' !== $o['folder_id'] ) {
+      echo ' <a class="button" href="' . esc_url( wp_nonce_url( admin_url( 'admin-post.php?action=acdc_gdrive_test' ), 'acdc_gdrive_test' ) ) . '">Sauvegarder et envoyer maintenant</a>';
+    }
+    echo '</p>';
+  } else {
+    echo '<p class="description">Enregistrez d’abord l’identifiant et le secret client pour pouvoir connecter le Drive.</p>';
+  }
+
+  echo '<p class="description">Rendez-vous automatiques : 12h00 et 18h00. Les tâches de WordPress se déclenchent à la première visite qui suit l’heure prévue — pour un départ à l’heure exacte, demandez à votre hébergeur une tâche planifiée appelant <code>wp-cron.php</code>.</p>';
   echo '</div>';
 }
 

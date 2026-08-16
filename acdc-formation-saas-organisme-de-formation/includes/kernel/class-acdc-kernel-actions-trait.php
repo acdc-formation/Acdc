@@ -7188,6 +7188,20 @@ public function handle_purge_plugin_data() {
     if ( ! wp_next_scheduled( 'acdc_of_absence_alert_cron' ) ) {
       wp_schedule_event( time(), 'daily', 'acdc_of_absence_alert_cron' );
     }
+    /* ACDC 3.25.294 — Sauvegarde vers Google Drive : 12h00 et 18h00.
+       À SAVOIR : les tâches de WordPress ne se déclenchent pas à l'heure dite,
+       mais à la première visite qui suit. Sur un site peu fréquenté, la
+       sauvegarde de midi peut donc partir à 12h40. Pour qu'elle parte à l'heure,
+       il faut une tâche planifiée côté hébergeur qui appelle wp-cron.php. */
+    foreach ( array( 'acdc_of_gdrive_backup_midi' => '12:00', 'acdc_of_gdrive_backup_soir' => '18:00' ) as $rdv => $heure ) {
+      if ( ! wp_next_scheduled( $rdv ) ) {
+        $prochain = strtotime( 'today ' . $heure );
+        if ( ! $prochain || $prochain <= time() ) {
+          $prochain = strtotime( 'tomorrow ' . $heure );
+        }
+        wp_schedule_event( $prochain ?: time(), 'daily', $rdv );
+      }
+    }
     /* Cron rapport de rétention RGPD (1×/jour, lecture seule — ne supprime rien). */
     if ( ! wp_next_scheduled( 'acdc_of_retention_scan_cron' ) ) {
       $retention_time = strtotime( 'tomorrow 3:30am' );
@@ -7204,6 +7218,37 @@ public function handle_purge_plugin_data() {
    * effectuée : la purge effective fera l'objet d'une action explicite et confirmée.
    * Entièrement protégé (try/catch) : ne peut ni planter le site ni perdre de données.
    * --------------------------------------------------------------- */
+  /** Enregistre les réglages Drive. Les secrets ne repassent jamais par l'écran. */
+  public function handle_save_gdrive() {
+    $this->require_manage_options_nonce( 'acdc_save_gdrive' );
+    $entree = isset( $_POST['gdrive'] ) && is_array( $_POST['gdrive'] ) ? wp_unslash( $_POST['gdrive'] ) : array();
+    $valeurs = array(
+      'folder_id' => isset( $entree['folder_id'] ) ? sanitize_text_field( (string) $entree['folder_id'] ) : '',
+      'conserver' => isset( $entree['conserver'] ) ? max( 1, absint( $entree['conserver'] ) ) : 60,
+    );
+    /* Un champ de secret laissé vide ne DOIT pas effacer le secret enregistré :
+       l'écran ne le réaffiche pas, on ne peut donc pas le ressaisir par erreur. */
+    /* Le formulaire nomme ses champs « identifiant » et « jeton » : le nom du
+       réglage lui-même ne doit pas transiter par une page. */
+    foreach ( array( 'identifiant' => 'client_id', 'jeton' => 'client_secret' ) as $champ => $reglage ) {
+      if ( isset( $entree[ $champ ] ) && '' !== trim( (string) $entree[ $champ ] ) ) {
+        $valeurs[ $reglage ] = sanitize_text_field( (string) $entree[ $champ ] );
+      }
+    }
+    $this->acdc_gdrive_save_settings( $valeurs );
+    wp_safe_redirect( admin_url( 'admin.php?page=acdc-of-maintenance&updated=1' ) );
+    exit;
+  }
+
+  /** Sauvegarde immédiate et envoi, pour vérifier que la chaîne fonctionne. */
+  public function handle_gdrive_test() {
+    $this->require_manage_options_nonce( 'acdc_gdrive_test' );
+    $r = $this->acdc_gdrive_sauvegarder_et_envoyer();
+    set_transient( 'acdc_of_gdrive_test_result', $r, 5 * MINUTE_IN_SECONDS );
+    wp_safe_redirect( admin_url( 'admin.php?page=acdc-of-maintenance' ) );
+    exit;
+  }
+
   public function cron_retention_scan() {
     global $wpdb;
     try {
