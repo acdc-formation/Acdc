@@ -14,6 +14,49 @@ if ( ! defined( 'ABSPATH' ) ) {
 
 trait ACDC_Sessions_Render_Trait {
 
+  /**
+   * Les demi-journées signées d'une séance, dans l'ordre.
+   *
+   * ACDC 3.25.303. Elles existent depuis toujours : la table d'émargement porte
+   * une ligne par demi-journée — seance_index, seance_label, seance_start_at,
+   * seance_end_at — avec son jeton formateur et ses signatures. C'est d'ailleurs
+   * pour cela que le formateur reçoit QUATRE convocations sur deux jours.
+   * Elles n'étaient simplement jamais montrées.
+   */
+  private function acdc_emarg_feuilles_signees( $session_id ) {
+    global $wpdb;
+    $session_id = absint( $session_id );
+    $table = $wpdb->prefix . 'acdc_of_emarg_sessions';
+    if ( ! $session_id || $wpdb->get_var( $wpdb->prepare( 'SHOW TABLES LIKE %s', $table ) ) !== $table ) {
+      return array();
+    }
+    return (array) $wpdb->get_results( $wpdb->prepare(
+      "SELECT * FROM {$table} WHERE session_id = %d AND trainer_status = %s ORDER BY seance_index ASC, seance_start_at ASC, id ASC",
+      $session_id,
+      'signe'
+    ) );
+  }
+
+  /**
+   * Le libellé d'une demi-journée, tel qu'un auditeur le cherche.
+   *
+   * « Feuille 2 » ne dit rien à un OPCO qui réclame l'après-midi du 11 mai.
+   * On donne donc la date et la tranche horaire, et l'on retombe sur le libellé
+   * enregistré si les horaires manquent — jamais sur un numéro nu.
+   */
+  private function acdc_emarg_libelle_demi_journee( $feuille ) {
+    if ( ! empty( $feuille->seance_start_at ) ) {
+      $jour  = mysql2date( 'd/m', $feuille->seance_start_at );
+      $debut = mysql2date( 'H\hi', $feuille->seance_start_at );
+      $fin   = ! empty( $feuille->seance_end_at ) ? mysql2date( 'H\hi', $feuille->seance_end_at ) : '';
+      return $jour . ' ' . $debut . ( '' !== $fin ? '-' . $fin : '' );
+    }
+    if ( ! empty( $feuille->seance_label ) ) {
+      return (string) $feuille->seance_label;
+    }
+    return 'Demi-journée ' . ( (int) $feuille->seance_index + 1 );
+  }
+
   private function render_front_sessions_validated_tab( $action, $item_id ) {
     if ( ! in_array( $action, array( 'list', 'view' ), true ) ) {
       $action = 'list';
@@ -218,10 +261,35 @@ trait ACDC_Sessions_Render_Trait {
                       <?php if ( $emarg_ses_s->trainer_sig_url ) : ?>
                       <img src="<?php echo esc_url( $emarg_ses_s->trainer_sig_url ); ?>" style="max-width:80px;max-height:36px;display:block;margin:4px auto 0;border:1px solid #e2e6ea;border-radius:4px" alt="Signature">
                       <?php endif; ?>
-                      <a href="<?php echo esc_url( wp_nonce_url( admin_url( 'admin-post.php?action=acdc_emarg_download_pdf&session_id=' . (int) $entry->id ), 'acdc_emarg_pdf_' . (int) $entry->id ) ); ?>"
-                         class="acdc-button acdc-button-soft acdc-button-sm" style="display:inline-block;margin-top:6px;font-size:11px;padding:3px 9px;text-decoration:none" title="Télécharger la feuille d'émargement PDF">
-                        📄 PDF
-                      </a>
+                      <?php
+                      /* ACDC 3.25.303 — UNE FEUILLE PAR DEMI-JOURNÉE.
+                         Un seul bouton passait l'identifiant du JOUR : les deux
+                         boutons de l'écran ouvraient le même document, qui les
+                         contenait toutes. Un OPCO qui réclame la feuille du
+                         11 mai après-midi ne veut pas les quatre.
+                         Les demi-journées existent en base depuis toujours —
+                         table d'émargement, une ligne par demi-journée avec ses
+                         horaires et ses signatures. On les montre. */
+                      $feuilles = method_exists( $this, 'acdc_emarg_feuilles_signees' )
+                        ? $this->acdc_emarg_feuilles_signees( (int) $entry->id )
+                        : array();
+                      $lien_pdf = function ( $sid, $fid, $libelle ) {
+                        $url = admin_url( 'admin-post.php?action=acdc_emarg_download_pdf&session_id=' . (int) $sid . ( $fid ? '&sheet_id=' . (int) $fid : '' ) );
+                        printf(
+                          '<a href="%s" class="acdc-button acdc-button-soft acdc-button-sm" style="display:inline-block;margin-top:6px;font-size:11px;padding:3px 9px;text-decoration:none" title="Télécharger cette feuille d\'émargement">📄 %s</a> ',
+                          esc_url( wp_nonce_url( $url, 'acdc_emarg_pdf_' . (int) $sid ) ),
+                          esc_html( $libelle )
+                        );
+                      };
+                      if ( count( $feuilles ) > 1 ) {
+                        foreach ( $feuilles as $f ) {
+                          $lien_pdf( (int) $entry->id, (int) $f->id, $this->acdc_emarg_libelle_demi_journee( $f ) );
+                        }
+                        $lien_pdf( (int) $entry->id, 0, 'Tout' );
+                      } else {
+                        $lien_pdf( (int) $entry->id, 0, 'PDF' );
+                      }
+                      ?>
                     </div>
                   <?php elseif ( 'none' === $t_status_s || ! $emarg_ses_s ) : ?>
                     <form method="post" action="<?php echo esc_url( admin_url('admin-post.php') ); ?>" style="margin:0">

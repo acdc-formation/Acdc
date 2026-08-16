@@ -272,7 +272,11 @@ class ACDC_Emargement {
     public function handle_download_pdf() {
         if ( ! current_user_can( 'manage_options' ) ) { wp_die( 'Accès refusé.' ); }
         $session_id = isset( $_GET['session_id'] ) ? absint( $_GET['session_id'] ) : 0;
+        /* ACDC 3.25.303 — sheet_id désigne la demi-journée. Le jeton reste posé
+           sur la séance : c'est elle qui porte le droit, la demi-journée n'est
+           qu'un choix de page. */
+        $sheet_id   = isset( $_GET['sheet_id'] ) ? absint( $_GET['sheet_id'] ) : 0;
         check_admin_referer( 'acdc_emarg_pdf_' . $session_id );
-        $this->pdf->serve_pdf( $session_id );
+        $this->pdf->serve_pdf( $session_id, $sheet_id );
     }
 }

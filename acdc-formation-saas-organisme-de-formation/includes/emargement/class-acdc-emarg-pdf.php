@@ -41,11 +41,24 @@ class ACDC_Emarg_PDF {
     /* -----------------------------------------------------------------------
      * Point d'entrée public — génère et sert le PDF en téléchargement
      * -------------------------------------------------------------------- */
-    public function serve_pdf( $session_id ) {
-        $pdf = $this->get_pdf_content( $session_id );
+    /**
+     * ACDC 3.25.303 — UNE FEUILLE PAR DEMI-JOURNÉE, ET NON UN SEUL DOCUMENT.
+     *
+     * Le PDF existait déjà en plusieurs pages, une par demi-journée. Mais tous
+     * les boutons de l'écran passaient le même identifiant — celui du JOUR :
+     * « peu importe où je clique, ça ouvre la même fenêtre ». Les quatre preuves
+     * étaient dans un seul fichier, et un OPCO qui réclame la feuille du 11 mai
+     * après-midi ne veut pas les quatre.
+     *
+     * @param int $sheet_id Identifiant de la demi-journée ; 0 = toutes.
+     */
+    public function serve_pdf( $session_id, $sheet_id = 0 ) {
+        $pdf = $this->get_pdf_content( $session_id, $sheet_id );
         if ( ! $pdf ) { wp_die( 'Impossible de générer le PDF.', 500 ); }
 
-        $filename    = 'emargement-seance-' . absint( $session_id ) . '-' . gmdate( 'Ymd' ) . '.pdf';
+        $filename    = 'emargement-seance-' . absint( $session_id )
+            . ( $sheet_id ? '-demi-journee-' . absint( $sheet_id ) : '' )
+            . '-' . gmdate( 'Ymd' ) . '.pdf';
         $preview     = ! empty( $_GET['preview'] );
         $disposition = $preview ? 'inline' : 'attachment';
         header( 'Content-Type: application/pdf' );
@@ -57,7 +70,7 @@ class ACDC_Emarg_PDF {
     }
 
     /* Retourne le contenu binaire du PDF émargement (sans header/exit) — utilisé par ZIP exporter */
-    public function get_pdf_content( $session_id ) {
+    public function get_pdf_content( $session_id, $sheet_id = 0 ) {
         $session_id = absint( $session_id );
         if ( ! $session_id ) { return false; }
 
@@ -67,8 +80,13 @@ class ACDC_Emarg_PDF {
         // - plusieurs feuilles signées    → PDF multi-pages (une feuille par séance).
         $all_sheets    = $this->core->get_all_by_session_id( $session_id );
         $signed_sheets = array();
+        $sheet_id = absint( $sheet_id );
         foreach ( (array) $all_sheets as $sh ) {
-            if ( 'signe' === $sh->trainer_status ) { $signed_sheets[] = $sh; }
+            if ( 'signe' !== $sh->trainer_status ) { continue; }
+            /* Une demi-journée demandée nommément : on ne rend qu'elle. Sans
+               ce filtre, les quatre boutons produisaient le même document. */
+            if ( $sheet_id && (int) $sh->id !== $sheet_id ) { continue; }
+            $signed_sheets[] = $sh;
         }
         if ( empty( $signed_sheets ) ) { return false; }
 
