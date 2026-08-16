@@ -9251,6 +9251,52 @@ private function maybe_auto_create_questionnaire_actions_from_response( $session
    *
    * @return int|null
    */
+  /**
+   * ACDC 3.25.302 — LE FINANCEUR N'ÉTAIT JAMAIS PORTÉ SUR LA SESSION D'ENQUÊTE.
+   *
+   * create_generic_survey_automated_session() renseignait formation_id,
+   * seance_id, formateur_id, company_id — et jamais funder_id. Or la résolution
+   * des destinataires d'une enquête financeur commence par « si funder_id est
+   * vide, aucun destinataire ». La liste était donc vide pour TOUS les dossiers,
+   * depuis toujours, et l'enquête se déclarait quand même envoyée.
+   */
+  private function acdc_resolve_survey_funder_id( $training_session ) {
+    global $wpdb;
+    if ( ! empty( $training_session->funder_id ) ) {
+      return absint( $training_session->funder_id );
+    }
+    $seance_id = ! empty( $training_session->id ) ? absint( $training_session->id ) : 0;
+    if ( $seance_id > 0 && ! empty( $this->training_registration_table ) && ! empty( $this->learner_table ) ) {
+      $funder_id = (int) $wpdb->get_var( $wpdb->prepare(
+        "SELECT r.funder_id
+           FROM {$this->training_registration_table} r
+           INNER JOIN {$this->learner_table} l ON l.id = r.learner_id
+          WHERE l.session_id = %d AND r.is_draft = 0 AND r.funder_id IS NOT NULL AND r.funder_id > 0
+          ORDER BY r.updated_at DESC, r.id DESC LIMIT 1",
+        $seance_id
+      ) );
+      if ( $funder_id > 0 ) {
+        return $funder_id;
+      }
+    }
+    return 0;
+  }
+
+  /**
+   * ACDC 3.25.302 — La boucle du financeur appelait le calcul de l'enquête À
+   * CHAUD : un reste de copier-coller, il n'existait aucun calcul propre au
+   * financeur. Sa date de départ suivait donc les réglages d'une autre enquête.
+   */
+  private function compute_funder_survey_automation_trigger_at( $training_session, $survey_settings ) {
+    $window = $this->get_mid_survey_session_window( $training_session );
+    if ( empty( $window ) ) { return ''; }
+    $engine = method_exists( $this, 'get_survey_engine_type_settings' ) ? $this->get_survey_engine_type_settings( 'funder' ) : array();
+    $delay_days = isset( $engine['trigger_delay_days'] ) ? absint( $engine['trigger_delay_days'] ) : 30;
+    $trigger_ts = strtotime( '+' . max( 0, $delay_days ) . ' days', (int) $window['end_ts'] );
+    if ( ! $trigger_ts ) { return ''; }
+    return gmdate( 'Y-m-d H:i:s', $trigger_ts + (int) ( get_option( 'gmt_offset', 0 ) * HOUR_IN_SECONDS ) );
+  }
+
   private function acdc_resolve_survey_company_id( $training_session ) {
     global $wpdb;
     if ( ! empty( $training_session->company_id ) ) {
@@ -9322,6 +9368,7 @@ private function maybe_auto_create_questionnaire_actions_from_response( $session
          se résolvent sur la liste des apprenants inscrits, pas sur une entité tierce. */
       'formateur_id'        => $this->acdc_resolve_survey_trainer_id( $training_session ),
       'company_id'          => $this->acdc_resolve_survey_company_id( $training_session ),
+      'funder_id'           => $this->acdc_resolve_survey_funder_id( $training_session ),
       'send_mode'           => 'scheduled',
       'session_date'        => $scheduled_at,
       'scheduled_at'        => $scheduled_at,
@@ -9414,7 +9461,7 @@ private function maybe_auto_create_questionnaire_actions_from_response( $session
       foreach ( (array) $training_sessions as $ts ) {
         if ( empty( $ts->id ) || $this->has_existing_funder_survey_automated_session( (int) $survey->id, (int) $ts->id ) ) { continue; }
         if ( $this->acdc_survey_exists_for_formation( 'funder_survey', (int) $survey->id, $ts ) ) { continue; }
-        $scheduled_at = $this->compute_hot_survey_automation_trigger_at( $ts, $survey_settings );
+        $scheduled_at = $this->compute_funder_survey_automation_trigger_at( $ts, $survey_settings );
         if ( empty( $scheduled_at ) ) { continue; }
         $created += $this->create_generic_survey_automated_session( 'funder_survey', $survey, $ts, $survey_settings, $scheduled_at ) > 0 ? 1 : 0;
       }
@@ -9461,6 +9508,31 @@ private function maybe_auto_create_questionnaire_actions_from_response( $session
   }
 
 
+  /**
+   * Pourquoi cette enquête n'a trouvé personne — en toutes lettres.
+   *
+   * « Aucun destinataire » n'est pas une cause, c'est un constat. Un financeur
+   * absent du dossier ne se corrige pas au même endroit qu'un contact sans
+   * adresse : la première se règle sur la convention, la seconde sur la fiche.
+   */
+  private function acdc_motif_sans_destinataire( $session ) {
+    $type = isset( $session->source_type ) ? (string) $session->source_type : '';
+    if ( 'funder_survey' === $type ) {
+      return empty( $session->funder_id )
+        ? 'Aucun financeur n’est rattaché au dossier : l’enquête financeur n’a personne à qui s’adresser.'
+        : 'Le financeur rattaché n’a pas d’adresse e-mail valide sur sa fiche.';
+    }
+    if ( 'company_survey' === $type ) {
+      return empty( $session->company_id )
+        ? 'Aucune entreprise n’est rattachée au dossier : l’enquête entreprise n’a personne à qui s’adresser.'
+        : 'Aucun contact de cette entreprise n’a d’adresse e-mail valide.';
+    }
+    if ( 'trainer_survey' === $type ) {
+      return 'Le formateur rattaché n’a pas d’adresse e-mail valide sur sa fiche.';
+    }
+    return 'Aucun apprenant de cette séance n’a d’adresse e-mail valide.';
+  }
+
   public function process_scheduled_survey_dispatches() {
     $this->ensure_mid_survey_automation_sessions();
     $this->ensure_hot_survey_automation_sessions();
@@ -9484,11 +9556,33 @@ private function maybe_auto_create_questionnaire_actions_from_response( $session
       $settings['last_email_sent_count'] = (int) ( $result['sent'] ?? 0 );
       $settings['last_email_failed_count'] = (int) ( $result['failed'] ?? 0 );
       $settings['last_email_target_count'] = (int) ( $result['target'] ?? 0 );
+      /* ACDC 3.25.302 — « ENVOYÉE » ÉTAIT ÉCRIT QUEL QUE SOIT LE RÉSULTAT.
+         Zéro destinataire, zéro e-mail parti : la ligne passait quand même à
+         « envoyée », le parcours l'annonçait, et les relances s'enchaînaient sur
+         ce mensonge. L'archive des e-mails, elle, restait vide — et c'est en la
+         regardant que David a vu qu'aucune enquête financeur ni entreprise
+         n'était jamais partie. Depuis toujours, et pour tous les dossiers.
+         Une enquête qui n'a trouvé personne n'est pas envoyée : elle est SANS
+         DESTINATAIRE, et elle dit pourquoi. C'est la différence entre un dossier
+         qu'on peut vérifier et un dossier faussement rassurant. */
+      $__acdc_partis = (int) ( $result['sent'] ?? 0 );
+      $__acdc_vises  = (int) ( $result['target'] ?? 0 );
+      $__acdc_statut = 'envoyee';
+      $__acdc_motif  = '';
+      if ( 0 === $__acdc_vises ) {
+        $__acdc_statut = 'sans_destinataire';
+        $__acdc_motif  = $this->acdc_motif_sans_destinataire( $session );
+      } elseif ( 0 === $__acdc_partis ) {
+        $__acdc_statut = 'echec_envoi';
+        $__acdc_motif  = sprintf( '%d destinataire(s) visé(s), aucun e-mail n’est parti.', $__acdc_vises );
+      }
+      $settings['dispatch_motif'] = $__acdc_motif;
+
       $wpdb->update(
         $this->questionnaire_session_table,
         array(
-          'status' => 'envoyee',
-          'dispatch_sent_at' => $this->now_mysql(),
+          'status' => $__acdc_statut,
+          'dispatch_sent_at' => 'envoyee' === $__acdc_statut ? $this->now_mysql() : null,
           'session_settings_json' => wp_json_encode( $settings ),
           'updated_at' => $this->now_mysql(),
         ),
@@ -9496,6 +9590,14 @@ private function maybe_auto_create_questionnaire_actions_from_response( $session
         array( '%s', '%s', '%s', '%s' ),
         array( '%d' )
       );
+      if ( 'envoyee' !== $__acdc_statut ) {
+        $this->log_action_event( 'enquete_sans_destinataire', 'questionnaire_session', (int) $session->id, 'error', array(
+          'type'   => (string) $session->source_type,
+          'motif'  => $__acdc_motif,
+          'vises'  => $__acdc_vises,
+          'partis' => $__acdc_partis,
+        ) );
+      }
       $this->log_questionnaire_event( array(
         'questionnaire_session_id' => (int) $session->id,
         'event_type' => 'dispatch_sent',

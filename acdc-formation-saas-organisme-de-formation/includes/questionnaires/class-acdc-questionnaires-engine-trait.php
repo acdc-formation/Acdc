@@ -116,6 +116,10 @@ trait ACDC_Questionnaires_Engine_Trait {
       'brouillon'              => 'Brouillon',
       'planifiee'              => 'Planifiée',
       'envoyee'                => 'Envoyée',
+      /* ACDC 3.25.302 — Deux états qui n'existaient pas, et dont l'absence
+         faisait passer une enquête partie à personne pour une enquête envoyée. */
+      'sans_destinataire'      => 'Sans destinataire',
+      'echec_envoi'            => 'Échec d’envoi',
       'prete'                  => 'Prête',
       'ouverte'                => 'Ouverte',
       'en_cours'               => 'En cours',
@@ -144,6 +148,8 @@ trait ACDC_Questionnaires_Engine_Trait {
       'brouillon'             => 'Brouillon',
       'planifiee'             => 'Planifiée',
       'envoyee'               => 'Envoyée',
+      'sans_destinataire'     => 'Sans destinataire',
+      'echec_envoi'           => 'Échec d’envoi',
       'ouverte'               => 'Ouverte',
       'commencee'             => 'Commencée',
       'partiellement_repondue'=> 'Partiellement répondue',

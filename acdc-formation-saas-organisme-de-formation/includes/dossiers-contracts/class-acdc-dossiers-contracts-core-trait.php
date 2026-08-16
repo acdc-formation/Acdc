@@ -937,10 +937,23 @@ trait ACDC_Dossiers_Contracts_Core_Trait {
       'start_date'         => '',
       'end_date'           => '',
       'public_funding'     => '',
+      'funder_id'          => 0,
+      'funder_source'      => '',
     );
 
     if ( ! $prospect ) {
       return $prefill;
+    }
+
+    /* Hors proposition, le recueil le plus récent du prospect fait foi. Un
+       pré-remplissage muet est un piège : on ne relit pas ce qu'on croit avoir
+       saisi. La provenance voyage donc avec la valeur, et l'écran la dit. */
+    if ( empty( $proposal ) && ! empty( $prospect->id ) && method_exists( $this, 'acdc_dernier_recueil_du_prospect' ) ) {
+      $dernier_recueil = $this->acdc_dernier_recueil_du_prospect( (int) $prospect->id );
+      if ( $dernier_recueil && ! empty( $dernier_recueil->funder_id ) ) {
+        $prefill['funder_id']     = absint( $dernier_recueil->funder_id );
+        $prefill['funder_source'] = sprintf( 'Financeur repris du recueil du besoin n° %d.', (int) $dernier_recueil->id );
+      }
     }
 
     $profile_type = isset( $prospect->profile_type ) ? (string) $prospect->profile_type : '';
@@ -992,6 +1005,29 @@ trait ACDC_Dossiers_Contracts_Core_Trait {
       /* Financement */
       if ( ! empty( $proposal->formation_funding ) ) {
         $prefill['public_funding'] = sanitize_text_field( (string) $proposal->formation_funding );
+      }
+      /* ACDC 3.25.302 — LE FINANCEUR N'ÉTAIT PAS REPRIS, ET LE PLUGIN LE SAVAIT
+         POURTANT DÉJÀ DEUX FOIS.
+         Le recueil du besoin porte funder_id ; la proposition, elle, n'a pas de
+         financeur à elle — elle porte un need_id et LIT celui du recueil. Les
+         deux ne peuvent donc pas se contredire ; ce que la proposition tranche,
+         c'est QUEL recueil fait foi quand un prospect en a plusieurs. C'est la
+         règle de David — « la proposition fait foi » — appliquée à ce que la
+         donnée permet réellement.
+         Seul le montant, l'intitulé et le régime de financement étaient repris.
+         Le financeur était redemandé une troisième fois, et son oubli sur une
+         convention a suffi à rendre muette toute la chaîne : convention sans
+         financeur, enquête financeur sans destinataire, statut « envoyée »
+         quand même. Un logiciel qui redemande ce qu'il sait fabrique l'oubli
+         qu'il reprochera ensuite. */
+      $prefill['funder_id']     = 0;
+      $prefill['funder_source'] = '';
+      if ( ! empty( $proposal->need_id ) && method_exists( $this, 'get_need' ) ) {
+        $need_de_la_proposition = $this->get_need( (int) $proposal->need_id );
+        if ( $need_de_la_proposition && ! empty( $need_de_la_proposition->funder_id ) ) {
+          $prefill['funder_id']     = absint( $need_de_la_proposition->funder_id );
+          $prefill['funder_source'] = sprintf( 'Financeur repris du recueil du besoin n° %d, désigné par la proposition.', (int) $proposal->need_id );
+        }
       }
     } else {
       /* Priorité : formation liée au prospect par IDENTIFIANT exact (desired_formation_id).

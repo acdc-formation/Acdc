@@ -68,6 +68,7 @@ lancent sans WordPress, en quelques secondes.
     php tests/test-identite-organisme.php # fiche entreprise et marque : qui gagne, champ par champ
     php tests/scan-durcissement.php # les durcissements de l'audit du 16 août, du Drive aux fuseaux
     php tests/scan-suppressions-tracees.php # une suppression laisse une trace, ou elle n'a jamais eu lieu
+    php tests/test-convention-complete.php # ce qui bloque une convention, ce qui la signale seulement
 
 Le dernier balaie tout le plugin et signale les fonctions qui utilisent `$wpdb`
 sans l'avoir importé — la faute qui a produit l'erreur fatale de la 3.25.236.

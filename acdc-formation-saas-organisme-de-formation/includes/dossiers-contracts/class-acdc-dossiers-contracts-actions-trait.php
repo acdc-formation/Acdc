@@ -459,6 +459,32 @@ public function handle_save_registration_contract() {
      négatif, c'est-à-dire un avoir déguisé. On refuse avant d'enregistrer,
      avec le total en toutes lettres — un refus qui ne dit pas contre quoi il
      compare est un refus qu'on ne sait pas corriger. */
+  /* ACDC 3.25.302 — UNE CONVENTION INCOMPLÈTE S'ENREGISTRAIT SANS UN MOT.
+     Le 16 août, une convention est partie sans financeur alors qu'il figurait
+     au recueil ET sur la proposition. Rien ne l'a signalé — ni ici, ni trois
+     mois plus tard quand l'enquête financeur n'a trouvé personne et s'est
+     déclarée envoyée quand même.
+     On refuse désormais, en NOMMANT ce qui manque : un refus qui ne dit pas
+     quoi corriger est un refus qu'on subit. Et l'on distingue ce qui rend le
+     document inopposable — on bloque — de ce qui reste à compléter — on le dit,
+     sans empêcher. Une alerte qui bloque sur un détail finit par être
+     contournée, et ce jour-là elle ne protège plus rien. */
+  $completude = \ACDC\Support\ConventionCompleteness::verifier( $input );
+  if ( ! $completude['ok'] ) {
+    $this->acdc_store_form_state( 'registration_contract', $input, array() );
+    $this->log_action_event( 'convention_incomplete', 'registration_contract', (int) $contract_id, 'error', array( 'manquants' => $completude['bloquants'] ) );
+    $message    = \ACDC\Support\ConventionCompleteness::messageRefus( $completude['bloquants'] );
+    $error_args = array( 'action' => $contract_id ? 'edit' : 'new', 'item_id' => $contract_id );
+    if ( $source_prospect_id ) {
+      $error_args['prospect_id'] = $source_prospect_id;
+    }
+    $target = $is_admin_page
+      ? $this->admin_page_url( 'acdc-of-registration-contract', $this->acdc_append_notice_args( $error_args, $message, 'error' ) )
+      : $this->portal_page_url( $this->acdc_append_notice_args( array_merge( array( 'tab' => 'registration_contract' ), $error_args ), $message, 'error' ) );
+    wp_safe_redirect( $target );
+    exit;
+  }
+
   $pec_plan = $this->acdc_contract_funding_plan( $input );
   if ( ! $pec_plan['ok'] ) {
     $this->acdc_store_form_state( 'registration_contract', $input, array( 'funding_pec_amount_ht' ) );

@@ -6361,7 +6361,29 @@ private function acdc_nom_fichier_sauvegarde( $quand = null ) {
         LEFT JOIN {$this->prospect_table} p ON p.id = n.source_prospect_id
         ORDER BY n.created_at DESC, n.id DESC";
     return $wpdb->get_results( $sql );
-  }  private function get_need( $id ) {
+  }
+
+  /**
+   * Le dernier recueil du besoin d'un prospect — celui qui fait foi hors
+   * proposition.
+   *
+   * ACDC 3.25.302. Quand aucune proposition ne désigne un recueil, c'est le plus
+   * récent qui compte : un prospect revenu six mois plus tard a changé de
+   * financeur, et l'ancien ne doit pas remonter sur la nouvelle convention.
+   */
+  private function acdc_dernier_recueil_du_prospect( $prospect_id ) {
+    global $wpdb;
+    $prospect_id = absint( $prospect_id );
+    if ( ! $prospect_id || empty( $this->need_table ) ) {
+      return null;
+    }
+    return $wpdb->get_row( $wpdb->prepare(
+      "SELECT * FROM {$this->need_table} WHERE source_prospect_id = %d ORDER BY created_at DESC, id DESC LIMIT 1",
+      $prospect_id
+    ) );
+  }
+
+  private function get_need( $id ) {
     global $wpdb;
     return $wpdb->get_row( $wpdb->prepare( "SELECT * FROM {$this->need_table} WHERE id = %d", $id ) );
   }  private function get_need_theme_options() {
