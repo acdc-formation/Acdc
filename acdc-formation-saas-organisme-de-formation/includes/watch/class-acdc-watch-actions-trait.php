@@ -475,7 +475,7 @@ trait ACDC_Watch_Actions_Trait {
     $tbl   = $this->get_watch_items_table();
     global $wpdb;
 
-    $since = wp_date( 'Y-m-d H:i:s', current_time( 'timestamp' ) - 7 * DAY_IN_SECONDS );
+    $since = gmdate( 'Y-m-d H:i:s', current_time( 'timestamp' ) - 7 * DAY_IN_SECONDS );
     $new_count      = (int) $wpdb->get_var( $wpdb->prepare( "SELECT COUNT(*) FROM {$tbl} WHERE collected_at >= %s", $since ) );
     $to_exploit     = (int) $wpdb->get_var( "SELECT COUNT(*) FROM {$tbl} WHERE status = 'reviewed' AND ai_score >= 6" );
     $urgent         = (int) $wpdb->get_var( "SELECT COUNT(*) FROM {$tbl} WHERE ai_urgency = 'immediat' AND status = 'reviewed'" );
@@ -511,7 +511,7 @@ trait ACDC_Watch_Actions_Trait {
     $tbl   = $this->get_watch_items_table();
     global $wpdb;
 
-    $since = wp_date( 'Y-m-d H:i:s', current_time( 'timestamp' ) - 30 * DAY_IN_SECONDS );
+    $since = gmdate( 'Y-m-d H:i:s', current_time( 'timestamp' ) - 30 * DAY_IN_SECONDS );
     $last  = $wpdb->get_var( "SELECT MAX(exploited_at) FROM {$tbl} WHERE status = 'exploited'" );
 
     if ( $last && strtotime( $last ) > strtotime( $since ) ) {

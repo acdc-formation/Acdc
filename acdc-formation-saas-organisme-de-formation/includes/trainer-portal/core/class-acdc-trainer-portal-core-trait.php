@@ -291,7 +291,7 @@ trait ACDC_Trainer_Portal_Core_Trait {
     global $wpdb;
     $this->trainer_portal_delete_active_sessions( $account_id );
     $raw       = $this->trainer_portal_random_token( 32 );
-    $expires   = wp_date( 'Y-m-d H:i:s', strtotime( '+7 days', current_time( 'timestamp' ) ) );
+    $expires   = gmdate( 'Y-m-d H:i:s', strtotime( '+7 days', current_time( 'timestamp' ) ) );
     $now_mysql = $this->trainer_portal_now_mysql();
     $wpdb->insert(
       $this->trainer_portal_session_table,
@@ -427,7 +427,7 @@ trait ACDC_Trainer_Portal_Core_Trait {
     $token = $this->trainer_portal_create_token(
       $account->id,
       'activation',
-      wp_date( 'Y-m-d H:i:s', strtotime( '+7 days', current_time( 'timestamp' ) ) ),
+      gmdate( 'Y-m-d H:i:s', strtotime( '+7 days', current_time( 'timestamp' ) ) ),
       array( 'purpose' => 'first_activation' )
     );
     return $this->trainer_portal_login_url( array( 'view' => 'activate', 'token' => rawurlencode( $token ) ) );
@@ -463,7 +463,7 @@ trait ACDC_Trainer_Portal_Core_Trait {
     $token = $this->trainer_portal_create_token(
       $account->id,
       'reset',
-      wp_date( 'Y-m-d H:i:s', strtotime( '+2 days', current_time( 'timestamp' ) ) ),
+      gmdate( 'Y-m-d H:i:s', strtotime( '+2 days', current_time( 'timestamp' ) ) ),
       array( 'purpose' => 'password_reset' )
     );
     $display_name = $trainer ? trim( (string) $trainer->first_name . ' ' . (string) $trainer->last_name ) : (string) $account->email;

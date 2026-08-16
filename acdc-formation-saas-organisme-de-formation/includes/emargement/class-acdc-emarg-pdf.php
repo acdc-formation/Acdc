@@ -231,6 +231,14 @@ class ACDC_Emarg_PDF {
         /* ---- Section séance ---- */
         $formation_label = ! empty( $session->formation_title ) ? $session->formation_title : '—';
         if ( ! empty( $session->formation_code ) ) { $formation_label .= '  (' . $session->formation_code . ')'; }
+        /* ACDC 3.25.297 — $date_label n'existait QUE si la séance portait une
+           date de début. Une séance sans date — il en existe, le plugin sait
+           créer des séances en brouillon — produisait une feuille d'émargement
+           qui lisait une variable jamais définie : selon le réglage du serveur,
+           un avertissement PHP au milieu du PDF, ou une case vide. Les deux
+           champs voisins, « Lieu » et « Format », avaient leur repli depuis
+           toujours ; celui-ci ne l'avait pas. Et c'est une pièce Qualiopi. */
+        $date_label = '—';
         if ( ! empty( $session->start_at ) ) {
             $date_label = mysql2date( 'd/m/Y', $session->start_at );
             if ( ! empty( $session->end_at ) && gmdate( 'Y-m-d', strtotime( $session->end_at ) ) !== gmdate( 'Y-m-d', strtotime( $session->start_at ) ) ) {

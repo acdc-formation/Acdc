@@ -444,14 +444,14 @@ trait ACDC_Learner_Portal_Actions_Trait {
       case 'enable':
         $reactivation_expiry = $this->learner_portal_parse_mysql_time( $account->access_expires_at ) > current_time( 'timestamp' )
           ? $account->access_expires_at
-          : wp_date( 'Y-m-d H:i:s', strtotime( '+30 days', current_time( 'timestamp' ) ) );
+          : gmdate( 'Y-m-d H:i:s', strtotime( '+30 days', current_time( 'timestamp' ) ) );
         $wpdb->update( $this->learner_portal_account_table, array( 'status' => 'active', 'access_expires_at' => $reactivation_expiry, 'last_access_notice_key' => null, 'last_access_notice_at' => null, 'last_access_notice_expiry_at' => null, 'updated_at' => $this->learner_portal_now_mysql() ), array( 'id' => $account_id ), array( '%s', '%s', '%s', '%s', '%s', '%s' ), array( '%d' ) );
         $message = 'Accès réactivé.';
         $this->learner_portal_log_event( $account_id, 'admin_enabled_access', array( 'new_expiry' => $reactivation_expiry ) );
         $this->learner_portal_notify_admin( 'Réactivation manuelle d’un accès extranet apprenant', '<p>Un accès extranet apprenant a été réactivé manuellement.</p><p><strong>E-mail :</strong> ' . esc_html( $account->email ) . '</p><p><strong>Nouvelle expiration :</strong> ' . esc_html( $this->learner_portal_format_date( $reactivation_expiry, true ) ) . '</p>' );
         break;
       case 'prolong':
-        $new_expiry = wp_date( 'Y-m-d H:i:s', strtotime( '+30 days', max( current_time( 'timestamp' ), $this->learner_portal_parse_mysql_time( $account->access_expires_at ) ) ) );
+        $new_expiry = gmdate( 'Y-m-d H:i:s', strtotime( '+30 days', max( current_time( 'timestamp' ), $this->learner_portal_parse_mysql_time( $account->access_expires_at ) ) ) );
         $wpdb->update( $this->learner_portal_account_table, array( 'status' => 'active', 'access_expires_at' => $new_expiry, 'last_access_notice_key' => null, 'last_access_notice_at' => null, 'last_access_notice_expiry_at' => null, 'updated_at' => $this->learner_portal_now_mysql() ), array( 'id' => $account_id ), array( '%s', '%s', '%s', '%s', '%s', '%s' ), array( '%d' ) );
         $message = 'Accès prolongé de 30 jours.';
         $this->learner_portal_log_event( $account_id, 'admin_prolonged_access', array( 'new_expiry' => $new_expiry ) );

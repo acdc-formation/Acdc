@@ -454,7 +454,7 @@ trait ACDC_Watch_Core_Trait {
   private function get_watch_dashboard_stats() {
     global $wpdb;
     $tbl      = $this->get_watch_items_table();
-    $month_start = wp_date( 'Y-m-01 00:00:00', current_time( 'timestamp' ) );
+    $month_start = gmdate( 'Y-m-01 00:00:00', current_time( 'timestamp' ) );
 
     $stats = array(
       'total_new'         => (int) $wpdb->get_var( "SELECT COUNT(*) FROM {$tbl} WHERE status = 'new'" ),

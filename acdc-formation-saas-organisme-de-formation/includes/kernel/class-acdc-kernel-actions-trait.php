@@ -5753,7 +5753,7 @@ public function handle_purge_plugin_data() {
             array( 'label' => 'Répondant',  'value' => $repondant_label ?: '—' ),
             array( 'label' => 'E-mail',     'value' => (string) ( $analysis->repondant_email ?? '—' ) ),
             array( 'label' => 'Analyse',    'value' => (string) ( $analysis->title ?? '—' ) ),
-            array( 'label' => 'Soumis le',  'value' => wp_date( 'j/m/Y à H\hi', current_time( 'timestamp' ) ) ),
+            array( 'label' => 'Soumis le',  'value' => wp_date( 'j/m/Y à H\hi' ) ),
           ),
           'body_html'     => '<p style="text-align:center;margin:24px 0;"><a href="' . esc_url( $analysis_url ) . '" style="display:inline-block;padding:12px 24px;background:#C5A253;color:#0B0706;text-decoration:none;border-radius:8px;font-weight:700;">Consulter l\'analyse du besoin</a></p>',
           'footer_notice' => 'Notification interne ACDC Formation — analyse du besoin complétée.',

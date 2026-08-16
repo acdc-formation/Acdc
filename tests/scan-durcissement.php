@@ -395,12 +395,16 @@ if ( ! is_readable( $drive ) ) {
    seconde fois. L'archive déposée à 13h11 s'appelait « 15h10mn », et l'écran
    affichait les deux chiffres à quelques lignes d'intervalle.
 
-   Le motif existe encore ailleurs dans le plugin, et certaines de ces lignes
-   calculent des DATES D'EXPIRATION de liens d'accès : un jeton annoncé pour
-   quinze minutes vivrait deux heures de plus. On ne les corrige pas dans une
-   livraison consacrée aux sauvegardes — ce serait un autre changement, avec un
-   autre risque. On les COMPTE, et on interdit qu'il y en ait une de plus. */
-$plafond_horloge = 16;
+   Le motif a été relevé à seize endroits le 16 août, gelé le jour même, puis
+   supprimé en 3.25.297. La règle qui les remplace tous :
+
+     — une valeur RANGÉE en base, qu'on comparera plus tard à
+       current_time('timestamp'), s'écrit avec gmdate() sur ce même repère ;
+     — une valeur AFFICHÉE à un humain s'écrit avec wp_date() sur un instant
+       vrai — c'est-à-dire time(), ou rien du tout.
+
+   Le plafond est à zéro : la dette est soldée, elle ne se rouvre pas. */
+$plafond_horloge = 0;
 $doubles = array();
 $fichiers_php = array();
 if ( is_dir( $root . '/includes' ) ) {
@@ -420,10 +424,9 @@ foreach ( $fichiers_php as $chemin ) {
 }
 if ( count( $doubles ) > $plafond_horloge ) {
     $hits[] = sprintf(
-        'le décalage horaire est compté deux fois à %d endroits, soit %d de plus que la dette connue : une date affichée ou une expiration de lien serait fausse de la valeur du décalage. Dernier ajout : %s',
+        'le décalage horaire est de nouveau compté deux fois, à %d endroit(s) : %s. Une valeur rangée en base doit s’écrire avec gmdate() sur current_time(\'timestamp\'), une valeur affichée avec wp_date() sur un instant vrai.',
         count( $doubles ),
-        count( $doubles ) - $plafond_horloge,
-        implode( ', ', array_slice( $doubles, $plafond_horloge ) )
+        implode( ', ', $doubles )
     );
 }
 /* Et le chemin des sauvegardes, lui, n'a plus le droit d'y figurer : c'est là

@@ -13374,7 +13374,7 @@ private function acdc_pdf_asset_is_readable( $url ) {
    */
   private function get_trainers_without_recent_evaluation() {
     global $wpdb;
-    $cutoff = wp_date( 'Y-m-d', strtotime( '-12 months', current_time( 'timestamp' ) ) );
+    $cutoff = gmdate( 'Y-m-d', strtotime( '-12 months', current_time( 'timestamp' ) ) );
     $rows = $wpdb->get_results(
       "SELECT t.id, t.first_name, t.last_name, MAX(e.evaluation_date) AS last_eval_date" .
       " FROM {$this->trainer_table} AS t" .

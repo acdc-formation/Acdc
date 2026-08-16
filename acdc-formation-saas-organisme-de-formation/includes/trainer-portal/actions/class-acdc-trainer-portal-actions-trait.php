@@ -49,7 +49,7 @@ trait ACDC_Trainer_Portal_Actions_Trait {
       $update     = array( 'failed_login_count' => $new_failed, 'updated_at' => $this->trainer_portal_now_mysql() );
       // Verrouillage après 5 échecs : 15 minutes.
       if ( $new_failed >= 5 ) {
-        $update['blocked_until']      = wp_date( 'Y-m-d H:i:s', strtotime( '+15 minutes', current_time( 'timestamp' ) ) );
+        $update['blocked_until']      = gmdate( 'Y-m-d H:i:s', strtotime( '+15 minutes', current_time( 'timestamp' ) ) );
         $update['failed_login_count'] = 0;
       }
       $wpdb->update( $this->trainer_portal_account_table, $update, array( 'id' => (int) $account->id ) );

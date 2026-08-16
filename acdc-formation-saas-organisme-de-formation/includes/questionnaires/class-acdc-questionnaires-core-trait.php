@@ -3864,7 +3864,7 @@ Vos réponses nous permettront d’évaluer nos pratiques, d’identifier des ax
 
 
   private function get_questionnaire_action_internal_followup_day_key() {
-    return wp_date( 'Y-m-d', current_time( 'timestamp' ) );
+    return gmdate( 'Y-m-d', current_time( 'timestamp' ) );
   }
 
 
@@ -4055,7 +4055,7 @@ Vos réponses nous permettront d’évaluer nos pratiques, d’identifier des ax
       'aujourd_hui' => 0,
       'a_venir'     => 0,
     );
-    $today = wp_date( 'Y-m-d', current_time( 'timestamp' ) );
+    $today = gmdate( 'Y-m-d', current_time( 'timestamp' ) );
     foreach ( (array) $rows as $row ) {
       $stats['total']++;
       if ( ! empty( $row->due_state['is_late'] ) ) {

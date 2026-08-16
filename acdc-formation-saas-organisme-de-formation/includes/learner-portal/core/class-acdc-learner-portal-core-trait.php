@@ -255,7 +255,7 @@ trait ACDC_Learner_Portal_Core_Trait {
     $token = $this->learner_portal_create_token(
       $account->id,
       'activation',
-      wp_date( 'Y-m-d H:i:s', strtotime( '+7 days', current_time( 'timestamp' ) ) ),
+      gmdate( 'Y-m-d H:i:s', strtotime( '+7 days', current_time( 'timestamp' ) ) ),
       array( 'purpose' => 'first_activation' )
     );
     return $this->learner_portal_login_url( array( 'view' => 'activate', 'token' => rawurlencode( $token ) ) );
@@ -372,7 +372,7 @@ trait ACDC_Learner_Portal_Core_Trait {
     $token = $this->learner_portal_create_token(
       $account->id,
       'reset',
-      wp_date( 'Y-m-d H:i:s', strtotime( '+2 days', current_time( 'timestamp' ) ) ),
+      gmdate( 'Y-m-d H:i:s', strtotime( '+2 days', current_time( 'timestamp' ) ) ),
       array( 'purpose' => 'password_reset' )
     );
 
@@ -447,7 +447,7 @@ trait ACDC_Learner_Portal_Core_Trait {
     $this->learner_portal_delete_active_sessions( $account_id );
 
     $raw       = $this->learner_portal_random_token( 32 );
-    $expires   = wp_date( 'Y-m-d H:i:s', strtotime( '+7 days', current_time( 'timestamp' ) ) );
+    $expires   = gmdate( 'Y-m-d H:i:s', strtotime( '+7 days', current_time( 'timestamp' ) ) );
     $now_mysql = $this->learner_portal_now_mysql();
 
     $wpdb->insert(
