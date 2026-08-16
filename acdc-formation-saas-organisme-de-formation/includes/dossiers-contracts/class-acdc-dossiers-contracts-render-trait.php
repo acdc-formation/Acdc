@@ -3548,7 +3548,10 @@ public function render_admin_registration_contract_page() { $this->render_admin_
     // Handicap, Qualité, Info publique, Comptabilité, Historique
     // ═══════════════════════════════════════════════════════════════════
     else :
-      $onglet_label = isset( $subtab_labels[ $entity_subtab ] ) ? $subtab_labels[ $entity_subtab ] : $entity_subtab;
+      /* ACDC 3.25.291 — $entity_subtab n'existe pas : le paramètre de cette
+         fonction s'appelle $subtab. L'onglet affichait donc une étiquette vide
+         au lieu de son nom. */
+      $onglet_label = isset( $subtab_labels[ $subtab ] ) ? $subtab_labels[ $subtab ] : $subtab;
       $nb_reg = count( $registrations );
     ?>
       <div class="acdc-panel">

@@ -444,7 +444,12 @@ trait ACDC_Documents_Billing_Render_Trait {
         'formation_full' => '', 'formation' => '', 'formation_title' => '',
         'start_date' => '', 'end_date' => '', 'trained_headcount' => '',
         'emission_date' => wp_date( 'd/m/Y' ), 'expiration_date' => wp_date( 'd/m/Y', strtotime( '+' . $quote_validity_days . ' days' ) ),
-        'tarif_ht_value' => '', 'tarif_ttc_value' => '0', 'vat_rate' => '20,00',
+        /* ACDC 3.25.291 — « vat_rate » figurait DEUX FOIS dans ce tableau : la
+           seconde valeur écrasait silencieusement la première. Le taux fixe à
+           20,00 ne servait donc à rien — seul le réglage comptait, ce qui est le
+           comportement voulu, mais que cette ligne contredisait à la lecture.
+           Une seule clé désormais, celle qui lit le réglage. */
+        'tarif_ht_value' => '', 'tarif_ttc_value' => '0',
         'quantity' => '1,00', 'designation' => "Dates de l'action de formation : à définir",
         'format' => 'Présentiel', 'validity_days' => (string) $quote_validity_days,
         'vat_rate' => ( isset( $profile_q['vat_rate_default'] ) && '20' === (string) $profile_q['vat_rate_default'] ) ? '20,00' : '0,00',

@@ -506,6 +506,12 @@ trait ACDC_Quizzes_Actions_Trait {
             'acdc_of_qz_cancel_participant'  => 'dispatch_quiz',
             'acdc_of_qz_resend_participant'  => 'dispatch_quiz',
             'acdc_of_qz_search_learners'     => 'dispatch_quiz',
+            /* ACDC 3.25.291 — Même nature que la recherche d'apprenants : une
+               lecture utilisée au moment d'envoyer un quiz. Sans cette ligne, le
+               contrôle de droits ajouté sur cette action aurait réservé la liste
+               des séances aux seuls administrateurs, et cassé l'écran d'envoi
+               pour les formateurs. */
+            'acdc_of_qz_get_formation_sessions' => 'dispatch_quiz',
             'acdc_of_qz_remind_participant'  => 'dispatch_quiz',
             'acdc_of_qz_remind_session'      => 'dispatch_quiz',
             /* ACDC 3.21.04.1 — Actions résultats */
@@ -1093,6 +1099,13 @@ trait ACDC_Quizzes_Actions_Trait {
             public function ajax_acdc_of_qz_get_formation_sessions() {
         if ( ! check_ajax_referer( 'acdc_of_qz_get_formation_sessions', '_wpnonce', false ) ) {
             wp_send_json_error( array( 'message' => 'Nonce invalide' ), 403 );
+        }
+        /* ACDC 3.25.291 — Cette action vérifiait le jeton mais pas les droits :
+           c'était la seule exception du module. Tout compte connecté pouvait
+           lister les séances d'une formation. Elle applique désormais le même
+           contrôle que ses voisines. */
+        if ( ! $this->qz_request_is_authorized( 'acdc_of_qz_get_formation_sessions' ) ) {
+            wp_send_json_error( array( 'message' => 'Accès refusé.' ), 403 );
         }
 
         $formation_id = isset( $_POST['formation_id'] ) ? absint( $_POST['formation_id'] ) : 0;

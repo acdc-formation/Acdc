@@ -698,7 +698,10 @@ trait ACDC_Compliance_Quality_Actions_Trait {
     $records[ $year ]['start_date'] = $start;
     $records[ $year ]['end_date']   = $end;
     $records[ $year ]['status']     = 'generated';
-    $records[ $year ]['pdf_url']    = isset( $pdf_url ) ? $pdf_url : '';
+    /* ACDC 3.25.291 — $pdf_url n'était jamais défini : ce champ valait donc
+       toujours la chaîne vide. Cette génération produit un seul document, le
+       CERFA ; la fiche pointe désormais dessus au lieu de ne rien porter. */
+    $records[ $year ]['pdf_url']    = $cerfa_url;
     $records[ $year ]['cerfa_url']  = $cerfa_url;
     $records[ $year ]['data'] = array(
       'c1'             => round( $c1_val, 0 ),

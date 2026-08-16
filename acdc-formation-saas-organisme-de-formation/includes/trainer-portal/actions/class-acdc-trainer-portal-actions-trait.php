@@ -106,6 +106,11 @@ trait ACDC_Trainer_Portal_Actions_Trait {
    */
   public function handle_trainer_request_reset() {
     check_admin_referer( 'acdc_trainer_request_reset' );
+    /* ACDC 3.25.291 — Cette demande n'était pas limitée : on pouvait la rejouer
+       en boucle sur une adresse. */
+    if ( $this->acdc_trop_de_tentatives( 'reinit_formateur' ) ) {
+      $this->trainer_portal_redirect( 'forgot', 'Trop de demandes depuis ce réseau. Patientez un quart d’heure avant de réessayer.', 'error' );
+    }
     $email = isset( $_POST['trainer_email'] ) ? sanitize_email( wp_unslash( $_POST['trainer_email'] ) ) : '';
     if ( '' === $email ) {
       $this->trainer_portal_redirect( 'forgot', 'Veuillez saisir votre e-mail.', 'error' );

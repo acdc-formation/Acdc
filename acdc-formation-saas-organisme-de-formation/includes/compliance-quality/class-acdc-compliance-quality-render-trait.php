@@ -2705,7 +2705,11 @@ trait ACDC_Compliance_Quality_Render_Trait {
     $partners_local    = array_values( array_filter( $partners, function( $p ) { return ( $p['scope'] ?? '' ) !== 'national'; } ) );
 
     // Fonction d'affichage d'un groupe de partenaires
-    $render_partners_table = function( $list ) use ( $type_labels ) {
+    /* ACDC 3.25.291 — $base_url ne figurait pas dans la liste « use » : à
+       l'intérieur de cette fermeture il n'existait pas, et les liens « voir » et
+       « modifier » de chaque partenaire se construisaient donc sur une base
+       vide. Ils ne menaient nulle part. */
+    $render_partners_table = function( $list ) use ( $type_labels, $base_url ) {
       if ( empty( $list ) ) {
         echo '<p style="color:#888;font-size:14px;">Aucun partenaire dans cette catégorie.</p>';
         return;

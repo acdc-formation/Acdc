@@ -1391,6 +1391,10 @@ trait ACDC_Quizzes_Render_Editor_Trait {
      * @return void
      */
     private function render_qz_modal_import_ai( $quiz_id ) {
+        /* ACDC 3.25.291 — La fenêtre lisait $quiz->title alors qu'elle ne reçoit
+           qu'un identifiant : le nom du quiz cible s'affichait vide, sur l'écran
+           même où l'on s'apprête à écraser ses questions. */
+        $quiz = $this->get_qz_quiz( (int) $quiz_id );
         ?>
         <div id="acdc-qz-modal-import-ai" class="acdc-qz-modal" hidden aria-modal="true" role="dialog" aria-labelledby="acdc-qz-import-ai-title">
             <div class="acdc-qz-modal-overlay" data-close></div>
@@ -1476,7 +1480,7 @@ trait ACDC_Quizzes_Render_Editor_Trait {
 
             /* --- Ouverture : remplir le nom du quiz cible --- */
             $(document).on('click', '.acdc-qz-import-ai-btn', function() {
-                var name = <?php echo wp_json_encode( $quiz->title ); ?>;
+                var name = <?php echo wp_json_encode( $quiz && isset( $quiz->title ) ? (string) $quiz->title : '' ); ?>;
                 $('#acdc-qz-import-quiz-name').text(name);
                 resetImportModal();
             });

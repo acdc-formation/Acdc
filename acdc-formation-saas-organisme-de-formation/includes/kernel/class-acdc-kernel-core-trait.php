@@ -124,6 +124,35 @@ trait ACDC_Kernel_Core_Trait {
  *
  * @return array<string,string>
  */
+/**
+ * Compte les sollicitations d'une même origine et dit si la limite est franchie.
+ *
+ * ACDC 3.25.291. La connexion aux portails et l'entrée dans un quiz étaient
+ * protégées contre les essais répétés ; les DEMANDES DE RÉINITIALISATION de mot
+ * de passe ne l'étaient pas. Une adresse pouvait donc être sollicitée en boucle :
+ * la boîte de l'apprenant se remplit, et surtout le domaine expéditeur finit
+ * classé en indésirable — ce jour-là, ce ne sont plus les réinitialisations qui
+ * n'arrivent pas, ce sont les convocations.
+ *
+ * Le compteur vit dans un transitoire : il s'efface tout seul, et ne peut donc
+ * pas bloquer durablement quelqu'un de légitime.
+ *
+ * @param string $portee   Ce que l'on compte (« reinit_apprenant »…).
+ * @param int    $limite   Nombre de tentatives tolérées sur la fenêtre.
+ * @param int    $fenetre  Durée de la fenêtre, en secondes.
+ * @return bool True si la limite est DÉJÀ atteinte — l'appelant doit refuser.
+ */
+private function acdc_trop_de_tentatives( $portee, $limite = 5, $fenetre = 900 ) {
+  $ip  = isset( $_SERVER['REMOTE_ADDR'] ) ? sanitize_text_field( wp_unslash( (string) $_SERVER['REMOTE_ADDR'] ) ) : 'inconnue';
+  $cle = 'acdc_rl_' . sanitize_key( (string) $portee ) . '_' . md5( $ip );
+  $n   = (int) get_transient( $cle );
+  if ( $n >= (int) $limite ) {
+    return true;
+  }
+  set_transient( $cle, $n + 1, (int) $fenetre );
+  return false;
+}
+
 private function acdc_org_identity() {
   static $identite = null;
   if ( null !== $identite ) {
@@ -6077,7 +6106,14 @@ dbDelta( $sql_companies );
       return '';
     }
     if ( 0 === strpos( $url, $uploads['baseurl'] ) ) {
-    $relative = preg_replace( '#^[\\/]+#', '', (string) $relative );
+      /* ACDC 3.25.291 — LA LIGNE QUI CALCULE LE CHEMIN MANQUAIT.
+         $relative se nettoyait lui-même sans avoir jamais été rempli : la
+         fonction rendait donc le dossier des téléversements, jamais le fichier.
+         Elle sert de dernier recours quand seule l'URL d'un document est
+         connue — pour joindre une convocation à un e-mail, par exemple. Résultat
+         invisible et fâcheux : le message partait sans sa pièce jointe. */
+      $relative = substr( $url, strlen( (string) $uploads['baseurl'] ) );
+      $relative = preg_replace( '#^[\\/]+#', '', (string) $relative );
       return trailingslashit( $uploads['basedir'] ) . $relative;
     }
     return '';

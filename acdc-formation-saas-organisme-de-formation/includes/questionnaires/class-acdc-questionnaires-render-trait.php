@@ -540,24 +540,14 @@ Fin : " . $this->format_pdf_date( $context['end_date'] ) ); ?></div>
         </a>
       </div>
     <?php endif; ?>
-    <?php $hot_automation_overview = method_exists( $this, 'get_hot_survey_automation_overview' ) ? $this->get_hot_survey_automation_overview() : array(); ?>
-    <?php if ( 'hot_survey' === $prefill_source_type && ! empty( $hot_automation_overview ) ) : ?>
-      <div class="acdc-panel acdc-panel-block acdc-mb-18">
-        <div class="acdc-inline-between acdc-gap-12" style="align-items:flex-start;">
-          <div>
-            <h3 style="margin:0;">Supervision automatique — enquêtes à chaud</h3>
-            <p class="acdc-help" style="margin:6px 0 0;">Pilotage des envois automatiques déclenchés à la fin réelle de la formation.</p>
-          </div>
-        </div>
-        <div class="acdc-grid-5cols" style="margin-top:14px;">
-          <div class="acdc-stat-card"><span>Sessions auto planifiées</span><strong><?php echo esc_html( (string) ( $hot_automation_overview['planned'] ?? 0 ) ); ?></strong></div>
-          <div class="acdc-stat-card"><span>Déclenchements à venir</span><strong><?php echo esc_html( (string) ( $hot_automation_overview['upcoming'] ?? 0 ) ); ?></strong></div>
-          <div class="acdc-stat-card"><span>Envois auto exécutés</span><strong><?php echo esc_html( (string) ( $hot_automation_overview['sent'] ?? 0 ) ); ?></strong></div>
-          <div class="acdc-stat-card"><span>Relances auto à exécuter</span><strong><?php echo esc_html( (string) ( $hot_automation_overview['reminders_due'] ?? 0 ) ); ?></strong></div>
-          <div class="acdc-stat-card"><span>Dernière session créée</span><strong><?php echo ! empty( $hot_automation_overview['last_trigger_at'] ) ? esc_html( mysql2date( 'd/m/Y H:i', $hot_automation_overview['last_trigger_at'] ) ) : '—'; ?></strong></div>
-        </div>
-      </div>
-    <?php endif; ?>
+    <?php /* ACDC 3.25.291 — BLOC RETIRÉ : IL N'A JAMAIS PU S'AFFICHER.
+             Un panneau « Supervision automatique — enquêtes à chaud » se trouvait
+             ici, conditionné à $prefill_source_type — une variable qui n'existe
+             pas dans cette fonction, dont les paramètres sont $scope et $state.
+             La condition était donc fausse à chaque affichage, depuis toujours,
+             et l'aperçu se calculait pour rien à chaque ouverture de l'écran.
+             Le panneau reste dans l'historique du dépôt : il pourra être branché
+             sur l'écran des enquêtes à chaud, là où il a du sens. */ ?>
     <section class="acdc-section-head"><div><h2><?php echo esc_html( $title ); ?></h2></div></section>
     <?php $this->render_front_trainer_surveys_documents_empty_table(); ?>
     <?php
@@ -2281,6 +2271,10 @@ public function render_quality_compliance_shortcode( $atts = array() ) {
     if ( '' !== $filter_search ) { $sessions_filters['search'] = $filter_search; }
     $sessions            = $this->get_questionnaire_sessions( $sessions_filters );
     $stats               = $this->get_questionnaire_session_stats( $sessions_filters );
+    /* ACDC 3.25.291 — Les libellés des compteurs lisaient $terms, jamais chargé
+       ici : les quatre tuiles de statistiques affichaient un nombre suivi d'un
+       libellé vide. Le vocabulaire dépend du type d'enquête, comme ailleurs. */
+    $terms               = $this->get_questionnaire_results_terms( $prefill_source_type );
     $header_title        = $context['session_title'];
     $header_description  = $context['session_description'];
     $create_label        = $context['create_session_label'];

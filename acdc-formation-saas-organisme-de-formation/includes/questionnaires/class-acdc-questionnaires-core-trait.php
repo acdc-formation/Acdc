@@ -7406,7 +7406,12 @@ private function maybe_auto_create_questionnaire_actions_from_response( $session
       return ! isset( $row['id'] ) || (string) $row['id'] !== $record_id;
     } ) );
     $this->save_quality_gap_records( $records );
-    $this->append_quality_audit_log_event( 'Registre des écarts', '' === $record_id ? 'Création d’un écart qualité' : 'Mise à jour d’un écart qualité', 'Écart ' . $data['id'] . ' enregistré dans le registre.', 'Traçable' );
+    /* ACDC 3.25.291 — Ce journal appartient au gestionnaire de SUPPRESSION, et
+       il annonçait une « création » ou une « mise à jour » en lisant $data['id'],
+       une variable qui n'existe pas ici. La trace d'une suppression décrivait
+       donc l'inverse de ce qui venait de se passer — et c'est justement cette
+       trace-là qu'on relit après coup. */
+    $this->append_quality_audit_log_event( 'Registre des écarts', 'Suppression d’un écart qualité', 'Écart ' . $record_id . ' supprimé du registre.', 'Traçable' );
     wp_safe_redirect( $this->get_quality_redirect_url_from_request( 'gap_deleted' ) );
     exit;
   }
@@ -7469,7 +7474,8 @@ private function maybe_auto_create_questionnaire_actions_from_response( $session
       return ! isset( $row['id'] ) || (string) $row['id'] !== $record_id;
     } ) );
     $this->save_quality_action_records( $records );
-    $this->append_quality_audit_log_event( 'Plan d’action', '' === $record_id ? 'Création d’une action qualité' : 'Mise à jour d’une action qualité', 'Action ' . $data['id'] . ' enregistrée dans le plan.', 'Traçable' );
+    /* ACDC 3.25.291 — Même défaut sur la suppression d'une action qualité. */
+    $this->append_quality_audit_log_event( 'Plan d’action', 'Suppression d’une action qualité', 'Action ' . $record_id . ' supprimée du plan.', 'Traçable' );
     wp_safe_redirect( $this->get_quality_redirect_url_from_request( 'action_deleted' ) );
     exit;
   }

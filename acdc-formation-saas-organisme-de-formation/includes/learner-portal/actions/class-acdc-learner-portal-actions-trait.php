@@ -195,6 +195,12 @@ trait ACDC_Learner_Portal_Actions_Trait {
       $this->learner_portal_redirect( 'login', 'Jeton de sécurité invalide.', 'error' );
     }
 
+    /* ACDC 3.25.291 — Cette demande n'était pas limitée : on pouvait la rejouer
+       en boucle sur une adresse. */
+    if ( $this->acdc_trop_de_tentatives( 'reinit_apprenant' ) ) {
+      $this->learner_portal_redirect( 'login', 'Trop de demandes depuis ce réseau. Patientez un quart d’heure avant de réessayer.', 'error' );
+    }
+
     $email   = isset( $_POST['learner_email'] ) ? sanitize_email( wp_unslash( $_POST['learner_email'] ) ) : '';
     $account = $this->learner_portal_get_account_by_email( $email );
 

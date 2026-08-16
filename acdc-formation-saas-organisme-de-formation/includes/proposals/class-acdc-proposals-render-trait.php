@@ -324,6 +324,15 @@ trait Acdc_Proposals_Render_Trait {
     if ( ! file_exists( $dir ) ) {
       wp_mkdir_p( $dir );
     }
+    /* ACDC 3.25.291 — Ce dossier n'était protégé par rien. On n'y pose PAS de
+       « deny from all » : le client ouvre sa proposition depuis le lien reçu par
+       e-mail, un blocage total la rendrait illisible. On empêche donc ce qui
+       peut l'être sans casser l'usage — le listage du dossier — et le nom du
+       fichier devient impossible à deviner (voir plus bas). */
+    $__index = trailingslashit( $dir ) . 'index.php';
+    if ( ! file_exists( $__index ) ) {
+      file_put_contents( $__index, "<?php // Silence is golden.\n" ); // phpcs:ignore WordPress.WP.AlternativeFunctions.file_system_operations_file_put_contents
+    }
     /* Supprimer l'ancien fichier HTML avant d'en créer un nouveau */
     if ( ! empty( $proposal->pdf_url ) ) {
       $old_url  = (string) $proposal->pdf_url;
@@ -333,7 +342,11 @@ trait Acdc_Proposals_Render_Trait {
       }
     }
 
-    $filename = 'proposition-' . (int) $proposal->id . '-' . time() . '.html';
+    /* ACDC 3.25.291 — L'horodatage se devine : il suffit d'essayer les
+       secondes d'une journée pour retrouver une proposition, qui porte le
+       nom du client et le prix négocié. On y ajoute un jeton aléatoire. */
+    $__jeton  = function_exists( 'wp_generate_password' ) ? wp_generate_password( 20, false, false ) : bin2hex( random_bytes( 10 ) );
+    $filename = 'proposition-' . (int) $proposal->id . '-' . time() . '-' . $__jeton . '.html';
     $filepath = $dir . $filename;
     $fileurl  = $url_base . $filename;
 
@@ -437,7 +450,20 @@ trait Acdc_Proposals_Render_Trait {
     if ( ! file_exists( $dir ) ) {
       wp_mkdir_p( $dir );
     }
-    $filename = 'proposition-' . (int) $proposal->id . '-' . time() . '.pdf';
+    /* ACDC 3.25.291 — Ce dossier n'était protégé par rien. On n'y pose PAS de
+       « deny from all » : le client ouvre sa proposition depuis le lien reçu par
+       e-mail, un blocage total la rendrait illisible. On empêche donc ce qui
+       peut l'être sans casser l'usage — le listage du dossier — et le nom du
+       fichier devient impossible à deviner (voir plus bas). */
+    $__index = trailingslashit( $dir ) . 'index.php';
+    if ( ! file_exists( $__index ) ) {
+      file_put_contents( $__index, "<?php // Silence is golden.\n" ); // phpcs:ignore WordPress.WP.AlternativeFunctions.file_system_operations_file_put_contents
+    }
+    /* ACDC 3.25.291 — L'horodatage se devine : il suffit d'essayer les
+       secondes d'une journée pour retrouver une proposition, qui porte le
+       nom du client et le prix négocié. On y ajoute un jeton aléatoire. */
+    $__jeton  = function_exists( 'wp_generate_password' ) ? wp_generate_password( 20, false, false ) : bin2hex( random_bytes( 10 ) );
+    $filename = 'proposition-' . (int) $proposal->id . '-' . time() . '-' . $__jeton . '.pdf';
     $filepath = $dir . $filename;
     $fileurl  = $url_base . $filename;
 
