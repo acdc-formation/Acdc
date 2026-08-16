@@ -15606,7 +15606,88 @@ public function render_admin_maintenance_page() {
   $o = $this->get_branding_options();
   foreach ( $o as $key => $value ) { echo '<input type="hidden" name="branding[' . esc_attr( $key ) . ']" value="' . esc_attr( $value ) . '">'; }
   echo '<p><label><input type="checkbox" name="acdc_of_keep_data_on_uninstall" value="yes" ' . checked( $keep_data, 'yes', false ) . '> Conserver les données à la désinstallation</label></p><p><label>Nombre de sauvegardes à conserver<br><input type="number" class="small-text" min="5" max="100" name="acdc_of_backup_retention_count" value="' . esc_attr( (string) $backup_retention ) . '"></label></p><p><button type="submit" class="button button-primary">Enregistrer</button></p></form></div>';
-  echo '</div></div>';
+  echo '</div>'; /* fin des deux colonnes — le journal prend toute la largeur */
+  $this->render_admin_system_log_panel();
+  echo '</div>';
+}
+
+/**
+ * Le journal des actions, enfin lisible.
+ *
+ * ACDC 3.25.292. La table qui reçoit ces événements existait depuis longtemps et
+ * personne ne pouvait l'ouvrir : aucun écran ne l'affichait. En parallèle, une
+ * option gardait les 200 derniers événements — sans les afficher davantage — et
+ * les effaçait au-delà. Autrement dit : le plugin écrivait un journal que
+ * personne ne lisait, et en jetait la moitié.
+ *
+ * Cet écran répond aux quatre questions qu'on se pose après un incident : QUI,
+ * QUOI, QUAND, D'OÙ. Il est volontairement sobre — la piste d'audit se consulte,
+ * elle ne se pilote pas.
+ */
+private function render_admin_system_log_panel() {
+  $filtre  = isset( $_GET['acdc_log_filtre'] ) && 'echec' === sanitize_key( wp_unslash( $_GET['acdc_log_filtre'] ) ) ? 'echec' : '';
+  $entrees = $this->get_system_log_entries( 100, $filtre );
+  $resume  = $this->get_system_log_summary();
+  $annees  = class_exists( '\\ACDC\\Support\\Retention' ) ? (int) \ACDC\Support\Retention::yearsFor( 'audit' ) : 0;
+
+  echo '<div class="acdc-admin-panel" style="margin-top:18px;"><h2>Journal des actions</h2>';
+  echo '<p class="description">Qui a fait quoi, quand, et depuis quelle adresse. '
+    . esc_html( sprintf( '%s entrée(s) conservée(s)', number_format_i18n( (int) $resume['total'] ) ) );
+  if ( '' !== $resume['plus_ancienne'] ) {
+    echo esc_html( sprintf( ', la plus ancienne remontant au %s', mysql2date( 'd/m/Y', $resume['plus_ancienne'] ) ) );
+  }
+  echo '. ';
+  if ( $annees > 0 ) {
+    echo esc_html( sprintf( 'Les événements sont conservés %d ans ; l’adresse d’origine est effacée au bout d’un an.', $annees ) );
+  }
+  echo '</p>';
+
+  $base = admin_url( 'admin.php?page=acdc-of-maintenance' );
+  echo '<p>';
+  echo '<a class="button' . ( '' === $filtre ? ' button-primary' : '' ) . '" href="' . esc_url( $base ) . '">Tout</a> ';
+  echo '<a class="button' . ( 'echec' === $filtre ? ' button-primary' : '' ) . '" href="' . esc_url( add_query_arg( 'acdc_log_filtre', 'echec', $base ) ) . '">Échecs seulement</a>';
+  echo '</p>';
+
+  if ( empty( $entrees ) ) {
+    echo '<p>' . esc_html( '' === $filtre ? 'Aucune action enregistrée pour le moment.' : 'Aucun échec enregistré.' ) . '</p></div>';
+    return;
+  }
+
+  echo '<div style="overflow-x:auto;"><table class="widefat striped"><thead><tr>';
+  foreach ( array( 'Quand', 'Qui', 'Action', 'Objet', 'Résultat', 'Origine' ) as $entete ) {
+    echo '<th>' . esc_html( $entete ) . '</th>';
+  }
+  echo '</tr></thead><tbody>';
+  foreach ( $entrees as $e ) {
+    $utilisateur = 0;
+    if ( isset( $e->user_id ) ) {
+      $utilisateur = (int) $e->user_id;
+    }
+    $nom = 'Système';
+    if ( $utilisateur > 0 ) {
+      $u   = get_userdata( $utilisateur );
+      $nom = $u ? $u->display_name : ( 'Utilisateur #' . $utilisateur );
+    }
+    $objet = trim( (string) ( $e->object_type ?? '' ) );
+    if ( '' !== $objet && ! empty( $e->object_id ) ) {
+      $objet .= ' #' . (int) $e->object_id;
+    }
+    $echec = isset( $e->result_status ) && 'success' !== (string) $e->result_status;
+    echo '<tr>';
+    echo '<td>' . esc_html( mysql2date( 'd/m/Y H:i:s', (string) $e->created_at ) ) . '</td>';
+    echo '<td>' . esc_html( $nom ) . '</td>';
+    echo '<td>' . esc_html( (string) ( $e->action_key ?? $e->event_type ?? '' ) ) . '</td>';
+    echo '<td>' . esc_html( '' !== $objet ? $objet : '—' ) . '</td>';
+    echo '<td>' . ( $echec ? '<strong style="color:#b32d2e;">' . esc_html( (string) $e->result_status ) . '</strong>' : esc_html( (string) ( $e->result_status ?? '' ) ) ) . '</td>';
+    /* L'adresse a pu être effacée par la conservation : on le dit, plutôt que
+       d'afficher une case vide qui ressemblerait à une absence d'origine. */
+    $origine = isset( $e->ip_address ) && '' !== (string) $e->ip_address ? (string) $e->ip_address : '';
+    echo '<td>' . ( '' !== $origine ? esc_html( $origine ) : '<span title="Effacée par la conservation des données">—</span>' ) . '</td>';
+    echo '</tr>';
+  }
+  echo '</tbody></table></div>';
+  echo '<p class="description">Les 100 entrées les plus récentes' . ( 'echec' === $filtre ? ' parmi les échecs' : '' ) . '.</p>';
+  echo '</div>';
 }
 
 /* ─────────────────────────────────────────────────────────────────────────────

@@ -133,6 +133,71 @@ if ( '' !== $quest ) {
     }
 }
 
+/* ── 7. LE JOURNAL DES ACTIONS ──────────────────────────────────────────── */
+
+/* Il existait, il était alimenté, et personne ne pouvait l'ouvrir : aucun écran
+   ne l'affichait. En parallèle une option gardait les 200 derniers événements —
+   sans les montrer davantage — et effaçait le reste. Le plugin écrivait donc un
+   journal que personne ne lisait, et en jetait la moitié. Plusieurs pièces le
+   tiennent maintenant debout ; il suffit qu'une seule reparte pour que la
+   traçabilité redevienne une croyance. */
+if ( '' !== $noyau ) {
+    if ( preg_match( '/function log_action_event\(.*?\n  \}/s', $noyau, $m ) ) {
+        if ( false !== strpos( $m[0], "update_option( 'acdc_of_action_log'" ) ) {
+            $hits[] = 'log_action_event() réécrit de nouveau l’option limitée aux 200 derniers événements : le journal recommence à s’effacer tout seul.';
+        }
+        if ( false === strpos( $m[0], 'insert_system_log' ) ) {
+            $hits[] = 'log_action_event() n’écrit plus dans la table : plus rien n’est conservé.';
+        }
+    } else {
+        $hits[] = 'log_action_event() est introuvable.';
+    }
+    if ( ! preg_match( '/ip_address VARCHAR/', $noyau ) || ! preg_match( '/user_agent VARCHAR/', $noyau ) ) {
+        $hits[] = 'la table du journal ne porte plus l’origine des actions : on saura ce qui a été fait, jamais depuis où.';
+    }
+    if ( false === strpos( $noyau, "'ip_address'    => \$this->acdc_adresse_appelante()" ) ) {
+        $hits[] = 'l’origine n’est plus enregistrée à l’insertion : les colonnes existent et restent vides.';
+    }
+    if ( ! preg_match( '/function purge_system_logs\(/', $noyau ) ) {
+        $hits[] = 'la conservation du journal a disparu : il grossit sans fin et l’adresse d’origine de chaque action y reste indéfiniment.';
+    } elseif ( preg_match( '/function purge_system_logs\(.*?\n\}/s', $noyau, $m ) ) {
+        if ( false === strpos( $m[0], 'ip_address = NULL' ) ) {
+            $hits[] = 'l’adresse d’origine n’est plus effacée au bout d’un an : une donnée personnelle serait conservée aussi longtemps que la preuve, ce qui est disproportionné.';
+        }
+        if ( false === strpos( $m[0], "yearsFor( 'audit' )" ) ) {
+            $hits[] = 'la durée de conservation du journal ne vient plus de la politique déclarée du projet : une seconde règle s’installe à côté de la première.';
+        }
+    }
+    if ( ! preg_match( '/function get_system_log_entries\(/', $noyau ) ) {
+        $hits[] = 'la lecture du journal a disparu : la table redevient inconsultable.';
+    }
+}
+
+/* On exige l'APPEL, pas la mention : un « method_exists( $this,
+   'purge_system_logs' ) » resté seul suffirait à faire passer un contrôle qui se
+   contenterait de chercher le nom. C'est le sabotage qui l'a montré. */
+$actions = $lire( 'includes/kernel/class-acdc-kernel-actions-trait.php' );
+if ( '' !== $actions && false === strpos( $actions, '$this->purge_system_logs()' ) ) {
+    $hits[] = 'la conservation du journal n’est plus déclenchée par la tâche planifiée : elle existe et ne tourne jamais.';
+}
+
+$rendu = $lire( 'includes/kernel/class-acdc-kernel-render-trait.php' );
+if ( '' !== $rendu ) {
+    if ( ! preg_match( '/function render_admin_system_log_panel\(/', $rendu ) ) {
+        $hits[] = 'l’écran du journal a disparu : le plugin écrit de nouveau une piste d’audit que personne ne peut ouvrir.';
+    }
+    if ( false === strpos( $rendu, '$this->render_admin_system_log_panel()' ) ) {
+        $hits[] = 'l’écran du journal n’est plus appelé depuis « Données & maintenance » : il existe et ne s’affiche nulle part.';
+    }
+    /* Le journal affiche des valeurs venues de l'extérieur — un intitulé d'action
+       peut contenir n'importe quoi. Chaque cellule doit être échappée. */
+    if ( preg_match( '/function render_admin_system_log_panel\(.*?\n\}/s', $rendu, $m ) ) {
+        if ( preg_match( "/echo '<td>' \. \\\$e->/", $m[0] ) || preg_match( "/echo '<td>' \. \(string\)/", $m[0] ) ) {
+            $hits[] = 'une cellule du journal affiche une valeur sans l’échapper : c’est justement l’écran où atterrit ce que l’on n’a pas choisi.';
+        }
+    }
+}
+
 /* ── VERDICT ────────────────────────────────────────────────────────────── */
 
 if ( $hits ) {
@@ -142,5 +207,5 @@ if ( $hits ) {
     printf( "%d alerte(s)\n", count( $hits ) );
     exit( 1 );
 }
-echo "Durcissement : chemin des pièces jointes calculé, réinitialisations limitées, propositions non listables et non devinables, droits vérifiés sur les séances, traces de suppression exactes.\n";
+echo "Durcissement : pièces jointes retrouvées, réinitialisations limitées, propositions non listables et non devinables, droits vérifiés, traces de suppression exactes, journal conservé, daté, situé et lisible.\n";
 exit( 0 );

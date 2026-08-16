@@ -7207,6 +7207,12 @@ public function handle_purge_plugin_data() {
   public function cron_retention_scan() {
     global $wpdb;
     try {
+      /* ACDC 3.25.292 — La piste d'audit n'avait aucune règle de conservation :
+         elle grossissait sans fin, et l'adresse IP de chaque action y restait
+         indéfiniment. Elle est traitée ici, avec le reste. */
+      if ( method_exists( $this, 'purge_system_logs' ) ) {
+        $this->purge_system_logs();
+      }
       if ( ! class_exists( '\\ACDC\\Support\\Retention' ) ) {
         return;
       }

@@ -142,6 +142,126 @@ trait ACDC_Kernel_Core_Trait {
  * @param int    $fenetre  Durée de la fenêtre, en secondes.
  * @return bool True si la limite est DÉJÀ atteinte — l'appelant doit refuser.
  */
+/**
+ * Applique la conservation à la piste d'audit.
+ *
+ * ACDC 3.25.292. Deux durées, parce que deux choses différentes vivent dans la
+ * même ligne.
+ *
+ *   — L'ÉVÉNEMENT lui-même relève de la politique déjà déclarée par le projet
+ *     pour les journaux d'audit (src/Support/Retention.php, catégorie « audit »).
+ *     C'est une preuve : elle doit tenir aussi longtemps que ce qu'elle prouve.
+ *   — L'ADRESSE IP et le navigateur sont des données personnelles. Les garder
+ *     aussi longtemps que la preuve serait disproportionné : ils servent à
+ *     comprendre un incident, ce qui se fait dans les semaines qui suivent, pas
+ *     dix ans après. Ils sont donc effacés au bout d'un an, et la ligne reste.
+ *
+ * Les deux opérations sont bornées et rejouables : les relancer deux fois ne
+ * change rien de plus que les relancer une fois.
+ *
+ * @return array{anonymisees:int,supprimees:int}
+ */
+private function purge_system_logs() {
+  global $wpdb;
+  $bilan = array( 'anonymisees' => 0, 'supprimees' => 0 );
+  if ( empty( $this->system_log_table ) || ! class_exists( '\\ACDC\\Support\\Retention' ) ) {
+    return $bilan;
+  }
+  if ( $wpdb->get_var( $wpdb->prepare( 'SHOW TABLES LIKE %s', $this->system_log_table ) ) !== $this->system_log_table ) {
+    return $bilan;
+  }
+
+  /* 1. L'origine s'efface au bout d'un an, la ligne reste. */
+  $limite_ip = gmdate( 'Y-m-d H:i:s', strtotime( '-1 year', (int) current_time( 'timestamp' ) ) );
+  $bilan['anonymisees'] = (int) $wpdb->query(
+    $wpdb->prepare(
+      "UPDATE {$this->system_log_table} SET ip_address = NULL, user_agent = NULL
+        WHERE created_at < %s AND ( ip_address IS NOT NULL OR user_agent IS NOT NULL )",
+      $limite_ip
+    )
+  );
+
+  /* 2. L'événement s'efface à l'échéance de la politique de conservation. */
+  $annees = (int) \ACDC\Support\Retention::yearsFor( 'audit' );
+  if ( $annees > 0 ) {
+    $limite_ligne = gmdate( 'Y-m-d H:i:s', strtotime( '-' . $annees . ' years', (int) current_time( 'timestamp' ) ) );
+    $bilan['supprimees'] = (int) $wpdb->query(
+      $wpdb->prepare( "DELETE FROM {$this->system_log_table} WHERE created_at < %s", $limite_ligne )
+    );
+  }
+
+  update_option(
+    'acdc_of_system_log_purge_report',
+    array(
+      'at'          => current_time( 'mysql' ),
+      'anonymisees' => $bilan['anonymisees'],
+      'supprimees'  => $bilan['supprimees'],
+      'annees'      => $annees,
+    ),
+    false
+  );
+  return $bilan;
+}
+
+/**
+ * Les dernières entrées de la piste d'audit, pour l'écran qui les affiche.
+ *
+ * ACDC 3.25.292. La table existait, elle était alimentée, et RIEN NE LA LISAIT :
+ * aucun écran ne l'affichait, nulle part. Un journal que personne ne peut ouvrir
+ * n'est pas une traçabilité, c'est une croyance.
+ *
+ * @param int    $limite
+ * @param string $filtre  '' pour tout, 'echec' pour les seules actions échouées.
+ * @return array
+ */
+private function get_system_log_entries( $limite = 100, $filtre = '' ) {
+  global $wpdb;
+  if ( empty( $this->system_log_table ) ) {
+    return array();
+  }
+  $limite = max( 1, min( 500, (int) $limite ) );
+  if ( 'echec' === $filtre ) {
+    return (array) $wpdb->get_results(
+      $wpdb->prepare(
+        "SELECT * FROM {$this->system_log_table} WHERE result_status <> 'success' ORDER BY id DESC LIMIT %d",
+        $limite
+      )
+    );
+  }
+  return (array) $wpdb->get_results(
+    $wpdb->prepare( "SELECT * FROM {$this->system_log_table} ORDER BY id DESC LIMIT %d", $limite )
+  );
+}
+
+/** Le nombre total d'entrées conservées, et la plus ancienne. */
+private function get_system_log_summary() {
+  global $wpdb;
+  $vide = array( 'total' => 0, 'plus_ancienne' => '' );
+  if ( empty( $this->system_log_table ) ) {
+    return $vide;
+  }
+  $total = (int) $wpdb->get_var( "SELECT COUNT(*) FROM {$this->system_log_table}" );
+  if ( $total < 1 ) {
+    return $vide;
+  }
+  return array(
+    'total'         => $total,
+    'plus_ancienne' => (string) $wpdb->get_var( "SELECT MIN(created_at) FROM {$this->system_log_table}" ),
+  );
+}
+
+/** L'adresse d'où part la requête, ou « inconnue ». */
+private function acdc_adresse_appelante() {
+  $ip = isset( $_SERVER['REMOTE_ADDR'] ) ? sanitize_text_field( wp_unslash( (string) $_SERVER['REMOTE_ADDR'] ) ) : '';
+  return '' !== $ip ? substr( $ip, 0, 45 ) : 'inconnue';
+}
+
+/** Le navigateur déclaré, tronqué : il sert à reconnaître un poste, pas à profiler. */
+private function acdc_navigateur_appelant() {
+  $ua = isset( $_SERVER['HTTP_USER_AGENT'] ) ? sanitize_text_field( wp_unslash( (string) $_SERVER['HTTP_USER_AGENT'] ) ) : '';
+  return substr( $ua, 0, 255 );
+}
+
 private function acdc_trop_de_tentatives( $portee, $limite = 5, $fenetre = 900 ) {
   $ip  = isset( $_SERVER['REMOTE_ADDR'] ) ? sanitize_text_field( wp_unslash( (string) $_SERVER['REMOTE_ADDR'] ) ) : 'inconnue';
   $cle = 'acdc_rl_' . sanitize_key( (string) $portee ) . '_' . md5( $ip );
@@ -3085,6 +3205,13 @@ dbDelta( $sql_companies );
       message TEXT NULL,
       context_json LONGTEXT NULL,
       source VARCHAR(40) NOT NULL DEFAULT 'plugin',
+      /* ACDC 3.25.292 — Sans l'origine d'une action, un journal dit ce qui a été
+         fait mais pas d'où : impossible de distinguer une manipulation depuis le
+         bureau d'une manipulation depuis ailleurs. Les journaux des portails
+         apprenant et formateur enregistraient déjà les deux ; celui du plugin,
+         non. L'adresse est effacée au bout d'un an — voir purge_system_logs(). */
+      ip_address VARCHAR(45) NULL,
+      user_agent VARCHAR(255) NULL,
       created_at DATETIME NOT NULL,
       PRIMARY KEY (id),
       KEY log_level (log_level),
@@ -4186,12 +4313,21 @@ dbDelta( $sql_companies );
       $this->log_error( 'db', $wpdb->last_error );
     }
     return $fallback;
-  }  private function log_action_event( $action, $object_type, $object_id = 0, $result = 'success', $extra = array() ) {
-    $log = get_option( 'acdc_of_action_log', array() );
-    if ( ! is_array( $log ) ) {
-      $log = array();
-    }
-
+  }  /**
+   * Enregistre une action dans la piste d'audit.
+   *
+   * ACDC 3.25.292 — LE JOURNAL S'EFFAÇAIT TOUT SEUL. Cette fonction recopiait
+   * chaque événement dans une option limitée aux 200 DERNIERS : passé ce seuil,
+   * les plus anciens disparaissaient définitivement, et une semaine chargée
+   * suffisait à tout effacer. Personne ne lisait cette option — aucun écran ne
+   * l'affichait — et elle était réécrite en entier à chaque action, ce qui
+   * coûtait une écriture de plus en plus lourde à mesure qu'elle grossissait.
+   *
+   * La table, elle, gardait déjà tout. Il ne manquait que trois choses : de quoi
+   * savoir d'où venait l'action, une règle de conservation, et un écran pour la
+   * relire. Les trois sont arrivées avec cette version ; l'option, elle, s'en va.
+   */
+  private function log_action_event( $action, $object_type, $object_id = 0, $result = 'success', $extra = array() ) {
     $entry = array(
       'timestamp'   => current_time( 'mysql' ),
       'user_id'     => get_current_user_id(),
@@ -4201,14 +4337,6 @@ dbDelta( $sql_companies );
       'result'      => sanitize_key( (string) $result ),
       'extra'       => is_array( $extra ) ? $extra : array(),
     );
-
-    $log[] = $entry;
-
-    if ( count( $log ) > 200 ) {
-      $log = array_slice( $log, -200 );
-    }
-
-    update_option( 'acdc_of_action_log', $log, false );
 
     $this->insert_system_log( array(
       'log_level'     => ( 'success' === $entry['result'] ) ? 'info' : 'warning',
@@ -4256,10 +4384,12 @@ dbDelta( $sql_companies );
       'message'       => wp_strip_all_tags( (string) $data['message'] ),
       'context_json'  => wp_json_encode( is_array( $data['context_json'] ) ? $data['context_json'] : array(), JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES ),
       'source'        => sanitize_key( (string) $data['source'] ),
+      'ip_address'    => $this->acdc_adresse_appelante(),
+      'user_agent'    => $this->acdc_navigateur_appelant(),
       'created_at'    => current_time( 'mysql' ),
     );
 
-    $format = array( '%s', '%s', '%s', '%s', '%d', '%d', '%s', '%s', '%s', '%s', '%s' );
+    $format = array( '%s', '%s', '%s', '%s', '%d', '%d', '%s', '%s', '%s', '%s', '%s', '%s', '%s' );
     return ( false !== $wpdb->insert( $this->system_log_table, $insert, $format ) );
   }
 
