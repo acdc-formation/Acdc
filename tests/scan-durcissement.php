@@ -543,6 +543,21 @@ if ( '' !== $noyau && false === strpos( $noyau, 'public function acdc_journalise
     $hits[] = 'la porte publique du journal a disparu : les modules signature et émargement sont des classes autonomes, ils ne peuvent plus rien tracer du tout.';
 }
 
+/* Le module signature est une CLASSE AUTONOME : il ne compose pas le plugin et
+   passe donc par la porte publique. Son journal d'audit sert au dossier de
+   preuve d'une signature ; il doit AUSSI verser au journal commun. Un balayage
+   qui se contenterait de voir « log_event » appelé chez le gestionnaire ne
+   prouverait rien : c'est ici, à l'arrivée, qu'il faut regarder. */
+$sig = $lire( 'includes/signature/class-acdc-sig-core.php' );
+if ( '' !== $sig ) {
+    $c = $corps( $sig, 'log_event' );
+    if ( '' === $c ) {
+        $hits[] = 'le journal du module signature est introuvable : le pont vers le journal commun ne peut plus être vérifié.';
+    } elseif ( false === strpos( $c, 'acdc_journaliser(' ) ) {
+        $hits[] = 'le journal du module signature ne verse plus au journal des actions : les demandes envoyées, signées, refusées ou supprimées disparaissent du seul journal que l’exploitant peut ouvrir.';
+    }
+}
+
 /* ── 13. L'EXCEPTION AU MODE RECETTE RESTE UNE IMPASSE ──────────────────── */
 
 /* L'alerte de sauvegarde doit percer le mode recette — la faire retenir

@@ -123,7 +123,11 @@ trait ACDC_Kernel_Actions_Trait {
     check_admin_referer( 'acdc_delete_dossier_subcontractor_' . $iid );
     $items = $this->get_dossier_subcontractors( $registration_id );
     $items = array_values( array_filter( $items, function( $it ) use ( $iid ) { return ( $it['id'] ?? '' ) !== $iid; } ) );
+    $__acdc_avant = count( (array) $this->get_dossier_subcontractors( $registration_id ) );
     update_option( 'acdc_of_dossier_subcontractors_' . $registration_id, $items, false );
+    /* ACDC 3.25.301 — On compare le nombre avant et après : une fiche
+       introuvable produit « error », et non une suppression imaginaire. */
+    $this->log_action_event( 'suppression_dossier_subcontractor', 'dossier_subcontractor', (int) $registration_id, count( (array) $items ) < $__acdc_avant ? 'success' : 'error', array( 'reference' => (string) $iid ) );
     $base = is_admin() ? admin_url( 'admin.php?page=acdc-of-dashboard' ) : $this->portal_page_url( array( 'tab' => 'training_files' ) );
     wp_safe_redirect( add_query_arg( array( 'action' => 'view', 'item_id' => $registration_id, 'subtab' => 'compliance', 'notice' => rawurlencode( 'Sous-traitant supprimé.' ), 'notice_type' => 'success' ), $base ) );
     exit;
@@ -5562,7 +5566,11 @@ public function handle_purge_plugin_data() {
       return;
     }
     $now = current_time( 'mysql' );
-    $wpdb->update( $this->need_block_table, array( 'actif' => 0, 'updated_at' => $now ), array( 'id' => $block_id ) );
+    $__acdc_maj = $wpdb->update( $this->need_block_table, array( 'actif' => 0, 'updated_at' => $now ), array( 'id' => $block_id ) );
+    /* ACDC 3.25.301 — CE GESTE NE SUPPRIME RIEN. Le bloc est DÉSACTIVÉ, la
+       ligne reste. Le gestionnaire s'appelle « delete », l'écran dit « Bloc
+       désactivé » : la trace suit ce qui a lieu, pas le nom de la fonction. */
+    $this->log_action_event( 'desactivation_need_block', 'need_block', (int) $block_id, false !== $__acdc_maj ? 'success' : 'error' );
     $this->redirect_to_nad( 'blocks', $is_admin_page, array( 'notice' => rawurlencode( 'Bloc désactivé.' ), 'notice_type' => 'success' ) );
   }
 

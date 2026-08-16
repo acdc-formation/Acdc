@@ -329,7 +329,9 @@ trait Acdc_Proposals_Actions_Trait {
         }
       }
     }
-    $this->delete_proposal( $proposal_id );
+    $__acdc_supprime = $this->delete_proposal( $proposal_id );
+    /* ACDC 3.25.301 — delete_proposal() rend le résultat de la base : on le lit. */
+    $this->log_action_event( 'suppression_proposal', 'proposal', (int) $proposal_id, $__acdc_supprime ? 'success' : 'error', array( 'lignes' => (int) $__acdc_supprime ) );
     $redirect = isset( $_GET['redirect'] ) ? esc_url_raw( wp_unslash( $_GET['redirect'] ) ) : '';
     if ( ! $redirect ) {
       $redirect = $this->portal_page_url( array( 'tab' => 'proposals' ) );

@@ -29,10 +29,14 @@
  * que descendre. Toute suppression ajoutée sans trace fait échouer ce balayage.
  */
 $root = $argv[1] ?? 'acdc-formation-saas-organisme-de-formation';
-$plafond = 15;
+$plafond = 0;
 
+/* Tous les journaux du plugin — chacun verse au journal commun depuis la
+   3.25.299/301, y compris celui du module signature, qui est une classe
+   autonome et passe par la porte publique acdc_journaliser(). */
 $journaux = '(log_action_event|insert_system_log|log_qz_event|learner_portal_log_event'
-    . '|trainer_portal_log_event|log_questionnaire_event|add_marketing_log|append_quality_audit_log_event)';
+    . '|trainer_portal_log_event|log_questionnaire_event|add_marketing_log'
+    . '|append_quality_audit_log_event|->log_event\()';
 
 /* Corps de chaque fonction du plugin : de sa déclaration à la suivante. Découper
    sur l'accolade fermante serait plus juste en théorie et faux en pratique,
@@ -123,5 +127,5 @@ if ( count( $muets ) < $plafond ) {
     );
     exit( 1 );
 }
-printf( "Suppressions tracées : %d restent à reprendre, aucune de plus.\n", count( $muets ) );
+echo "Toute suppression laisse une trace : aucune n’échappe au journal.\n";
 exit( 0 );

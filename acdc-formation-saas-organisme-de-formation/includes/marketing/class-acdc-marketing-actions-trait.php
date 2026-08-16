@@ -609,7 +609,11 @@ trait ACDC_Marketing_Actions_Trait {
     $signatures = array_values( array_filter( $signatures, function( $s ) use ( $sig_id ) {
       return ! isset( $s['id'] ) || $s['id'] !== $sig_id;
     } ) );
+    $__acdc_avant = count( (array) $this->get_marketing_store( 'signatures', array() ) );
     $this->update_marketing_store( 'signatures', $signatures );
+    /* ACDC 3.25.301 — On compare le nombre avant et après : une fiche
+       introuvable produit « error », et non une suppression imaginaire. */
+    $this->log_action_event( 'suppression_marketing_signature', 'marketing_signature', 0, count( (array) $signatures ) < $__acdc_avant ? 'success' : 'error', array( 'reference' => (string) $sig_id ) );
     $this->redirect_to_portal( 'marketing_signatures', 'Signature supprimée.', 'success', array( 'acdc_notice' => 'sig_deleted' ) );
   }
 

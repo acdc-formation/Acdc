@@ -279,6 +279,9 @@ public function handle_delete_portal_user() {
 
   require_once ABSPATH . 'wp-admin/includes/user.php';
   $deleted = wp_delete_user( $user_id );
+  /* ACDC 3.25.301 — La suppression d'un compte est le geste le moins réversible
+     de l'application : elle se date et s'attribue. */
+  $this->log_action_event( 'suppression_portal_user', 'user', (int) $user_id, $deleted ? 'success' : 'error' );
   $message = $deleted ? 'Utilisateur supprimé.' : 'Impossible de supprimer cet utilisateur.';
   $notice_type = $deleted ? 'success' : 'error';
 

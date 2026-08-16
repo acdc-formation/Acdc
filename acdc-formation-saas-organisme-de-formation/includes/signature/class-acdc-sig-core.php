@@ -228,6 +228,27 @@ class ACDC_Sig_Core {
 
     public function log_event( $request_id, $event, $details = '', $ip = '', $ua = '' ) {
         global $wpdb;
+
+        /* ACDC 3.25.301 — LE HUITIÈME JOURNAL VERSE AU JOURNAL COMMUN.
+           Le module signature est une CLASSE AUTONOME : il ne compose pas le
+           plugin et n'atteignait donc pas log_action_event(), privée. Son
+           journal d'audit vivait dans sa propre table, invisible depuis l'écran
+           « Journal des actions ». Il verse désormais par la porte publique
+           ouverte en 3.25.299 — sa table reste, elle sert au dossier de preuve
+           d'une signature. */
+        if ( class_exists( 'ACDC_Formation_SAAS_Plugin' ) ) {
+            $plugin = ACDC_Formation_SAAS_Plugin::get_instance();
+            if ( $plugin && method_exists( $plugin, 'acdc_journaliser' ) ) {
+                $plugin->acdc_journaliser(
+                    'signature_' . sanitize_key( $event ),
+                    'signature_request',
+                    (int) $request_id,
+                    'success',
+                    array( 'detail' => (string) $details )
+                );
+            }
+        }
+
         $wpdb->insert( $this->table_audit, array(
             'request_id' => (int) $request_id,
             'event'      => sanitize_key( $event ),

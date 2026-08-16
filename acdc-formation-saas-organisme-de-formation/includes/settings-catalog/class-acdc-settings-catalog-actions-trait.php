@@ -113,6 +113,13 @@ trait ACDC_Settings_Catalog_Actions_Trait {
         $this->redirect_to_portal( 'catalog', 'Erreur lors du retrait du catalogue.', 'error' );
       }
     }
+    /* ACDC 3.25.301 — Ce n'est PAS une suppression de ligne mais un retrait de
+       publication : la trace le dit tel quel, et ne s'écrit que si une formation
+       était réellement désignée — l'écran, lui, annonce le retrait dans tous les
+       cas. */
+    if ( $formation_id ) {
+      $this->log_action_event( 'retrait_catalogue', 'formation', (int) $formation_id, 'success' );
+    }
     $this->redirect_to_portal( 'catalog', 'Formation retirée du catalogue.', 'success' );
   }
 

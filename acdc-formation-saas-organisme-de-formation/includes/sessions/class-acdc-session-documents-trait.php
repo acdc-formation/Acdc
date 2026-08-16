@@ -1338,7 +1338,11 @@ trait ACDC_Session_Documents_Trait {
 
     $document = $this->acdc_session_document( $document_id );
     if ( $document ) {
-      $this->acdc_session_docs_delete( $document );
+      $__acdc_supprime = $this->acdc_session_docs_delete( $document );
+      /* ACDC 3.25.301 — Le document de séance est une pièce du dossier : sa
+         disparition se date et s'attribue. acdc_session_docs_delete() rend un
+         booléen, on l'écrit tel quel. */
+      $this->log_action_event( 'suppression_session_document', 'session_document', (int) $document_id, $__acdc_supprime ? 'success' : 'error' );
       $this->log_error( 'learner_portal', 'Document de séance supprimé par l’organisme.', array(
         'document_id' => $document_id,
         'session_id'  => (int) $document->session_id,

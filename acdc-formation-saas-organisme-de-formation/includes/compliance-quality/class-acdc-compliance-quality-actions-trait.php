@@ -1268,10 +1268,14 @@ trait ACDC_Compliance_Quality_Actions_Trait {
     if ( ! current_user_can( 'manage_options' ) ) { wp_die( esc_html( 'Accès refusé.' ) ); }
     $mission_id = isset( $_GET['mission_id'] ) ? sanitize_text_field( wp_unslash( $_GET['mission_id'] ) ) : '';
     check_admin_referer( 'acdc_delete_external_mission_' . $mission_id );
+    $__acdc_avant = count( (array) $this->get_external_mission_records() );
     $records = array_values( array_filter( $this->get_external_mission_records(), function( $r ) use ( $mission_id ) {
       return (string) ( $r['id'] ?? '' ) !== $mission_id;
     } ) );
     $this->save_external_mission_records( $records );
+    /* ACDC 3.25.301 — On compare le nombre avant et après : une fiche
+       introuvable produit « error », et non une suppression imaginaire. */
+    $this->log_action_event( 'suppression_external_mission', 'external_mission', 0, count( (array) $records ) < $__acdc_avant ? 'success' : 'error', array( 'reference' => (string) $mission_id ) );
     $this->redirect_to_portal( 'external_missions', 'Prestation supprimée.', 'success' );
   }
 
@@ -1436,7 +1440,13 @@ trait ACDC_Compliance_Quality_Actions_Trait {
     check_admin_referer( 'acdc_delete_complaint' );
     $id             = isset( $_POST['complaint_id'] ) ? (int) $_POST['complaint_id'] : 0;
     $front_redirect = ! empty( $_POST['_front_redirect'] ) ? esc_url_raw( wp_unslash( $_POST['_front_redirect'] ) ) : '';
-    if ( $id > 0 ) { $this->delete_complaint( $id ); }
+    if ( $id > 0 ) {
+      $__acdc_supprime = $this->delete_complaint( $id );
+      /* ACDC 3.25.301 — delete_complaint() rend le résultat de la base : on le
+         LIT au lieu de l'affirmer. Une première version écrivait « success »
+         sans rien regarder — le défaut même que ce journal doit empêcher. */
+      $this->log_action_event( 'suppression_complaint', 'complaint', (int) $id, $__acdc_supprime ? 'success' : 'error', array( 'lignes' => (int) $__acdc_supprime ) );
+    }
     wp_safe_redirect( $front_redirect ? $front_redirect : admin_url( 'admin.php?page=acdc-of-complaints&deleted=1' ) );
     exit;
   }
@@ -1894,7 +1904,11 @@ trait ACDC_Compliance_Quality_Actions_Trait {
     check_admin_referer( 'acdc_delete_training_site_' . $sid );
     $sites = $this->get_training_sites();
     $sites = array_values( array_filter( $sites, function( $s ) use ( $sid ) { return ( $s['id'] ?? '' ) !== $sid; } ) );
+    $__acdc_avant = count( (array) $this->get_training_sites() );
     update_option( 'acdc_of_training_sites', $sites, false );
+    /* ACDC 3.25.301 — On compare le nombre avant et après : une fiche
+       introuvable produit « error », et non une suppression imaginaire. */
+    $this->log_action_event( 'suppression_training_site', 'training_site', 0, count( (array) $sites ) < $__acdc_avant ? 'success' : 'error', array( 'reference' => (string) $sid ) );
     wp_safe_redirect( $this->portal_page_url( array( 'tab' => 'training_sites', 'notice' => rawurlencode( 'Local supprimé.' ), 'notice_type' => 'success' ) ) );
     exit;
   }
@@ -1950,7 +1964,11 @@ trait ACDC_Compliance_Quality_Actions_Trait {
     check_admin_referer( 'acdc_delete_subcontractor_' . $iid );
     $items = $this->get_subcontractors();
     $items = array_values( array_filter( $items, function( $it ) use ( $iid ) { return ( $it['id'] ?? '' ) !== $iid; } ) );
+    $__acdc_avant = count( (array) $this->get_subcontractors() );
     update_option( 'acdc_of_subcontractors', $items, false );
+    /* ACDC 3.25.301 — On compare le nombre avant et après : une fiche
+       introuvable produit « error », et non une suppression imaginaire. */
+    $this->log_action_event( 'suppression_subcontractor', 'subcontractor', 0, count( (array) $items ) < $__acdc_avant ? 'success' : 'error', array( 'reference' => (string) $iid ) );
     wp_safe_redirect( $this->portal_page_url( array( 'tab' => 'subcontractors', 'notice' => rawurlencode( 'Sous-traitant supprimé.' ), 'notice_type' => 'success' ) ) );
     exit;
   }

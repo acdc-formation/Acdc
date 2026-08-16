@@ -1305,6 +1305,9 @@ trait ACDC_Quizzes_Actions_Trait {
         }
 
         $ok = $this->delete_qz_question( $quiz_id, $question_id );
+        /* ACDC 3.25.301 — Le résultat écrit est celui de l'opération, pas celui
+           de la réponse affichée. */
+        $this->log_action_event( 'suppression_qz_question', 'qz_question', (int) $question_id, $ok ? 'success' : 'error', array( 'quiz' => (int) $quiz_id ) );
         if ( ! $ok ) {
             wp_send_json_error( array( 'message' => __( "Suppression impossible.", 'acdc-formation-saas' ) ) );
         }
@@ -1374,6 +1377,9 @@ trait ACDC_Quizzes_Actions_Trait {
         }
 
         $ok = $this->delete_qz_objective( $quiz_id, $objective_id );
+        /* ACDC 3.25.301 — Le résultat écrit est celui de l'opération, pas celui
+           de la réponse affichée. */
+        $this->log_action_event( 'suppression_qz_objective', 'qz_objective', (int) $objective_id, $ok ? 'success' : 'error', array( 'quiz' => (int) $quiz_id ) );
         if ( ! $ok ) {
             wp_send_json_error( array( 'message' => __( "Suppression impossible.", 'acdc-formation-saas' ) ) );
         }
