@@ -70,6 +70,7 @@ lancent sans WordPress, en quelques secondes.
     php tests/scan-suppressions-tracees.php # une suppression laisse une trace, ou elle n'a jamais eu lieu
     php tests/test-convention-complete.php # ce qui bloque une convention, ce qui la signale seulement
     php tests/test-demi-journees.php # la pause déjeuner n'est jamais comptée comme du temps de formation
+    php tests/test-tva-regime.php # les régimes de TVA, leurs mentions, et le passé qui ne se réécrit pas
 
 Le dernier balaie tout le plugin et signale les fonctions qui utilisent `$wpdb`
 sans l'avoir importé — la faute qui a produit l'erreur fatale de la 3.25.236.
