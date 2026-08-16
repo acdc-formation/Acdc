@@ -198,6 +198,59 @@ if ( '' !== $rendu ) {
     }
 }
 
+/* ── 8. LA SAUVEGARDE PREND TOUT, ET DIT CE QU'ELLE N'A PAS PRIS ────────── */
+
+/* Deux listes de tables tenues à la main nommaient 40 tables ; le plugin en
+   compte 56. Absentes de toutes les sauvegardes : les factures, les devis, le
+   registre des réclamations, les contrats de sous-traitance, les quatre tables
+   du portail formateur, ses documents, ses évaluations, son cahier de bord, les
+   blocs de recueil, les activités de prospection, les thématiques, la veille.
+   Et les FICHIERS n'y étaient pas non plus : la base ne garde que l'adresse
+   d'une signature manuscrite, l'image vit dans les téléversements — une
+   restauration rendait des émargements sans signature.
+   Rien de tout cela ne se voyait : la sauvegarde s'annonçait « créée ». */
+if ( '' !== $noyau ) {
+    if ( preg_match( '/function get_plugin_table_map\(.*?\n  \}/s', $noyau, $m ) ) {
+        if ( false === strpos( $m[0], 'SHOW TABLES LIKE' ) ) {
+            $hits[] = 'la sauvegarde ne demande plus à la base quelles tables existent : elle retombe sur une liste tenue à la main, qui décrochera de nouveau sans que rien ne le signale.';
+        }
+        foreach ( array( 'companies', 'learners', 'system_logs' ) as $etiquette ) {
+            if ( false === strpos( $m[0], "'" . $etiquette . "'" ) ) {
+                $hits[] = sprintf( 'l’étiquette historique « %s » a disparu de la carte : les archives déjà produites ne seraient plus restaurables.', $etiquette );
+            }
+        }
+    } else {
+        $hits[] = 'get_plugin_table_map() est introuvable.';
+    }
+    if ( preg_match( '/function backup_data_snapshot\(.*?\n  \}/s', $noyau, $m ) ) {
+        /* On exige le MÉCANISME, pas une mention : retirer la seule ligne
+           d'initialisation laissait passer un contrôle qui cherchait
+           « $manifest['fichiers'] ». C'est le sabotage qui l'a montré. */
+        if ( false === strpos( $m[0], "glob( \$racine . 'acdc*', GLOB_ONLYDIR )" ) ) {
+            $hits[] = 'la sauvegarde n’emporte plus les fichiers de preuve : une restauration rendrait des émargements dont la signature manuscrite n’existe plus.';
+        }
+        if ( false === strpos( $m[0], "'acdc-backups' === \$nom_dossier" ) ) {
+            $hits[] = 'le dossier des sauvegardes n’est plus exclu de la copie : chaque archive contiendrait les précédentes, et grossirait sans fin.';
+        }
+        if ( false === strpos( $m[0], "\$manifest['tables_absentes']" ) || false === strpos( $m[0], "\$manifest['complete']" ) ) {
+            $hits[] = 'la sauvegarde ne dit plus ce qu’elle n’a pas pris : elle peut de nouveau s’annoncer réussie en ayant laissé des données derrière elle.';
+        }
+    } else {
+        $hits[] = 'backup_data_snapshot() est introuvable.';
+    }
+    if ( preg_match( '/function restore_backup_snapshot_from_manifest\(.*?\n  \}/s', $noyau, $m ) ) {
+        if ( false === strpos( $m[0], "'fichiers de preuve'" ) ) {
+            $hits[] = 'la restauration ne remet plus les fichiers de preuve : les lignes reviennent, les signatures non.';
+        }
+        if ( false === strpos( $m[0], "strpos( \$relatif_f, '..' )" ) ) {
+            $hits[] = 'la restauration des fichiers ne refuse plus les chemins qui remontent : une archive préparée pourrait écrire hors des téléversements.';
+        }
+    }
+    if ( ! preg_match( '/function acdc_nom_sauvegarde\(/', $noyau ) ) {
+        $hits[] = 'le nom lisible des sauvegardes a disparu : les archives reprennent des noms techniques.';
+    }
+}
+
 /* ── VERDICT ────────────────────────────────────────────────────────────── */
 
 if ( $hits ) {
@@ -207,5 +260,5 @@ if ( $hits ) {
     printf( "%d alerte(s)\n", count( $hits ) );
     exit( 1 );
 }
-echo "Durcissement : pièces jointes retrouvées, réinitialisations limitées, propositions non listables et non devinables, droits vérifiés, traces de suppression exactes, journal conservé, daté, situé et lisible.\n";
+echo "Durcissement : pièces jointes retrouvées, réinitialisations limitées, propositions non listables, droits vérifiés, traces de suppression exactes, journal lisible, sauvegarde complète et qui dit ce qu’elle laisse.\n";
 exit( 0 );

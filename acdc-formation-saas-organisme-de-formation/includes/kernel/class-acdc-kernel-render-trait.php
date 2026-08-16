@@ -15607,7 +15607,67 @@ public function render_admin_maintenance_page() {
   foreach ( $o as $key => $value ) { echo '<input type="hidden" name="branding[' . esc_attr( $key ) . ']" value="' . esc_attr( $value ) . '">'; }
   echo '<p><label><input type="checkbox" name="acdc_of_keep_data_on_uninstall" value="yes" ' . checked( $keep_data, 'yes', false ) . '> Conserver les données à la désinstallation</label></p><p><label>Nombre de sauvegardes à conserver<br><input type="number" class="small-text" min="5" max="100" name="acdc_of_backup_retention_count" value="' . esc_attr( (string) $backup_retention ) . '"></label></p><p><button type="submit" class="button button-primary">Enregistrer</button></p></form></div>';
   echo '</div>'; /* fin des deux colonnes — le journal prend toute la largeur */
+  $this->render_admin_backup_content_panel();
   $this->render_admin_system_log_panel();
+  echo '</div>';
+}
+
+/**
+ * Ce que contient réellement la dernière sauvegarde.
+ *
+ * ACDC 3.25.293. L'écran disait « Dernière sauvegarde manuelle : <date> » et
+ * s'arrêtait là. Pendant ce temps la sauvegarde emportait 29 tables sur 56 :
+ * ni les factures, ni les devis, ni les huit tables du module quiz — donc
+ * aucune preuve d'évaluation. Elle s'annonçait réussie, et elle l'était, d'un
+ * peu plus de la moitié des données.
+ *
+ * Un chiffre affiché aurait suffi à le voir. Il est là.
+ */
+private function render_admin_backup_content_panel() {
+  $manifeste = (string) get_option( 'acdc_of_last_manual_backup_file', '' );
+  if ( '' === $manifeste ) {
+    $manifeste = (string) get_option( 'acdc_of_last_safety_backup_file', '' );
+  }
+  echo '<div class="acdc-admin-panel" style="margin-top:18px;"><h2>Contenu de la dernière sauvegarde</h2>';
+  $chemin = '' !== $manifeste ? $this->get_backup_absolute_path( $manifeste ) : '';
+  $donnees = ( '' !== $chemin && is_file( $chemin ) ) ? json_decode( (string) file_get_contents( $chemin ), true ) : null;
+  if ( ! is_array( $donnees ) ) {
+    echo '<p>Aucune sauvegarde lisible pour le moment.</p></div>';
+    return;
+  }
+
+  $tables  = isset( $donnees['tables'] ) && is_array( $donnees['tables'] ) ? $donnees['tables'] : array();
+  $lignes  = 0;
+  foreach ( $tables as $t ) {
+    $lignes += (int) ( $t['rows'] ?? 0 );
+  }
+  $fichiers = isset( $donnees['fichiers'] ) && is_array( $donnees['fichiers'] ) ? $donnees['fichiers'] : array();
+  $nb_fichiers = 0;
+  foreach ( (array) ( $fichiers['dossiers'] ?? array() ) as $d ) {
+    $nb_fichiers += (int) ( $d['fichiers'] ?? 0 );
+  }
+  $absentes = isset( $donnees['tables_absentes'] ) ? (array) $donnees['tables_absentes'] : array();
+  $ignores  = isset( $fichiers['ignores'] ) ? (array) $fichiers['ignores'] : array();
+
+  echo '<p><strong>' . esc_html( (string) ( $donnees['nom'] ?? 'Sauvegarde' ) ) . '</strong></p>';
+  echo '<ul style="margin-left:18px;list-style:disc;">';
+  echo '<li>' . esc_html( sprintf( '%d table(s), %s ligne(s) au total', count( $tables ), number_format_i18n( $lignes ) ) ) . '</li>';
+  echo '<li>' . esc_html( sprintf( '%d fichier(s) de preuve (%s)', $nb_fichiers, size_format( (int) ( $fichiers['octets'] ?? 0 ) ) ) ) . '</li>';
+  echo '</ul>';
+
+  /* Le point entier de ce panneau : ce qui MANQUE se dit, en rouge. */
+  if ( empty( $absentes ) && empty( $ignores ) ) {
+    echo '<p style="color:#1e7e34;"><strong>Sauvegarde complète</strong> — aucune table ni aucun fichier du plugin n’a été laissé de côté.</p>';
+  } else {
+    echo '<p style="color:#b32d2e;"><strong>Sauvegarde INCOMPLÈTE.</strong></p><ul style="margin-left:18px;list-style:disc;color:#b32d2e;">';
+    foreach ( $absentes as $t ) {
+      echo '<li>' . esc_html( sprintf( 'table non sauvegardée : %s', (string) $t ) ) . '</li>';
+    }
+    foreach ( $ignores as $i ) {
+      echo '<li>' . esc_html( sprintf( 'fichiers non sauvegardés (%s) : %s', (string) ( $i['dossier'] ?? '?' ), (string) ( $i['raison'] ?? '' ) ) ) . '</li>';
+    }
+    echo '</ul>';
+  }
   echo '</div>';
 }
 

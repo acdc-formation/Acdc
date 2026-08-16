@@ -4394,7 +4394,7 @@ dbDelta( $sql_companies );
   }
 
   private function get_plugin_table_map() {
-    return array(
+    $carte = array(
       'companies' => $this->company_table,
       'contacts' => $this->contact_table,
       'documents' => $this->document_table,
@@ -4425,6 +4425,32 @@ dbDelta( $sql_companies );
       'learner_portal_logs' => $this->learner_portal_log_table,
       'system_logs' => $this->system_log_table,
     ) + $this->acdc_satellite_table_map();
+
+    /* ACDC 3.25.293 — CES DEUX LISTES SONT TENUES À LA MAIN, ET ELLES AVAIENT
+       DÉCROCHÉ. Ensemble elles nomment 40 tables ; le plugin en compte 56.
+       Étaient donc absentes de toutes les sauvegardes : les FACTURES, les DEVIS,
+       le registre des réclamations, les contrats de sous-traitance, les quatre
+       tables du portail formateur, ses documents, ses évaluations et son cahier
+       de bord, les blocs et questions de recueil, les activités de prospection,
+       les thématiques et la veille.
+       Une liste qu'il faut penser à compléter finit toujours par ne plus l'être.
+       On demande donc à la base ce qu'elle contient : toute table du plugin est
+       emportée, y compris celle qu'un module créera demain.
+       Les étiquettes ci-dessus sont conservées telles quelles — ce sont les noms
+       des fichiers à l'intérieur des archives déjà produites, et une archive
+       faite hier doit rester restaurable aujourd'hui. */
+    global $wpdb;
+    $connues = array_flip( array_filter( $carte ) );
+    $motif   = $wpdb->esc_like( $wpdb->prefix . 'acdc_' ) . '%';
+    foreach ( (array) $wpdb->get_col( $wpdb->prepare( 'SHOW TABLES LIKE %s', $motif ) ) as $table ) {
+      $table = (string) $table;
+      if ( '' === $table || isset( $connues[ $table ] ) ) {
+        continue;
+      }
+      $carte[ substr( $table, strlen( $wpdb->prefix ) ) ] = $table;
+    }
+
+    return $carte;
   }
 
   /**
@@ -4683,6 +4709,29 @@ dbDelta( $sql_companies );
     return is_array( $found ) && ! empty( $found );
   }
 
+/**
+ * Le nom d'une sauvegarde, tel qu'il se lit.
+ *
+ * ACDC 3.25.293 — Demandé par l'exploitant : « Sauvegarde du jj-mm-aaaa —
+ * 00h00mn ». C'est le nom affiché, et celui de l'archive. Sur le disque le
+ * fichier garde une forme sans espace ni tiret long : un nom de fichier voyage
+ * mal d'un système à l'autre, et une archive qu'on ne peut plus ouvrir ne
+ * protège rien.
+ */
+private function acdc_nom_sauvegarde( $quand = null ) {
+  $quand = ( null === $quand ) ? current_time( 'timestamp' ) : ( is_numeric( $quand ) ? (int) $quand : strtotime( (string) $quand ) );
+  if ( (int) $quand <= 0 ) {
+    return 'Sauvegarde';
+  }
+  return sprintf( 'Sauvegarde du %s — %sh%smn', wp_date( 'd-m-Y', (int) $quand ), wp_date( 'H', (int) $quand ), wp_date( 'i', (int) $quand ) );
+}
+
+/** Le même nom, utilisable comme nom de fichier partout. */
+private function acdc_nom_fichier_sauvegarde( $quand = null ) {
+  $quand = ( null === $quand ) ? current_time( 'timestamp' ) : ( is_numeric( $quand ) ? (int) $quand : strtotime( (string) $quand ) );
+  return 'sauvegarde-du-' . wp_date( 'd-m-Y-H\hi\m\n', (int) $quand );
+}
+
   private function get_backup_run_directory( $label ) {
     $base = $this->get_backup_base_directory();
     if ( '' === $base ) {
@@ -4873,7 +4922,10 @@ dbDelta( $sql_companies );
     if ( '' === $dir || ! is_dir( $dir ) || ! class_exists( 'ZipArchive' ) ) {
       return '';
     }
-    $zip_path = trailingslashit( $dir ) . sanitize_file_name( $label ) . '.zip';
+    /* ACDC 3.25.293 — L'archive s'appelait « manual-manual_backup.zip ». Elle
+       porte désormais sa date : c'est ce qu'on lit dans un dossier de
+       sauvegardes, et c'est ce qui a été demandé. */
+    $zip_path = trailingslashit( $dir ) . sanitize_file_name( $this->acdc_nom_fichier_sauvegarde() ) . '.zip';
     $zip = new ZipArchive();
     if ( true !== $zip->open( $zip_path, ZipArchive::CREATE | ZipArchive::OVERWRITE ) ) {
       return '';
@@ -4913,6 +4965,59 @@ dbDelta( $sql_companies );
     $this->create_safety_backup_snapshot( 'restore_backup', array( 'user_id' => get_current_user_id() ) );
 
     $report = array();
+
+    /* ── LES FICHIERS DE PREUVE REVIENNENT AVEC LES LIGNES ──────────────
+       ACDC 3.25.293 — Restaurer la base sans les fichiers rendait des
+       émargements dont la signature n'existait plus. On ne remplace jamais un
+       fichier déjà présent : une restauration répare ce qui manque, elle
+       n'écrase pas ce qui vit. */
+    $dossier_fichiers = trailingslashit( dirname( $manifest_path ) ) . 'fichiers';
+    if ( is_dir( $dossier_fichiers ) ) {
+      $uploads_cible = wp_get_upload_dir();
+      $rendus = 0;
+      $deja   = 0;
+      $rates  = 0;
+      if ( ! empty( $uploads_cible['basedir'] ) ) {
+        $base_cible = trailingslashit( $uploads_cible['basedir'] );
+        foreach ( new RecursiveIteratorIterator(
+          new RecursiveDirectoryIterator( $dossier_fichiers, FilesystemIterator::SKIP_DOTS ),
+          RecursiveIteratorIterator::SELF_FIRST
+        ) as $fichier ) {
+          if ( $fichier->isDir() ) {
+            continue;
+          }
+          $relatif_f = ltrim( str_replace( $dossier_fichiers, '', $fichier->getPathname() ), '/\\' );
+          /* Une entrée d'archive ne doit jamais pouvoir écrire hors des
+             téléversements : on refuse tout chemin qui remonte. */
+          if ( false !== strpos( $relatif_f, '..' ) ) {
+            $rates++;
+            continue;
+          }
+          $destination_f = $base_cible . $relatif_f;
+          if ( file_exists( $destination_f ) ) {
+            $deja++;
+            continue;
+          }
+          wp_mkdir_p( dirname( $destination_f ) );
+          if ( @copy( $fichier->getPathname(), $destination_f ) ) {
+            $rendus++;
+          } else {
+            $rates++;
+          }
+        }
+      }
+      /* Même forme que les tables : le récapitulatif compte les « ko » pour
+         décider si la restauration est incomplète, et un fichier de preuve non
+         restauré doit s'y voir autant qu'une ligne refusée. */
+      $report[] = array(
+        'label'   => 'fichiers de preuve',
+        'table'   => '(' . $rendus . ' restauré(s), ' . $deja . ' déjà présent(s))',
+        'ok'      => $rendus,
+        'ko'      => $rates,
+        'error'   => $rates > 0 ? 'copie impossible vers les téléversements' : '',
+        'dropped' => array(),
+      );
+    }
 
     $dir = dirname( $manifest_path );
     $map = $this->get_plugin_table_map();
@@ -5061,6 +5166,7 @@ dbDelta( $sql_companies );
 
     $manifest = array(
       'created_at' => current_time( 'mysql' ),
+      'nom' => $this->acdc_nom_sauvegarde(),
       'label' => (string) $label,
       'plugin_version' => ACDC_OF_SAAS_VERSION,
       'schema_version' => get_option( 'acdc_of_db_version', '3.0.0' ),
@@ -5094,6 +5200,83 @@ dbDelta( $sql_companies );
         'file' => basename( $table_file ),
       );
     }
+
+    /* ── LES FICHIERS DE PREUVE ─────────────────────────────────────────
+       ACDC 3.25.293 — La base ne contient que l'ADRESSE d'une signature
+       manuscrite : l'image, elle, est un fichier dans les téléversements. Une
+       restauration rendait donc des émargements dont la signature avait disparu.
+       Idem pour les contrats, les pièces d'identité et les propositions.
+       On emporte les dossiers du plugin — sauf celui des sauvegardes, qui se
+       contiendrait lui-même. Le total est borné : une archive qui remplit le
+       disque du serveur ne protège plus rien, elle met en panne. Ce qui est
+       laissé de côté est NOMMÉ dans le manifeste, jamais passé sous silence. */
+    $manifest['fichiers'] = array( 'dossiers' => array(), 'octets' => 0, 'ignores' => array() );
+    $uploads_dir = wp_get_upload_dir();
+    if ( ! empty( $uploads_dir['basedir'] ) && is_dir( $uploads_dir['basedir'] ) ) {
+      $budget = (int) apply_filters( 'acdc_of_backup_files_budget', 512 * 1024 * 1024 );
+      $cumul  = 0;
+      $racine = trailingslashit( $uploads_dir['basedir'] );
+      $cible  = trailingslashit( $dir ) . 'fichiers/';
+      foreach ( (array) glob( $racine . 'acdc*', GLOB_ONLYDIR ) as $source ) {
+        $nom_dossier = basename( (string) $source );
+        if ( 'acdc-backups' === $nom_dossier ) {
+          continue; /* le dossier des sauvegardes ne se sauvegarde pas lui-même */
+        }
+        $pris  = 0;
+        $poids = 0;
+        $trop_gros = false;
+        foreach ( new RecursiveIteratorIterator(
+          new RecursiveDirectoryIterator( $source, FilesystemIterator::SKIP_DOTS ),
+          RecursiveIteratorIterator::SELF_FIRST
+        ) as $fichier ) {
+          if ( $fichier->isDir() ) {
+            continue;
+          }
+          $taille = (int) $fichier->getSize();
+          if ( $cumul + $taille > $budget ) {
+            $trop_gros = true;
+            break;
+          }
+          $relatif_f   = ltrim( str_replace( $racine, '', $fichier->getPathname() ), '/\\' );
+          $destination = $cible . $relatif_f;
+          wp_mkdir_p( dirname( $destination ) );
+          if ( @copy( $fichier->getPathname(), $destination ) ) {
+            $pris++;
+            $poids += $taille;
+            $cumul += $taille;
+          } else {
+            $manifest['fichiers']['ignores'][] = array( 'dossier' => $nom_dossier, 'raison' => 'copie impossible : ' . $relatif_f );
+          }
+        }
+        if ( $pris > 0 ) {
+          $manifest['fichiers']['dossiers'][] = array( 'dossier' => $nom_dossier, 'fichiers' => $pris, 'octets' => $poids );
+        }
+        if ( $trop_gros ) {
+          $manifest['fichiers']['ignores'][] = array( 'dossier' => $nom_dossier, 'raison' => 'budget d’archive atteint' );
+          break;
+        }
+      }
+      $manifest['fichiers']['octets'] = $cumul;
+    }
+
+    /* ── CE QUI N'A PAS ÉTÉ PRIS EST DIT ────────────────────────────────
+       Le défaut d'origine n'était pas d'oublier des tables : c'était de ne pas
+       le dire. Une sauvegarde qui s'annonce réussie en ayant laissé des données
+       derrière elle est plus dangereuse qu'une sauvegarde ratée. */
+    $emportees = array();
+    foreach ( $manifest['tables'] as $entree ) {
+      if ( ! empty( $entree['table'] ) ) {
+        $emportees[ (string) $entree['table'] ] = true;
+      }
+    }
+    $manifest['tables_absentes'] = array();
+    $motif_tables = $wpdb->esc_like( $wpdb->prefix . 'acdc_' ) . '%';
+    foreach ( (array) $wpdb->get_col( $wpdb->prepare( 'SHOW TABLES LIKE %s', $motif_tables ) ) as $table_base ) {
+      if ( ! isset( $emportees[ (string) $table_base ] ) ) {
+        $manifest['tables_absentes'][] = (string) $table_base;
+      }
+    }
+    $manifest['complete'] = empty( $manifest['tables_absentes'] ) && empty( $manifest['fichiers']['ignores'] );
 
     $options_path = trailingslashit( $dir ) . 'options.json';
     file_put_contents( $options_path, wp_json_encode( $this->get_backup_options_snapshot(), JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES | JSON_PRETTY_PRINT ) );
