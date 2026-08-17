@@ -577,6 +577,38 @@ if ( '' !== $noyau ) {
     }
 }
 
+/* ── L'ÉTAT « AUCUNE COPIE HORS DU SERVEUR » NE SE TAIT PAS ──────────────
+   ACDC 3.25.315. La veille du Drive surveillait finement le dépôt EN RETARD et
+   sortait sans un mot quand le Drive n'était pas connecté du tout — c'est-à-dire
+   dans le seul cas où il n'existe AUCUNE copie hors du serveur. Elle surveillait
+   la panne la moins grave et gardait le silence sur la pire.
+   Ne rien recevoir ne doit jamais vouloir dire deux choses à la fois. */
+if ( is_readable( $drive ) ) {
+    $src_drive = (string) file_get_contents( $drive );
+
+    if ( ! preg_match( '/if\s*\(\s*!\s*\$this->acdc_gdrive_pret\(\)\s*\)\s*\{\s*\$this->acdc_gdrive_rappeler_absence_de_copie\(\)\s*;/', $src_drive ) ) {
+        $hits[] = 'la veille du Drive redevient muette quand le Drive n’est pas connecté : l’état où AUCUNE copie ne quitte le serveur est justement celui qui n’alerterait plus. Ne rien recevoir dirait alors deux choses à la fois.';
+    }
+
+    if ( false === strpos( $src_drive, 'function acdc_gdrive_rappeler_absence_de_copie' ) ) {
+        $hits[] = 'le rappel « aucune copie hors du serveur » a disparu du module Drive.';
+    } else {
+        $deb    = strpos( $src_drive, 'function acdc_gdrive_rappeler_absence_de_copie' );
+        $corps  = substr( $src_drive, $deb, 2400 );
+        /* Le rythme est une propriété de sécurité à l'envers : un rappel
+           quotidien pour un réglage manquant apprend à ne plus lire les
+           rappels, et c'est l'alerte de panne réelle qui se perd ensuite. */
+        if ( false === strpos( $corps, 'WEEK_IN_SECONDS' ) ) {
+            $hits[] = 'le rappel « aucune copie hors du serveur » n’est plus espacé d’une semaine : répété trop souvent, il fait ignorer les alertes qui, elles, signalent une panne.';
+        }
+        /* La date s'écrit avant l'envoi : sinon un envoi qui échoue relance le
+           rappel à chaque chargement d'écran. */
+        if ( ! preg_match( '/rappel_absent_le.*?\n(.*?)acdc_send_branded_email/s', $corps ) ) {
+            $hits[] = 'le rappel « aucune copie hors du serveur » n’écrit plus sa date AVANT l’envoi : un envoi en échec le relancerait à chaque chargement d’écran.';
+        }
+    }
+}
+
 /* ── VERDICT ────────────────────────────────────────────────────────────── */
 
 if ( $hits ) {

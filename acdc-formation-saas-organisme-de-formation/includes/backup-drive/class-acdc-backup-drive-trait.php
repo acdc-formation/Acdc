@@ -52,6 +52,10 @@ trait ACDC_Backup_Drive_Trait {
 			'derniere_erreur' => '',
 			'connecte_le'   => '',
 			'alerte_le'     => '',
+			/* ACDC 3.25.315 — Date du dernier rappel « aucune copie hors du
+			   serveur ». Distincte d'alerte_le : les deux états ne se disent pas
+			   au même rythme et ne doivent pas s'effacer l'un l'autre. */
+			'rappel_absent_le' => '',
 		);
 		$o = array_merge( $defauts, $o );
 		foreach ( array( 'client_id', 'client_secret', 'refresh_token' ) as $secret ) {
@@ -610,10 +614,23 @@ trait ACDC_Backup_Drive_Trait {
 	public function acdc_gdrive_veiller() {
 		$o = $this->acdc_gdrive_settings();
 
-		/* Tant que le Drive n'est pas connecté, l'écran le dit en toutes lettres
-		   et l'exploitant est en train de s'en occuper : un courrier quotidien
-		   ne lui apprendrait rien et lui apprendrait à ne plus les lire. */
+		/* ACDC 3.25.315 — L'ÉTAT LE PLUS DANGEREUX ÉTAIT LE SEUL QUI SE TAISAIT.
+		   Ce bloc sortait sans un mot quand le Drive n'était pas connecté, au
+		   motif que l'écran le dit et que l'exploitant s'en occupe. Le
+		   raisonnement tenait les premiers jours ; il ne tient plus au bout de
+		   quelques mois, et il ne tient plus du tout depuis que la seconde
+		   extension de sauvegarde a été retirée.
+		   Or « pas connecté » n'est pas un dépôt en retard : c'est AUCUNE copie
+		   hors du serveur. La veille surveillait donc finement la panne la moins
+		   grave et gardait le silence sur la pire. C'est la famille « un
+		   contrôle qui rassure à tort » : ne rien recevoir ne distinguait pas
+		   « tout va bien » de « rien n'est protégé ».
+		   On le dit donc, mais une fois par semaine et pas une fois par jour :
+		   ce n'est pas un incident qui vient d'arriver, c'est un réglage à
+		   poser. Et seulement s'il y a quelque chose à protéger — un site sans
+		   aucun apprenant n'a pas besoin d'être rappelé à l'ordre. */
 		if ( ! $this->acdc_gdrive_pret() ) {
+			$this->acdc_gdrive_rappeler_absence_de_copie();
 			return;
 		}
 
@@ -676,6 +693,66 @@ trait ACDC_Backup_Drive_Trait {
 	}
 
 	/** La veille passe aussi par l'administration : un cron mort ne s'auto-signale pas. */
+	/**
+	 * ACDC 3.25.315 — « Aucune copie hors du serveur » se dit, une fois par semaine.
+	 *
+	 * Trois précautions, et aucune n'est décorative :
+	 *   1. rien n'est envoyé si le site n'a aucun apprenant — une installation
+	 *      neuve n'a rien à protéger, et un rappel sans objet apprend à ne plus
+	 *      lire les rappels ;
+	 *   2. une fois par semaine, jamais par jour : ce n'est pas un incident, c'est
+	 *      un réglage qui manque ;
+	 *   3. la date du rappel s'écrit AVANT l'envoi. Si l'envoi échoue, on ne
+	 *      réessaie pas à chaque chargement d'écran.
+	 *
+	 * @return bool True si un rappel a été envoyé.
+	 */
+	private function acdc_gdrive_rappeler_absence_de_copie() {
+		global $wpdb;
+
+		$o = $this->acdc_gdrive_settings();
+
+		if ( '' !== $o['rappel_absent_le']
+			&& ( time() - $this->acdc_gdrive_instant( $o['rappel_absent_le'] ) ) < WEEK_IN_SECONDS ) {
+			return false;
+		}
+
+		$destinataire = sanitize_email( (string) get_option( 'admin_email' ) );
+		if ( '' === $destinataire ) {
+			return false;
+		}
+
+		/* Y a-t-il quelque chose à protéger ? Une seule requête, une fois par
+		   semaine au plus : le coût est nul et il évite d'alerter dans le vide. */
+		$apprenants = 0;
+		if ( ! empty( $this->learner_table ) ) {
+			$apprenants = (int) $wpdb->get_var( "SELECT COUNT(*) FROM {$this->learner_table}" );
+		}
+		if ( $apprenants < 1 ) {
+			return false;
+		}
+
+		$this->acdc_gdrive_save_settings( array( 'rappel_absent_le' => gmdate( 'Y-m-d H:i:s' ) ) );
+
+		$this->acdc_send_branded_email(
+			$destinataire,
+			'Sauvegardes ACDC : aucune copie de vos données ne quitte le serveur',
+			array(
+				'intro_html' => '<p>Le dépôt automatique vers Google Drive n’est pas configuré.</p>',
+				'body_html'  => '<p>Les sauvegardes du plugin sont bien prises, mais elles restent sur le disque du serveur — '
+					. 'celui-là même qu’elles sont censées protéger. Vos ' . (int) $apprenants . ' dossiers d’apprenants, '
+					. 'vos conventions, vos émargements signés et vos factures n’existent donc qu’à un seul endroit '
+					. 'côté plugin.</p>'
+					. '<p>Ce message revient une fois par semaine tant que le dépôt n’est pas connecté. '
+					. 'Il s’arrêtera de lui-même dès la première copie déposée.</p>',
+			),
+			array( 'alerte_exploitant' => true, 'email_category' => 'exploitation' )
+		);
+
+		$this->log_action_event( 'gdrive_absent', 'settings', 0, 'warning', array( 'apprenants' => $apprenants ) );
+		return true;
+	}
+
 	public function acdc_gdrive_veiller_en_admin() {
 		if ( ! current_user_can( 'manage_options' ) || get_transient( 'acdc_of_gdrive_veille' ) ) {
 			return;
