@@ -3942,14 +3942,19 @@ public function handle_save_quiz() {
   }
 
   $sender_name = ! empty( $marketing_settings['sender_name'] ) ? sanitize_text_field( $marketing_settings['sender_name'] ) : 'ACDC-Formation';
-  $sender_email = ! empty( $marketing_settings['sender_email'] ) ? sanitize_email( $marketing_settings['sender_email'] ) : '';
+  /* ACDC 3.25.317 — Une seule porte décide de l'expéditeur.
+     Cette chaîne de repli descendait sur l'adresse de contact de la fiche, puis
+     sur « admin_email » — c'est-à-dire, très souvent, une adresse personnelle
+     chez un fournisseur grand public. Le « From: » quittait alors le domaine
+     signé et DMARC ne s'alignait plus : tous les e-mails en indésirables.
+     La 3.25.290 avait raison de retirer les adresses en dur des DOCUMENTS ;
+     elle a eu tort de traiter un « From: » comme un document. */
+  $sender_email = \ACDC\AdresseExpedition::resoudre(
+    $marketing_settings,
+    (string) apply_filters( 'acdc_email_expediteur', \ACDC\AdresseExpedition::DEFAUT )
+  );
   if ( '' === $sender_email && ! empty( $branding['email'] ) ) {
     $sender_email = sanitize_email( $branding['email'] );
-  }
-  if ( '' === $sender_email ) {
-    /* ACDC 3.25.290 — L'expéditeur de dernier recours était écrit en dur. */
-    $__id_exp     = $this->acdc_org_identity();
-    $sender_email = '' !== $__id_exp['email'] ? sanitize_email( $__id_exp['email'] ) : sanitize_email( (string) get_option( 'admin_email' ) );
   }
   $reply_to = ! empty( $marketing_settings['reply_to'] ) ? sanitize_email( $marketing_settings['reply_to'] ) : $sender_email;
   $internal_email = ! empty( $marketing_settings['internal_notification_email'] ) ? sanitize_email( $marketing_settings['internal_notification_email'] ) : $sender_email;

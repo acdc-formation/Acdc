@@ -80,6 +80,18 @@ $tolerés = array(
     /* Les contacts nommés du programme : choix explicite de l'exploitant,
        à reprendre plus tard. */
     'includes/settings-catalog/class-acdc-settings-catalog-programme-pdf-trait.php' => 'get_prog_pdf_contacts',
+    /* ACDC 3.25.317 — L'ADRESSE D'EXPÉDITION EST FIXE, ET C'EST VOULU.
+       Ce fichier n'est pas balayé aujourd'hui, mais l'exception est écrite ici
+       pour qu'elle survive à un élargissement du périmètre — et surtout pour
+       qu'on ne la « corrige » pas en croyant bien faire.
+       La règle de ce balayage vaut pour les valeurs AFFICHÉES : un e-mail de
+       contact, un téléphone, un SIRET doivent suivre la fiche. L'adresse du
+       « From: » n'est pas de cette nature : c'est une donnée d'INFRASTRUCTURE,
+       liée aux enregistrements DNS du domaine. La faire suivre une saisie
+       d'écran a envoyé, le 17 août, la totalité des e-mails en indésirables.
+       Elle se change par le filtre « acdc_email_expediteur », en même temps que
+       le DNS — jamais par une fiche. */
+    'src/AdresseExpedition.php' => null,
 );
 
 /* Ces fonctions ne décrivent pas l'organisme : elles décrivent des tiers — les
@@ -101,18 +113,45 @@ foreach ( $it as $f ) {
 }
 $fichiers[] = $root . '/src/Support/OrgIdentity.php';
 
+/**
+ * Le fichier débarrassé de ses commentaires, SANS perdre la numérotation.
+ *
+ * Un commentaire qui cite une valeur explique un défaut passé ; il ne l'affiche
+ * à personne. Le filtre d'origine sautait les lignes COMMENÇANT par « * », « //
+ * » ou « /* » — il laissait donc passer les lignes de continuation d'un bloc,
+ * qui commencent par du texte ordinaire. En 3.25.317, le commentaire qui
+ * explique pourquoi l'adresse d'expédition est fixée a ainsi été signalé comme
+ * une adresse écrite en dur.
+ *
+ * L'analyseur lexical de PHP tranche là où une heuristique de début de ligne se
+ * trompe. Chaque commentaire est remplacé par ses seuls sauts de ligne, si bien
+ * que les numéros rapportés restent ceux du fichier réel.
+ */
+function acdc_lignes_sans_commentaires( $chemin ) {
+    $sans = '';
+    foreach ( token_get_all( (string) file_get_contents( $chemin ) ) as $jeton ) {
+        if ( is_array( $jeton ) ) {
+            if ( T_COMMENT === $jeton[0] || T_DOC_COMMENT === $jeton[0] ) {
+                $sans .= str_repeat( "\n", substr_count( $jeton[1], "\n" ) );
+                continue;
+            }
+            $sans .= $jeton[1];
+            continue;
+        }
+        $sans .= $jeton;
+    }
+    return explode( "\n", $sans );
+}
+
 foreach ( $fichiers as $chemin ) {
     $relatif = str_replace( $root . '/', '', $chemin );
-    $lignes  = file( $chemin );
+    $lignes  = acdc_lignes_sans_commentaires( $chemin );
     $fonction = '';
     foreach ( $lignes as $i => $ligne ) {
         if ( preg_match( '/function\s+([a-z0-9_]+)\s*\(/i', $ligne, $mf ) ) {
             $fonction = $mf[1];
         }
-        /* Un commentaire qui cite une valeur explique un défaut passé ; il ne
-           l'affiche à personne. */
-        $nu = trim( $ligne );
-        if ( '' === $nu || 0 === strpos( $nu, '*' ) || 0 === strpos( $nu, '//' ) || 0 === strpos( $nu, '/*' ) ) {
+        if ( '' === trim( $ligne ) ) {
             continue;
         }
         if ( in_array( $fonction, $hors_sujet, true ) ) {

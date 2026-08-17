@@ -356,12 +356,49 @@ private function acdc_get_transactional_email_branding() {
     $logo_url = ! empty( $branding['logo_url'] ) ? esc_url( (string) $branding['logo_url'] ) : '';
     $website = '' !== $identite['site'] ? esc_url_raw( $identite['site'] ) : home_url( '/' );
     $phone = sanitize_text_field( $identite['telephone'] );
-    /* L'expéditeur marketing prime : c'est une adresse d'envoi, pas une
-       identité — elle peut légitimement différer de l'adresse de contact. */
-    $email = ! empty( $marketing_settings['sender_email'] ) ? sanitize_email( (string) $marketing_settings['sender_email'] ) : '';
-    if ( '' === $email && '' !== $identite['email'] ) {
-      $email = sanitize_email( $identite['email'] );
+    /* ACDC 3.25.317 — L'ADRESSE QUI EXPÉDIE N'EST PAS L'ADRESSE QUI REÇOIT.
+       Ces deux-là étaient une seule variable, et la 3.25.290 les a fait
+       diverger sans que rien ne le signale.
+
+       Cette version-là avait raison sur son intention : l'en-tête et le pied
+       des e-mails doivent lire la fiche identité, comme les conventions et les
+       factures. Mais la même variable servait AUSSI d'expéditeur « From: », et
+       elle a remplacé le repli codé en dur — « contact@acdc-formation.com » —
+       par l'adresse de contact de la fiche.
+
+       Or c'est le DOMAINE du « From: » que SPF, DKIM et DMARC vérifient. Tant
+       que l'expéditeur restait sur le domaine signé, l'authentification était
+       parfaite (9,6/10 chez mail-tester, serveur hors listes noires). Dès que
+       le « From: » est passé sur une adresse d'un autre domaine, l'alignement
+       DMARC est tombé — et TOUS les e-mails sont partis en indésirables, y
+       compris ceux qui arrivaient jusque-là.
+
+       On sépare donc les deux notions, définitivement :
+
+         — « email »        : l'adresse de CONTACT, affichée dans le corps et le
+                              pied du message. Elle suit la fiche identité,
+                              conformément à la 3.25.290.
+         — « sender_email » : l'adresse d'EXPÉDITION, celle du « From: ». Elle
+                              doit rester sur le domaine authentifié, sans quoi
+                              rien n'arrive.
+
+       Le repli codé en dur revient, et c'est délibéré : une adresse d'envoi est
+       une donnée d'INFRASTRUCTURE, liée aux enregistrements DNS du domaine, pas
+       une préférence de fiche. Le filtre la rend modifiable pour qui change de
+       domaine d'envoi — mais elle ne suivra plus une saisie d'écran à son insu. */
+    $contact_email = '' !== $identite['email'] ? sanitize_email( $identite['email'] ) : '';
+
+    $sender_email = \ACDC\AdresseExpedition::resoudre(
+      $marketing_settings,
+      (string) apply_filters( 'acdc_email_expediteur', \ACDC\AdresseExpedition::DEFAUT )
+    );
+    /* Dernier recours seulement : mieux vaut un expéditeur non aligné qu'un
+       en-tête « From: » vide, qui lui ne part pas du tout. */
+    if ( '' === $sender_email ) {
+      $sender_email = $contact_email;
     }
+
+    $email    = '' !== $contact_email ? $contact_email : $sender_email;
     $reply_to = ! empty( $marketing_settings['reply_to'] ) ? sanitize_email( (string) $marketing_settings['reply_to'] ) : $email;
     $sender_name = ! empty( $marketing_settings['sender_name'] ) ? sanitize_text_field( (string) $marketing_settings['sender_name'] ) : $company_name;
     $address_line = \ACDC\Support\OrgIdentity::addressLine( $identite, ' — ' );
@@ -374,6 +411,7 @@ private function acdc_get_transactional_email_branding() {
       'website_label'  => preg_replace( '#^https?://#', '', rtrim( $website, '/' ) ),
       'phone'          => $phone,
       'email'          => $email,
+      'sender_email'   => $sender_email,
       'reply_to'       => $reply_to,
       'sender_name'    => $sender_name,
       'address_line'   => $address_line,
@@ -512,8 +550,13 @@ private function acdc_build_transactional_email_html( $args = array() ) {
 private function acdc_get_transactional_email_headers( $args = array() ) {
     $branding = $this->acdc_get_transactional_email_branding();
     $headers = array( 'Content-Type: text/html; charset=UTF-8' );
-    if ( ! empty( $branding['email'] ) ) {
-      $headers[] = 'From: ' . $branding['sender_name'] . ' <' . $branding['email'] . '>';
+    /* ACDC 3.25.317 — « sender_email », JAMAIS « email ». Le premier est
+       l'adresse d'expédition, sur le domaine authentifié ; le second est
+       l'adresse de contact affichée dans le message. Les confondre ici, c'est
+       ce qui a envoyé la totalité des e-mails en indésirables : le « From: »
+       suivait une saisie d'écran, et DMARC ne s'aligne plus. */
+    if ( ! empty( $branding['sender_email'] ) ) {
+      $headers[] = 'From: ' . $branding['sender_name'] . ' <' . $branding['sender_email'] . '>';
     }
     if ( ! empty( $branding['reply_to'] ) ) {
       $headers[] = 'Reply-To: ' . $branding['reply_to'];

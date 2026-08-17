@@ -39,9 +39,20 @@ class ACDC_Sig_Email {
         $logo_url     = ! empty( $branding['logo_url'] )     ? esc_url( (string) $branding['logo_url'] ) : '';
         $website      = ! empty( $branding['website'] )      ? esc_url_raw( (string) $branding['website'] ) : home_url( '/' );
         $phone        = ! empty( $branding['phone'] )        ? sanitize_text_field( (string) $branding['phone'] ) : '';
-        $email        = ! empty( $marketing['sender_email'] ) ? sanitize_email( (string) $marketing['sender_email'] ) : '';
-        if ( '' === $email && ! empty( $branding['email'] ) ) { $email = sanitize_email( (string) $branding['email'] ); }
+        /* ACDC 3.25.317 — L'adresse AFFICHÉE et l'adresse qui EXPÉDIE.
+           Ce module composait son « From: » avec l'adresse de contact, et
+           retombait sur « admin_email » — souvent une adresse personnelle chez
+           un fournisseur grand public. Le « From: » quittait le domaine signé,
+           DMARC ne s'alignait plus, et l'invitation à signer partait en
+           indésirables comme le reste. Les deux notions sont désormais
+           distinctes, et l'expéditeur passe par la porte commune. */
+        $email        = ! empty( $branding['email'] ) ? sanitize_email( (string) $branding['email'] ) : '';
         if ( '' === $email ) { $email = sanitize_email( (string) get_option( 'admin_email' ) ); }
+        $sender_email = \ACDC\AdresseExpedition::resoudre(
+            $marketing,
+            (string) apply_filters( 'acdc_email_expediteur', \ACDC\AdresseExpedition::DEFAUT )
+        );
+        if ( '' === $sender_email ) { $sender_email = $email; }
         $sender_name  = ! empty( $marketing['sender_name'] ) ? sanitize_text_field( (string) $marketing['sender_name'] ) : $company_name;
         $reply_to     = ! empty( $marketing['reply_to'] )    ? sanitize_email( (string) $marketing['reply_to'] ) : $email;
         $address_bits = array_filter( array(
@@ -58,6 +69,7 @@ class ACDC_Sig_Email {
             'website_label'=> preg_replace( '#^https?://#', '', rtrim( $website, '/' ) ),
             'phone'        => $phone,
             'email'        => $email,
+            'sender_email' => $sender_email,
             'sender_name'  => $sender_name,
             'reply_to'     => $reply_to,
             'address_line' => implode( ' — ', $address_bits ),
@@ -199,7 +211,7 @@ class ACDC_Sig_Email {
 
         $headers = array(
             'Content-Type: text/html; charset=UTF-8',
-            'From: ' . sanitize_text_field( $b['sender_name'] ) . ' <' . sanitize_email( $b['email'] ) . '>',
+            'From: ' . sanitize_text_field( $b['sender_name'] ) . ' <' . sanitize_email( $b['sender_email'] ) . '>',
         );
         if ( ! empty( $b['reply_to'] ) ) {
             $headers[] = 'Reply-To: ' . sanitize_email( $b['reply_to'] );

@@ -3420,15 +3420,37 @@ Vos réponses nous permettront d’évaluer nos pratiques, d’identifier des ax
   private function get_questionnaire_mail_settings() {
     $defaults = array(
       'sender_name' => 'ACDC-Formation',
-      /* ACDC 3.25.290 — L'adresse d'expédition par défaut était écrite en dur :
-         un changement d'entité laissait les questionnaires partir de l'ancienne
-         boîte. À défaut de fiche renseignée, WordPress décidera. */
-      'sender_email' => '',
+      /* ACDC 3.25.317 — « WordPress décidera » était la mauvaise réponse.
+         La 3.25.290 avait retiré l'adresse d'expédition écrite en dur, pour
+         qu'un changement d'entité ne laisse pas les questionnaires partir de
+         l'ancienne boîte. L'intention était bonne, la conséquence non : à
+         défaut, WordPress compose « wordpress@ » suivi du domaine du SITE —
+         « acdcformation.com » — qui n'est pas le domaine SIGNÉ,
+         « acdc-formation.com ». Un tiret d'écart, et DMARC ne s'aligne plus.
+         Ce sont précisément ces envois-là qui partaient en indésirables.
+         Le défaut redevient donc l'adresse du domaine signé, et le réglage de
+         la fiche la remplace dès qu'il est saisi — ce qui répond au besoin
+         d'origine sans casser l'alignement. */
+      'sender_email' => \ACDC\AdresseExpedition::resoudre(
+        array(),
+        (string) apply_filters( 'acdc_email_expediteur', \ACDC\AdresseExpedition::DEFAUT )
+      ),
       'reply_to' => '',
     );
     $settings = $this->get_marketing_store( 'settings', array() );
     $settings = is_array( $settings ) ? $settings : array();
-    return wp_parse_args( $settings, $defaults );
+    $settings = wp_parse_args( $settings, $defaults );
+    /* wp_parse_args ne comble que les clés ABSENTES : une adresse enregistrée
+       puis vidée reste vide, et l'en-tête « From: » disparaît — auquel cas
+       WordPress remet son « wordpress@domaine-du-site », non signé. On repasse
+       donc par la porte commune, qui tranche dans tous les cas. */
+    if ( empty( $settings['sender_email'] ) ) {
+      $settings['sender_email'] = \ACDC\AdresseExpedition::resoudre(
+        array(),
+        (string) apply_filters( 'acdc_email_expediteur', \ACDC\AdresseExpedition::DEFAUT )
+      );
+    }
+    return $settings;
   }
 
 
