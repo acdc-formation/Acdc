@@ -9812,14 +9812,57 @@ private function maybe_auto_create_questionnaire_actions_from_response( $session
    */
   public function process_scheduled_survey_reminders( $lot = 20, $retard_max_jours = 7 ) {
     global $wpdb;
+
+    /* ACDC 3.25.314 — LE LOT TOURNE. IL RESTAIT BLOQUÉ SUR LES VINGT MÊMES.
+       Le plafond posé en 3.25.313 a créé un défaut que son voisin n'a pas :
+       la boucle des ENVOIS marque chaque enquête qu'elle écarte — son statut
+       change, elle sort de la requête, la fenêtre avance. Celle-ci n'écarte
+       rien : elle passe son chemin en mémoire, et la même enquête revient au
+       passage suivant, et à tous les suivants.
+       Deux façons de rester bloqué, et les deux se produisent :
+         — « ORDER BY dispatch_sent_at ASC » place les NULL EN TÊTE sous MySQL,
+           donc les enquêtes jamais expédiées — celles que la boucle refuse
+           d'emblée — occupaient les premières places ;
+         — une enquête trop ancienne pour être relancée porte, par définition,
+           la date la plus vieille : elle trustait le début du classement.
+       Vingt enquêtes dormantes, et PLUS AUCUNE RELANCE NE PARTAIT JAMAIS, en
+       silence, sur une file qui paraissait pourtant traitée.
+       On avance donc par curseur d'identifiant, qui fait le tour : chaque
+       enquête est examinée à son tour, quel que soit le nombre d'écartées. On
+       perd la priorité « la plus ancienne d'abord » — elle ne valait rien tant
+       que la file ne tournait pas. */
+    $curseur = absint( get_option( 'acdc_survey_reminder_cursor', 0 ) );
+
     $sessions = $wpdb->get_results( $wpdb->prepare(
       "SELECT * FROM {$this->questionnaire_session_table}
         WHERE is_survey_session = 1
           AND status IN ('envoyee','ouverte','commencee','partielle')
-        ORDER BY dispatch_sent_at ASC
+          AND id > %d
+        ORDER BY id ASC
         LIMIT %d",
+      $curseur,
       (int) $lot
     ) );
+
+    if ( empty( $sessions ) ) {
+      /* Fin de tour : on repart du début au passage suivant. Si le curseur
+         était déjà à zéro, il n'y a simplement rien à relancer. */
+      if ( $curseur > 0 ) {
+        update_option( 'acdc_survey_reminder_cursor', 0, false );
+      }
+      return;
+    }
+
+    /* Le curseur s'écrit AVANT le travail, comme les numéros de schéma : si ce
+       passage n'allait pas au bout, le suivant reprendrait le même lot et
+       rejouerait les envois déjà faits. Ce qui n'est pas traité ici revient au
+       tour d'après — rien n'est perdu, rien n'est doublé. */
+    $__dernier = 0;
+    foreach ( (array) $sessions as $__s ) {
+      $__dernier = max( $__dernier, (int) $__s->id );
+    }
+    update_option( 'acdc_survey_reminder_cursor', $__dernier, false );
+
     /* Les destinataires déjà servis pendant CE passage. Vide à chaque appel. */
     $__servis = array();
     foreach ( (array) $sessions as $session ) {

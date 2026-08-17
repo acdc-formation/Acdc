@@ -80,7 +80,18 @@ trait ACDC_Learner_Portal_Actions_Trait {
       global $wpdb;
       $failed_count = max( 0, absint( $account->failed_login_count ) ) + 1;
       $new_status   = $failed_count >= 5 ? 'blocked' : $account->status;
-      $blocked_at   = $failed_count >= 5 ? wp_date( 'Y-m-d H:i:s', strtotime( '+30 minutes', $now_ts ) ) : null;
+      /* ACDC 3.25.314 — LE DÉCALAGE ÉTAIT COMPTÉ DEUX FOIS, ICI AUSSI.
+         current_time('timestamp') rend un instant auquel le décalage du site est
+         DÉJÀ ajouté ; wp_date l'ajoute une seconde fois. Le blocage annoncé pour
+         trente minutes durait donc trente minutes PLUS le décalage — deux heures
+         et demie l'été. L'écran affichait « 30 minutes » pendant que le compte
+         restait fermé cinq fois plus longtemps.
+         Même faute qu'en 3.25.295 sur le nom des sauvegardes : on lit et on
+         écrit désormais sur la même échelle — chaîne d'heure locale, strtotime,
+         gmdate — et le compte rouvre à la minute annoncée. */
+      $blocked_at   = $failed_count >= 5
+        ? gmdate( 'Y-m-d H:i:s', strtotime( '+30 minutes', (int) strtotime( (string) current_time( 'mysql' ) ) ) )
+        : null;
       $wpdb->update(
         $this->learner_portal_account_table,
         array(
@@ -103,7 +114,18 @@ trait ACDC_Learner_Portal_Actions_Trait {
           . '<p><strong>Blocage jusqu’au :</strong> ' . esc_html( $this->learner_portal_format_date( $blocked_at, true ) ) . '</p>'
         );
       }
-      $this->learner_portal_redirect( 'login', $failed_count >= 5 ? 'Compte bloqué pendant 30 minutes après 5 échecs de connexion. Contact : ' . $this->learner_portal_contact_email() : 'Connexion impossible. Vérifiez vos identifiants.', 'error' );
+      /* ACDC 3.25.314 — LA DERNIÈRE PHRASE QUI DÉSIGNAIT ENCORE VOS CLIENTS.
+         La 3.25.313 a rendu génériques les quatre réponses qui distinguaient
+         « adresse inconnue », « accès non activé », « compte bloqué » et « accès
+         expiré » — sans quoi on éprouvait une liste d'adresses pour savoir
+         lesquelles ont été formées ici. Celle-ci est restée, et c'est la pire :
+         elle se déclenche sur le chemin du MAUVAIS mot de passe, c'est-à-dire
+         exactement celui qu'emprunte quelqu'un qui éprouve des adresses. Cinq
+         tentatives suffisaient à confirmer un compte.
+         L'apprenant légitime, lui, ne perd rien : dès qu'il donne le bon mot de
+         passe, la branche du dessus lui annonce le blocage et le temps restant.
+         Il n'a jamais eu besoin de l'apprendre ici. */
+      $this->learner_portal_redirect( 'login', $__refus_generique, 'error' );
     }
 
     global $wpdb;

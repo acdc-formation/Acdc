@@ -368,7 +368,7 @@ public function handle_save_branding() {
   update_option( 'acdc_of_branding', $clean, false );
   $keep_data = isset( $_POST['acdc_of_keep_data_on_uninstall'] ) ? 'yes' : 'no';
   $purge_prod = isset( $_POST['acdc_of_purge_allowed_in_production'] ) ? 'yes' : 'no';
-  $backup_retention = isset( $_POST['acdc_of_backup_retention_count'] ) ? absint( wp_unslash( $_POST['acdc_of_backup_retention_count'] ) ) : 30;
+  $backup_retention = isset( $_POST['acdc_of_backup_retention_count'] ) ? absint( wp_unslash( $_POST['acdc_of_backup_retention_count'] ) ) : $this->acdc_retention_sauvegardes_defaut();
   if ( $backup_retention < 5 ) { $backup_retention = 5; }
   if ( $backup_retention > 100 ) { $backup_retention = 100; }
   update_option( 'acdc_of_keep_data_on_uninstall', $keep_data, false );

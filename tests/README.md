@@ -74,7 +74,7 @@ lancent sans WordPress, en quelques secondes.
     php tests/scan-tva-branchee.php # un seul réglage de TVA, figé sur le document, jamais écrit en dur
     php tests/test-nom-document.php # noms de fichiers lisibles, durées lisibles
     php tests/scan-recette-ecrans.php # les cinq défauts d'écran de la recette de bout en bout
-    php tests/scan-migrations-schema.php # une colonne ajoutée sans migration ne sort jamais
+    php tests/scan-migrations-schema.php # une colonne ajoutée sans migration ne sort jamais (signature ET émargement)
     php tests/test-texte-alternatif.php # la version texte des e-mails : liens gardés, style perdu
     php tests/scan-audit-17-aout.php # les dix corrections de l'audit du 17 août
 

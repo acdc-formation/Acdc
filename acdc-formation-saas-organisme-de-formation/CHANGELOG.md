@@ -4,6 +4,48 @@ Toutes les modifications notables de ce projet sont documentées ici.
 Format inspiré de [Keep a Changelog](https://keepachangelog.com/fr/1.1.0/).
 L'historique détaillé antérieur est archivé dans [`release-notes/`](release-notes/).
 
+## [3.25.314] — 2026-08-17
+
+### Corrigé — Les sept défauts introduits par les corrections de la 3.25.313
+
+**La 3.25.313 ne doit pas être installée.** Sept de ses dix corrections ont introduit un
+défaut ailleurs — aucun dans la logique corrigée, tous dans ce que la correction touchait
+par ricochet.
+
+- **Bloquant — plus aucune feuille d'émargement n'était créable.** La colonne
+  `signature_token` avait été ajoutée au `CREATE TABLE` sans incrémenter
+  `ACDC_Emargement::DB_VERSION` : sur une installation existante, `dbDelta` ne tournait
+  jamais et `create_emarg_session()` échouait en silence. Exactement la faute de la
+  3.25.311 sur le module de signature. Numéro de schéma incrémenté, `maybe_add_column()`
+  ajouté, feuilles existantes pourvues d'un jeton, et filet de rattrapage à la lecture.
+- **Sécurité — un jeton de signature vide n'ouvre plus rien.** La colonne naissant à la
+  chaîne vide sur toutes les feuilles antérieures, l'adresse de signature sans clé aurait
+  ouvert la première d'entre elles et livré une liste nominative à un visiteur quelconque.
+- **La feuille d'émargement expirait avant la séance.** La fenêtre de 72 h était comptée
+  depuis la création de la feuille, pas depuis la séance : une feuille préparée d'avance
+  était déjà périmée le jour venu, et personne ne pouvait signer. Elle se ferme désormais
+  72 h après la fin de la séance, et se prolonge — jamais ne se raccourcit.
+- **Les relances d'enquêtes s'arrêtaient définitivement.** Le plafond de vingt posé en
+  3.25.313 ne s'accompagnait d'aucun marquage : les enquêtes écartées occupaient la
+  fenêtre à chaque passage. La file avance désormais par curseur, qui fait le tour.
+- **La rétention des sauvegardes annoncée à 5 était restée à 30.** Le 5 n'était lu que si
+  l'option n'existait pas ; sept endroits écrivaient encore 30. Une seule porte décide
+  désormais, et une valeur restée à l'ancien défaut redescend à 5, une fois.
+- **Le garde-fou anti-boucle des instantanés ne reconnaissait plus ses propres dossiers**
+  depuis l'ajout du condensat en fin de nom.
+- **L'export de sauvegarde par tranches n'était pas trié** : `LIMIT/OFFSET` sans
+  `ORDER BY` pouvait recopier une ligne et en perdre une autre si le site travaillait
+  pendant la sauvegarde. Tri sur la clé primaire ; les tables sans clé sont signalées
+  dans le manifeste.
+- **Portail apprenant** : la dernière phrase qui confirmait l'existence d'un compte à qui
+  éprouve une liste d'adresses est devenue générique ; et le blocage annoncé pour trente
+  minutes durait trente minutes plus le décalage horaire (deux heures et demie l'été).
+
+### Ajouté — Contrôles automatiques
+`scan-migrations-schema.php` couvre désormais le module d'émargement (empreinte de
+colonnes des deux tables + `DB_VERSION` épinglée), le refus du jeton vide et la présence
+du filet de rattrapage. Les quatre règles ont été éprouvées **en les sabotant**.
+
 ## [3.25.139] — 2026-07-24
 
 ### Ajouté — Encarts CA + Rétention RGPD sur le tableau de bord ACDC

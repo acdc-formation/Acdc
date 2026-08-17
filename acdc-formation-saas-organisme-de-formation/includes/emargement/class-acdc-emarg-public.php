@@ -499,6 +499,13 @@ function initCanvas(canvasId) {
 
         $learners = $this->core->get_learners_for_emarg( $emarg->id );
 
+        /* ACDC 3.25.314 — LE QR NE S'AFFICHE QUE S'IL A UNE CLÉ.
+           Les feuilles ouvertes avant cette version n'ont pas de jeton de
+           signature ; le filet de rattrapage leur en pose un ici, à la lecture.
+           S'il échoue, on n'affiche pas un QR qui mènerait à une adresse sans
+           clé : on dit au formateur d'utiliser les liens individuels. */
+        $jeton_signature = $this->core->jeton_signature( $emarg );
+
         if ( isset( $_GET['just_signed'] ) ) {
             echo '<div class="emarg-alert emarg-alert-success">✅ Signature du formateur enregistrée. Les apprenants peuvent maintenant signer.</div>';
         }
@@ -518,11 +525,18 @@ function initCanvas(canvasId) {
             <?php endif; ?>
 
             <!-- QR code pour que les apprenants scannent -->
+            <?php if ( '' !== $jeton_signature ) : ?>
             <div style="text-align:center;margin-bottom:24px;">
                 <div class="emarg-section-title">📱 QR Code émargement apprenants</div>
                 <p style="font-size:13px;color:#6b7280;margin-bottom:12px;">Affichez ce QR code sur votre écran — chaque apprenant le scanne pour signer.</p>
                 <div id="qr-learners" style="display:inline-block"></div>
             </div>
+            <?php else : ?>
+            <div class="emarg-alert emarg-alert-info">
+                Le QR code n'est pas disponible sur cette feuille. Utilisez le bouton
+                « ✉ Envoyer lien » en face de chaque apprenant : le lien personnel fonctionne normalement.
+            </div>
+            <?php endif; ?>
 
             <div class="emarg-section-title">Liste des apprenants</div>
             <?php if ( empty( $learners ) ) : ?>
@@ -580,6 +594,7 @@ function initCanvas(canvasId) {
                 <?php endforeach; ?>
             </ul>
         </div>
+        <?php if ( '' !== $jeton_signature ) : ?>
         <script>
         document.addEventListener('DOMContentLoaded', function() {
             if (typeof qrcode === 'function') {
@@ -592,13 +607,14 @@ function initCanvas(canvasId) {
                    signatures des autres, ni les boutons « Marquer absent » et
                    « Envoyer lien ». */
                 ?>
-                qr.addData(<?php echo wp_json_encode( $this->core->get_public_url( 'signature', $emarg->signature_token ) ); ?>);
+                qr.addData(<?php echo wp_json_encode( $this->core->get_public_url( 'signature', $jeton_signature ) ); ?>);
                 qr.make();
                 var el = document.getElementById('qr-learners');
                 if (el) { el.innerHTML = qr.createImgTag(4, 4); }
             }
         });
         </script>
+        <?php endif; ?>
         <?php
     }
 

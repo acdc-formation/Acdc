@@ -109,6 +109,12 @@ class ACDC_Emarg_Core {
         $this->maybe_add_column( $this->table_sessions, 'seance_end_at', 'DATETIME NULL AFTER seance_start_at' );
         $this->maybe_add_column( $this->table_learners, 'seance_index', 'INT NOT NULL DEFAULT 0 AFTER session_id' );
 
+        /* ACDC 3.25.314 — Le jeton de la page de signature montrée en salle.
+           Ajouté au CREATE TABLE en 3.25.313 sans migration : il manquait ces
+           deux lignes et l'incrément de DB_VERSION. */
+        $this->maybe_add_column( $this->table_sessions, 'signature_token', "VARCHAR(64) NOT NULL DEFAULT '' AFTER list_token" );
+        $this->acdc_remplir_jetons_signature();
+
         /* ACDC 3.25.230 — LA RÉPARATION NE SE FAIT PLUS DANS install().
            Voir maybe_repair_empty_sheets() : exécutée ici, elle s'exécutait à
            CHAQUE requête tant que le numéro de schéma n'était pas écrit — et
@@ -222,6 +228,221 @@ class ACDC_Emarg_Core {
         return bin2hex( random_bytes( 24 ) );
     }
 
+    /**
+     * ACDC 3.25.314 — LE JETON DE SIGNATURE DES FEUILLES DÉJÀ OUVERTES.
+     *
+     * Ajouter la colonne ne suffit pas : elle naît vide sur toutes les feuilles
+     * existantes. Un jeton vide, ce n'est pas « pas de QR », c'est un QR qui
+     * mène à une adresse sans clé — et une porte ouverte, puisque toutes les
+     * feuilles anciennes partageraient la même valeur vide.
+     *
+     * Deux bornes, et aucune n'est facultative :
+     *   1. cent lignes par passe, cinquante passes au plus — install() écrit son
+     *      numéro de schéma AVANT de travailler, donc un dépassement de temps
+     *      ici ne rejouerait pas la migration : mieux vaut s'arrêter proprement
+     *      et laisser le filet de rattrapage faire le reste ;
+     *   2. on sort à la première erreur d'écriture plutôt que d'insister.
+     *
+     * Ce qui n'est pas rattrapé ici l'est à la lecture, par jeton_signature().
+     *
+     * @return int Nombre de feuilles pourvues d'un jeton.
+     */
+    private function acdc_remplir_jetons_signature() {
+        global $wpdb;
+
+        // La colonne peut manquer si l'ALTER précédent a échoué : on ne veut pas
+        // d'une requête en erreur à chaque passe.
+        $colonne = $wpdb->get_results( "SHOW COLUMNS FROM {$this->table_sessions} LIKE 'signature_token'" );
+        if ( empty( $colonne ) ) {
+            return 0;
+        }
+
+        $remplis = 0;
+
+        for ( $passe = 0; $passe < 50; $passe++ ) {
+            $ids = $wpdb->get_col(
+                "SELECT id FROM {$this->table_sessions}
+                  WHERE signature_token IS NULL OR signature_token = ''
+                  ORDER BY id DESC
+                  LIMIT 100"
+            );
+
+            if ( empty( $ids ) ) {
+                break;
+            }
+
+            foreach ( (array) $ids as $id ) {
+                $ecrit = $wpdb->update(
+                    $this->table_sessions,
+                    array( 'signature_token' => $this->generate_token() ),
+                    array( 'id' => (int) $id ),
+                    array( '%s' ),
+                    array( '%d' )
+                );
+                if ( false === $ecrit ) {
+                    return $remplis;
+                }
+                $remplis++;
+            }
+        }
+
+        return $remplis;
+    }
+
+    /**
+     * ACDC 3.25.314 — LE FILET DE RATTRAPAGE, À LA LECTURE.
+     *
+     * La migration ne repasse jamais : son numéro de schéma est écrit avant le
+     * travail. Une feuille restée sans jeton — parce que la passe s'est arrêtée,
+     * parce que la colonne est arrivée après elle — n'aurait donc plus jamais
+     * d'occasion d'en recevoir un. On le lui donne au moment où l'on en a besoin,
+     * c'est-à-dire quand le formateur ouvre sa liste et affiche le QR.
+     *
+     * Retourne une chaîne vide si le jeton ne peut pas être créé : l'écran
+     * appelant doit alors se taire plutôt que de montrer un QR sans clé.
+     *
+     * @param object $emarg Ligne de feuille d'émargement.
+     * @return string Jeton de signature, ou chaîne vide.
+     */
+    public function jeton_signature( $emarg ) {
+        if ( ! is_object( $emarg ) || empty( $emarg->id ) ) {
+            return '';
+        }
+
+        $jeton = isset( $emarg->signature_token ) ? (string) $emarg->signature_token : '';
+        if ( '' !== $jeton ) {
+            return $jeton;
+        }
+
+        global $wpdb;
+        $colonne = $wpdb->get_results( "SHOW COLUMNS FROM {$this->table_sessions} LIKE 'signature_token'" );
+        if ( empty( $colonne ) ) {
+            return '';
+        }
+
+        $jeton = $this->generate_token();
+        $ecrit = $wpdb->update(
+            $this->table_sessions,
+            array( 'signature_token' => $jeton ),
+            array( 'id' => (int) $emarg->id ),
+            array( '%s' ),
+            array( '%d' )
+        );
+        if ( false === $ecrit ) {
+            return '';
+        }
+
+        $emarg->signature_token = $jeton;
+        return $jeton;
+    }
+
+    /**
+     * ACDC 3.25.314 — L'EXPIRATION SE COMPTE DEPUIS LA SÉANCE, PAS DEPUIS LA
+     * CRÉATION DE LA FEUILLE.
+     *
+     * Elle valait « maintenant + 72 heures », calculé UNE FOIS, à la création.
+     * Or une feuille naît quand le dossier s'ouvre — souvent bien avant le jour
+     * de la formation : convocations envoyées, séances préparées à l'avance. Une
+     * feuille préparée le lundi pour une séance du vendredi était déjà périmée
+     * quand les apprenants se présentaient. Les trois portes refusent alors le
+     * jeton, et l'écran dit « Lien invalide ou expiré » sans dire pourquoi :
+     * PERSONNE ne peut signer, et la preuve Qualiopi de la séance est perdue —
+     * une feuille d'émargement ne se rattrape pas le lendemain.
+     *
+     * C'est « une valeur conservée là où elle devait être recalculée », sur la
+     * pièce la moins rattrapable du dossier.
+     *
+     * La règle : la fenêtre se ferme 72 heures après la FIN de la séance. Quand
+     * la séance est inconnue, on retombe sur l'ancien calcul. Et jamais moins de
+     * 72 heures à partir de maintenant : une feuille ouverte le jour même reste
+     * signable, et une séance passée garde le délai de régularisation.
+     *
+     * @param array $seance_meta ['start_at' => ..., 'end_at' => ...] ou ligne de feuille.
+     * @return string Date d'expiration au format MySQL.
+     */
+    public function acdc_expiration_feuille( $seance_meta = array() ) {
+        $seance_meta = is_object( $seance_meta ) ? get_object_vars( $seance_meta ) : (array) $seance_meta;
+
+        $ttl = self::TOKEN_TTL_HOURS * 3600;
+        /* Les deux bornes se lisent sur la MÊME échelle : une chaîne d'heure
+           locale passée à strtotime(), reformatée par gmdate(). Mélanger
+           current_time('timestamp') et strtotime() d'une date de séance
+           comparerait deux repères décalés du fuseau. */
+        $plancher = (int) strtotime( (string) current_time( 'mysql' ) ) + $ttl;
+
+        $fin = '';
+        foreach ( array( 'seance_end_at', 'end_at', 'seance_start_at', 'start_at' ) as $cle ) {
+            if ( ! empty( $seance_meta[ $cle ] ) && '0000-00-00 00:00:00' !== (string) $seance_meta[ $cle ] ) {
+                $fin = (string) $seance_meta[ $cle ];
+                break;
+            }
+        }
+
+        $borne = $plancher;
+        if ( '' !== $fin ) {
+            $horodate = strtotime( $fin );
+            if ( false !== $horodate ) {
+                $borne = max( $plancher, $horodate + $ttl );
+            }
+        }
+
+        return gmdate( 'Y-m-d H:i:s', $borne );
+    }
+
+    /**
+     * ACDC 3.25.314 — REPOUSSE L'EXPIRATION D'UNE FEUILLE, JAMAIS L'INVERSE.
+     *
+     * Appelée quand on retombe sur une feuille déjà ouverte : la séance a pu
+     * être déplacée, ou la feuille a pu être créée bien avant. On ne raccourcit
+     * jamais une fenêtre en cours — retirer un accès dont quelqu'un dispose
+     * pendant qu'il signe, c'est perdre la signature.
+     *
+     * @param object $emarg       Ligne de feuille.
+     * @param array  $seance_meta Métadonnées fraîches de la séance, si connues.
+     * @return bool True si la date a été repoussée.
+     */
+    public function acdc_prolonger_expiration( $emarg, $seance_meta = array() ) {
+        global $wpdb;
+
+        if ( ! is_object( $emarg ) || empty( $emarg->id ) ) {
+            return false;
+        }
+
+        /* Les métadonnées fraîches priment ; à défaut, la séance telle que la
+           feuille la connaît. */
+        $source = array();
+        foreach ( array( 'start_at', 'end_at' ) as $cle ) {
+            if ( ! empty( $seance_meta[ $cle ] ) ) { $source[ $cle ] = $seance_meta[ $cle ]; }
+        }
+        if ( empty( $source ) ) {
+            $source = array(
+                'seance_start_at' => $emarg->seance_start_at ?? '',
+                'seance_end_at'   => $emarg->seance_end_at ?? '',
+            );
+        }
+
+        $voulue  = $this->acdc_expiration_feuille( $source );
+        $actuelle = (string) ( $emarg->expires_at ?? '' );
+
+        if ( '' !== $actuelle && strtotime( $actuelle ) >= strtotime( $voulue ) ) {
+            return false;
+        }
+
+        $ecrit = $wpdb->update(
+            $this->table_sessions,
+            array( 'expires_at' => $voulue, 'updated_at' => current_time( 'mysql' ) ),
+            array( 'id' => (int) $emarg->id ),
+            array( '%s', '%s' ),
+            array( '%d' )
+        );
+        if ( false === $ecrit ) {
+            return false;
+        }
+
+        $emarg->expires_at = $voulue;
+        return true;
+    }
+
     /* -----------------------------------------------------------------------
      * Créer une session d'émargement
      * -------------------------------------------------------------------- */
@@ -265,6 +486,10 @@ class ACDC_Emarg_Core {
             // un apprenant après coup ne l'ajoutait donc à aucune feuille déjà
             // créée — et deux demi-journées sur quatre sortaient vides.
             $this->sync_learners( (int) $existing->id, $learners );
+            /* ACDC 3.25.314 — Et on repousse sa fenêtre de signature. Une feuille
+               préparée d'avance, ou dont la séance a été déplacée, doit rester
+               signable le jour venu. Voir acdc_prolonger_expiration(). */
+            $this->acdc_prolonger_expiration( $existing, $seance_meta );
             return (int) $existing->id;
         }
 
@@ -275,8 +500,10 @@ class ACDC_Emarg_Core {
             $learners = $this->resolve_session_learners( $session_id );
         }
 
-        $now     = current_time( 'mysql' );
-        $expires = gmdate( 'Y-m-d H:i:s', current_time( 'timestamp' ) + self::TOKEN_TTL_HOURS * 3600 );
+        $now = current_time( 'mysql' );
+        /* ACDC 3.25.314 — La fenêtre se ferme 72 h après la FIN DE LA SÉANCE, et
+           non 72 h après ce moment-ci. Voir acdc_expiration_feuille(). */
+        $expires = $this->acdc_expiration_feuille( $seance_meta );
 
         $wpdb->insert( $this->table_sessions, array(
             'session_id'      => $session_id,
@@ -638,11 +865,24 @@ class ACDC_Emarg_Core {
         ) );
     }
 
+    /**
+     * ACDC 3.25.314 — UN JETON VIDE N'OUVRE RIEN.
+     *
+     * Les jetons formateur et liste sont posés à la création : ils ne sont
+     * jamais vides. Celui-ci, non — il naît vide sur toutes les feuilles
+     * antérieures à la 3.25.314. Sans ce refus, l'adresse de signature sans
+     * clé ouvrirait la première feuille venue restée sans jeton, et donnerait
+     * à n'importe quel visiteur la liste nominative d'une séance.
+     */
     public function get_by_signature_token( $token ) {
         global $wpdb;
+        $token = sanitize_text_field( (string) $token );
+        if ( '' === $token ) {
+            return null;
+        }
         return $wpdb->get_row( $wpdb->prepare(
             "SELECT * FROM {$this->table_sessions} WHERE signature_token = %s AND ( expires_at IS NULL OR expires_at > %s ) LIMIT 1",
-            sanitize_text_field( $token ),
+            $token,
             current_time( 'mysql' )
         ) );
     }

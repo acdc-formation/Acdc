@@ -14733,7 +14733,7 @@ public function render_admin_configuration_page() {
   $keep_data = get_option( 'acdc_of_keep_data_on_uninstall', 'yes' );
   $db_version = get_option( 'acdc_of_db_version', '3.0.0' );
   $purge_prod = get_option( 'acdc_of_purge_allowed_in_production', 'no' );
-  $backup_retention = absint( get_option( 'acdc_of_backup_retention_count', 30 ) );
+  $backup_retention = absint( get_option( 'acdc_of_backup_retention_count', $this->acdc_retention_sauvegardes_defaut() ) );
   $last_safety_backup_at = get_option( 'acdc_of_last_safety_backup_at', '' );
   $last_safety_backup_file = get_option( 'acdc_of_last_safety_backup_file', '' );
   $last_manual_backup_at = get_option( 'acdc_of_last_manual_backup_at', '' );
@@ -15610,7 +15610,7 @@ public function render_admin_ui_variables_page() {
 public function render_admin_maintenance_page() {
   $this->acdc_render_backoffice_tabs( 'acdc-of-maintenance' );
   $keep_data = get_option( 'acdc_of_keep_data_on_uninstall', 'yes' );
-  $backup_retention = absint( get_option( 'acdc_of_backup_retention_count', 30 ) );
+  $backup_retention = absint( get_option( 'acdc_of_backup_retention_count', $this->acdc_retention_sauvegardes_defaut() ) );
   $last_manual_backup_at = get_option( 'acdc_of_last_manual_backup_at', '' );
   $last_safety_backup_at = get_option( 'acdc_of_last_safety_backup_at', '' );
   echo '<div class="wrap acdc-admin-shell"><h1>Données & maintenance</h1>';

@@ -177,6 +177,104 @@ if ( false === $deb ) {
 }
 
 /* --------------------------------------------------------------------------
+ * 6. L'ÉMARGEMENT : SES COLONNES ET SON NUMÉRO DE SCHÉMA VONT ENSEMBLE
+ *
+ * LA MÊME FAUTE, DEUX FOIS. La règle 2 ci-dessus surveille le module de
+ * signature parce que j'y avais ajouté « entity_label » sans toucher à sa
+ * VERSION. Quatre versions plus tard, j'ai ajouté « signature_token » à la
+ * table d'émargement sans toucher à sa DB_VERSION — et cette page-là ne
+ * surveillait que le module de signature. Le balayage voyait la faute qu'il
+ * connaissait, pas la faute qu'il décrivait.
+ *
+ * Conséquence sur l'installation de David : maybe_install() sort immédiatement
+ * quand le numéro stocké est identique, dbDelta n'aurait jamais tourné, la
+ * colonne n'aurait jamais existé, et create_emarg_session() — qui l'écrit à
+ * chaque appel — aurait échoué. Plus une seule feuille d'émargement ouvrable.
+ *
+ * Pour corriger une alerte d'ici : incrémentez ACDC_Emargement::DB_VERSION,
+ * ajoutez le maybe_add_column() correspondant dans install(), PUIS mettez à
+ * jour les trois nombres ci-dessous.
+ * ----------------------------------------------------------------------- */
+$emarg_attendu_sessions = 22;
+$emarg_attendu_learners = 18;
+$emarg_attendu_version  = '3.25.314';
+
+$emarg_core = $racine . '/includes/emargement/class-acdc-emarg-core.php';
+$emarg_head = $racine . '/includes/class-acdc-emargement.php';
+$src_core   = (string) file_get_contents( $emarg_core );
+$src_head   = (string) file_get_contents( $emarg_head );
+
+$compte_colonnes = function ( $src, $ancre ) {
+    $deb = strpos( $src, $ancre );
+    if ( false === $deb ) { return null; }
+    $fin = strpos( $src, 'PRIMARY KEY', $deb );
+    if ( false === $fin ) { return null; }
+    $bloc = substr( $src, $deb, $fin - $deb );
+    return preg_match_all( '/^\s*[a-z_]+\s+(BIGINT|INT|VARCHAR|CHAR|TEXT|LONGTEXT|DATETIME|DATE|TINYINT|SMALLINT|DECIMAL)/mi', $bloc );
+};
+
+if ( ! preg_match( "/const DB_VERSION\s*=\s*'([^']+)'/", $src_head, $m ) ) {
+    $signale( 'includes/class-acdc-emargement.php', "la constante DB_VERSION a disparu : plus rien ne déclenche les migrations du module d'émargement." );
+} else {
+    $emarg_version = $m[1];
+
+    $n_sessions = $compte_colonnes( $src_core, '$sql_sessions = "CREATE TABLE' );
+    $n_learners = $compte_colonnes( $src_core, '$sql_learners = "CREATE TABLE' );
+
+    if ( null === $n_sessions || null === $n_learners ) {
+        $signale( 'includes/emargement/class-acdc-emarg-core.php', "une des deux définitions de table d'émargement est introuvable." );
+    } else {
+        if ( $n_sessions !== $emarg_attendu_sessions ) {
+            $signale( 'includes/emargement/class-acdc-emarg-core.php',
+                sprintf(
+                    "la table des feuilles d'émargement compte %d colonnes, ce balayage en attendait %d. Si c'est voulu : incrémentez ACDC_Emargement::DB_VERSION (actuellement « %s ») ET ajoutez le maybe_add_column() correspondant — SANS QUOI LA COLONNE NE SERA JAMAIS CRÉÉE sur les installations existantes, et plus aucune feuille ne pourra être ouverte — puis mettez à jour les nombres dans ce fichier.",
+                    $n_sessions, $emarg_attendu_sessions, $emarg_version
+                ) );
+        }
+        if ( $n_learners !== $emarg_attendu_learners ) {
+            $signale( 'includes/emargement/class-acdc-emarg-core.php',
+                sprintf(
+                    "la table des apprenants émargés compte %d colonnes, ce balayage en attendait %d. Même règle : DB_VERSION (actuellement « %s ») et maybe_add_column() vont avec.",
+                    $n_learners, $emarg_attendu_learners, $emarg_version
+                ) );
+        }
+    }
+
+    if ( $emarg_version !== $emarg_attendu_version ) {
+        $signale( 'includes/class-acdc-emargement.php',
+            sprintf( "DB_VERSION vaut « %s », ce balayage attendait « %s ». Mettez à jour ce fichier pour enregistrer la migration.", $emarg_version, $emarg_attendu_version ) );
+    }
+}
+
+/* --------------------------------------------------------------------------
+ * 7. UNE COLONNE AJOUTÉE APRÈS COUP NAÎT VIDE — ET UN JETON VIDE N'OUVRE RIEN
+ *
+ * Le corollaire de la règle 6, et il est de sécurité. « signature_token » est
+ * NOT NULL DEFAULT '' : sur toutes les feuilles antérieures à la migration, il
+ * vaut la chaîne vide. Sans refus explicite, l'adresse de signature SANS clé
+ * ouvre la première feuille venue restée sans jeton — et livre à n'importe quel
+ * visiteur la liste nominative d'une séance.
+ * ----------------------------------------------------------------------- */
+$deb = strpos( $src_core, 'function get_by_signature_token(' );
+if ( false === $deb ) {
+    $signale( 'includes/emargement/class-acdc-emarg-core.php', "la porte de la page de signature a disparu." );
+} else {
+    $corps = substr( $src_core, $deb, 900 );
+    /* On cherche la FORME : un refus AVANT la requête. Le commentaire au-dessus
+       de la fonction parle de jeton vide ; un simple strpos aurait été content
+       de lui. Le sabotage l'a confirmé. */
+    if ( ! preg_match( "/if\s*\(\s*''\s*===\s*\\\$token\s*\)\s*\{\s*return\s+null\s*;/", $corps ) ) {
+        $signale( 'includes/emargement/class-acdc-emarg-core.php',
+            "get_by_signature_token() ne refuse plus un jeton vide : l'adresse de signature sans clé ouvrirait une feuille antérieure à la migration, dont le jeton vaut la chaîne vide, et montrerait la liste nominative de la séance à un visiteur quelconque." );
+    }
+}
+
+if ( false === strpos( $src_core, 'function jeton_signature(' ) ) {
+    $signale( 'includes/emargement/class-acdc-emarg-core.php',
+        "le filet de rattrapage jeton_signature() a disparu. La migration ne repasse jamais — son numéro de schéma est écrit AVANT le travail : une feuille restée sans jeton n'en recevrait plus jamais, et son QR mènerait à une adresse sans clé." );
+}
+
+/* --------------------------------------------------------------------------
  * VERDICT
  * ----------------------------------------------------------------------- */
 echo "\n";

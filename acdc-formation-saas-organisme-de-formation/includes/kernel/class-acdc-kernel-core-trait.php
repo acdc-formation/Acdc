@@ -3647,7 +3647,7 @@ dbDelta( $sql_companies );
     add_option( 'acdc_of_db_version', '3.0.0' );
     add_option( 'acdc_of_data_protection_level', '3' );
     add_option( 'acdc_of_purge_allowed_in_production', 'no' );
-    add_option( 'acdc_of_backup_retention_count', 30 );
+    add_option( 'acdc_of_backup_retention_count', $this->acdc_retention_sauvegardes_defaut() );
     add_option( 'acdc_of_last_backup_file', '' );
     add_option( 'acdc_of_last_backup_at', '' );
     add_option( 'acdc_of_last_manual_backup_file', '' );
@@ -3763,7 +3763,10 @@ dbDelta( $sql_companies );
     update_option( 'acdc_of_db_version', '3.0.0', false );
     update_option( 'acdc_of_data_protection_level', '3', false );
     if ( ! get_option( 'acdc_of_purge_allowed_in_production', null ) ) { update_option( 'acdc_of_purge_allowed_in_production', 'no', false ); }
-    if ( ! get_option( 'acdc_of_backup_retention_count', null ) ) { update_option( 'acdc_of_backup_retention_count', 30, false ); }
+    if ( ! get_option( 'acdc_of_backup_retention_count', null ) ) { update_option( 'acdc_of_backup_retention_count', $this->acdc_retention_sauvegardes_defaut(), false ); }
+    /* ACDC 3.25.314 — Une valeur restée à l'ancien défaut de 30 redescend à 5,
+       une seule fois. Voir acdc_normaliser_retention_sauvegardes(). */
+    $this->acdc_normaliser_retention_sauvegardes();
     if ( null === get_option( 'acdc_of_last_manual_backup_file', null ) ) { update_option( 'acdc_of_last_manual_backup_file', '', false ); }
     if ( null === get_option( 'acdc_of_last_manual_backup_at', null ) ) { update_option( 'acdc_of_last_manual_backup_at', '', false ); }
     $this->ensure_soft_delete_schema();
@@ -4963,8 +4966,62 @@ dbDelta( $sql_companies );
    * réparer dans l'heure. Le réglage reste modifiable.
    */
   private function get_backup_retention_count() {
-    $count = absint( get_option( 'acdc_of_backup_retention_count', 5 ) );
-    return $count > 0 ? $count : 5;
+    $count = absint( get_option( 'acdc_of_backup_retention_count', $this->acdc_retention_sauvegardes_defaut() ) );
+    return $count > 0 ? $count : $this->acdc_retention_sauvegardes_defaut();
+  }
+
+  /**
+   * ACDC 3.25.314 — LE CINQ N'ÉTAIT QU'UN FILET, PAS UNE VALEUR.
+   *
+   * En 3.25.313 j'ai abaissé la rétention de 30 à 5 ici — et nulle part
+   * ailleurs. Or ce 5 n'est lu que si l'option N'EXISTE PAS. Elle existe :
+   * l'installation l'écrit à 30, une routine de réparation la réécrit à 30, et
+   * trois écrans réaffichent 30. Sur le site de David, la valeur effective est
+   * restée 30. J'avais annoncé une correction qui ne changeait rien.
+   *
+   * C'est la famille « un interrupteur qui ne commande rien », dans sa forme la
+   * plus discrète : le code lit bien la bonne option, mais la valeur par défaut
+   * n'est jamais celle qui sert.
+   *
+   * Un seul endroit décide, désormais. Tout le reste l'appelle.
+   */
+  public function acdc_retention_sauvegardes_defaut() {
+    return 5;
+  }
+
+  /**
+   * ACDC 3.25.314 — RAMÈNE À 5 UNE RÉTENTION RESTÉE À L'ANCIEN DÉFAUT.
+   *
+   * Changer le défaut ne change pas une valeur déjà stockée. Cette passe ne
+   * touche QUE la valeur exactement égale à l'ancien défaut (30), une seule
+   * fois, et laisse tout autre nombre intact : si quelqu'un a choisi 30
+   * sciemment après ce passage, son choix tient.
+   *
+   * Trente sauvegardes complètes, c'est quinze jours de copies de 62 tables —
+   * signatures manuscrites et pièces d'identité comprises — empilées sur le
+   * disque, et les sauvegardes prises à la main évincées par le même quota.
+   */
+  public function acdc_normaliser_retention_sauvegardes() {
+    if ( '1' === (string) get_option( 'acdc_of_backup_retention_normalisee', '' ) ) {
+      return false;
+    }
+    update_option( 'acdc_of_backup_retention_normalisee', '1', false );
+
+    $actuel = absint( get_option( 'acdc_of_backup_retention_count', 0 ) );
+    if ( 30 !== $actuel ) {
+      return false;
+    }
+    update_option( 'acdc_of_backup_retention_count', $this->acdc_retention_sauvegardes_defaut(), false );
+    if ( method_exists( $this, 'acdc_journaliser' ) ) {
+      $this->acdc_journaliser(
+        'backup_retention_normalisee',
+        'backup',
+        0,
+        'success',
+        array( 'avant' => 30, 'apres' => $this->acdc_retention_sauvegardes_defaut() )
+      );
+    }
+    return true;
   }
 
   /**
@@ -5087,14 +5144,37 @@ dbDelta( $sql_companies );
   }
 
   /* ACDC 3.25.184 — Existe-t-il déjà un instantané pour cette transition de
-     version ? Le nom du répertoire porte l'horodatage devant, d'où le motif. */
+     version ? Le nom du répertoire porte l'horodatage devant, d'où le motif.
+
+     ACDC 3.25.314 — LE MOTIF NE RECONNAISSAIT PLUS SES PROPRES DOSSIERS.
+     En 3.25.313 j'ai ajouté un condensat à la FIN du nom de dossier — pour
+     qu'il ne se devine pas — et ce contrôle-ci cherchait toujours un nom qui
+     se TERMINE par le libellé. Il ne trouvait donc plus rien, et répondait
+     « non » à chaque appel.
+     Ce qu'il garde n'est pas décoratif : sans lui, une migration qui se rejoue
+     refait un instantané complet à chaque tour. En 3.25.183, quarante-sept
+     minutes de migration en boucle ont produit assez de dossiers pour pousser
+     TOUTES les sauvegardes anciennes hors de la rétention et les effacer. Un
+     garde-fou muet est pire qu'aucun : on lui fait confiance.
+     Deux motifs, parce que les dossiers d'avant la 3.25.313 n'ont pas de
+     condensat et doivent continuer de compter. */
   private function acdc_update_snapshot_exists( $label ) {
     $base = $this->get_backup_base_directory();
     if ( '' === $base ) {
       return false;
     }
-    $found = glob( trailingslashit( $base ) . '*-' . sanitize_file_name( strtolower( (string) $label ) ), GLOB_ONLYDIR );
-    return is_array( $found ) && ! empty( $found );
+    $slug = sanitize_file_name( strtolower( (string) $label ) );
+    if ( '' === $slug ) {
+      return false;
+    }
+    $racine = trailingslashit( $base );
+    foreach ( array( '*-' . $slug, '*-' . $slug . '-*' ) as $motif ) {
+      $trouves = glob( $racine . $motif, GLOB_ONLYDIR );
+      if ( is_array( $trouves ) && ! empty( $trouves ) ) {
+        return true;
+      }
+    }
+    return false;
   }
 
 /**
@@ -5633,9 +5713,15 @@ private function acdc_nom_fichier_sauvegarde( $quand = null ) {
          mémoire allouée à PHP, le processus est tué net, sans message, et la
          sauvegarde n'a pas lieu. Sur un hébergement mutualisé, cette limite
          n'est pas généreuse.
-         On écrit désormais mille lignes à la fois, et le fichier produit reste
-         exactement le même — c'est important : les archives déjà déposées chez
-         Google doivent rester restaurables par ce plugin. */
+         On écrit désormais mille lignes à la fois.
+         ACDC 3.25.314 — RECTIFICATION DE CE QUI EST ÉCRIT CI-DESSUS. J'avais
+         noté que « le fichier produit reste exactement le même ». C'est faux :
+         l'indentation a changé, et depuis le tri de la 3.25.314 l'ordre des
+         lignes peut changer aussi. Ce qui est vrai, et seul ce qui compte : la
+         STRUCTURE est inchangée — mêmes clés, mêmes valeurs — donc les archives
+         déjà déposées chez Google restent restaurables par ce plugin. Écrire
+         « identique » quand on veut dire « compatible » finit par faire sauter
+         une comparaison d'empreinte que personne n'aura remise en cause. */
       $table_file = trailingslashit( $dir ) . sanitize_file_name( $table_label ) . '.json';
       $fh = @fopen( $table_file, 'wb' ); // phpcs:ignore WordPress.PHP.NoSilencedErrors.Discouraged
       if ( ! $fh ) {
@@ -5646,9 +5732,34 @@ private function acdc_nom_fichier_sauvegarde( $quand = null ) {
       fwrite( $fh, '    "label": ' . wp_json_encode( $table_label, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES ) . ",\n" );
       fwrite( $fh, '    "columns": ' . wp_json_encode( $columns, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES ) . ",\n" );
       fwrite( $fh, '    "rows": [' );
+      /* ACDC 3.25.314 — DÉCOUPER SANS TRIER NE DÉCOUPE RIEN DE FIABLE.
+         « LIMIT/OFFSET » sans ORDER BY laisse au moteur le droit de rendre les
+         lignes dans l'ordre qui l'arrange, et cet ordre peut CHANGER entre deux
+         tranches — d'autant plus qu'une sauvegarde tourne pendant que le site
+         travaille. Une ligne insérée entre la tranche 1 et la tranche 2 décale
+         tout ce qui suit : la sauvegarde recopie alors une ligne deux fois et en
+         PERD une autre, sans la moindre erreur. Le manifeste annonce le bon
+         nombre de lignes ; c'est le contenu qui est faux. On ne s'en aperçoit
+         qu'en restaurant, c'est-à-dire le jour où il est trop tard.
+         La clé primaire donne un ordre stable. Une table qui n'en a pas est
+         triée sur sa première colonne, et le manifeste le DIT — un tri partiel
+         qu'on tait vaut un tri absent. */
+      $__cles_tri = array();
+      foreach ( (array) $columns as $__col ) {
+        if ( ! empty( $__col['Field'] ) && isset( $__col['Key'] ) && 'PRI' === (string) $__col['Key'] ) {
+          $__cles_tri[] = '`' . str_replace( '`', '', (string) $__col['Field'] ) . '`';
+        }
+      }
+      $__tri_partiel = false;
+      if ( empty( $__cles_tri ) && ! empty( $columns[0]['Field'] ) ) {
+        $__cles_tri[]  = '`' . str_replace( '`', '', (string) $columns[0]['Field'] ) . '`';
+        $__tri_partiel = true;
+      }
+      $__ordre = ! empty( $__cles_tri ) ? ' ORDER BY ' . implode( ', ', $__cles_tri ) : '';
+
       $__premier = true;
       for ( $__offset = 0; $__offset < $rows; $__offset += 1000 ) {
-        $__lot = $wpdb->get_results( $wpdb->prepare( "SELECT * FROM {$table} LIMIT %d OFFSET %d", 1000, $__offset ), ARRAY_A );
+        $__lot = $wpdb->get_results( $wpdb->prepare( "SELECT * FROM {$table}{$__ordre} LIMIT %d OFFSET %d", 1000, $__offset ), ARRAY_A );
         foreach ( (array) $__lot as $__ligne ) {
           fwrite( $fh, ( $__premier ? "\n" : ",\n" ) . '        ' . wp_json_encode( $__ligne, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES ) );
           $__premier = false;
@@ -5657,12 +5768,18 @@ private function acdc_nom_fichier_sauvegarde( $quand = null ) {
       }
       fwrite( $fh, ( $__premier ? '' : "\n    " ) . "]\n}\n" );
       fclose( $fh );
-      $manifest['tables'][] = array(
+      $__entree = array(
         'label' => $table_label,
         'table' => $table,
         'rows' => $rows,
         'file' => basename( $table_file ),
       );
+      if ( $__tri_partiel ) {
+        /* Table sans clé primaire : l'ordre de lecture n'est pas garanti unique.
+           On l'écrit ici plutôt que de laisser croire à un export exact. */
+        $__entree['tri'] = 'partiel';
+      }
+      $manifest['tables'][] = $__entree;
     }
 
     /* ── LES FICHIERS DE PREUVE ─────────────────────────────────────────

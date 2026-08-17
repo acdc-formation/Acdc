@@ -26,7 +26,19 @@ foreach ( $emarg_manifest as $file => $class ) {
 class ACDC_Emargement {
 
     /** Version du schéma d'émargement. À incrémenter à chaque changement de structure. */
-    const DB_VERSION   = '3.25.223';
+    /* ACDC 3.25.314 — 3.25.223 → 3.25.314 POUR LA COLONNE « signature_token ».
+       LE MÊME DÉFAUT QU'EN 3.25.311, AU MÊME POINT DU RAISONNEMENT. La colonne a
+       été ajoutée au CREATE TABLE en 3.25.313 sans toucher à ce numéro. Or
+       maybe_install() sort immédiatement quand le numéro stocké est identique :
+       sur une installation existante, dbDelta n'aurait jamais tourné, la colonne
+       n'aurait jamais été créée, et create_emarg_session() — qui l'écrit à chaque
+       appel — aurait échoué. PLUS AUCUNE FEUILLE D'ÉMARGEMENT n'aurait pu être
+       ouverte après la mise à jour, et l'écran l'aurait dit sans en donner la
+       raison.
+       Toute colonne ajoutée à ce module exige d'incrémenter ce numéro ET
+       d'ajouter son maybe_add_column() : le premier déclenche la migration, le
+       second la rend sûre même si dbDelta est capricieux. */
+    const DB_VERSION   = '3.25.314';
     const OPTION_DB_VER = 'acdc_emarg_db_version';
 
     private static $instance = null;
