@@ -4786,6 +4786,161 @@ dbDelta( $sql_companies );
   }
 
   /**
+   * ACDC 3.25.315 — LE VERROU DES SIGNATURES, ET SA PROPRE MESURE.
+   *
+   * LE DÉFAUT QU'ELLE FERME. « acdc-signatures/ » reçoit les signatures
+   * manuscrites, les pièces d'identité et les certificats d'audit. Cinq modules
+   * y écrivent — le noyau, la signature, les devis, les contrats, la
+   * facturation — et AUCUN n'y pose de protection. Le sous-dossier « id/ » est
+   * verrouillé depuis longtemps, les sauvegardes aussi ; le dossier qui porte
+   * les signatures, jamais. Et le nom d'une signature est
+   * « signature-<numéro>-<horodatage>.png » : aucun jeton, dans un dossier
+   * numéroté en séquence. Devinable.
+   *
+   * POURQUOI UN CONTENU PARTICULIER, et pas le « deny from all » des
+   * sauvegardes : le certificat d'audit vit dans ce même dossier et son adresse
+   * PART AU SIGNATAIRE. Un refus sec tuerait ce lien. On refuse donc le
+   * répertoire et on rouvre les seuls PDF — ce qui est sans risque, le
+   * certificat portant déjà une empreinte de 16 caractères dans son nom
+   * (voir build_audit_pdf_filename()). Les pièces d'identité restent refusées
+   * même en PDF, par le « id- » ci-dessous et par le .htaccess de « id/ ».
+   *
+   * POURQUOI ELLE SE MESURE ELLE-MÊME. La forme « FilesMatch » seule ne
+   * fonctionne pas partout : sur LiteSpeed, un fichier absent renvoie 404 sans
+   * que la règle soit consultée. On ne peut donc pas savoir depuis le code si
+   * la syntaxe posée est appliquée — il faut la MESURER sur le serveur réel.
+   * C'est ce que fait cette fonction : elle écrit, elle appelle deux adresses
+   * qui n'existent pas, et elle lit les codes.
+   *
+   *   .png → 403 et .pdf → 404  : le refus s'applique et l'exception marche.
+   *   l'un des deux → 500       : la syntaxe est refusée par ce serveur.
+   *   .pdf → 403                : l'exception ne marche pas ; le certificat du
+   *                               signataire deviendrait injoignable.
+   *   .png → 404                : la règle est ignorée, elle ne protège rien.
+   *
+   * DANS TOUS LES CAS SAUF LE PREMIER, ELLE REMET L'ÉTAT D'AVANT. Un verrou
+   * qu'on ne peut pas vérifier ne reste pas posé sur un site en production :
+   * il vaut mieux un dossier ouvert qu'on sait ouvert qu'un certificat mort
+   * qu'on croit protégé. Le verdict est stocké pour être affiché.
+   *
+   * Le drapeau « fait » s'écrit APRÈS le travail, jamais avant — c'est la faute
+   * de la 3.25.313 sur l'émargement, dont le numéro de version s'inscrivait
+   * avant la migration et empêchait tout rattrapage.
+   *
+   * @return string Le verdict : actif, rejete, exception_ko, ignore,
+   *                indetermine, ou '' si rien n'était à faire.
+   */
+  public function acdc_verrouiller_signatures_en_admin() {
+    /* Jamais sur le chemin d'une page publique : deux appels HTTP sur la
+       visite d'un prospect, c'est la faute de la 3.25.176. */
+    if ( ! is_admin() ) {
+      return;
+    }
+    $this->acdc_verrouiller_signatures();
+  }
+
+  private function acdc_verrouiller_signatures() {
+    if ( '1' === get_option( 'acdc_verrou_signatures_3_25_315_fait', '' ) ) {
+      return (string) get_option( 'acdc_verrou_signatures_3_25_315_verdict', '' );
+    }
+
+    $uploads = wp_upload_dir();
+    if ( empty( $uploads['basedir'] ) || empty( $uploads['baseurl'] ) ) {
+      return '';
+    }
+    $dir = trailingslashit( (string) $uploads['basedir'] ) . 'acdc-signatures';
+    /* Dossier absent : rien à verrouiller, et SURTOUT on ne marque pas « fait ».
+       Il naîtra à la première signature, et le passage suivant le prendra. */
+    if ( ! is_dir( $dir ) ) {
+      return '';
+    }
+
+    /* Verrou de course : deux onglets d'administration chargés ensemble
+       lanceraient deux fois l'écriture ET les deux appels HTTP. */
+    if ( get_transient( 'acdc_verrou_signatures_en_cours' ) ) {
+      return '';
+    }
+    set_transient( 'acdc_verrou_signatures_en_cours', '1', 5 * MINUTE_IN_SECONDS );
+
+    $regle = "# ACDC — Refus par défaut, comme pour acdc-backups.\n"
+      . "# Un motif de fichier seul ne suffit pas : ce serveur peut résoudre le\n"
+      . "# fichier avant d'évaluer la règle. Le refus porte donc sur le répertoire.\n"
+      . "Order allow,deny\n\n"
+      . "# Exception : le certificat PDF est remis au signataire depuis son portail.\n"
+      . "# Son nom porte déjà une empreinte de 16 caractères : indevinable.\n"
+      . "<FilesMatch \"\\.pdf$\">\n"
+      . "Allow from all\n"
+      . "</FilesMatch>\n\n"
+      . "# Mais jamais une pièce d'identité, même déposée en PDF.\n"
+      . "# Sous « Order allow,deny », un refus l'emporte sur une autorisation.\n"
+      . "<FilesMatch \"^id-\">\n"
+      . "Deny from all\n"
+      . "</FilesMatch>\n";
+
+    $ht      = trailingslashit( $dir ) . '.htaccess';
+    $avant   = file_exists( $ht ) ? (string) file_get_contents( $ht ) : null; // phpcs:ignore WordPress.WP.AlternativeFunctions.file_system_operations_file_get_contents
+    $restore = static function () use ( $ht, $avant ) {
+      if ( null === $avant ) {
+        if ( file_exists( $ht ) ) {
+          @unlink( $ht ); // phpcs:ignore WordPress.PHP.NoSilencedErrors.Discouraged
+        }
+        return;
+      }
+      file_put_contents( $ht, $avant ); // phpcs:ignore WordPress.WP.AlternativeFunctions.file_system_operations_file_put_contents
+    };
+
+    if ( false === file_put_contents( $ht, $regle ) ) { // phpcs:ignore WordPress.WP.AlternativeFunctions.file_system_operations_file_put_contents
+      delete_transient( 'acdc_verrou_signatures_en_cours' );
+      return $this->acdc_verrou_signatures_verdict( 'indetermine', "Écriture du .htaccess impossible (permissions)." );
+    }
+
+    /* Les deux sondes portent sur des fichiers qui N'EXISTENT PAS : aucune
+       donnée réelle n'est lue, ni transmise, ni journalisée. */
+    $base   = trailingslashit( (string) $uploads['baseurl'] ) . 'acdc-signatures/';
+    $temoin = 'verrou-' . wp_hash( 'acdc-verrou-signatures' ) . '-inexistant';
+    $sonde  = static function ( $url ) {
+      $r = wp_remote_get( $url, array( 'timeout' => 8, 'redirection' => 0, 'blocking' => true ) );
+      return is_wp_error( $r ) ? 0 : (int) wp_remote_retrieve_response_code( $r );
+    };
+    $code_png = $sonde( $base . $temoin . '.png' );
+    $code_pdf = $sonde( $base . $temoin . '.pdf' );
+
+    delete_transient( 'acdc_verrou_signatures_en_cours' );
+
+    if ( 403 === $code_png && 404 === $code_pdf ) {
+      return $this->acdc_verrou_signatures_verdict( 'actif', 'Refus du dossier actif, exception PDF fonctionnelle.' );
+    }
+    $restore();
+    if ( 500 === $code_png || 500 === $code_pdf ) {
+      return $this->acdc_verrou_signatures_verdict( 'rejete', 'Syntaxe refusée par ce serveur (500). État précédent rétabli.' );
+    }
+    if ( 403 === $code_png && 403 === $code_pdf ) {
+      return $this->acdc_verrou_signatures_verdict( 'exception_ko', "L'exception PDF ne s'applique pas : le certificat serait injoignable. État précédent rétabli." );
+    }
+    if ( 0 === $code_png || 0 === $code_pdf ) {
+      return $this->acdc_verrou_signatures_verdict( 'indetermine', 'Le site ne peut pas s\'appeler lui-même : mesure impossible. État précédent rétabli.' );
+    }
+    return $this->acdc_verrou_signatures_verdict( 'ignore', 'Règle non appliquée par ce serveur (code ' . $code_png . '). État précédent rétabli.' );
+  }
+
+  /**
+   * ACDC 3.25.315 — Enregistre le verdict de la mesure ci-dessus.
+   *
+   * Le drapeau « fait » n'est posé QUE sur un résultat concluant. Une mesure
+   * impossible n'est pas un travail terminé : elle doit être retentée au
+   * passage suivant, sans quoi le dossier resterait ouvert pour toujours sur la
+   * foi d'un appel HTTP qui a échoué une fois.
+   */
+  private function acdc_verrou_signatures_verdict( $verdict, $detail ) {
+    update_option( 'acdc_verrou_signatures_3_25_315_verdict', $verdict, false );
+    update_option( 'acdc_verrou_signatures_3_25_315_detail', $detail, false );
+    if ( in_array( $verdict, array( 'actif', 'rejete', 'exception_ko', 'ignore' ), true ) ) {
+      update_option( 'acdc_verrou_signatures_3_25_315_fait', '1', false );
+    }
+    return $verdict;
+  }
+
+  /**
    * ACDC 3.25.313 — LE DOSSIER D'UN DOCUMENT QUE LE CLIENT DOIT POUVOIR OUVRIR.
    *
    * Devis, factures, résultats de quiz, analyses du besoin : leurs adresses

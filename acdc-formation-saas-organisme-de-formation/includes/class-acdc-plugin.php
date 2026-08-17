@@ -892,6 +892,12 @@ class ACDC_Formation_SAAS_Plugin {
        d'une page servie au public. */
     add_action( 'admin_init', array( $this, 'maybe_run_qz_score_ratio_backfill' ) );
     add_action( 'admin_init', array( $this, 'acdc_backfill_survey_session_targets' ) );
+    /* ACDC 3.25.315 — Le verrou du dossier des signatures, posé et MESURÉ par le
+       plugin lui-même : cinq modules écrivent dans « acdc-signatures/ » et aucun
+       ne le protégeait. La mesure est indispensable, la syntaxe utile ici n'étant
+       pas appliquée par tous les serveurs — et l'état d'avant est rétabli dès
+       qu'elle n'est pas concluante. */
+    add_action( 'admin_init', array( $this, 'acdc_verrouiller_signatures_en_admin' ) );
     add_action( 'init', array( $this, 'ensure_quiz_async_public_page' ), 11 );
     // hotfix52 — Migration rétroactive PDF positionnement / évaluation
     add_action( 'init', array( $this, 'maybe_run_qz_retroactive_pdf_migration' ), 12 );
