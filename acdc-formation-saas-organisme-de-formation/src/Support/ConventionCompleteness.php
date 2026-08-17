@@ -38,7 +38,16 @@ final class ConventionCompleteness {
     /** Ce sans quoi la convention n'est pas opposable. */
     public const BLOQUANTS = array(
         'formation_id'        => 'la formation',
-        'company_id'          => 'le commanditaire',
+        /* ACDC 3.25.316 — « commanditaire », et non « company_id ».
+           L'ancienne clé exigeait un identifiant d'ENTREPRISE. Or le formulaire
+           désigne le commanditaire de trois façons selon son type : une fiche
+           entreprise, une fiche indépendant, ou le nom d'un particulier. Exiger
+           « company_id » bloquait donc toute convention avec un particulier, et
+           toute convention passant par la liste visible à l'écran — qui poste
+           « source_prospect_id ». La clé n'a plus de suffixe « _id » : elle
+           accepte un identifiant comme un nom, et c'est à l'appelant de dire
+           qui est le commanditaire. */
+        'commanditaire'       => 'le commanditaire',
         'start_date'          => 'la date de début',
         'end_date'            => 'la date de fin',
         'formation_address'   => 'l’adresse du lieu de formation',

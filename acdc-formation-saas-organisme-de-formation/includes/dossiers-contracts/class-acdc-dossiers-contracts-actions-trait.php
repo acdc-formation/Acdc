@@ -469,7 +469,71 @@ public function handle_save_registration_contract() {
      document inopposable — on bloque — de ce qui reste à compléter — on le dit,
      sans empêcher. Une alerte qui bloque sur un détail finit par être
      contournée, et ce jour-là elle ne protège plus rien. */
-  $completude = \ACDC\Support\ConventionCompleteness::verifier( $input );
+  /* ACDC 3.25.316 — LE CONTRÔLE RÉCLAMAIT DES CHAMPS QUE LA PAGE N'ENVOIE PAS.
+     Il recevait « $input », c'est-à-dire le POST BRUT, et y cherchait cinq clés
+     que le formulaire ne poste sous aucune de ces formes :
+
+       — « company_id »  : la liste visible à l'écran poste
+                           « source_prospect_id » ;
+       — « start_date », « end_date » : dérivées des séances vingt lignes plus
+                           haut, donc absentes du POST ;
+       — « vat_rate »    : jamais saisi, il vient du profil de l'organisme et
+                           n'est qu'AFFICHÉ (« 20,00 % ») ;
+       — « funder_id »   : résolu par acdc_contract_funding_plan(), qui ne
+                           tournait qu'APRÈS ce contrôle.
+
+     Conséquence : depuis la 3.25.302, AUCUNE convention ne pouvait être
+     enregistrée. Le refus nommait cinq manques dont quatre étaient à l'écran,
+     ce qui rendait la correction impossible — on cherchait ce qui était déjà
+     là.
+
+     La faute n'est pas dans le contrôleur, qui est juste et testé, mais dans ce
+     qu'on lui donnait à lire. On lui passe désormais les valeurs RÉSOLUES, et
+     le plan de financement est calculé avant, puisque c'est lui qui connaît le
+     financeur. */
+  $pec_plan = $this->acdc_contract_funding_plan( $input );
+
+  /* Le commanditaire porte trois noms selon son type. On les essaie dans
+     l'ordre où l'écran les propose, et l'on retient le premier qui désigne
+     quelqu'un — un particulier n'a pas de fiche entreprise, et le bloquer là
+     dessus serait le faux barrage que ce fichier cherche justement à éviter. */
+  $commanditaire = '';
+  foreach ( array( (string) $source_prospect_id, (string) $company_id ) as $piste ) {
+    if ( '' !== $piste && '0' !== $piste ) {
+      $commanditaire = $piste;
+      break;
+    }
+  }
+  if ( '' === $commanditaire ) {
+    $commanditaire = trim( $commanditaire_first_name . ' ' . $commanditaire_last_name );
+  }
+
+  /* TOUS les champs bloquants sont nommés ici, y compris ceux qui viennent tels
+     quels du formulaire. C'est volontairement redondant : tant qu'un seul
+     pouvait retomber en silence sur « $input », la faute pouvait revenir sans
+     que rien ne la voie. Le balayage « scan-convention-appelant.php » exige
+     cette liste complète, et échoue si une clé en disparaît.
+     Le reste du POST est fusionné dessous pour les champs SIGNALÉS, qui ne
+     bloquent rien et se lisent directement. */
+  $controle = array_merge(
+    $input,
+    array(
+      'formation_id'      => $formation_id,
+      'commanditaire'     => $commanditaire,
+      'start_date'        => $start_date,
+      'end_date'          => $end_date,
+      'formation_address' => isset( $input['formation_address'] ) ? $input['formation_address'] : '',
+      'formation_city'    => isset( $input['formation_city'] ) ? $input['formation_city'] : '',
+      'price_ht'          => isset( $input['price_ht'] ) ? $input['price_ht'] : '',
+      'vat_rate'          => \ACDC\Support\VatRegime::taux( $this->acdc_regime_tva_profil() ),
+      'trainer_id'        => isset( $input['trainer_id'] ) ? $input['trainer_id'] : '',
+      'learner_ids'       => $learner_ids,
+      'public_funding'    => isset( $input['public_funding'] ) ? $input['public_funding'] : '',
+      'funder_id'         => isset( $pec_plan['funder_id'] ) ? $pec_plan['funder_id'] : '',
+    )
+  );
+
+  $completude = \ACDC\Support\ConventionCompleteness::verifier( $controle );
   if ( ! $completude['ok'] ) {
     $this->acdc_store_form_state( 'registration_contract', $input, array() );
     $this->log_action_event( 'convention_incomplete', 'registration_contract', (int) $contract_id, 'error', array( 'manquants' => $completude['bloquants'] ) );
@@ -485,7 +549,8 @@ public function handle_save_registration_contract() {
     exit;
   }
 
-  $pec_plan = $this->acdc_contract_funding_plan( $input );
+  /* Le plan est calculé plus haut, le contrôle de complétude ayant besoin du
+     financeur qu'il résout. Seul son refus reste ici, à sa place d'origine. */
   if ( ! $pec_plan['ok'] ) {
     $this->acdc_store_form_state( 'registration_contract', $input, array( 'funding_pec_amount_ht' ) );
     $message    = \ACDC\Support\FundingSplit::errorMessage( $pec_plan['error'], $pec_plan['total_ht'] );
