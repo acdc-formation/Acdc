@@ -9786,9 +9786,42 @@ private function maybe_auto_create_questionnaire_actions_from_response( $session
   }
 
 
-  public function process_scheduled_survey_reminders() {
+  /**
+   * ACDC 3.25.313 — LES RELANCES N'AVAIENT REÇU AUCUN DES TROIS GARDE-FOUS.
+   *
+   * La 3.25.312 a fermé la rafale du 16 août — douze messages en une seconde,
+   * tous tombés en indésirables malgré une authentification parfaite — en posant
+   * trois règles sur l'ENVOI INITIAL des enquêtes : un lot par passage, un seul
+   * message par destinataire et par passage, et un refus d'envoyer au-delà de
+   * sept jours de retard. Cette fonction-ci, sa voisine de vingt lignes, n'en a
+   * reçu aucune : elle ramassait toutes les enquêtes ouvertes sans limite et
+   * envoyait un e-mail à chaque tour de boucle.
+   *
+   * C'était même la moitié la plus dangereuse : les relances sont, par nature,
+   * des messages presque identiques envoyés plusieurs fois aux mêmes personnes.
+   *
+   * CE QUI EST VRAIMENT EN JEU n'est pas le sort des enquêtes. Un filtre juge un
+   * motif, pas un message : quelques envois semblables en quelques secondes, et
+   * c'est le DOMAINE qui est déclassé. Ce qui tombe ensuite en indésirables, ce
+   * sont les convocations, les demandes de signature et les liens d'émargement —
+   * c'est-à-dire la preuve Qualiopi.
+   *
+   * @param int $lot              Nombre maximal d'enquêtes examinées par passage.
+   * @param int $retard_max_jours Au-delà, on ne relance plus : la question posée
+   *                              ne correspondrait plus à ce que la personne a vécu.
+   */
+  public function process_scheduled_survey_reminders( $lot = 20, $retard_max_jours = 7 ) {
     global $wpdb;
-    $sessions = $wpdb->get_results( "SELECT * FROM {$this->questionnaire_session_table} WHERE is_survey_session = 1 AND status IN ('envoyee','ouverte','commencee','partielle')" );
+    $sessions = $wpdb->get_results( $wpdb->prepare(
+      "SELECT * FROM {$this->questionnaire_session_table}
+        WHERE is_survey_session = 1
+          AND status IN ('envoyee','ouverte','commencee','partielle')
+        ORDER BY dispatch_sent_at ASC
+        LIMIT %d",
+      (int) $lot
+    ) );
+    /* Les destinataires déjà servis pendant CE passage. Vide à chaque appel. */
+    $__servis = array();
     foreach ( (array) $sessions as $session ) {
       $settings = $this->get_questionnaire_session_settings_array( $session );
       $reminder_days = isset( $settings['reminder_days'] ) && is_array( $settings['reminder_days'] ) ? $settings['reminder_days'] : array( 5, 10, 15 );
@@ -9797,6 +9830,12 @@ private function maybe_auto_create_questionnaire_actions_from_response( $session
         continue;
       }
       $days_since = (int) floor( ( current_time( 'timestamp' ) - $sent_at ) / DAY_IN_SECONDS );
+      /* Le troisième garde-fou : une enquête dont la dernière relance prévue est
+         elle-même dépassée depuis plus d'une semaine ne se rattrape plus. */
+      $__derniere = ! empty( $reminder_days ) ? absint( max( $reminder_days ) ) : 15;
+      if ( $days_since > ( $__derniere + (int) $retard_max_jours ) ) {
+        continue;
+      }
       $participants = $this->get_questionnaire_session_participants( $session->id );
       foreach ( (array) $participants as $participant ) {
         if ( in_array( (string) $participant->participant_status, array( 'repondu', 'termine' ), true ) ) {
@@ -9809,7 +9848,14 @@ private function maybe_auto_create_questionnaire_actions_from_response( $session
         $target_day = absint( $reminder_days[ $count ] );
         if ( $days_since >= $target_day ) {
           $email = $this->get_questionnaire_participant_contact_email( $participant );
+          /* Le deuxième garde-fou : une personne ne reçoit qu'un message par
+             passage, quelle que soit le nombre d'enquêtes qui la visent. Les
+             autres attendront le passage suivant — elles ne sont pas perdues. */
+          if ( $email && in_array( strtolower( trim( (string) $email ) ), $__servis, true ) ) {
+            continue;
+          }
           if ( $email ) {
+            $__servis[] = strtolower( trim( (string) $email ) );
             $settings_mail = $this->get_questionnaire_mail_settings();
             $sender_name = sanitize_text_field( (string) ( $settings_mail['sender_name'] ?? '' ) );
             $sender_email = sanitize_email( (string) ( $settings_mail['sender_email'] ?? '' ) );

@@ -368,6 +368,11 @@ trait ACDC_Export_CSV_Trait {
 			wp_die( esc_html( 'Apprenant introuvable.' ) );
 		}
 
+		/* ACDC 3.25.313 — Voir handle_acdc_rgpd_anonymize_learner() : la demande
+		   d'accès se démontre, elle aussi. La trace est écrite AVANT l'envoi du
+		   fichier, car cet envoi se termine par exit() : après, il est trop tard. */
+		$this->log_action_event( 'rgpd_export', 'learner', $learner_id, 'success' );
+
 		$nom = sanitize_file_name( $learner->last_name . '-' . $learner->first_name );
 		$out = $this->acdc_csv_open( 'rgpd-apprenant-' . $nom . '-' . date_i18n( 'Y-m-d' ) . '.csv' );
 
@@ -506,7 +511,11 @@ trait ACDC_Export_CSV_Trait {
 
 		// Anonymiser aussi les participations quiz liées
 		$tbl_p = $wpdb->prefix . 'acdc_of_qz_participants';
-		$wpdb->query( $wpdb->prepare(
+		/* ACDC 3.25.313 — Le résultat était jeté. On le garde : le journal doit
+		   dire COMBIEN de participations ont été anonymisées, pas seulement que
+		   quelqu'un a cliqué. Un compte écrit à la main serait un mensonge en
+		   puissance — c'est la requête qui répond. */
+		$participants = (int) $wpdb->query( $wpdb->prepare(
 			"UPDATE {$tbl_p} SET full_name = %s, email = %s, nickname = %s, is_anonymized = 1, anonymized_at = %s WHERE learner_id = %d AND is_anonymized = 0",
 			$token,
 			$token . '@anonyme.local',
@@ -516,6 +525,17 @@ trait ACDC_Export_CSV_Trait {
 		) );
 
 		$referer = wp_get_referer() ?: admin_url( 'admin.php?page=acdc-of-learners' );
+		/* ACDC 3.25.313 — LA PREUVE D'AVOIR TRAITÉ LA DEMANDE.
+		   Ni l'anonymisation ni l'export ne laissaient la moindre trace. Or le
+		   RGPD n'impose pas seulement de répondre à une demande d'effacement :
+		   il impose de pouvoir DÉMONTRER qu'on y a répondu. Sans écriture au
+		   journal, la seule preuve possible était la parole de l'exploitant.
+		   La trace ne contient aucune donnée personnelle : l'identifiant de la
+		   fiche suffit, et c'est précisément ce que la personne demandait à voir
+		   disparaître. */
+		$this->log_action_event( 'rgpd_anonymisation', 'learner', $learner_id, 'success', array(
+			'participations_anonymisees' => (int) $participants,
+		) );
 		wp_safe_redirect( add_query_arg( 'acdc_notice', 'rgpd_anonymized', $referer ) );
 		exit;
 	}

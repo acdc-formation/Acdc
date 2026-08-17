@@ -344,6 +344,10 @@ function initCanvas(canvasId) {
             case 'formateur': $this->render_trainer_page( $token ); break;
             case 'liste':     $this->render_learner_list( $token ); break;
             case 'apprenant': $this->render_learner_sign( $token ); break;
+            /* ACDC 3.25.313 — La page montrée en salle : retrouver son nom, signer.
+               Rien d'autre — ni les signatures des autres, ni les boutons du
+               formateur. */
+            case 'signature': $this->render_signature_choice( $token ); break;
             default:
                 echo '<div class="emarg-alert emarg-alert-error">Lien invalide ou expiré.</div>';
         }
@@ -428,6 +432,52 @@ function initCanvas(canvasId) {
     /* -----------------------------------------------------------------------
      * Mode 2 : liste apprenants
      * -------------------------------------------------------------------- */
+    /**
+     * ACDC 3.25.313 — LA PAGE QUE L'ON MONTRE EN SALLE.
+     *
+     * Elle ne fait qu'une chose : proposer à la personne de retrouver son nom et
+     * d'ouvrir SA page de signature. Elle ne montre ni la signature des autres,
+     * ni l'heure à laquelle chacun a signé, ni les boutons « Marquer absent » et
+     * « Envoyer lien » — qui restent sur l'écran du formateur, derrière son
+     * propre jeton.
+     *
+     * Les personnes déjà signées apparaissent, mais sans rien de plus qu'une
+     * mention « déjà signé » : c'est nécessaire, sinon quelqu'un qui a signé
+     * cherche son nom sans le trouver et signe une seconde fois.
+     */
+    private function render_signature_choice( $token ) {
+        $emarg = $this->core->get_by_signature_token( $token );
+        if ( ! $emarg ) {
+            echo '<div class="emarg-alert emarg-alert-error">Lien invalide ou expiré.</div>';
+            return;
+        }
+        $learners = $this->core->get_learners_for_emarg( $emarg->id );
+        ?>
+        <div class="emarg-card">
+            <h2 style="margin-top:0;">Feuille d’émargement</h2>
+            <p>Retrouvez votre nom dans la liste, puis touchez « C’est moi » pour signer.</p>
+            <ul class="emarg-list">
+                <?php foreach ( (array) $learners as $l ) :
+                    $nom    = trim( (string) $l->first_name . ' ' . (string) $l->last_name );
+                    $signe  = ( 'signe' === (string) $l->status );
+                    ?>
+                    <li class="emarg-item">
+                        <span class="emarg-name"><?php echo esc_html( $nom ); ?></span>
+                        <?php if ( $signe ) : ?>
+                            <span class="emarg-badge">✔ Déjà signé</span>
+                        <?php else : ?>
+                            <a class="emarg-btn" href="<?php echo esc_url( $this->core->get_public_url( 'apprenant', $l->sign_token ) ); ?>">C’est moi, je signe</a>
+                        <?php endif; ?>
+                    </li>
+                <?php endforeach; ?>
+            </ul>
+            <?php if ( empty( $learners ) ) : ?>
+                <div class="emarg-alert">Aucun apprenant n’est inscrit sur cette feuille. Prévenez votre formateur.</div>
+            <?php endif; ?>
+        </div>
+        <?php
+    }
+
     private function render_learner_list( $token ) {
         $emarg = $this->core->get_by_list_token( $token );
         if ( ! $emarg ) {
@@ -534,7 +584,15 @@ function initCanvas(canvasId) {
         document.addEventListener('DOMContentLoaded', function() {
             if (typeof qrcode === 'function') {
                 var qr = qrcode(0, 'M');
-                qr.addData(<?php echo wp_json_encode( $this->core->get_public_url('liste', $token) ); ?>);
+                <?php
+                /* ACDC 3.25.313 — LE QR NE DONNE PLUS LA CLÉ DU FORMATEUR.
+                   Il encodait l'adresse de CETTE page — l'écran du formateur —
+                   sous la consigne « chaque apprenant le scanne pour signer ».
+                   Il mène désormais à la page de signature, qui ne montre ni les
+                   signatures des autres, ni les boutons « Marquer absent » et
+                   « Envoyer lien ». */
+                ?>
+                qr.addData(<?php echo wp_json_encode( $this->core->get_public_url( 'signature', $emarg->signature_token ) ); ?>);
                 qr.make();
                 var el = document.getElementById('qr-learners');
                 if (el) { el.innerHTML = qr.createImgTag(4, 4); }

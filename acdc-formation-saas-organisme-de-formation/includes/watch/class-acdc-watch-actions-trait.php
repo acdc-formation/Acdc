@@ -146,9 +146,31 @@ trait ACDC_Watch_Actions_Trait {
           continue;
         }
         if ( 0 === strpos( $option, 'acdc_of_watch_api_' ) ) {
+          /* ACDC 3.25.313 — UN CHAMP VIDE N'EFFACE JAMAIS UNE CLÉ.
+             Depuis que l'écran ne réaffiche plus les clés, le champ arrive vide
+             à chaque enregistrement. Sans cette garde, ouvrir l'écran « Veille »
+             et cliquer « Enregistrer » effacerait les cinq clés d'un coup.
+             Pour retirer une clé volontairement, on coche la case prévue à cet
+             effet — le silence d'un formulaire ne vaut pas décision. */
+          if ( '' === trim( (string) $val ) ) {
+            continue;
+          }
           $val = $this->acdc_secret_encrypt( $val );
         }
         update_option( $option, $val );
+      }
+    }
+
+    /* ACDC 3.25.313 — Le retrait volontaire d'une clé, par une case à cocher.
+       C'est le geste explicite qui remplace l'ancien « vider le champ », lequel
+       ne se distinguait pas d'un formulaire simplement réenregistré. */
+    $__a_effacer = isset( $_POST['acdc_watch_effacer_cle'] ) && is_array( $_POST['acdc_watch_effacer_cle'] )
+      ? array_map( 'sanitize_key', wp_unslash( $_POST['acdc_watch_effacer_cle'] ) )
+      : array();
+    foreach ( $__a_effacer as $__opt ) {
+      if ( 0 === strpos( $__opt, 'acdc_of_watch_api_' ) && array_key_exists( $__opt, $fields ) ) {
+        update_option( $__opt, '' );
+        $this->log_action_event( 'cle_api_retiree', 'settings', 0, 'success', array( 'reglage' => $__opt ) );
       }
     }
 

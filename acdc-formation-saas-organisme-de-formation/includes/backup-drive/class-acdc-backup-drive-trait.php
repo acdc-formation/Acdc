@@ -464,6 +464,19 @@ trait ACDC_Backup_Drive_Trait {
 			return array( 'ok' => false, 'message' => $message );
 		}
 
+		/* ACDC 3.25.313 — L'ARCHIVE LOCALE PART UNE FOIS DÉPOSÉE.
+		   Le dépôt réussi, elle restait sur le disque du serveur. C'est
+		   exactement ce dont on voulait se passer : l'intérêt d'une sauvegarde
+		   hors site est qu'elle n'occupe plus la machine qu'elle protège.
+		   On n'efface qu'APRÈS un envoi confirmé — jamais avant, jamais sur
+		   erreur : à ce moment-là, l'exemplaire local est le seul qui existe. */
+		if ( ! empty( $archive ) && is_file( $archive ) ) {
+			$__base = method_exists( $this, 'get_backup_base_directory' ) ? $this->get_backup_base_directory() : '';
+			if ( '' !== $__base && 0 === strpos( $archive, trailingslashit( $__base ) ) ) {
+				@unlink( $archive ); // phpcs:ignore WordPress.PHP.NoSilencedErrors.Discouraged
+			}
+		}
+
 		$purge = $this->acdc_gdrive_appliquer_conservation();
 		$this->acdc_gdrive_save_settings( array(
 			/* ACDC 3.25.295 — Écrit en UTC, sans exception. Voir acdc_gdrive_veiller(). */

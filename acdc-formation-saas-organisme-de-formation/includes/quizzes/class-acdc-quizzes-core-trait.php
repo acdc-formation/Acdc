@@ -5247,9 +5247,14 @@ trait ACDC_Quizzes_Core_Trait {
         if ( empty( $uploads['basedir'] ) ) { return false; }
         $dir_path = trailingslashit( $uploads['basedir'] ) . 'acdc-qz-results/' . $session_id . '/' . $participant_id . '/';
         $dir_url  = trailingslashit( $uploads['baseurl'] ) . 'acdc-qz-results/' . $session_id . '/' . $participant_id . '/';
-        if ( ! wp_mkdir_p( $dir_path ) ) { return false; }
+        /* ACDC 3.25.313 — Dossier non listable : ces PDF portent le nom de
+           l'apprenant et sa note. */
+        if ( ! $this->acdc_dossier_documents( $dir_path ) ) { return false; }
         $safe_name = sanitize_file_name( mb_strimwidth( $quiz_title, 0, 40, '' ) );
-        $filename  = 'resultats-quiz-' . $safe_name . '-' . date( 'Y-m-d' ) . '.pdf';
+        /* ACDC 3.25.313 — Le nom était entièrement prévisible : intitulé du
+           quiz et date du jour, dans un dossier numéroté en séquence. Ce PDF
+           porte le nom de l'apprenant et sa note. */
+        $filename  = 'resultats-quiz-' . $safe_name . '-' . gmdate( 'Y-m-d' ) . '-' . wp_generate_password( 20, false, false ) . '.pdf';
         $filepath  = $dir_path . $filename;
         $fileurl   = $dir_url . rawurlencode( $filename );
         if ( ! $sig_core->safe_file_write( $filepath, $pdf_raw, 'quiz result PDF' ) ) { return false; }

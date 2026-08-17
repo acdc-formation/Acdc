@@ -56,6 +56,45 @@ foreach ( $rii as $f ) {
     }
 }
 
+/* --------------------------------------------------------------------------
+ * ACDC 3.25.313 — LA RÈGLE DE FORME, PARCE QUE LA RÈGLE DE NOM A ÉCHOUÉ.
+ *
+ * L'audit du 17 août a montré que ce balayage annonçait « 0 occurrence » alors
+ * que l'écran « Veille » réécrivait bien cinq clés d'API dans le HTML. La cause
+ * tient en un mot : le contrôle ci-dessus cherche le NOM d'un réglage dans
+ * l'expression imprimée, et la ligne fautive s'écrivait
+ * « value="<?php echo esc_attr( $val ); ?>" ». Aucun nom, donc aucun signalement.
+ *
+ * Un contrôle qu'un simple renommage de variable désarme ne contrôle rien. On
+ * ajoute donc une règle de FORME, qui ne dépend d'aucun nom :
+ *
+ *   un champ « type="password" » ne porte JAMAIS de valeur non vide.
+ *
+ * C'est vrai sans exception. Un champ de mot de passe dit qu'une valeur existe ;
+ * il ne la réaffiche pas. La règle est déjà tenue partout ailleurs dans le
+ * plugin — le mot de passe des financeurs s'écrit « value="" » — et
+ * tests/test-secret-financeur.php vérifie qu'un envoi vide n'efface rien.
+ * ----------------------------------------------------------------------- */
+foreach ( $rii2 = new RecursiveIteratorIterator( new RecursiveDirectoryIterator( $root ) ) as $f ) {
+    if ( $f->isDir() || 'php' !== strtolower( $f->getExtension() ) ) { continue; }
+    $path = $f->getPathname();
+    if ( false !== strpos( $path, '/vendor/' ) ) { continue; }
+    $rel   = preg_replace( '#^.*/(includes|src)/#', '', $path );
+    $lines = explode( "\n", (string) file_get_contents( $path ) );
+    foreach ( $lines as $i => $line ) {
+        $t = ltrim( $line );
+        if ( 0 === strpos( $t, '*' ) || 0 === strpos( $t, '//' ) || 0 === strpos( $t, '/*' ) ) { continue; }
+        if ( false === stripos( $line, 'type="password"' ) && false === stripos( $line, "type='password'" ) ) { continue; }
+        /* On isole ce que porte l'attribut « value ». Vide, ou absent : correct. */
+        if ( ! preg_match( '/\bvalue\s*=\s*(["\'])(.*?)\1/s', $line, $mv ) ) { continue; }
+        if ( '' === trim( $mv[2] ) ) { continue; }
+        $hits[] = sprintf(
+            '%s:%d  un champ « type=password » porte une valeur : %s',
+            $rel, $i + 1, trim( substr( $mv[2], 0, 60 ) )
+        );
+    }
+}
+
 if ( $hits ) {
     echo "Secrets imprimés dans une page (le masque n’est qu’un décor) :\n";
     foreach ( array_unique( $hits ) as $h ) { echo '  ' . $h . "\n"; }

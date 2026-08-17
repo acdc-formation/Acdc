@@ -15,6 +15,11 @@ trait ACDC_Trainer_Portal_Actions_Trait {
    */
   public function handle_trainer_login() {
     check_admin_referer( 'acdc_trainer_login' );
+    /* ACDC 3.25.313 — Voir handle_learner_portal_login() : le blocage par compte
+       seul permettait de tenir un formateur dehors le jour de sa formation. */
+    if ( $this->acdc_trop_de_tentatives( 'connexion_formateur', 15, 900 ) ) {
+      $this->trainer_portal_redirect( 'login', 'Trop de tentatives depuis cet appareil. Réessayez dans un quart d’heure.', 'error' );
+    }
     $email    = isset( $_POST['trainer_email'] ) ? sanitize_email( wp_unslash( $_POST['trainer_email'] ) ) : '';
     $password = isset( $_POST['trainer_password'] ) ? (string) wp_unslash( $_POST['trainer_password'] ) : '';
 

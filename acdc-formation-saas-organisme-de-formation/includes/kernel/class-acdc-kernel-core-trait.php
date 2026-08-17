@@ -181,6 +181,35 @@ private function purge_system_logs() {
     )
   );
 
+  /* ACDC 3.25.313 — LA RÈGLE S'APPLIQUE AUX TROIS JOURNAUX, PLUS À UN SEUL.
+     L'écran affiche « l'adresse Internet est effacée au bout d'un an ». C'était
+     vrai du journal du plugin, et faux des deux journaux de portails : ils
+     gardaient adresse et navigateur pour toujours. Un écran qui annonce une
+     règle que le code n'applique pas est pire qu'un écran muet — il fait croire
+     l'obligation tenue.
+     On ne supprime aucune ligne ici : on efface l'origine, la trace demeure. */
+  foreach ( array( $this->learner_portal_log_table, $this->trainer_portal_log_table ) as $__journal ) {
+    if ( empty( $__journal ) ) {
+      continue;
+    }
+    if ( $wpdb->get_var( $wpdb->prepare( 'SHOW TABLES LIKE %s', $__journal ) ) !== $__journal ) {
+      continue;
+    }
+    $__colonnes = (array) $wpdb->get_col( "SHOW COLUMNS FROM {$__journal}" );
+    $__sets = array();
+    if ( in_array( 'ip_address', $__colonnes, true ) ) { $__sets[] = 'ip_address = NULL'; }
+    if ( in_array( 'user_agent', $__colonnes, true ) ) { $__sets[] = 'user_agent = NULL'; }
+    if ( empty( $__sets ) || ! in_array( 'created_at', $__colonnes, true ) ) {
+      continue;
+    }
+    $bilan['anonymisees'] += (int) $wpdb->query(
+      $wpdb->prepare(
+        "UPDATE {$__journal} SET " . implode( ', ', $__sets ) . ' WHERE created_at < %s',
+        $limite_ip
+      )
+    );
+  }
+
   /* 2. L'événement s'efface à l'échéance de la politique de conservation. */
   $annees = (int) \ACDC\Support\Retention::yearsFor( 'audit' );
   if ( $annees > 0 ) {
@@ -1075,6 +1104,19 @@ private function acdc_send_transactional_email( $to, $subject, $template_args = 
    * bloquerait une session en cours. Reste : les vraies pages de wp-admin,
    * WP-CLI et le cron.
    */
+  /**
+   * ACDC 3.25.313 — PORTE PUBLIQUE VERS LA GARDE DE MIGRATION.
+   *
+   * Les classes autonomes — signature, émargement — ne peuvent pas appeler une
+   * méthode privée de trait. Sans cette porte, chacune recopierait la règle, et
+   * une règle recopiée finit par diverger : c'est exactement ce qui a laissé le
+   * module signature rejouer sa migration sur chaque page publique alors que le
+   * noyau, les quiz et l'émargement avaient tous été corrigés.
+   */
+  public function acdc_migration_autorisee_ici() {
+    return $this->acdc_upgrade_may_run_here();
+  }
+
   private function acdc_upgrade_may_run_here() {
     if ( defined( 'WP_CLI' ) && WP_CLI ) {
       return true;
@@ -4685,15 +4727,109 @@ dbDelta( $sql_companies );
   }
 
 
+  /**
+   * ACDC 3.25.313 — VERROUILLER UN DOSSIER, ET RIEN QUE LUI.
+   *
+   * LE DÉFAUT QU'ELLE FERME. Plusieurs dossiers de téléversement recevaient des
+   * données personnelles sans aucune barrière : le plus grave était celui des
+   * SAUVEGARDES, qui contient la copie complète de l'organisme — 62 tables en
+   * clair, les signatures manuscrites, les pièces d'identité, et l'archive des
+   * e-mails avec ses liens à jeton. Toutes les protections posées ailleurs dans
+   * le plugin sont contenues dans ce seul fichier.
+   *
+   * Le plugin savait pourtant faire : acdc_protect_contracts_dir() pose les deux
+   * fichiers depuis la 3.25.148. Elle n'avait simplement jamais été appelée ici.
+   *
+   * POURQUOI UNE NOUVELLE FONCTION plutôt qu'un appel à l'ancienne : celle-ci
+   * protège aussi le dossier PARENT, ce qui est juste pour « contrats/42 » et
+   * catastrophique ailleurs — en 3.25.225, ce comportement a rendu toute la
+   * médiathèque inaccessible. Celle-ci ne touche QUE le dossier qu'on lui donne.
+   *
+   * LES DEUX FICHIERS SONT NÉCESSAIRES, pas redondants : le « .htaccess » bloque
+   * l'accès direct sur Apache, l'« index.php » empêche l'affichage de la liste
+   * des fichiers sur les serveurs qui ignorent .htaccess — nginx notamment.
+   *
+   * @param string $dir_path Le dossier à verrouiller. Lui seul.
+   * @return bool Vrai si le dossier existe et porte ses deux protections.
+   */
+  private function acdc_verrouiller_dossier( $dir_path ) {
+    $dir_path = (string) $dir_path;
+    if ( '' === $dir_path ) {
+      return false;
+    }
+    if ( ! file_exists( $dir_path ) ) {
+      wp_mkdir_p( $dir_path );
+    }
+    if ( ! is_dir( $dir_path ) ) {
+      return false;
+    }
+    /* Jamais à la racine des téléversements : c'est la faute de la 3.25.225, qui
+       a rendu 403 sur les images du site, les logos des e-mails et les
+       propositions commerciales envoyées aux prospects. */
+    $uploads  = wp_upload_dir();
+    $base_dir = ! empty( $uploads['basedir'] ) ? trailingslashit( (string) $uploads['basedir'] ) : '';
+    if ( '' !== $base_dir && trailingslashit( $dir_path ) === $base_dir ) {
+      return false;
+    }
+    $ht = trailingslashit( $dir_path ) . '.htaccess';
+    if ( ! file_exists( $ht ) ) {
+      file_put_contents( $ht, "deny from all\n" ); // phpcs:ignore WordPress.WP.AlternativeFunctions.file_system_operations_file_put_contents
+    }
+    $idx = trailingslashit( $dir_path ) . 'index.php';
+    if ( ! file_exists( $idx ) ) {
+      file_put_contents( $idx, "<?php // Silence is golden.\n" ); // phpcs:ignore WordPress.WP.AlternativeFunctions.file_system_operations_file_put_contents
+    }
+    return true;
+  }
+
+  /**
+   * ACDC 3.25.313 — LE DOSSIER D'UN DOCUMENT QUE LE CLIENT DOIT POUVOIR OUVRIR.
+   *
+   * Devis, factures, résultats de quiz, analyses du besoin : leurs adresses
+   * partent par e-mail au destinataire. On ne peut donc PAS y poser un
+   * « deny from all » — le lien deviendrait mort chez le client, et c'est
+   * exactement le raisonnement déjà tenu pour les propositions commerciales
+   * en 3.25.291.
+   *
+   * On pose donc l'AUTRE moitié de la protection, celle qui ne coûte rien : un
+   * « index.php » vide, qui empêche d'afficher la LISTE du dossier. Sans lui,
+   * un serveur mal réglé donne l'inventaire complet — c'est-à-dire les noms de
+   * tous vos clients — à qui devine le nom du dossier.
+   *
+   * La seconde moitié du travail est ailleurs : le nom des fichiers doit être
+   * imprévisible. Un index.php sans jeton dans le nom protège de l'inventaire,
+   * pas de la devinette.
+   *
+   * @param string $dir_path Le dossier à créer et à rendre non listable.
+   */
+  private function acdc_dossier_documents( $dir_path ) {
+    $dir_path = (string) $dir_path;
+    if ( '' === $dir_path ) {
+      return '';
+    }
+    if ( ! file_exists( $dir_path ) ) {
+      wp_mkdir_p( $dir_path );
+    }
+    if ( ! is_dir( $dir_path ) ) {
+      return '';
+    }
+    $idx = trailingslashit( $dir_path ) . 'index.php';
+    if ( ! file_exists( $idx ) ) {
+      file_put_contents( $idx, "<?php // Silence is golden.\n" ); // phpcs:ignore WordPress.WP.AlternativeFunctions.file_system_operations_file_put_contents
+    }
+    return $dir_path;
+  }
+
   private function get_backup_base_directory() {
     $uploads = wp_upload_dir();
     if ( empty( $uploads['basedir'] ) ) {
       return '';
     }
     $dir = trailingslashit( $uploads['basedir'] ) . 'acdc-backups';
-    if ( ! file_exists( $dir ) ) {
-      wp_mkdir_p( $dir );
-    }
+    /* ACDC 3.25.313 — LE VERROU EST POSÉ AVANT TOUTE ÉCRITURE, et à chaque
+       passage : un dossier créé avant ce correctif reçoit ses protections au
+       premier appel suivant, sans migration. */
+    $this->acdc_verrouiller_dossier( $dir );
     return is_dir( $dir ) ? $dir : '';
   }
 
@@ -4815,9 +4951,76 @@ dbDelta( $sql_companies );
     return $ref . ' — ' . $title;
   }
 
+  /**
+   * ACDC 3.25.313 — Le nombre de sauvegardes gardées SUR LE SERVEUR.
+   *
+   * Il valait 30. Avec deux rendez-vous automatiques par jour, cela fait quinze
+   * jours de copies complètes empilées — et elles évincent au passage les
+   * sauvegardes prises à la main, qui partagent le même quota.
+   *
+   * Cinq suffisent : ce qui protège vraiment, c'est l'exemplaire déposé chez
+   * Google, gardé bien plus longtemps. Les copies locales ne servent qu'à
+   * réparer dans l'heure. Le réglage reste modifiable.
+   */
   private function get_backup_retention_count() {
-    $count = absint( get_option( 'acdc_of_backup_retention_count', 30 ) );
-    return $count > 0 ? $count : 30;
+    $count = absint( get_option( 'acdc_of_backup_retention_count', 5 ) );
+    return $count > 0 ? $count : 5;
+  }
+
+  /**
+   * ACDC 3.25.313 — Efface le contenu brut d'une sauvegarde, l'archive exceptée.
+   *
+   * On ne descend jamais ailleurs que dans le dossier de sauvegarde qu'on nous
+   * donne, et on refuse d'agir si le chemin ne commence pas par la base des
+   * sauvegardes : une fonction qui efface doit prouver où elle est.
+   *
+   * @param string $dir Le dossier de ce passage de sauvegarde.
+   * @return int Nombre d'éléments retirés.
+   */
+  private function acdc_vider_dossier_brut( $dir ) {
+    $dir  = (string) $dir;
+    $base = $this->get_backup_base_directory();
+    if ( '' === $dir || '' === $base || ! is_dir( $dir ) ) {
+      return 0;
+    }
+    if ( 0 !== strpos( trailingslashit( $dir ), trailingslashit( $base ) ) ) {
+      return 0;
+    }
+    $retires = 0;
+    foreach ( (array) glob( trailingslashit( $dir ) . '*' ) as $item ) {
+      $nom = basename( (string) $item );
+      /* On garde l'archive — c'est elle la sauvegarde — le manifeste qui la
+         décrit, et les deux fichiers de verrouillage du dossier. */
+      if ( '.htaccess' === $nom || 'index.php' === $nom || 'manifest.json' === $nom ) {
+        continue;
+      }
+      if ( is_file( $item ) && preg_match( '/\.zip$/i', $nom ) ) {
+        continue;
+      }
+      if ( is_dir( $item ) ) {
+        $retires += $this->acdc_supprimer_arborescence( $item ) ? 1 : 0;
+        continue;
+      }
+      if ( is_file( $item ) && @unlink( $item ) ) { // phpcs:ignore WordPress.PHP.NoSilencedErrors.Discouraged
+        $retires++;
+      }
+    }
+    return $retires;
+  }
+
+  /** Suppression récursive, bornée au dossier des sauvegardes par l'appelant. */
+  private function acdc_supprimer_arborescence( $chemin ) {
+    if ( ! is_dir( $chemin ) ) {
+      return false;
+    }
+    foreach ( (array) glob( trailingslashit( $chemin ) . '*' ) as $item ) {
+      if ( is_dir( $item ) ) {
+        $this->acdc_supprimer_arborescence( $item );
+      } elseif ( is_file( $item ) ) {
+        @unlink( $item ); // phpcs:ignore WordPress.PHP.NoSilencedErrors.Discouraged
+      }
+    }
+    return @rmdir( $chemin ); // phpcs:ignore WordPress.PHP.NoSilencedErrors.Discouraged
   }
 
   /**
@@ -4933,10 +5136,17 @@ private function acdc_nom_fichier_sauvegarde( $quand = null ) {
     $timestamp = time();
     $stamp = wp_date( 'Ymd-His', $timestamp );
     $slug = sanitize_file_name( strtolower( (string) $label ) );
-    $dir = trailingslashit( $base ) . $stamp . '-' . $slug;
-    if ( ! file_exists( $dir ) ) {
-      wp_mkdir_p( $dir );
-    }
+    /* ACDC 3.25.313 — UN NOM QUI NE SE DEVINE PAS.
+       Le nom ne portait que la date et l'heure — et les deux rendez-vous
+       automatiques sont à heure FIXE, 12h00 et 18h00. Le dossier du jour se
+       nommait donc d'avance. Le condensat est dérivé des clés du site : il est
+       déterministe — le même passage retrouve le même dossier — et impossible à
+       deviner de l'extérieur. Même procédé que les contrats formateur. */
+    $empreinte = substr( wp_hash( 'acdc-backup-dir-' . $stamp . '-' . $slug ), 0, 12 );
+    $dir = trailingslashit( $base ) . $stamp . '-' . $slug . '-' . $empreinte;
+    /* Le verrou est posé sur CE dossier aussi : le .htaccess du parent ne
+       protège pas les serveurs qui l'ignorent. */
+    $this->acdc_verrouiller_dossier( $dir );
     return is_dir( $dir ) ? $dir : '';
   }
 
@@ -5011,15 +5221,38 @@ private function acdc_nom_fichier_sauvegarde( $quand = null ) {
     }
   }
 
+  /**
+   * ACDC 3.25.313 — LE FILET DES GESTES IRRÉVERSIBLES NE POUVAIT PAS SE TENDRE.
+   *
+   * Cette fonction rendait TOUJOURS un tableau : en cas d'échec,
+   * « array( 'success' => false, 'manifest' => '' ) ». Or ses quatre appelants
+   * testaient « empty( $backup ) » — c'est-à-dire l'EXISTENCE du tableau, jamais
+   * ce qu'il dit. Un tableau non vide n'est pas vide, échec compris. Le message
+   * « Purge annulée : la sauvegarde de sécurité n'a pas pu être créée » ne
+   * pouvait donc jamais s'afficher, et trois gestes irréversibles — remise à
+   * zéro totale, remise à zéro sélective, suppression des émargements orphelins —
+   * partaient sans filet, en croyant en avoir un.
+   *
+   * ON CORRIGE À LA SOURCE plutôt qu'aux quatre appelants : la fonction rend
+   * désormais FAUX quand la sauvegarde a échoué. Les quatre « empty() » écrits
+   * de bonne foi deviennent justes d'un coup, et le cinquième appelant qui
+   * naîtra un jour héritera de la bonne réponse sans avoir à connaître l'histoire.
+   *
+   * @return array|false Le résultat, ou faux si la sauvegarde a échoué.
+   */
   private function create_safety_backup_snapshot( $reason, $context = array() ) {
     $result = $this->backup_data_snapshot( 'safety-' . sanitize_key( (string) $reason ), array(
       'reason' => sanitize_key( (string) $reason ),
       'context' => is_array( $context ) ? $context : array(),
     ) );
-    if ( ! empty( $result['manifest'] ) ) {
-      update_option( 'acdc_of_last_safety_backup_file', $result['manifest'], false );
-      update_option( 'acdc_of_last_safety_backup_at', current_time( 'mysql' ), false );
+    if ( empty( $result['success'] ) || empty( $result['manifest'] ) ) {
+      $this->log_action_event( 'sauvegarde_securite_echec', 'backup', 0, 'error', array(
+        'motif' => sanitize_key( (string) $reason ),
+      ) );
+      return false;
     }
+    update_option( 'acdc_of_last_safety_backup_file', $result['manifest'], false );
+    update_option( 'acdc_of_last_safety_backup_at', current_time( 'mysql' ), false );
     return $result;
   }
 
@@ -5155,7 +5388,21 @@ private function acdc_nom_fichier_sauvegarde( $quand = null ) {
       return new WP_Error( 'acdc_backup_manifest_invalid', 'Structure de sauvegarde invalide.' );
     }
 
-    $this->create_safety_backup_snapshot( 'restore_backup', array( 'user_id' => get_current_user_id() ) );
+    /* ACDC 3.25.313 — LA RESTAURATION NE PART PLUS SANS FILET.
+       Le résultat de la sauvegarde de sécurité n'était même pas affecté à une
+       variable : on la prenait, et on continuait quoi qu'il arrive. Or la
+       restauration VIDE chaque table avant de la remplir, sans annulation
+       possible. Interrompue au milieu, elle laisse la moitié des tables sur
+       l'archive et l'autre sur les données du jour.
+       C'est précisément le geste que l'exploitant fera le jour où quelque chose
+       sera déjà cassé : c'est le pire moment pour découvrir que le filet
+       n'existait pas. */
+    if ( ! $this->create_safety_backup_snapshot( 'restore_backup', array( 'user_id' => get_current_user_id() ) ) ) {
+      return new WP_Error(
+        'acdc_restore_no_safety_backup',
+        'Restauration annulée : la sauvegarde de sécurité de l’état actuel n’a pas pu être créée. Rien n’a été touché. Vérifiez l’espace disque disponible avant de réessayer.'
+      );
+    }
 
     $report = array();
 
@@ -5378,14 +5625,38 @@ private function acdc_nom_fichier_sauvegarde( $quand = null ) {
       }
       $rows = (int) $wpdb->get_var( "SELECT COUNT(*) FROM {$table}" );
       $columns = $wpdb->get_results( "SHOW COLUMNS FROM {$table}", ARRAY_A );
-      $data = $wpdb->get_results( "SELECT * FROM {$table}", ARRAY_A );
+      /* ACDC 3.25.313 — LA TABLE S'ÉCRIT PAR TRANCHES, PLUS D'UN SEUL BLOC.
+         « SELECT * FROM » chargeait la table ENTIÈRE en mémoire, puis
+         wp_json_encode en fabriquait une seconde copie « aérée » — plus grosse
+         encore. Le journal des actions et l'archive des e-mails sont les deux
+         tables qui grossissent sans fin : le jour où l'une d'elles dépasse la
+         mémoire allouée à PHP, le processus est tué net, sans message, et la
+         sauvegarde n'a pas lieu. Sur un hébergement mutualisé, cette limite
+         n'est pas généreuse.
+         On écrit désormais mille lignes à la fois, et le fichier produit reste
+         exactement le même — c'est important : les archives déjà déposées chez
+         Google doivent rester restaurables par ce plugin. */
       $table_file = trailingslashit( $dir ) . sanitize_file_name( $table_label ) . '.json';
-      file_put_contents( $table_file, wp_json_encode( array(
-        'table' => $table,
-        'label' => $table_label,
-        'columns' => $columns,
-        'rows' => $data,
-      ), JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES | JSON_PRETTY_PRINT ) );
+      $fh = @fopen( $table_file, 'wb' ); // phpcs:ignore WordPress.PHP.NoSilencedErrors.Discouraged
+      if ( ! $fh ) {
+        continue;
+      }
+      fwrite( $fh, "{\n" );
+      fwrite( $fh, '    "table": ' . wp_json_encode( $table, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES ) . ",\n" );
+      fwrite( $fh, '    "label": ' . wp_json_encode( $table_label, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES ) . ",\n" );
+      fwrite( $fh, '    "columns": ' . wp_json_encode( $columns, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES ) . ",\n" );
+      fwrite( $fh, '    "rows": [' );
+      $__premier = true;
+      for ( $__offset = 0; $__offset < $rows; $__offset += 1000 ) {
+        $__lot = $wpdb->get_results( $wpdb->prepare( "SELECT * FROM {$table} LIMIT %d OFFSET %d", 1000, $__offset ), ARRAY_A );
+        foreach ( (array) $__lot as $__ligne ) {
+          fwrite( $fh, ( $__premier ? "\n" : ",\n" ) . '        ' . wp_json_encode( $__ligne, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES ) );
+          $__premier = false;
+        }
+        unset( $__lot );
+      }
+      fwrite( $fh, ( $__premier ? '' : "\n    " ) . "]\n}\n" );
+      fclose( $fh );
       $manifest['tables'][] = array(
         'label' => $table_label,
         'table' => $table,
@@ -5481,6 +5752,15 @@ private function acdc_nom_fichier_sauvegarde( $quand = null ) {
     if ( $archive_relative ) {
       $manifest['archive'] = basename( $archive_relative );
       file_put_contents( $manifest_path, wp_json_encode( $manifest, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES | JSON_PRETTY_PRINT ) );
+      /* ACDC 3.25.313 — LE BRUT DISPARAÎT UNE FOIS L'ARCHIVE FAITE.
+         Chaque passage écrivait les 62 tables et tous les fichiers de preuve
+         (≈178 Mo), puis un zip contenant exactement la même chose — et gardait
+         les deux. Trente dossiers conservés × 2 exemplaires ≈ dix gigaoctets en
+         quinze jours. Sur un hébergement mutualisé, un disque plein arrête les
+         signatures, les émargements et les factures avant d'arrêter le site.
+         On ne supprime QUE si l'archive existe : sans elle, le brut est la
+         sauvegarde, et l'effacer reviendrait à n'en avoir aucune. */
+      $this->acdc_vider_dossier_brut( $dir );
     }
     $this->prune_backup_directories();
 

@@ -12,6 +12,19 @@ trait ACDC_Learner_Portal_Actions_Trait {
       $this->learner_portal_redirect( 'login', 'Jeton de sécurité invalide.', 'error' );
     }
 
+    /* ACDC 3.25.313 — LE COMPTEUR D'ÉCHECS PUNISSAIT LA VICTIME.
+       Cinq mots de passe faux bloquent le compte VISÉ pendant trente minutes, et
+       le compteur est attaché à lui, pas à celui qui tape. Cinq essais toutes
+       les demi-heures suffisaient donc à maintenir un apprenant — ou un
+       formateur le jour de sa formation — dehors, sans jamais rien deviner.
+       Le blocage par compte reste : il protège du forçage. On lui adjoint le
+       blocage par RÉSEAU, qui protège des autres. Le seuil est volontairement
+       large (15 par quart d'heure) : une salle entière partage souvent la même
+       connexion, et une protection qui gêne les gens honnêtes finit désactivée. */
+    if ( $this->acdc_trop_de_tentatives( 'connexion_apprenant', 15, 900 ) ) {
+      $this->learner_portal_redirect( 'login', 'Trop de tentatives depuis cet appareil. Réessayez dans un quart d’heure.', 'error' );
+    }
+
     $email    = isset( $_POST['learner_email'] ) ? sanitize_email( wp_unslash( $_POST['learner_email'] ) ) : '';
     $password = isset( $_POST['learner_password'] ) ? (string) wp_unslash( $_POST['learner_password'] ) : '';
 
@@ -22,9 +35,23 @@ trait ACDC_Learner_Portal_Actions_Trait {
       $this->learner_portal_redirect( 'login', 'Connexion impossible. Vérifiez vos identifiants.', 'error' );
     }
 
+    /* ACDC 3.25.313 — TROIS MESSAGES DIFFÉRENTS DISAIENT QUI EST VOTRE CLIENT.
+       Selon que l'adresse était inconnue, jamais activée, bloquée ou expirée,
+       l'écran répondait quatre choses distinctes — sans jamais demander de mot
+       de passe valable. On pouvait donc éprouver une liste d'adresses et savoir
+       lesquelles ont été formées chez vous : la première étape d'un hameçonnage
+       crédible, « bonjour, votre formation ACDC… ». Le portail formateur, lui,
+       répond déjà la même chose dans tous les cas.
+       ON NE SUPPRIME PAS CES MESSAGES : ils sont utiles à l'apprenant légitime,
+       qui doit savoir s'il faut activer son accès ou en demander un nouveau. On
+       ne les révèle qu'à quelqu'un QUI A DONNÉ LE BON MOT DE PASSE. Un inconnu
+       n'obtient qu'une phrase, toujours la même. */
+    $__mdp_juste = ( '' !== $password && ! empty( $account->password_hash ) && wp_check_password( $password, $account->password_hash ) );
+    $__refus_generique = 'Connexion impossible. Vérifiez vos identifiants.';
+
     if ( 'never_activated' === $account->status ) {
       $this->learner_portal_log_event( $account->id, 'activation_required_login_refused' );
-      $this->learner_portal_redirect( 'login', 'Votre accès doit d’abord être activé depuis le lien reçu par e-mail.', 'error' );
+      $this->learner_portal_redirect( 'login', $__mdp_juste ? 'Votre accès doit d’abord être activé depuis le lien reçu par e-mail.' : $__refus_generique, 'error' );
     }
 
     $now_ts = current_time( 'timestamp' );
@@ -32,11 +59,18 @@ trait ACDC_Learner_Portal_Actions_Trait {
     if ( $blocked_until && $blocked_until > $now_ts ) {
       $minutes = max( 1, (int) ceil( ( $blocked_until - $now_ts ) / 60 ) );
       $this->learner_portal_log_event( $account->id, 'login_blocked_attempt', array( 'remaining_minutes' => $minutes ) );
-      $this->learner_portal_redirect( 'login', 'Compte temporairement bloqué. Temps restant : ' . $minutes . ' minute(s). Contact : ' . $this->learner_portal_contact_email(), 'error' );
+      /* Le compte bloqué se dit à qui connaît le mot de passe : c'est le
+         propriétaire, et il a besoin de savoir combien de temps attendre. */
+      $this->learner_portal_redirect( 'login', $__mdp_juste
+        ? 'Compte temporairement bloqué. Temps restant : ' . $minutes . ' minute(s). Contact : ' . $this->learner_portal_contact_email()
+        : $__refus_generique, 'error' );
     }
 
     if ( in_array( $account->status, array( 'disabled', 'expired' ), true ) ) {
       $this->learner_portal_log_event( $account->id, 'access_refused_expired' );
+      if ( ! $__mdp_juste ) {
+        $this->learner_portal_redirect( 'login', $__refus_generique, 'error' );
+      }
       $view = 'expired';
       $message = 'Votre accès extranet n’est plus actif.';
       $this->learner_portal_redirect( 'login', $message, 'error', array( 'view' => $view, 'email' => rawurlencode( $email ) ) );
@@ -397,6 +431,17 @@ trait ACDC_Learner_Portal_Actions_Trait {
       $this->learner_portal_redirect( 'login', 'Jeton de sécurité invalide.', 'error' );
     }
 
+    /* ACDC 3.25.313 — CE FORMULAIRE PUBLIC N'AVAIT AUCUNE LIMITE.
+       Il accepte une adresse et un message libre, et les envoie dans la boîte de
+       l'exploitant. Sans limitation, il suffisait de le soumettre en boucle pour
+       la saturer — et c'est cette même boîte, ce même domaine, qui portent vos
+       convocations et vos demandes de signature. Le formulaire « mot de passe
+       oublié », juste au-dessus, est protégé depuis la 3.25.291 ; celui-ci ne
+       l'était pas. */
+    if ( $this->acdc_trop_de_tentatives( 'contact_expire_apprenant', 5, 900 ) ) {
+      $this->learner_portal_redirect( 'login', 'Trop de demandes envoyées depuis cet appareil. Réessayez dans un quart d’heure.', 'error', array( 'view' => 'expired' ) );
+    }
+
     $email   = isset( $_POST['learner_email'] ) ? sanitize_email( wp_unslash( $_POST['learner_email'] ) ) : '';
     $message = isset( $_POST['message'] ) ? sanitize_textarea_field( wp_unslash( $_POST['message'] ) ) : '';
     $account = $this->learner_portal_get_account_by_email( $email );
@@ -405,8 +450,12 @@ trait ACDC_Learner_Portal_Actions_Trait {
     $body .= '<p><strong>E-mail :</strong> ' . esc_html( $email ) . '</p>';
     $body .= '<p><strong>Message :</strong><br>' . nl2br( esc_html( $message ) ) . '</p>';
 
-    $this->learner_portal_send_email( get_option( 'admin_email' ), 'Demande de réactivation d’accès extranet', $body );
+    /* L'ENVOI N'A LIEU QUE POUR UN COMPTE EXISTANT. Il était placé AVANT ce
+       test : n'importe quelle adresse inventée déclenchait un e-mail. La réponse
+       affichée reste la même dans les deux cas — sinon ce formulaire dirait à un
+       inconnu si une adresse est cliente de l'organisme. */
     if ( $account ) {
+      $this->learner_portal_send_email( get_option( 'admin_email' ), 'Demande de réactivation d’accès extranet', $body );
       $this->learner_portal_log_event( $account->id, 'expired_access_contact_sent', array( 'message' => $message ) );
     }
 

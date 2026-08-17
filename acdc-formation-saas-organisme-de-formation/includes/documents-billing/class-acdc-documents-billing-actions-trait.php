@@ -918,14 +918,18 @@ trait ACDC_Documents_Billing_Actions_Trait {
       $upload   = wp_upload_dir();
       $dir      = trailingslashit( $upload['basedir'] ) . 'acdc-invoices/';
       $url_base = trailingslashit( $upload['baseurl'] ) . 'acdc-invoices/';
-      wp_mkdir_p( $dir );
+      /* ACDC 3.25.313 — Dossier non listable : sans index.php, un serveur mal
+         réglé donne l'inventaire de vos factures, donc la liste de vos clients. */
+      $this->acdc_dossier_documents( $dir );
       if ( ! empty( $inv->html_url ) ) {
         $old_path = str_replace( $url_base, $dir, (string) $inv->html_url );
         if ( 0 === strpos( $old_path, $dir ) && file_exists( $old_path ) ) {
           @unlink( $old_path ); // phpcs:ignore WordPress.PHP.NoSilencedErrors.Discouraged
         }
       }
-      $filename = 'facture-' . (int) $inv->id . '-' . time() . '.html';
+      /* ACDC 3.25.313 — Jeton aléatoire : voir le devis. Une facture porte le
+         nom du client et le montant. */
+      $filename = 'facture-' . (int) $inv->id . '-' . time() . '-' . wp_generate_password( 20, false, false ) . '.html';
       if ( false !== file_put_contents( $dir . $filename, $document_html ) ) {
         $html_url = $url_base . $filename;
         $wpdb->update( $this->invoice_table, array( 'html_url' => $html_url ), array( 'id' => $invoice_id ) );

@@ -76,6 +76,7 @@ lancent sans WordPress, en quelques secondes.
     php tests/scan-recette-ecrans.php # les cinq défauts d'écran de la recette de bout en bout
     php tests/scan-migrations-schema.php # une colonne ajoutée sans migration ne sort jamais
     php tests/test-texte-alternatif.php # la version texte des e-mails : liens gardés, style perdu
+    php tests/scan-audit-17-aout.php # les dix corrections de l'audit du 17 août
 
 Le dernier balaie tout le plugin et signale les fonctions qui utilisent `$wpdb`
 sans l'avoir importé — la faute qui a produit l'erreur fatale de la 3.25.236.

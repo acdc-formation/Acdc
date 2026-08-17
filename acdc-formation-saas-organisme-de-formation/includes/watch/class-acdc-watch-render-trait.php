@@ -724,7 +724,37 @@ trait ACDC_Watch_Render_Trait {
                 </div>
               </div>
               <p style="font-size:11px;color:var(--acdc-text,#4b5d76);margin:0 0 4px;"><?php echo esc_html( $af['help'] ); ?></p>
-              <input type="password" name="<?php echo esc_attr( $af['opt'] ); ?>" value="<?php echo esc_attr( $val ); ?>" placeholder="Coller la cle ici — ne jamais taper manuellement" style="width:100%;height:40px;border:1px solid var(--acdc-border,#dfe5ee);border-radius:10px;padding:0 12px;font-size:13px;" autocomplete="off">
+              <?php
+              /* ACDC 3.25.313 — LA CLÉ N'EST PLUS RÉÉCRITE DANS LA PAGE.
+                 Ce champ portait « value="<?= la clé déchiffrée ?>" ». Le plugin
+                 chiffre soigneusement ces cinq clés au repos… puis les rendait
+                 en clair dans le code de la page, à chaque ouverture de l'écran.
+                 Visibles par « afficher le code source », par toute extension de
+                 navigateur, et présentes dans le cache du navigateur.
+                 Un champ de mot de passe ne réaffiche jamais ce qu'il garde : il
+                 dit qu'une valeur EXISTE, et un envoi vide la laisse en place.
+                 C'est la règle déjà appliquée au mot de passe des financeurs, et
+                 vérifiée par tests/test-secret-financeur.php. */
+              $__pose = ( '' !== trim( (string) $val ) );
+              ?>
+              <input type="password" name="<?php echo esc_attr( $af['opt'] ); ?>" value="" placeholder="<?php echo $__pose ? 'Clé enregistrée — laissez vide pour la conserver' : 'Coller la clé ici — ne jamais taper manuellement'; ?>" style="width:100%;height:40px;border:1px solid var(--acdc-border,#dfe5ee);border-radius:10px;padding:0 12px;font-size:13px;" autocomplete="off">
+              <p style="font-size:11px;margin:4px 0 0;color:<?php echo $__pose ? '#2f7d4f' : 'var(--acdc-text,#4b5d76)'; ?>;">
+                <?php echo $__pose ? '● Clé enregistrée. Laissez le champ vide pour la conserver ; saisissez-en une nouvelle pour la remplacer.' : '○ Aucune clé enregistrée — ce service n’est pas utilisé.'; ?>
+              </p>
+              <?php if ( $__pose ) : ?>
+                <?php
+                /* Puisqu'un champ vide ne peut plus effacer, il faut un geste
+                   EXPLICITE pour retirer une clé — sinon la seule façon de se
+                   débarrasser d'un service inutilisé serait de ne plus pouvoir.
+                   L'audit demande justement de vider les clés des services non
+                   utilisés : sans cette case, la recommandation serait
+                   inapplicable. */
+                ?>
+                <label style="display:inline-flex;align-items:center;gap:6px;font-size:11px;margin-top:6px;color:#8a4b4b;">
+                  <input type="checkbox" name="acdc_watch_effacer_cle[]" value="<?php echo esc_attr( $af['opt'] ); ?>">
+                  Retirer cette clé à l’enregistrement (le service cessera d’être appelé)
+                </label>
+              <?php endif; ?>
             </div>
             <?php endforeach; ?>
           </div>

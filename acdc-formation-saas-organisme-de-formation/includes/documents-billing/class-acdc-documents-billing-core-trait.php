@@ -430,7 +430,10 @@ trait ACDC_Documents_Billing_Core_Trait {
     $upload     = wp_upload_dir();
     $dir        = trailingslashit( $upload['basedir'] ) . 'acdc-quotes/';
     $url_base   = trailingslashit( $upload['baseurl'] ) . 'acdc-quotes/';
-    wp_mkdir_p( $dir );
+    /* ACDC 3.25.313 — Voir acdc_dossier_documents() : l'adresse d'un devis part
+       par e-mail au client, on ne peut donc pas la fermer — mais on peut
+       empêcher qu'on lise la liste de tous les autres. */
+    $this->acdc_dossier_documents( $dir );
     /* Supprimer l'ancien fichier si présent */
     if ( ! empty( $quote->html_url ) ) {
       $old_path = str_replace( $url_base, $dir, (string) $quote->html_url );
@@ -446,7 +449,13 @@ trait ACDC_Documents_Billing_Core_Trait {
     $filename = \ACDC\Support\NomDocument::composer(
       'devis ' . ( $quote->number ?? '' ),
       (string) ( $quote->client_company ?: $quote->apprenant_name ),
-      (string) time(),
+      /* ACDC 3.25.313 — UN JETON, PAS SEULEMENT UN HORODATAGE.
+         L'horodatage forçait le rechargement mais se devinait : une plage de
+         quelques heures suffit à retrouver un devis, qui porte le nom du client
+         et le prix négocié. Le jeton aléatoire ferme cela — même procédé que les
+         propositions commerciales depuis la 3.25.291. Les devis déjà produits
+         gardent leur adresse : on ne casse aucun lien déjà envoyé. */
+      time() . '-' . wp_generate_password( 20, false, false ),
       'html'
     );
     $filepath = $dir . $filename;

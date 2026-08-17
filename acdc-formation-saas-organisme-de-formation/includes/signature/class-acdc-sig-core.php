@@ -85,12 +85,48 @@ class ACDC_Sig_Core {
         update_option( self::OPTION_DB_VER, self::VERSION );
     }
 
+    /**
+     * ACDC 3.25.313 — UNE PAGE PUBLIQUE NE DÉCLENCHE PLUS DE MIGRATION.
+     *
+     * Cette fonction est branchée sur « init », donc sur CHAQUE requête — y
+     * compris celle d'un visiteur anonyme qui ouvre une page de signature. Et le
+     * numéro de version n'était écrit qu'à la FIN : tant que le travail
+     * n'aboutissait pas, chaque nouvelle requête le recommençait, en parallèle.
+     * Dix visiteurs simultanés lançaient dix modifications de table qui se
+     * ralentissaient mutuellement.
+     *
+     * C'est mot pour mot la panne du 9 août. Le noyau (3.25.184), les quiz
+     * (3.25.177) et l'émargement (3.25.230) ont tous été corrigés à l'époque ;
+     * ce module est le dernier à avoir gardé le déroulé fautif.
+     *
+     * DEUX VERROUS, et ils ne font pas la même chose :
+     *   — la garde d'emplacement : une migration ne tourne que dans
+     *     l'administration, en ligne de commande ou dans une tâche planifiée ;
+     *   — le verrou de dix minutes : deux onglets d'administration ouverts en
+     *     même temps ne la lancent pas deux fois.
+     */
     public function maybe_upgrade() {
-        if ( get_option( self::OPTION_DB_VER, '' ) !== self::VERSION ) {
-            $this->create_or_update_tables();
-            $this->ensure_signature_page();
-            update_option( self::OPTION_DB_VER, self::VERSION );
+        if ( get_option( self::OPTION_DB_VER, '' ) === self::VERSION ) {
+            return;
         }
+        if ( class_exists( 'ACDC_Formation_SAAS_Plugin' ) ) {
+            $plugin = ACDC_Formation_SAAS_Plugin::get_instance();
+            if ( $plugin && method_exists( $plugin, 'acdc_migration_autorisee_ici' ) && ! $plugin->acdc_migration_autorisee_ici() ) {
+                return;
+            }
+        } elseif ( ! is_admin() ) {
+            /* Repli si le noyau n'est pas chargé : on refuse hors administration
+               plutôt que de laisser une page publique migrer la base. */
+            return;
+        }
+        if ( get_transient( 'acdc_sig_migration_en_cours' ) ) {
+            return;
+        }
+        set_transient( 'acdc_sig_migration_en_cours', 1, 10 * MINUTE_IN_SECONDS );
+        $this->create_or_update_tables();
+        $this->ensure_signature_page();
+        update_option( self::OPTION_DB_VER, self::VERSION );
+        delete_transient( 'acdc_sig_migration_en_cours' );
     }
 
     private function create_or_update_tables() {

@@ -38,6 +38,7 @@ class ACDC_Emarg_Core {
           seance_end_at DATETIME DEFAULT NULL,
           trainer_token VARCHAR(64) NOT NULL DEFAULT '',
           list_token VARCHAR(64) NOT NULL DEFAULT '',
+          signature_token VARCHAR(64) NOT NULL DEFAULT '',
           trainer_id BIGINT UNSIGNED DEFAULT NULL,
           trainer_name VARCHAR(190) DEFAULT '',
           trainer_email VARCHAR(190) DEFAULT '',
@@ -54,6 +55,7 @@ class ACDC_Emarg_Core {
           PRIMARY KEY (id),
           UNIQUE KEY trainer_token (trainer_token),
           UNIQUE KEY list_token (list_token),
+          KEY signature_token (signature_token),
           KEY session_id (session_id),
           KEY trainer_id (trainer_id),
           KEY status (status)
@@ -284,6 +286,18 @@ class ACDC_Emarg_Core {
             'seance_end_at'   => ! empty( $seance_meta['end_at'] ) ? $seance_meta['end_at'] : null,
             'trainer_token'   => $this->generate_token(),
             'list_token'      => $this->generate_token(),
+            /* ACDC 3.25.313 — LE JETON QUE L'ON MONTRE EN SALLE.
+               Le QR code affiché aux apprenants encodait l'adresse de la page
+               LISTE, c'est-à-dire l'écran du formateur : chaque personne qui le
+               scannait pouvait y revenir 72 heures durant, y voyait la signature
+               de tous les autres, et disposait des boutons « Signer » de chacun
+               et « Marquer absent ». Elle pouvait donc signer à la place d'un
+               absent, ou déclarer absent un présent.
+               Ce troisième jeton mène à une page qui ne fait qu'une chose :
+               proposer de retrouver son nom et de signer. Il est DISTINCT du
+               jeton de liste — sinon il suffirait de changer un mot dans
+               l'adresse pour retrouver l'écran du formateur. */
+            'signature_token' => $this->generate_token(),
             'trainer_id'      => $trainer_id ?: null,
             'trainer_name'    => $trainer_name,
             'trainer_email'   => $trainer_email,
@@ -624,11 +638,37 @@ class ACDC_Emarg_Core {
         ) );
     }
 
+    public function get_by_signature_token( $token ) {
+        global $wpdb;
+        return $wpdb->get_row( $wpdb->prepare(
+            "SELECT * FROM {$this->table_sessions} WHERE signature_token = %s AND ( expires_at IS NULL OR expires_at > %s ) LIMIT 1",
+            sanitize_text_field( $token ),
+            current_time( 'mysql' )
+        ) );
+    }
+
+    /**
+     * ACDC 3.25.313 — LE LIEN PERSONNEL EXPIRE, LUI AUSSI.
+     *
+     * Cette requête ne portait AUCUNE condition de date, alors que ses deux
+     * voisines — jeton formateur et jeton de liste — refusent explicitement un
+     * jeton périmé. Une signature apposée des mois après la séance s'inscrivait
+     * donc sur la feuille, avec l'horodatage du jour : la pièce maîtresse d'un
+     * dossier Qualiopi devenait une preuve qu'un tiers pouvait remplir à
+     * n'importe quel moment.
+     * On joint la feuille pour lire SON expiration : c'est elle qui porte la
+     * date, et c'est la même règle pour les trois portes.
+     */
     public function get_learner_by_sign_token( $token ) {
         global $wpdb;
         return $wpdb->get_row( $wpdb->prepare(
-            "SELECT * FROM {$this->table_learners} WHERE sign_token = %s LIMIT 1",
-            sanitize_text_field( $token )
+            "SELECT l.* FROM {$this->table_learners} l
+               INNER JOIN {$this->table_sessions} s ON s.id = l.emarg_session_id
+              WHERE l.sign_token = %s
+                AND ( s.expires_at IS NULL OR s.expires_at > %s )
+              LIMIT 1",
+            sanitize_text_field( $token ),
+            current_time( 'mysql' )
         ) );
     }
 
@@ -840,12 +880,29 @@ class ACDC_Emarg_Core {
             }
         }
 
+        /* ACDC 3.25.313 — La signature d'un apprenant est LA preuve du dossier :
+           elle s'inscrit au journal commun, comme sa contestation possible. */
+        $this->acdc_tracer_emargement( 'emargement_signature_apprenant', $learner_row_id, array(
+            'retard_minutes' => (int) $late_minutes,
+        ) );
         return array( 'late_minutes' => $late_minutes );
     }
 
     /* -----------------------------------------------------------------------
      * Marquer absent
      * -------------------------------------------------------------------- */
+    /**
+     * ACDC 3.25.313 — MARQUER QUELQU'UN ABSENT LAISSE DÉSORMAIS UNE TRACE.
+     *
+     * Le module émargement était le SEUL des huit journaux séparés à n'avoir
+     * jamais été raccordé au journal commun en 3.25.299/301. Déclarer un
+     * apprenant absent n'écrivait strictement rien : ni qui, ni depuis où, ni
+     * quand. Trois mois après, si la personne conteste avoir été portée absente
+     * — et c'est une contestation sérieuse, elle touche à la facturation et au
+     * dossier Qualiopi — l'application ne pouvait pas dire qui avait cliqué.
+     * Cette action est de surcroît déclenchable depuis la page publique, avec le
+     * seul jeton de liste : raison de plus pour l'inscrire.
+     */
     public function mark_absent( $learner_row_id ) {
         global $wpdb;
         $now = current_time( 'mysql' );
@@ -853,6 +910,7 @@ class ACDC_Emarg_Core {
             array( 'status' => 'absent', 'is_absent' => 1, 'updated_at' => $now ),
             array( 'id' => absint( $learner_row_id ) )
         );
+        $this->acdc_tracer_emargement( 'emargement_absent', absint( $learner_row_id ) );
 
         // ACDC 3.25.115 — réévaluer la complétion après un marquage absent.
         $emarg_row = $wpdb->get_row( $wpdb->prepare(
@@ -907,6 +965,30 @@ class ACDC_Emarg_Core {
     /* -----------------------------------------------------------------------
      * URL publique d'émargement
      * -------------------------------------------------------------------- */
+    /**
+     * ACDC 3.25.313 — La porte de ce module vers le journal commun.
+     *
+     * ACDC_Emarg_Core est une classe AUTONOME : elle ne peut pas appeler les
+     * méthodes privées du plugin. On passe par la porte publique ouverte en
+     * 3.25.299, celle-là même qui a raccordé les sept autres journaux.
+     */
+    private function acdc_tracer_emargement( $action, $learner_row_id, $extra = array() ) {
+        if ( ! class_exists( 'ACDC_Formation_SAAS_Plugin' ) ) {
+            return;
+        }
+        $plugin = ACDC_Formation_SAAS_Plugin::get_instance();
+        if ( ! $plugin || ! method_exists( $plugin, 'acdc_journaliser' ) ) {
+            return;
+        }
+        $plugin->acdc_journaliser(
+            sanitize_key( (string) $action ),
+            'emargement_learner',
+            (int) $learner_row_id,
+            'success',
+            is_array( $extra ) ? $extra : array()
+        );
+    }
+
     public function get_public_url( $mode, $token ) {
         return add_query_arg( array( 'acdc_emarg' => $mode, 'tok' => $token ), home_url( '/' ) );
     }
