@@ -874,6 +874,52 @@ trait ACDC_Sessions_Actions_Trait {
         }
       }
     }
+
+    /* ACDC 3.25.318 — LE RATTRAPAGE DES SÉANCES DÉJÀ CLÔTURÉES.
+       La requête ci-dessus écarte les séances déjà « Terminée ». C'est juste
+       pour éviter de les reclôturer — mais tout le bas du cycle était accroché
+       à cette MÊME passe : certificats de réalisation, attestations de fin, et
+       le passage des dossiers à « formation réalisée ».
+       Conséquence observée le 18/08 : une séance passée à « Terminée » par une
+       autre voie que celle-ci — clôture manuelle, validation — sortait
+       définitivement du champ. Les certificats n'étaient jamais PRODUITS ni
+       STOCKÉS, donc jamais visibles dans l'espace de l'apprenant ; les dossiers
+       restaient « Pré-inscrit » ; et l'enquête à froid, accrochée au même
+       jalon, n'était jamais armée. Rien ne le signalait : l'écran
+       d'administration régénère le certificat à la demande, ce qui donnait à
+       croire que la pièce existait.
+       C'est la faute de fond que ce plugin répète : un drapeau posé AVANT le
+       travail, et le travail qui n'a jamais lieu.
+       On repasse donc sur les séances terminées dont la fin est passée. La
+       routine appelée est idempotente — acdc_completion_store_document() ne
+       refabrique pas une pièce existante, et advance_registration_workflow()
+       ne recule jamais un dossier. Le lot est borné : c'est un rattrapage, pas
+       un balayage complet à chaque passage du cron. */
+    $rattrapage = $wpdb->get_results(
+      "SELECT id, formation_id, status
+       FROM {$this->session_table}
+       WHERE COALESCE(
+           end_at,
+           CONCAT( COALESCE(end_date, '1970-01-01'), ' 23:59:59' )
+       ) < NOW()
+         AND ( end_at IS NOT NULL OR end_date IS NOT NULL )
+         AND COALESCE(is_draft, 0) = 0
+         AND COALESCE(status, '') = 'Terminée'
+       ORDER BY id DESC
+       LIMIT 20"
+    );
+
+    foreach ( (array) $rattrapage as $session ) {
+      $formation_id = (int) $session->formation_id;
+      if ( $formation_id <= 0 ) {
+        continue;
+      }
+      $this->acdc_completion_dispatch_for_session( (int) $session->id, $formation_id );
+      $linked_regs = $this->acdc_registrations_for_session( $session, $formation_id );
+      foreach ( (array) $linked_regs as $lr ) {
+        $this->advance_registration_workflow( (int) $lr->id, 'formation_realisee' );
+      }
+    }
   }
 
   /**
