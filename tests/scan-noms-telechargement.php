@@ -131,8 +131,8 @@ $exiger(
     'Le nom de la convention se compose à nouveau sans contexte : privée de la fiche entreprise, du prospect et des apprenants, la résolution du commanditaire retombe sur son TYPE et le fichier s’appelle « entreprise-… ».'
 );
 $exiger(
-    '' !== $corps_nom && (bool) preg_match( "/NomDocument::composer\(\s*\\\$nature/", $corps_nom ),
-    'Le nom de la convention ne passe plus par la porte commune des noms de documents.'
+    '' !== $corps_nom && (bool) preg_match( "/NomDocument::assembler\(\s*array\(\s*\\\$qui,\s*\\\$nature,\s*\\\$formation,\s*\\\$date\s*\)/", $corps_nom ),
+    'Le nom de la convention ne passe plus par la porte commune des noms de documents, ou l’ordre demandé — client, nature, formation, date — n’est plus respecté.'
 );
 $exiger(
     '' !== $corps_nom && false !== strpos( $corps_nom, "'Convention signée'" ),

@@ -38,11 +38,32 @@ trait Acdc_Proposals_Render_Trait {
       if ( ! $ts ) {
         continue;
       }
-      if ( 'inline' === $mode ) {
+      if ( 'inline' === $mode || 'plage' === $mode ) {
         $formatted[] = date_i18n( 'd/m/Y', $ts );
       } else {
         $formatted[] = 'Séance ' . ( $i + 1 ) . ' : ' . date_i18n( 'd/m/Y', $ts );
       }
+    }
+    /* ACDC 3.25.325 — LA PÉRIODE, POUR LES DOCUMENTS ENVOYÉS AU CLIENT.
+       Une proposition annonce quand la formation a lieu : deux jours de suite
+       se lisent « 18/08/2026 – 19/08/2026 », pas comme une énumération. On ne
+       relie par un tiret que des dates RÉELLEMENT consécutives — écrire une
+       plage là où il y a un trou entre les séances ferait annoncer au client
+       des journées qui n'existent pas. */
+    if ( 'plage' === $mode ) {
+      if ( count( $formatted ) < 2 ) {
+        return implode( ', ', $formatted );
+      }
+      $consecutives = true;
+      for ( $k = 1, $n = count( $parts ); $k < $n; $k++ ) {
+        if ( strtotime( $parts[ $k ] ) - strtotime( $parts[ $k - 1 ] ) !== DAY_IN_SECONDS ) {
+          $consecutives = false;
+          break;
+        }
+      }
+      return $consecutives
+        ? $formatted[0] . ' – ' . $formatted[ count( $formatted ) - 1 ]
+        : implode( ', ', $formatted );
     }
     return 'inline' === $mode
       ? implode( ', ', $formatted )
@@ -1765,6 +1786,7 @@ startxref
       'formation_hours_per_day'  => $is_edit ? (int) $p->formation_hours_per_day : 7,
       'formation_price_per_day'  => $is_edit ? (float) $p->formation_price_per_day : 900,
       'formation_total'          => $is_edit ? (float) $p->formation_total : 0,
+      'vat_regime'               => $is_edit && ! empty( $p->vat_regime ) ? (string) $p->vat_regime : '',
       'formation_learners_count' => $is_edit ? (int) $p->formation_learners_count : 1,
       'formation_funding'        => $is_edit ? (string) $p->formation_funding : '',
       'formation_dates'          => $is_edit ? (string) $p->formation_dates : '',
@@ -2095,6 +2117,31 @@ startxref
               </p>
             </div>
             <input type="hidden" name="proposal[formation_total]" id="acdc-full-total-hidden" value="<?php echo esc_attr( $v['formation_total'] ); ?>">
+
+            <?php
+            /* ACDC 3.25.325 — LE RÉGIME DE TVA MANQUAIT À L'APPEL.
+               La page financière de la proposition n'affichait que des montants
+               « net de TVA » : avec un profil à 20 %, le client lisait un prix
+               inférieur d'un cinquième à celui qu'il paiera. On demande donc ici
+               le régime, prérempli avec celui du profil et modifiable — une
+               formation peut être exonérée quand l'organisme ne l'est pas.
+               Enregistré sur la proposition, il ne bougera plus : une offre
+               déjà envoyée ne se réécrit pas toute seule. */
+            $__regime_prop = isset( $v['vat_regime'] ) && '' !== (string) $v['vat_regime']
+              ? (string) $v['vat_regime']
+              : $this->acdc_regime_tva_profil();
+            ?>
+            <div style="display:grid;grid-template-columns:1fr;gap:14px;margin-bottom:14px;">
+              <p style="margin:0;">
+                <label style="font-size:12px;font-weight:600;color:#0f2c52;display:block;margin-bottom:5px;">R&#233;gime de TVA de la proposition</label>
+                <select name="proposal[vat_regime]" style="width:100%;height:40px;border-radius:10px;border:1px solid #dfe5ee;padding:0 12px;font-size:13px;">
+                  <?php foreach ( \ACDC\Support\VatRegime::options() as $__rk => $__rl ) : ?>
+                    <option value="<?php echo esc_attr( $__rk ); ?>" <?php selected( $__regime_prop, $__rk ); ?>><?php echo esc_html( $__rl ); ?></option>
+                  <?php endforeach; ?>
+                </select>
+                <p class="description" style="margin:6px 0 0;font-size:11px;">Repris du profil de l&#8217;entreprise. C&#8217;est lui qui d&#233;cide si la page financi&#232;re affiche un total TTC ou la mention d&#8217;exon&#233;ration.</p>
+              </p>
+            </div>
 
             <div style="display:grid;grid-template-columns:1fr 1fr;gap:14px;margin-bottom:14px;">
               <p style="margin:0;">

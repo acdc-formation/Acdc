@@ -27,6 +27,23 @@ function verifie( $titre, $attendu, $obtenu ) {
     if ( ! $ok ) { $echecs[] = $titre; }
 }
 
+/* --- L'EXCEPTION DE LA CONVENTION : LE CLIENT EN TÊTE ---
+   Une convention par client, toutes portant le même titre de formation : c'est
+   le nom du client qui trie le dossier. Et la version signée le dit, sans quoi
+   les deux téléchargements portent le même nom. */
+verifie( 'la convention porte le client en tête, puis la formation',
+    'skill-conseil-convention-l-intelligence-artificielle-appliquee-a-votre-metier-18-08-2026.pdf',
+    N::assembler( array( 'Skill Conseil', 'Convention', "L’Intelligence Artificielle appliquée à votre métier", '18-08-2026' ) ) );
+verifie( '  la version signée ne se confond pas avec la vierge',
+    'skill-conseil-convention-signee-l-intelligence-artificielle-appliquee-a-votre-metier-18-08-2026.pdf',
+    N::assembler( array( 'Skill Conseil', 'Convention signée', "L’Intelligence Artificielle appliquée à votre métier", '18-08-2026' ) ) );
+verifie( '  un morceau vide ne laisse pas de tiret orphelin',
+    'skill-conseil-convention-18-08-2026.pdf',
+    N::assembler( array( 'Skill Conseil', 'Convention', '', '18-08-2026' ) ) );
+verifie( '  tout vide reste un nom, jamais rien',
+    'document.pdf',
+    N::assembler( array( '', '', '' ) ) );
+
 /* --- LA RÈGLE --- */
 verifie( 'les trois certificats d’un dossier se distinguent',
     'certificat-convention-de-formation-acme-sarl-16-08-2026.pdf',

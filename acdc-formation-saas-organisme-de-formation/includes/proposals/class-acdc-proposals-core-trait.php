@@ -106,6 +106,15 @@ trait Acdc_Proposals_Core_Trait {
     /* 3.24.65 — code postal et ville client */
     $this->maybe_add_table_column( $table, 'client_postal_code', "VARCHAR(20) DEFAULT ''" );
     $this->maybe_add_table_column( $table, 'client_city',        "VARCHAR(120) DEFAULT ''" );
+    /* ACDC 3.25.325 — LE RÉGIME DE TVA DE LA PROPOSITION.
+       La page financière n'affichait que des montants « net de TVA », quel que
+       soit le régime de l'organisme : le 18 août, la TVA était à 20 % dans le
+       profil et la proposition annonçait au client un prix sans elle — soit un
+       écart de 20 % entre l'offre et la facture qui la suivra.
+       Une proposition est un ENGAGEMENT DE PRIX : elle doit porter son régime,
+       comme le devis et la convention, pour qu'un changement ultérieur ne
+       réécrive pas une offre déjà envoyée. Vide, elle suit le profil. */
+    $this->maybe_add_table_column( $table, 'vat_regime', "VARCHAR(40) DEFAULT ''" );
 
     /* Backfill source_prospect_id pour les propositions existantes (via need_id → recueil) */
     $need_table = $wpdb->prefix . 'acdc_of_needs';

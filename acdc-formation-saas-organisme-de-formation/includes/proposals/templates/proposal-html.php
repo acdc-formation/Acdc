@@ -842,6 +842,27 @@ $pg_contact     = $_pg_num++;
 
     <div style="background:#d6a353;color:#fff;font-weight:800;font-size:18px;height:48px;display:flex;align-items:center;justify-content:center;text-transform:uppercase;letter-spacing:.04em;margin-bottom:0">Proposition financière</div>
 
+    <?php
+    /* ACDC 3.25.325 — Voir proposal-mpdf.php : le régime de TVA et la mise en
+       forme des dates valent pour les deux versions du même document. Une
+       version HTML qui annoncerait un autre total que le PDF serait pire que le
+       défaut qu'elle corrige. */
+    $__regime_prop = '';
+    if ( ! empty( $p->vat_regime ) ) {
+      $__regime_prop = (string) $p->vat_regime;
+    } elseif ( method_exists( $this, 'acdc_regime_tva_profil' ) ) {
+      $__regime_prop = $this->acdc_regime_tva_profil();
+    }
+    $__tva      = \ACDC\Support\VatRegime::get( $__regime_prop );
+    $__taux     = (float) $__tva['taux'];
+    $__avec_tva = $__taux > 0.0;
+    $__ht       = (float) $p->formation_total;
+    $__mt_tva   = $__ht * $__taux / 100;
+    $__ttc      = $__ht + $__mt_tva;
+    $__dates_prop = method_exists( $this, 'acdc_format_seances_list' )
+      ? $this->acdc_format_seances_list( (string) $p->formation_dates, 'plage' )
+      : (string) $p->formation_dates;
+    ?>
     <table class="tbl" style="margin-bottom:16px">
       <tr>
         <td style="padding:14px 12px;width:42%;vertical-align:middle"><strong style="color:#0f2c52">Lieu de formation</strong></td>
@@ -849,7 +870,7 @@ $pg_contact     = $_pg_num++;
       </tr>
       <tr>
         <td style="padding:14px 12px;vertical-align:middle"><strong style="color:#0f2c52">Date prévue de la formation</strong></td>
-        <td style="padding:14px 12px;color:#0f2c52;vertical-align:middle"><?php echo $p->formation_dates ? nl2br( esc_html( $p->formation_dates ) ) : 'À confirmer'; ?></td>
+        <td style="padding:14px 12px;color:#0f2c52;vertical-align:middle"><?php echo $__dates_prop ? esc_html( $__dates_prop ) : 'À confirmer'; ?></td>
       </tr>
       <tr>
         <td style="padding:14px 12px;vertical-align:middle"><strong style="color:#0f2c52">Date limite de confirmation</strong></td>
@@ -859,27 +880,42 @@ $pg_contact     = $_pg_num++;
 
     <table class="tbl">
       <tr>
-        <th>Désignation</th><th>Montant net de TVA</th><th>Quantité</th><th>Remise</th><th>Total net de TVA</th>
+        <th>Désignation</th><th><?php echo $__avec_tva ? 'Montant HT' : 'Montant net de TVA'; ?></th><th>Quantité</th><th>Remise</th><th><?php echo $__avec_tva ? 'Total HT' : 'Total net de TVA'; ?></th>
       </tr>
       <tr>
         <td><?php echo $formation_title_esc; ?></td>
         <td><strong><?php echo number_format( (float) $p->formation_price_per_day, 0, ',', '&#160;' ); ?>&nbsp;€/jour</strong></td>
         <td><?php echo (int) $p->formation_days; ?></td>
         <td><?php echo $p->formation_discount ? esc_html( $p->formation_discount ) : '&mdash;'; ?></td>
-        <td><strong><?php echo number_format( (float) $p->formation_total, 0, ',', '&#160;' ); ?>&nbsp;€</strong><br><span style="font-weight:400;font-size:10px">net de TVA</span></td>
+        <td><strong><?php echo number_format( (float) $p->formation_total, 0, ',', '&#160;' ); ?>&nbsp;€</strong><br><span style="font-weight:400;font-size:10px"><?php echo $__avec_tva ? 'HT' : 'net de TVA'; ?></span></td>
       </tr>
       <tr><td>Ressources compl&eacute;mentaires</td><td><strong><?php echo $p->extra_resources_label ? esc_html( $p->extra_resources_label ) : 'Offertes'; ?></strong></td><td></td><td></td><td></td></tr>
       <tr><td>Frais de d&eacute;placement et d&apos;h&eacute;bergement</td><td><strong><?php echo $p->travel_costs_label ? esc_html( $p->travel_costs_label ) : 'Offerts'; ?></strong></td><td></td><td></td><td></td></tr>
+      <?php if ( $__avec_tva ) : ?>
+      <tr>
+        <td colspan="4"><strong>TOTAL HT</strong></td>
+        <td><strong><?php echo number_format( $__ht, 2, ',', '&#160;' ); ?>&nbsp;€</strong></td>
+      </tr>
+      <tr>
+        <td colspan="4"><strong>TVA <?php echo esc_html( rtrim( rtrim( number_format( $__taux, 2, ',', '' ), '0' ), ',' ) ); ?>&nbsp;%</strong></td>
+        <td><strong><?php echo number_format( $__mt_tva, 2, ',', '&#160;' ); ?>&nbsp;€</strong></td>
+      </tr>
+      <tr style="background:#f0e8d8">
+        <td colspan="4"><strong>TOTAL TTC DE LA PROPOSITION</strong></td>
+        <td><strong><?php echo number_format( $__ttc, 2, ',', '&#160;' ); ?>&nbsp;€</strong><br><span style="font-weight:400;font-size:10px">TTC</span></td>
+      </tr>
+      <?php else : ?>
       <tr style="background:#f0e8d8">
         <td colspan="4"><strong>TOTAL DE LA PROPOSITION</strong></td>
         <td><strong><?php echo number_format( (float) $p->formation_total, 0, ',', '&#160;' ); ?>&nbsp;€</strong><br><span style="font-weight:400;font-size:10px">net de TVA</span></td>
       </tr>
+      <?php endif; ?>
     </table>
 
     <?php
     /* ACDC 3.25.309 — Voir proposal-mpdf.php : référence légale écrite en dur,
        remplacée par le régime réel de l'organisme. */
-    $acdc_mention_tva = method_exists( $this, 'acdc_mention_tva_profil' ) ? $this->acdc_mention_tva_profil() : '';
+    $acdc_mention_tva = (string) $__tva['mention'];
     ?>
     <?php if ( '' !== $acdc_mention_tva ) : ?><p style="margin-top:6px;color:#475569"><?php echo esc_html( $acdc_mention_tva ); ?></p><?php endif; ?>
     <p style="margin-top:3px;color:#475569">Déclaration d'activité enregistrée sous le numéro <?php echo esc_html( $acdc['nda'] ); ?> auprès du préfet de région PACA.<br>Cet enregistrement ne vaut pas agrément de l'État.</p>

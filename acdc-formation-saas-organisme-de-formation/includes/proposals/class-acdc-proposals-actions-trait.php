@@ -422,6 +422,13 @@ trait Acdc_Proposals_Actions_Trait {
     if ( isset( $raw['client_email'] ) ) {
       $clean['client_email'] = sanitize_email( wp_unslash( (string) $raw['client_email'] ) );
     }
+    /* ACDC 3.25.325 — Le régime de TVA de la proposition. On n'accepte qu'une
+       clé connue : un régime inventé ferait imprimer un taux sans mention, ou
+       une mention sans fondement. Vide = la proposition suit le profil. */
+    if ( isset( $raw['vat_regime'] ) ) {
+      $__regime = sanitize_text_field( wp_unslash( (string) $raw['vat_regime'] ) );
+      $clean['vat_regime'] = \ACDC\Support\VatRegime::existe( $__regime ) ? $__regime : '';
+    }
     return $clean;
   }
 

@@ -74,9 +74,17 @@ final class NomDocument {
         if ( '' === $base ) {
             $base = self::SANS_NOM;
         }
-        /* Les systèmes de fichiers et les en-têtes HTTP n'aiment pas les noms
-           interminables : on borne, sans jamais couper au milieu d'un mot si on
-           peut l'éviter. */
+        $base = self::borner( $base );
+        $ext = self::slug( $extension );
+        return '' !== $ext ? $base . '.' . $ext : $base;
+    }
+
+    /**
+     * Les systèmes de fichiers et les en-têtes HTTP n'aiment pas les noms
+     * interminables : on borne, sans jamais couper au milieu d'un mot si on
+     * peut l'éviter.
+     */
+    private static function borner( $base ) {
         if ( strlen( $base ) > 120 ) {
             $base    = substr( $base, 0, 120 );
             $dernier = strrpos( $base, '-' );
@@ -85,7 +93,39 @@ final class NomDocument {
             }
             $base = rtrim( $base, '-' );
         }
-        $ext = self::slug( $extension );
+        return $base;
+    }
+
+    /**
+     * Le même nom, mais dans un ordre choisi par l'appelant.
+     *
+     * La règle commune met la nature devant, parce qu'on classe d'abord par
+     * type de pièce. La convention fait exception, et l'exploitant a raison :
+     * il en édite une par client, toutes portant le même titre de formation.
+     * C'est le nom du client qui doit trier le dossier, donc venir en tête.
+     *
+     * Cette porte prend les morceaux dans l'ordre voulu, les nettoie et les
+     * assemble avec la même mesure et le même bornage que composer(), pour
+     * qu'il n'existe jamais deux façons de fabriquer un nom.
+     *
+     * @param array  $morceaux  Les parties, déjà dans l'ordre d'affichage.
+     * @param string $extension Sans le point.
+     * @return string
+     */
+    public static function assembler( array $morceaux, $extension = 'pdf' ) {
+        $propres = array();
+        foreach ( $morceaux as $part ) {
+            $slug = self::slug( $part );
+            if ( '' !== $slug ) {
+                $propres[] = $slug;
+            }
+        }
+        $base = implode( '-', $propres );
+        if ( '' === $base ) {
+            $base = self::SANS_NOM;
+        }
+        $base = self::borner( $base );
+        $ext  = self::slug( $extension );
         return '' !== $ext ? $base . '.' . $ext : $base;
     }
 

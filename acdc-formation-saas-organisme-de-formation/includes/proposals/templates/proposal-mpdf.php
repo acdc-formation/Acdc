@@ -222,7 +222,14 @@ $_img3 = ! empty( $th_imgs['projet'] ) ? (string)$th_imgs['projet'] : $img_cover
   <tr><td class="lbl">Durée</td><td><?php echo $e($p->formation_days); ?> jour<?php echo (int)$p->formation_days>1?'s':'';?> de <?php echo $e($p->formation_hours_per_day);?>h (<?php echo $e($total_hours);?>h)</td></tr>
   <tr><td class="lbl">Effectifs</td><td>Groupe : <?php echo $e($p->formation_learners_count);?> apprenant<?php echo (int)$p->formation_learners_count>1?'s':'';?></td></tr>
   <?php if($p->formation_funding):?><tr><td class="lbl">Financement</td><td><?php echo $e($p->formation_funding);?></td></tr><?php endif;?>
-  <?php if($p->formation_dates):?><tr><td class="lbl">Dates prévues</td><td><?php echo $nl($p->formation_dates);?></td></tr><?php endif;?>
+  <?php
+  /* Même porte que la page financière : les dates de séances se lisent
+     « 18/08/2026 – 19/08/2026 », jamais « 2026-08-18,2026-08-19 ». */
+  $__dates_projet = method_exists( $this, 'acdc_format_seances_list' )
+    ? $this->acdc_format_seances_list( (string) $p->formation_dates, 'plage' )
+    : (string) $p->formation_dates;
+  ?>
+  <?php if($__dates_projet):?><tr><td class="lbl">Dates prévues</td><td><?php echo $e($__dates_projet);?></td></tr><?php endif;?>
   <?php if($p->formation_location):?><tr><td class="lbl">Lieu</td><td><?php echo $nl($p->formation_location);?></td></tr><?php endif;?>
 </table>
 <?php
@@ -412,13 +419,43 @@ $_pg_fin = 10 + $prog_days;
 <div class="cnt">
 <p class="lbl" style="margin-bottom:10pt;">Date de la proposition&nbsp;: <?php echo $e($date_prop);?></p>
 <?php echo $rib('Proposition financière');?>
+<?php
+/* ACDC 3.25.325 — LA PAGE FINANCIÈRE IGNORAIT LA TVA.
+   Tout y était libellé « net de TVA », en dur, quel que soit le régime. Avec un
+   profil à 20 %, le client lisait un prix inférieur d'un cinquième à celui de la
+   facture qui suivra : ce n'est pas une coquille d'affichage, c'est une offre
+   commerciale fausse.
+   Le régime de la PROPOSITION prime — elle le porte depuis 3.25.325 — et à
+   défaut c'est celui du profil, en vigueur au moment de l'édition. */
+$__regime_prop = '';
+if ( ! empty( $p->vat_regime ) ) {
+  $__regime_prop = (string) $p->vat_regime;
+} elseif ( method_exists( $this, 'acdc_regime_tva_profil' ) ) {
+  $__regime_prop = $this->acdc_regime_tva_profil();
+}
+$__tva      = \ACDC\Support\VatRegime::get( $__regime_prop );
+$__taux     = (float) $__tva['taux'];
+$__avec_tva = $__taux > 0.0;
+$__ht       = (float) $p->formation_total;
+$__mt_tva   = $__ht * $__taux / 100;
+$__ttc      = $__ht + $__mt_tva;
+$__eur      = static function( $montant ) { return number_format( (float) $montant, 2, ',', ' ' ); };
+$__lib_col  = $__avec_tva ? 'Montant HT' : 'Montant net TVA';
+$__lib_tot  = $__avec_tva ? 'Total HT'   : 'Total net TVA';
+/* Les dates arrivaient telles qu'elles sont stockées — « 2026-08-18,2026-08-19 »
+   — sur un document envoyé au client. Le reste du plugin les met en forme
+   depuis toujours par cette porte ; cette page ne l'appelait pas. */
+$__dates_prop = method_exists( $this, 'acdc_format_seances_list' )
+  ? $this->acdc_format_seances_list( (string) $p->formation_dates, 'plage' )
+  : (string) $p->formation_dates;
+?>
 <table class="fin" style="margin-bottom:8pt;">
   <?php if($p->formation_location):?><tr><td class="lbl" style="width:38%;">Lieu de formation</td><td><?php echo $nl($p->formation_location);?></td></tr><?php endif;?>
-  <?php if($p->formation_dates):?><tr><td class="lbl">Date prévue</td><td><?php echo $nl($p->formation_dates);?></td></tr><?php endif;?>
+  <?php if($__dates_prop):?><tr><td class="lbl">Date prévue</td><td><?php echo $e($__dates_prop);?></td></tr><?php endif;?>
   <tr><td class="lbl">Date limite de confirmation</td><td><?php echo $p->proposal_deadline?$e($p->proposal_deadline):'Le plus tôt possible';?></td></tr>
 </table>
 <table class="fin" style="margin-bottom:6pt;">
-  <tr><th style="width:40%;">Désignation</th><th>Montant net TVA</th><th>Qté</th><th>Remise</th><th>Total net TVA</th></tr>
+  <tr><th style="width:40%;">Désignation</th><th><?php echo $e($__lib_col);?></th><th>Qté</th><th>Remise</th><th><?php echo $e($__lib_tot);?></th></tr>
   <tr>
     <td><?php echo $form_title_esc;?></td>
     <td style="font-weight:bold;"><?php echo $e(number_format((float)$p->formation_price_per_day,0,',',' '));?>&nbsp;€/jour</td>
@@ -428,15 +465,20 @@ $_pg_fin = 10 + $prog_days;
   </tr>
   <tr><td>Ressources complémentaires</td><td style="font-weight:bold;"><?php echo $p->extra_resources_label?$e($p->extra_resources_label):'Offertes';?></td><td></td><td></td><td></td></tr>
   <tr><td>Frais de déplacement</td><td style="font-weight:bold;"><?php echo $p->travel_costs_label?$e($p->travel_costs_label):'Offertes';?></td><td></td><td></td><td></td></tr>
+<?php if ( $__avec_tva ) : ?>
+  <tr><td colspan="4" style="text-align:right;">TOTAL HT</td><td><?php echo $e($__eur($__ht));?>&nbsp;€</td></tr>
+  <tr><td colspan="4" style="text-align:right;">TVA <?php echo $e(rtrim(rtrim(number_format($__taux,2,',',''),'0'),','));?>&nbsp;%</td><td><?php echo $e($__eur($__mt_tva));?>&nbsp;€</td></tr>
+  <tr class="tot"><td colspan="4" style="text-align:right;">TOTAL TTC DE LA PROPOSITION</td><td><?php echo $e($__eur($__ttc));?>&nbsp;€ TTC</td></tr>
+<?php else : ?>
   <tr class="tot"><td colspan="4" style="text-align:right;">TOTAL DE LA PROPOSITION</td><td><?php echo $e(number_format((float)$p->formation_total,0,',',' '));?>&nbsp;€ net de TVA</td></tr>
+<?php endif; ?>
 </table>
 <?php
 /* ACDC 3.25.309 — La référence légale était écrite en dur ici : l'article 293 B
    (franchise en base) s'imprimait quel que soit le régime réel de l'organisme,
-   et pendant que le devis du même dossier facturait 20 %. Elle vient désormais
-   du régime choisi dans le profil de l'entreprise, et disparaît quand la TVA
-   s'applique. */
-$acdc_mention_tva = method_exists( $this, 'acdc_mention_tva_profil' ) ? $this->acdc_mention_tva_profil() : '';
+   et pendant que le devis du même dossier facturait 20 %. Elle suit désormais le
+   régime retenu pour la proposition, et disparaît quand la TVA s'applique. */
+$acdc_mention_tva = (string) $__tva['mention'];
 if ( '' !== $acdc_mention_tva ) : ?>
 <p style="font-size:8pt;color:#6b7280;margin-bottom:3pt;"><?php echo $e( $acdc_mention_tva ); ?></p>
 <?php endif; ?>

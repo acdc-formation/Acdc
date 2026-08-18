@@ -2473,7 +2473,17 @@ trait ACDC_Dossiers_Contracts_Core_Trait {
     if ( $est_personne ) {
       $nature = $signee ? 'Contrat de formation signé' : 'Contrat de formation';
     } else {
-      $nature = $signee ? 'Convention signée' : 'Convention de formation';
+      $nature = $signee ? 'Convention signée' : 'Convention';
+    }
+
+    /* Le titre de la formation est conservé : deux conventions d'un même client
+       pour deux formations différentes doivent se distinguer. Il vient APRÈS le
+       nom du client, qui est ce par quoi on trie un dossier de téléchargements. */
+    $formation = '';
+    if ( ! empty( $contract->formation_title ) ) {
+      $formation = (string) $contract->formation_title;
+    } elseif ( ! empty( $context['formation']->title ) ) {
+      $formation = (string) $context['formation']->title;
     }
 
     /* La date qui compte : celle de la signature quand il y en a une, celle du
@@ -2488,7 +2498,7 @@ trait ACDC_Dossiers_Contracts_Core_Trait {
     }
     $date = '' !== $source_date ? mysql2date( 'd-m-Y', $source_date ) : '';
 
-    return \ACDC\Support\NomDocument::composer( $nature, $qui, $date, 'pdf' );
+    return \ACDC\Support\NomDocument::assembler( array( $qui, $nature, $formation, $date ), 'pdf' );
   }
 
   /**
