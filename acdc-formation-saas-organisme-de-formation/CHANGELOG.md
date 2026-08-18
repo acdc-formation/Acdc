@@ -4,6 +4,49 @@ Toutes les modifications notables de ce projet sont documentées ici.
 Format inspiré de [Keep a Changelog](https://keepachangelog.com/fr/1.1.0/).
 L'historique détaillé antérieur est archivé dans [`release-notes/`](release-notes/).
 
+## [3.25.325] — 2026-08-18
+
+### Corrigé — Les relevés de la première journée de formation réelle
+
+**Confidentialité — chaque apprenant voyait les analyses du besoin des autres.**
+L'extranet listait les analyses en interrogeant le DOSSIER, commun aux trois apprenants
+d'une même session : chacun lisait ce que les autres avaient déclaré d'eux-mêmes, et
+l'analyse du commanditaire par-dessus le marché. La lecture se fait désormais sur le seul
+rattachement à l'apprenant. Corrige un défaut introduit en 3.25.306.
+
+- **L'analyse du commanditaire portait le nom de son signataire**, donc le nom d'une
+  apprenante, d'où deux analyses apparemment identiques. La fiche société est rechargée
+  une fois son identifiant résolu depuis le prospect.
+- **Noms de fichiers.** La convention téléchargée s'appelait « entreprise-… » : le TYPE de
+  commanditaire au lieu de son nom, faute de contexte chargé. Elle porte maintenant le nom
+  du client, puis la nature, la formation et la date — et la version signée le dit. Le
+  recueil des besoins, lui, cherchait l'entreprise sur une colonne que sa saisie ne remplit
+  pas : il descend jusqu'au prospect, et porte sa date.
+- **Proposition commerciale — le prix annoncé n'était pas celui qui sera facturé.** La page
+  financière libellait tout « net de TVA » quel que soit le régime : avec un profil à 20 %,
+  le client lisait un prix inférieur d'un cinquième à sa facture. La proposition porte
+  désormais son régime, prérempli depuis le profil, et affiche TOTAL HT, TVA et TOTAL TTC.
+  Les dates de séances s'y lisent « 18/08/2026 – 19/08/2026 » et non plus telles qu'elles
+  sont stockées.
+- **Quiz — la bonne réponse était toujours la première**, et les choix multiples sortaient
+  dans l'ordre de l'alphabet : cocher A partout donnait 100 %. Les propositions sont
+  mélangées, de façon stable d'un affichage à l'autre.
+- **Quiz — toute réponse rédigée était refusée « Temps écoulé ».** Le serveur chronométrait
+  sur la colonne brute quand l'écran, lui, ne chronomètre pas une réponse à rédiger.
+- **Quiz live — « non rattaché à un apprenant » sous des noms lisibles.** Le pseudo saisi en
+  salle est rapproché des apprenants de la séance, et rattaché seulement si une seule
+  personne correspond.
+- **Quiz — l'ordre de la liste du formateur** suit la séquence pédagogique, et le lancement
+  en live ouvre son propre onglet.
+- **Podium — un jouet sous des géants.** L'image portait 60 % de vide et se dimensionnait
+  sur la hauteur de l'écran pendant que les personnages se dimensionnaient en « vh ».
+  Recadrée, elle devient une scène aux proportions fixes où les trois places sont mesurées
+  sur les pixels. Vérifié en rendant la page à 1920, 1366, 1024 et 390 px.
+- **Quatre écrans cherchaient au mauvais endroit** : « Quiz effectués » interrogeait la
+  table des documents, « Feuilles d'émargement » n'offrait aucun téléchargement,
+  « Résultats analyses complétées » affirmait une complétude non vérifiée et ne donnait pas
+  le PDF, et l'extranet apprenant ne reconnaissait les quiz à faire que par une adresse.
+
 ## [3.25.314] — 2026-08-17
 
 ### Corrigé — Les sept défauts introduits par les corrections de la 3.25.313
