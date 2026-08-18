@@ -106,6 +106,7 @@ trait ACDC_Sessions_Render_Trait {
           </div>
         <?php endforeach; ?>
       </div>
+      <?php $this->acdc_rendre_bilan_post_formation( $session ); ?>
       <?php $this->render_session_documents_panel( $session ); ?>
       <?php
       return;
@@ -378,6 +379,55 @@ trait ACDC_Sessions_Render_Trait {
         }
       })();
     </script>
+    <?php
+  }
+
+  /**
+   * ACDC 3.25.323 — LE BILAN DU FORMATEUR REMONTE ENFIN À L'ORGANISME.
+   *
+   * Le formateur remplit, à la fin de chaque séance, un bilan post-formation :
+   * niveau du groupe, objectifs atteints, incidents, recommandations. Il
+   * s'enregistrait bien — et ne s'affichait NULLE PART hors de son propre
+   * portail. Les colonnes existaient dans la table des séances ; aucun écran
+   * côté organisme ne les lisait.
+   *
+   * Ce n'est pas un détail d'affichage : c'est l'indicateur 21 de Qualiopi, qui
+   * demande à l'organisme de recueillir l'appréciation de ses formateurs. Le
+   * recueil avait lieu, la preuve était invisible, et le hub qualité annonçait
+   * « 2 formateurs sans bilan depuis +12 mois ».
+   *
+   * On ne montre le bloc que s'il y a quelque chose à montrer : un cadre vide
+   * sur toutes les séances passées ferait du bruit sans rien apprendre.
+   */
+  private function acdc_rendre_bilan_post_formation( $session ) {
+    if ( ! $session ) {
+      return;
+    }
+    $niveau      = trim( (string) ( $session->report_group_level ?? '' ) );
+    $objectifs   = trim( (string) ( $session->report_objectives_reached ?? '' ) );
+    $incidents   = trim( (string) ( $session->report_incidents ?? '' ) );
+    $recos       = trim( (string) ( $session->report_recommendations ?? '' ) );
+    $depose_le   = trim( (string) ( $session->report_submitted_at ?? '' ) );
+
+    if ( '' === $niveau && '' === $objectifs && '' === $incidents && '' === $recos ) {
+      return;
+    }
+    ?>
+    <div class="acdc-panel acdc-mb-18">
+      <h3>Bilan post-formation du formateur</h3>
+      <p class="acdc-help" style="margin-top:-4px;">
+        Renseigné par le formateur depuis son extranet, à l’issue de la séance.
+        <?php if ( '' !== $depose_le ) : ?>
+          Déposé le <?php echo esc_html( mysql2date( 'd/m/Y à H:i', $depose_le ) ); ?>.
+        <?php endif; ?>
+      </p>
+      <div class="acdc-list-details">
+        <div><strong>Niveau du groupe :</strong> <?php echo esc_html( '' !== $niveau ? $niveau : '—' ); ?></div>
+        <div><strong>Objectifs atteints :</strong> <?php echo esc_html( '' !== $objectifs ? $objectifs : '—' ); ?></div>
+        <div><strong>Incidents et difficultés :</strong> <?php echo '' !== $incidents ? nl2br( esc_html( $incidents ) ) : '—'; ?></div>
+        <div><strong>Recommandations pour la prochaine session :</strong> <?php echo '' !== $recos ? nl2br( esc_html( $recos ) ) : '—'; ?></div>
+      </div>
+    </div>
     <?php
   }
 

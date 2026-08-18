@@ -697,7 +697,28 @@ trait ACDC_Sessions_Core_Trait {
     return '—';
   }
 
+  /**
+   * ACDC 3.25.323 — LA DURÉE, C'EST LE TEMPS DE FORMATION, PAS L'AMPLITUDE.
+   *
+   * Cette fonction soustrayait le début de la fin : 09:00 → 17:00 donnait 8 h.
+   * Or la journée compte deux demi-journées — 09:00–12:30 et 13:30–17:00 — soit
+   * 7 h. La pause déjeuner était comptée comme du temps de formation.
+   *
+   * L'écart n'est pas cosmétique : la convention, le devis et les certificats
+   * annoncent 14 h pour deux jours, pendant que les statistiques formateurs
+   * affichaient 16 h. Deux chiffres pour la même réalité, et c'est le plus
+   * flatteur qui sortait — sur une base facturable et auditable.
+   *
+   * Les demi-journées existent, dans la feuille d'émargement : chacune porte son
+   * début et sa fin. On les additionne quand elles sont là, ce qui donne le
+   * temps réellement dispensé. Sans elles — une séance sans émargement — on
+   * retombe sur l'amplitude, faute de mieux, et c'est signalé par le code.
+   */
   private function get_session_duration_label( $session ) {
+    $minutes_demi = $this->acdc_session_minutes_demi_journees( $session );
+    if ( $minutes_demi > 0 ) {
+      return $this->acdc_session_duree_texte( $minutes_demi );
+    }
     if ( empty( $session->start_at ) || empty( $session->end_at ) ) {
       return '—';
     }
@@ -706,9 +727,51 @@ trait ACDC_Sessions_Core_Trait {
     if ( ! $start || ! $end || $end <= $start ) {
       return '—';
     }
-    $minutes = (int) round( ( $end - $start ) / 60 );
+    return $this->acdc_session_duree_texte( (int) round( ( $end - $start ) / 60 ) );
+  }
+
+  /**
+   * ACDC 3.25.323 — Le temps réellement dispensé, demi-journée par demi-journée.
+   *
+   * @return int Minutes, ou 0 si la séance n'a pas de demi-journées connues.
+   */
+  private function acdc_session_minutes_demi_journees( $session ) {
+    global $wpdb;
+
+    if ( empty( $session->id ) ) {
+      return 0;
+    }
+    $table = $wpdb->prefix . 'acdc_of_emarg_sessions';
+    if ( $wpdb->get_var( $wpdb->prepare( 'SHOW TABLES LIKE %s', $table ) ) !== $table ) {
+      return 0;
+    }
+    $lignes = $wpdb->get_results( $wpdb->prepare(
+      "SELECT seance_start_at, seance_end_at FROM {$table}
+        WHERE session_id = %d AND seance_start_at IS NOT NULL AND seance_end_at IS NOT NULL",
+      (int) $session->id
+    ) );
+    if ( empty( $lignes ) ) {
+      return 0;
+    }
+    $minutes = 0;
+    foreach ( $lignes as $ligne ) {
+      $debut = strtotime( (string) $ligne->seance_start_at );
+      $fin   = strtotime( (string) $ligne->seance_end_at );
+      if ( $debut && $fin && $fin > $debut ) {
+        $minutes += (int) round( ( $fin - $debut ) / 60 );
+      }
+    }
+    return $minutes;
+  }
+
+  /** Des minutes en « 7 h », « 3 h 30 » ou « 45 min ». */
+  private function acdc_session_duree_texte( $minutes ) {
+    $minutes = (int) $minutes;
+    if ( $minutes <= 0 ) {
+      return '—';
+    }
     $hours = (int) floor( $minutes / 60 );
-    $rest = $minutes % 60;
+    $rest  = $minutes % 60;
     if ( $hours > 0 && $rest > 0 ) {
       /* ACDC 3.25.207 — « 3h30 min » doublait l'unité : les minutes étaient
          déjà dites par le « 30 ». On écrit « 3 h 30 », comme un horaire. */

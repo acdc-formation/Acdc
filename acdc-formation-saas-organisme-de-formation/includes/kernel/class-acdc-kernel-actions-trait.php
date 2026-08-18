@@ -5787,6 +5787,11 @@ public function handle_purge_plugin_data() {
       array( 'id' => (int) $analysis->id )
     );
 
+    /* ACDC 3.25.323 — La pièce est fabriquée MAINTENANT, pas au premier clic.
+       L'extranet de l'apprenant ne lit que « document_url_apprenant » : tant
+       qu'elle est vide, il ne voit rien, même sur une analyse complétée. */
+    $this->acdc_nad_apprenant_pdf_stocke( (int) $analysis->id );
+
     // ACDC 3.21.29-hotfix4 — Propagation des corrections d'identité.
     // Si le répondant a corrigé son nom/prénom/email/téléphone, on met à jour :
     // 1. Les champs repondant_* de l'analyse elle-même.
@@ -7612,6 +7617,95 @@ public function handle_purge_plugin_data() {
   }
 
   // ── ACDC 3.25.22 — Génération PDF analyse du besoin apprenant ────────────
+  /**
+   * ACDC 3.25.323 — LE PDF DE L'APPRENANT NE DÉPEND PLUS D'UN CLIC.
+   *
+   * « document_url_apprenant » n'était renseignée que par le téléchargement du
+   * PDF depuis l'administration : un EFFET DE BORD d'une consultation. Or
+   * l'extranet de l'apprenant ne lit que cette colonne.
+   *
+   * Conséquence constatée le 18/08 : l'analyse du besoin de Bérengère était
+   * « Traité / Complétée » côté organisme, et son onglet « Analyses du besoin »
+   * affichait zéro. Elle ne l'aurait vue que si quelqu'un, un jour, avait ouvert
+   * son PDF — c'est-à-dire jamais.
+   *
+   * La pièce se fabrique donc à la COMPLÉTION, quand la réponse arrive. La
+   * fonction est idempotente : elle ne refabrique pas un PDF déjà stocké, pour
+   * qu'une pièce déjà consultée ne change pas sous les pieds de qui l'a
+   * téléchargée.
+   *
+   * @param int $nad_id L'analyse.
+   * @return string L'adresse du PDF stocké, ou '' si la fabrication a échoué.
+   */
+  private function acdc_nad_apprenant_pdf_stocke( $nad_id ) {
+    global $wpdb;
+
+    $nad_id = absint( $nad_id );
+    if ( ! $nad_id ) {
+      return '';
+    }
+    $nad = $wpdb->get_row( $wpdb->prepare( "SELECT * FROM {$this->need_analysis_table} WHERE id = %d", $nad_id ) );
+    if ( ! $nad ) {
+      return '';
+    }
+    if ( ! empty( $nad->document_url_apprenant ) ) {
+      return (string) $nad->document_url_apprenant;
+    }
+
+    $uploads = wp_upload_dir();
+    if ( empty( $uploads['basedir'] ) || empty( $uploads['baseurl'] ) ) {
+      return '';
+    }
+    $dir_path = trailingslashit( $uploads['basedir'] ) . 'acdc-nad-apprenants/' . $nad_id . '/';
+    $dir_url  = trailingslashit( $uploads['baseurl'] ) . 'acdc-nad-apprenants/' . $nad_id . '/';
+    if ( ! wp_mkdir_p( $dir_path ) ) {
+      return '';
+    }
+
+    $filename = 'analyse-besoin-' . sanitize_file_name( (string) $nad->title ) . '.pdf';
+    $filepath = $dir_path . $filename;
+    $fileurl  = $dir_url . rawurlencode( $filename );
+
+    $autoload = dirname( dirname( dirname( dirname( plugin_dir_path( __FILE__ ) ) ) ) ) . '/acdc-libs/vendor/autoload.php';
+    if ( file_exists( $autoload ) ) { require_once $autoload; }
+    if ( ! class_exists( '\Mpdf\Mpdf' ) ) {
+      return '';
+    }
+
+    try {
+      $html = $this->acdc_build_nad_apprenant_pdf_html( $nad );
+      $mpdf = new \Mpdf\Mpdf( array(
+        'format' => 'A4', 'margin_top' => 14, 'margin_bottom' => 14,
+        'margin_left' => 14, 'margin_right' => 14, 'tempDir' => sys_get_temp_dir(),
+      ) );
+      $mpdf->SetTitle( sanitize_file_name( $filename ) );
+      $mpdf->WriteHTML( $html );
+      $pdf_raw = $mpdf->Output( $filename, 'S' );
+    } catch ( \Throwable $e ) {
+      /* Une fabrication ratée ne doit pas faire échouer l'enregistrement de la
+         réponse : l'analyse est complétée, c'est l'essentiel. Le PDF restera
+         fabricable au premier téléchargement, comme avant. */
+      return '';
+    }
+
+    if ( ! is_string( $pdf_raw ) || '' === $pdf_raw ) {
+      return '';
+    }
+    if ( false === file_put_contents( $filepath, $pdf_raw ) ) { // phpcs:ignore WordPress.WP.AlternativeFunctions.file_system_operations_file_put_contents
+      return '';
+    }
+
+    $wpdb->update(
+      $this->need_analysis_table,
+      array( 'document_url_apprenant' => esc_url_raw( $fileurl ) ),
+      array( 'id' => $nad_id ),
+      array( '%s' ),
+      array( '%d' )
+    );
+
+    return $fileurl;
+  }
+
   public function handle_generate_nad_apprenant_pdf() {
     $this->require_manage_options();
     $nad_id = isset( $_GET['nad_id'] ) ? absint( wp_unslash( $_GET['nad_id'] ) ) : 0;

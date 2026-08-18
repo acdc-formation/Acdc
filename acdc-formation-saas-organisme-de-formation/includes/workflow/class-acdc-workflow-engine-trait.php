@@ -1823,6 +1823,67 @@ trait ACDC_Workflow_Engine_Trait {
     foreach ( (array) $due as $step ) {
       $this->acdc_wf_execute_step( $step );
     }
+
+    $this->acdc_wf_reprendre_etapes_en_attente( $batch );
+  }
+
+  /**
+   * ACDC 3.25.323 — LES ÉTAPES DÉJÀ EN ATTENTE SONT RELUES.
+   *
+   * La boucle ci-dessus ne prend que les étapes « pending ». Une étape passée
+   * en « waiting » — parce que le moteur ne savait pas constater l'envoi d'un
+   * module — n'était donc PLUS JAMAIS regardée. Elle restait en attente pour
+   * toujours, même une fois l'envoi parti et archivé.
+   *
+   * C'est la faute que ce plugin répète, et c'est la troisième fois cette
+   * semaine : un état terminal posé sur un travail inachevé, et plus rien qui
+   * revienne le vérifier. Même forme que la séance passée à « Terminée » avant
+   * d'avoir produit ses certificats.
+   *
+   * On repasse donc sur les étapes en attente et l'on interroge l'archive.
+   * Celles dont l'envoi est prouvé se closent ; les autres restent en attente,
+   * sans dommage. La passe est bornée, et ne rejoue RIEN : elle ne fait que
+   * lire une trace et en tirer la conséquence.
+   */
+  private function acdc_wf_reprendre_etapes_en_attente( $batch = 30 ) {
+    global $wpdb;
+
+    $now = $this->acdc_wf_mysql( $this->acdc_wf_now() );
+
+    $en_attente = $wpdb->get_results( $wpdb->prepare(
+      "SELECT s.* FROM {$this->workflow_step_table} s
+         INNER JOIN {$this->workflow_run_table} r ON r.id = s.run_id
+        WHERE s.status = 'waiting' AND s.mode = 'auto'
+          AND s.settled_by <> 'human'
+          AND r.status = 'active'
+        ORDER BY s.scheduled_at ASC
+        LIMIT %d",
+      (int) $batch
+    ) );
+
+    foreach ( (array) $en_attente as $step ) {
+      $preuve = $this->acdc_wf_constater_envoi_delegue( $step );
+      if ( ! $preuve ) {
+        continue;
+      }
+      $delegate = $this->acdc_wf_step_delegate( (string) $step->step_key );
+      $quand    = ! empty( $preuve['created_at'] ) ? (string) $preuve['created_at'] : '';
+      $vers     = ! empty( $preuve['to'] ) ? (string) $preuve['to'] : '';
+      $wpdb->update(
+        $this->workflow_step_table,
+        array(
+          'status'      => 'done',
+          'executed_at' => ! empty( $step->executed_at ) ? $step->executed_at : $now,
+          'settled_by'  => 'archive',
+          'result_note' => 'Envoi confirmé a posteriori par l’archive des e-mails'
+            . ( '' !== $delegate ? ' — ' . $delegate : '' )
+            . ( '' !== $quand ? ', le ' . $quand : '' )
+            . ( '' !== $vers ? ', à ' . $vers : '' ) . '.',
+          'updated_at'  => $now,
+        ),
+        array( 'id' => (int) $step->id )
+      );
+    }
   }
 
   /**
@@ -1855,6 +1916,108 @@ trait ACDC_Workflow_Engine_Trait {
     );
 
     return isset( $delegated[ $base ] ) ? $delegated[ $base ] : '';
+  }
+
+  /**
+   * ACDC 3.25.323 — LE MOTEUR PEUT CONSTATER, DONC IL NE DOIT PLUS DEVINER.
+   *
+   * L'HISTOIRE DE CETTE FONCTION, PARCE QU'ELLE EXPLIQUE SON EXISTENCE.
+   * La 3.25.219 marquait « Faite » toute étape déléguée : faux positif, cinq
+   * enquêtes déclarées parties dont aucune ne l'était. La 3.25.221 a corrigé en
+   * la laissant « en attente », sur cette prémisse : « le moteur n'a pas les
+   * moyens de constater l'envoi d'un module tiers ». C'était vrai, et prudent.
+   *
+   * Ça ne l'est plus. Chaque e-mail passe par la porte commune, qui écrit dans
+   * l'archive son module d'origine, son action, son destinataire et son état.
+   * La recette du 18/08 l'a prouvé par l'absurde : sept étapes « en attente »
+   * pendant que l'archive montrait les sept envois aboutis. L'information
+   * existait dans la base, personne n'allait la chercher.
+   *
+   * Le moteur la cherche donc. Il ne se fie ni à ce qu'il a ordonné, ni à ce
+   * qu'un module prétend : il lit la trace de l'envoi réel.
+   *
+   * CE QU'ON EXIGE POUR CONFIRMER, et pourquoi c'est strict :
+   *   — le MODULE de l'envoi correspond à celui qui porte l'étape ;
+   *   — l'envoi est ABOUTI, pas seulement tenté ;
+   *   — il est POSTÉRIEUR à la planification de l'étape : un envoi antérieur
+   *     appartient à un autre passage, et le confondre rendrait « faite » une
+   *     étape jamais exécutée ;
+   *   — et, quand l'étape nomme un destinataire, l'envoi le concerne.
+   *
+   * Sans preuve, l'étape reste EN ATTENTE — exactement comme avant. On n'a pas
+   * remplacé un aveuglement par une confiance : on a ajouté un constat.
+   *
+   * @return array|null L'entrée d'archive qui prouve l'envoi, ou null.
+   */
+  private function acdc_wf_constater_envoi_delegue( $step ) {
+    if ( ! method_exists( $this, 'get_marketing_email_archive' ) ) {
+      return null;
+    }
+
+    $base    = preg_replace( '/_r\d+$/', '', (string) $step->step_key );
+    $modules = array(
+      'nad_send'       => array( 'analyse_besoin' ),
+      'survey_hot'     => array( 'questionnaires' ),
+      'survey_cold'    => array( 'questionnaires' ),
+      'survey_mid'     => array( 'questionnaires' ),
+      'survey_company' => array( 'questionnaires' ),
+      'survey_funder'  => array( 'questionnaires' ),
+      'survey_trainer' => array( 'questionnaires' ),
+    );
+    if ( empty( $modules[ $base ] ) ) {
+      return null;
+    }
+
+    $archive = (array) $this->get_marketing_email_archive();
+    if ( empty( $archive ) ) {
+      return null;
+    }
+
+    $depuis = ! empty( $step->scheduled_at ) ? strtotime( (string) $step->scheduled_at ) : 0;
+    /* Une minute de tolérance : le module peut expédier juste avant que le
+       moteur n'inscrive l'horodatage de la planification. */
+    $depuis = $depuis > 0 ? $depuis - MINUTE_IN_SECONDS : 0;
+
+    $cible = trim( (string) $step->target_label );
+    $cible_normalisee = ( '' !== $cible && method_exists( $this, 'acdc_normalize_email_archive_match_text' ) )
+      ? $this->acdc_normalize_email_archive_match_text( $cible )
+      : '';
+
+    foreach ( $archive as $entree ) {
+      if ( ! is_array( $entree ) ) {
+        continue;
+      }
+      if ( 'sent' !== (string) ( $entree['status'] ?? '' ) ) {
+        continue;
+      }
+      if ( ! in_array( (string) ( $entree['source_module'] ?? '' ), $modules[ $base ], true ) ) {
+        continue;
+      }
+      $quand = ! empty( $entree['created_at'] ) ? strtotime( (string) $entree['created_at'] ) : 0;
+      if ( $depuis > 0 && ( 0 === $quand || $quand < $depuis ) ) {
+        continue;
+      }
+      /* Le destinataire, quand l'étape en nomme un. Un envoi du bon module à la
+         bonne heure mais à quelqu'un d'autre ne prouve rien pour CETTE étape. */
+      if ( '' !== $cible_normalisee ) {
+        $ou = $this->acdc_normalize_email_archive_match_text(
+          (string) ( $entree['to'] ?? '' ) . ' ' . (string) ( $entree['subject'] ?? '' )
+        );
+        $trouve = false;
+        foreach ( array_filter( array_map( 'trim', explode( ',', $cible_normalisee ) ) ) as $morceau ) {
+          if ( '' !== $morceau && false !== strpos( $ou, $morceau ) ) {
+            $trouve = true;
+            break;
+          }
+        }
+        if ( ! $trouve ) {
+          continue;
+        }
+      }
+      return $entree;
+    }
+
+    return null;
   }
 
   private function acdc_wf_execute_step( $step ) {
@@ -1898,6 +2061,33 @@ trait ACDC_Workflow_Engine_Trait {
       $delegate = $this->acdc_wf_step_delegate( (string) $step->step_key );
 
       if ( '' !== $delegate ) {
+        /* ACDC 3.25.323 — On regarde AVANT de déclarer l'attente.
+           L'archive garde la trace de chaque envoi, avec son module et son
+           destinataire. Si elle prouve que l'envoi a eu lieu, l'étape est faite
+           — et la note dit sur quoi repose ce constat, pour qu'un auditeur
+           puisse le refaire. Sinon, on retombe sur l'attente d'avant : le
+           moteur ne prétend toujours rien savoir qu'il n'a pas vu. */
+        $preuve = $this->acdc_wf_constater_envoi_delegue( $step );
+        if ( $preuve ) {
+          $quand = ! empty( $preuve['created_at'] ) ? (string) $preuve['created_at'] : '';
+          $vers  = ! empty( $preuve['to'] ) ? (string) $preuve['to'] : '';
+          $wpdb->update(
+            $this->workflow_step_table,
+            array(
+              'status'      => 'done',
+              'executed_at' => $now,
+              'settled_by'  => 'archive',
+              'result_note' => 'Envoi confirmé par l’archive des e-mails — ' . $delegate
+                . ( '' !== $quand ? ', le ' . $quand : '' )
+                . ( '' !== $vers ? ', à ' . $vers : '' ) . '.',
+              'attempts'    => (int) $step->attempts + 1,
+              'updated_at'  => $now,
+            ),
+            array( 'id' => (int) $step->id )
+          );
+          return;
+        }
+
         /* ACDC 3.25.221 — CORRECTION D'UNE RÉGRESSION QUE J'AI INTRODUITE.
            La 3.25.219 marquait ces étapes « Faite ». Je remplaçais un faux
            négatif — « En échec » sur une étape qui avait réussi — par un faux
