@@ -1036,11 +1036,35 @@ trait ACDC_Documents_Billing_Core_Trait {
       return $row;
     }
     if ( ! empty( $quote->company_id ) && ! empty( $quote->formation_id ) ) {
-      return $wpdb->get_row( $wpdb->prepare(
+      $row = $wpdb->get_row( $wpdb->prepare(
         "SELECT * FROM {$t} WHERE company_id = %d AND formation_id = %d ORDER BY id DESC LIMIT 1",
         (int) $quote->company_id,
         (int) $quote->formation_id
       ) );
+      if ( $row ) {
+        return $row;
+      }
+    }
+    /* ACDC 3.25.321 — LE LIEN QUE L'ÉCRAN REMPLIT VRAIMENT.
+       Les deux recherches ci-dessus s'appuient sur « quote_id » et sur
+       « company_id ». Or la convention se crée depuis une liste qui poste
+       « source_prospect_id » : le devis et la convention portent TOUS DEUX cette
+       colonne, et c'est le seul lien garanti entre eux.
+       Sans ce troisième chemin, la convention restait introuvable, le plan de
+       financement n'était jamais lu, et une prise en charge de 1 200 € sur
+       1 800 € produisait UNE facture au client pour la totalité. Le devis était
+       juste, la convention était juste, et la facture était fausse — sans qu'un
+       seul écran ne le signale.
+       C'est la même racine que la 3.25.316 : du code qui cherche « company_id »
+       là où l'écran écrit « source_prospect_id ». */
+    if ( ! empty( $quote->source_prospect_id ) ) {
+      $row = $wpdb->get_row( $wpdb->prepare(
+        "SELECT * FROM {$t} WHERE source_prospect_id = %d ORDER BY id DESC LIMIT 1",
+        (int) $quote->source_prospect_id
+      ) );
+      if ( $row ) {
+        return $row;
+      }
     }
     return null;
   }
@@ -1160,6 +1184,34 @@ trait ACDC_Documents_Billing_Core_Trait {
     /* Cas ordinaire : personne d'autre que le client. La facture est celle
        d'avant cette version, au détail près. */
     if ( \ACDC\Support\FundingSplit::CLIENT_SEUL === $plan['case'] ) {
+      /* ACDC 3.25.321 — UNE FACTURE AU CLIENT SEUL QUI AURAIT DÛ ÊTRE DOUBLE.
+         « Client seul » est le cas ordinaire, et c'est aussi le cas de repli
+         quand la convention n'a pas été retrouvée. Les deux se ressemblaient à
+         s'y méprendre : on émettait une facture de la TOTALITÉ au client alors
+         que le dossier annonçait une prise en charge, sans qu'aucun écran ne le
+         dise. Une erreur de facturation muette est pire qu'un refus.
+         On journalise donc la contradiction — dossier à financement externe,
+         facture au client seul — pour qu'elle se voie dans le journal d'activité
+         plutôt que dans un rappel du client trois mois plus tard. */
+      $__annonce_externe = $contract
+        && ! empty( $contract->public_funding )
+        && ! in_array( strtolower( trim( (string) $contract->public_funding ) ), array( '', 'non', 'aucun' ), true );
+      if ( $__annonce_externe && method_exists( $this, 'log_action_event' ) ) {
+        $this->log_action_event(
+          'invoice_client_seul_malgre_financement',
+          'invoice',
+          0,
+          'warning',
+          array(
+            'quote_id'       => (int) $quote->id,
+            'contract_id'    => (int) $contract->id,
+            'public_funding' => (string) $contract->public_funding,
+            'pec_saisie'     => (string) ( $contract->funding_pec_amount_ht ?? '' ),
+            'total_ht'       => (float) $total_ht,
+            'pourquoi'       => 'Le dossier annonce un financement externe mais aucun montant pris en charge exploitable n’a été trouvé : la facture part au client pour la totalité.',
+          )
+        );
+      }
       $id = $this->save_invoice( $data );
       return $id ? array( $id ) : array();
     }

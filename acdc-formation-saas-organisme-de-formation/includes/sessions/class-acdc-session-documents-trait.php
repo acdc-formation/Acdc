@@ -221,6 +221,43 @@ trait ACDC_Session_Documents_Trait {
       }
     }
 
+    /* ACDC 3.25.321 — UNE FORMATION DE DEUX JOURS TIENT EN DEUX SÉANCES.
+       Les deux sources ci-dessus reposent sur « apprenants.session_id » : UNE
+       colonne, donc UNE séance. L'inscription ne rattache l'apprenant qu'à la
+       PREMIÈRE. Un document déposé par le formateur sur la SECONDE journée
+       n'apparaissait donc jamais dans l'espace de l'apprenant — constaté le
+       18/08 : trois documents déposés sur la J2, onglet « Documents de séance »
+       vide chez les trois apprenants.
+       C'est exactement le défaut corrigé en 3.25.211 pour le portail
+       formateur, laissé intact de ce côté-ci. On applique le même remède, et
+       dans l'autre sens : on repasse par « acdc_session_learners() », la
+       fonction qui sait reconstruire les apprenants d'une séance, et l'on
+       retient les séances de la MÊME formation dont la liste contient cette
+       personne.
+       Ce n'est pas un élargissement : c'est la réciproque exacte de
+       « acdc_registrations_for_session() ». Une séance de la même formation
+       animée pour une autre entreprise ne contient pas cet apprenant, donc elle
+       n'entre pas — la cloison tient. */
+    if ( $formation_id > 0 && $learner_id > 0 && method_exists( $this, 'acdc_session_learners' ) ) {
+      $autres = $wpdb->get_results( $wpdb->prepare(
+        "SELECT * FROM {$this->session_table}
+          WHERE formation_id = %d AND COALESCE(is_draft, 0) = 0",
+        $formation_id
+      ) );
+      foreach ( (array) $autres as $autre ) {
+        if ( isset( $seen[ (int) $autre->id ] ) ) {
+          continue;
+        }
+        foreach ( (array) $this->acdc_session_learners( $autre ) as $__ap ) {
+          if ( ! empty( $__ap->id ) && (int) $__ap->id === $learner_id ) {
+            $seen[ (int) $autre->id ] = true;
+            $sessions[] = $autre;
+            break;
+          }
+        }
+      }
+    }
+
     $cache[ $cache_key ] = $sessions;
     return $sessions;
   }
