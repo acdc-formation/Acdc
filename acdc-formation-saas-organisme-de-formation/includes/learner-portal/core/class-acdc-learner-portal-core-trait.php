@@ -684,6 +684,16 @@ trait ACDC_Learner_Portal_Core_Trait {
     if ( ! $tbl_p || ! $tbl_s || ! $tbl_q ) {
       return array();
     }
+    /* ACDC 3.25.325 — DEUX FAÇONS D'ÊTRE CET APPRENANT, UNE SEULE INTERROGÉE.
+       Cette requête ne reconnaissait un quiz que par l'adresse portée par le
+       PARTICIPANT. Or un apprenant qui rejoint depuis la salle, ou qu'un
+       formateur inscrit depuis une séance, n'a souvent qu'un rattachement —
+       « learner_id » — et pas d'adresse recopiée sur la ligne. Ses quiz
+       n'apparaissaient donc nulle part dans son extranet.
+       La liste des quiz TERMINÉS faisait déjà la jointure avec la fiche
+       apprenant depuis la 3.21.06 ; celle des quiz À FAIRE, non. Deux écrans
+       voisins, deux définitions de « ses quiz ». Il n'y en a plus qu'une. */
+    $learner_table = $wpdb->prefix . 'acdc_of_learners';
     return (array) $wpdb->get_results( $wpdb->prepare(
       "SELECT p.id AS participant_id, p.status AS participant_status,
               p.secure_token, p.token_expires_at, p.invited_at,
@@ -694,11 +704,13 @@ trait ACDC_Learner_Portal_Core_Trait {
        FROM {$tbl_p} p
        INNER JOIN {$tbl_s} s ON s.id = p.session_id
        INNER JOIN {$tbl_q} q ON q.id = s.quiz_id
-       WHERE p.email = %s
+       LEFT  JOIN {$learner_table} l ON l.id = p.learner_id
+       WHERE ( p.email = %s OR l.email = %s )
          AND p.status IN ('pending','invited','opened','started','partial')
          AND ( p.token_expires_at IS NULL OR p.token_expires_at > NOW() )
          AND p.is_anonymized = 0
        ORDER BY p.invited_at DESC",
+      $email,
       $email
     ) );
   }

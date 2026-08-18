@@ -11022,7 +11022,23 @@ private function acdc_nom_fichier_sauvegarde( $quand = null ) {
   }  private function get_financial_statistics_scope() {
     $scope = isset( $_GET['scope'] ) ? sanitize_key( wp_unslash( $_GET['scope'] ) ) : '';
     return in_array( $scope, array( 'potential', 'action', 'ancillary' ), true ) ? $scope : '';
-  }  private function get_completed_quiz_documents( $args = array() ) {
+  }  /**
+   * ACDC 3.25.325 — LES QUIZ NE SONT PAS DES DOCUMENTS.
+   *
+   * Cet écran cherchait les quiz effectués dans la table des DOCUMENTS, en
+   * filtrant sur les lignes dont le type ou le titre contient « quiz ». Or rien
+   * n'y dépose jamais de quiz : les passations vivent dans les tables du module
+   * quiz — une session par envoi, un participant par apprenant. L'écran était
+   * donc vide en toutes circonstances, y compris le 18 août après trois quiz
+   * passés par trois apprenants.
+   *
+   * C'est la faute que ce plugin répète : du code qui cherche une donnée là où
+   * l'écran en écrit une autre. On interroge désormais la source réelle.
+   *
+   * Ne remontent que les passations TERMINÉES : un quiz envoyé et jamais ouvert
+   * n'est pas un quiz effectué, et le faire figurer ici gonflerait une preuve.
+   */
+  private function get_completed_quiz_documents( $args = array() ) {
     global $wpdb;
 
     $defaults = array(
@@ -11033,33 +11049,79 @@ private function acdc_nom_fichier_sauvegarde( $quand = null ) {
     );
     $args = wp_parse_args( $args, $defaults );
 
-    $where = array( "(LOWER(d.document_type) LIKE '%quiz%' OR LOWER(d.title) LIKE '%quiz%')" );
-    $values = array();
-
-    if ( '' !== $args['search'] ) {
-      $like = '%' . $wpdb->esc_like( $args['search'] ) . '%';
-      $where[] = '(d.title LIKE %s OR d.document_type LIKE %s OR e.name LIKE %s OR CONCAT(COALESCE(c.first_name, ""), " ", COALESCE(c.last_name, "")) LIKE %s)';
-      array_push( $values, $like, $like, $like, $like );
+    $tbl_p = $this->get_qz_table( 'participants' );
+    $tbl_s = $this->get_qz_table( 'sessions' );
+    $tbl_q = $this->get_qz_table( 'quizzes' );
+    if ( '' === $tbl_p || '' === $tbl_s || '' === $tbl_q ) {
+      return ! empty( $args['count'] ) ? 0 : array();
     }
 
+    $where  = array( "p.status = 'completed'", 'p.is_anonymized = 0' );
+    $values = array();
+    if ( '' !== $args['search'] ) {
+      $like = '%' . $wpdb->esc_like( $args['search'] ) . '%';
+      $where[] = '(q.title LIKE %s OR p.nickname LIKE %s OR p.full_name LIKE %s OR e.name LIKE %s OR CONCAT(COALESCE(l.first_name, ""), " ", COALESCE(l.last_name, "")) LIKE %s)';
+      array_push( $values, $like, $like, $like, $like, $like );
+    }
     $where_sql = implode( ' AND ', $where );
 
+    $jointures = "FROM {$tbl_p} p
+      INNER JOIN {$tbl_s} s ON s.id = p.session_id
+      INNER JOIN {$tbl_q} q ON q.id = s.quiz_id
+      LEFT JOIN {$this->learner_table} l ON l.id = p.learner_id
+      LEFT JOIN {$this->company_table} e ON e.id = l.company_id";
+
     if ( ! empty( $args['count'] ) ) {
-      $sql = "SELECT COUNT(*) FROM {$this->document_table} d LEFT JOIN {$this->company_table} e ON e.id = d.company_id LEFT JOIN {$this->contact_table} c ON c.id = d.contact_id WHERE {$where_sql}";
+      $sql = "SELECT COUNT(*) {$jointures} WHERE {$where_sql}";
       if ( ! empty( $values ) ) {
         $sql = $wpdb->prepare( $sql, $values );
       }
       return (int) $wpdb->get_var( $sql );
     }
 
-    $limit = max( 1, (int) $args['limit'] );
+    $limit  = max( 1, (int) $args['limit'] );
     $offset = max( 0, (int) $args['offset'] );
     $values[] = $limit;
     $values[] = $offset;
 
-    $sql = "SELECT d.*, e.name AS company_name, CONCAT(COALESCE(c.first_name, ''), ' ', COALESCE(c.last_name, '')) AS contact_name FROM {$this->document_table} d LEFT JOIN {$this->company_table} e ON e.id = d.company_id LEFT JOIN {$this->contact_table} c ON c.id = d.contact_id WHERE {$where_sql} ORDER BY d.created_at DESC LIMIT %d OFFSET %d";
-    $sql = $wpdb->prepare( $sql, $values );
-    return $wpdb->get_results( $sql );
+    $sql = "SELECT p.id, p.nickname, p.full_name, p.learner_id, p.total_score_percentage,
+                   p.completed_at, q.title AS quiz_title, q.quiz_purpose,
+                   e.name AS company_name,
+                   CONCAT(COALESCE(l.first_name, ''), ' ', COALESCE(l.last_name, '')) AS learner_name
+            {$jointures} WHERE {$where_sql}
+            ORDER BY p.completed_at DESC, p.id DESC LIMIT %d OFFSET %d";
+    $lignes = $wpdb->get_results( $wpdb->prepare( $sql, $values ) );
+
+    $libelles = array(
+      'positioning' => 'Test de positionnement',
+      'diagnostic'  => 'Évaluation diagnostique',
+      'live'        => 'Quiz live',
+      'assessment'  => 'Évaluation des acquis',
+    );
+    $sortie = array();
+    foreach ( (array) $lignes as $ligne ) {
+      $qui = trim( (string) $ligne->learner_name );
+      if ( '' === $qui ) {
+        $qui = trim( (string) $ligne->full_name );
+      }
+      if ( '' === $qui ) {
+        $qui = trim( (string) $ligne->nickname );
+      }
+      $sortie[] = (object) array(
+        'title'         => (string) $ligne->quiz_title,
+        'document_type' => isset( $libelles[ $ligne->quiz_purpose ] ) ? $libelles[ $ligne->quiz_purpose ] : (string) $ligne->quiz_purpose,
+        'company_name'  => (string) $ligne->company_name,
+        'contact_name'  => $qui,
+        'created_at'    => (string) $ligne->completed_at,
+        'score_label'   => null === $ligne->total_score_percentage ? '' : ( round( (float) $ligne->total_score_percentage ) . ' %' ),
+        'rattache'      => ! empty( $ligne->learner_id ),
+        'view_url'      => method_exists( $this, 'qz_admin_url' )
+          ? $this->qz_admin_url( (string) $ligne->quiz_purpose, array( 'view' => 'results', 'participant' => (int) $ligne->id ) )
+          : '',
+        'file_url'      => '',
+      );
+    }
+    return $sortie;
   }  private function get_attendance_sheet_entries( $search = '' ) {
     $items = $this->get_validated_sessions( array( 'search' => $search ) );
     if ( empty( $items ) ) {

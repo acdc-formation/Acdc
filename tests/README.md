@@ -83,6 +83,7 @@ lancent sans WordPress, en quelques secondes.
     php tests/scan-cloison-analyses.php # une analyse du besoin ne sort jamais de son apprenant
     php tests/scan-proposition-financiere.php # le prix annoncé est celui qui sera facturé
     php tests/scan-podium-proportions.php # le podium à l'échelle de ceux qui montent dessus
+    php tests/scan-quiz-et-documents.php # chaque écran lit la source qui est réellement écrite
 
 Le dernier balaie tout le plugin et signale les fonctions qui utilisent `$wpdb`
 sans l'avoir importé — la faute qui a produit l'erreur fatale de la 3.25.236.

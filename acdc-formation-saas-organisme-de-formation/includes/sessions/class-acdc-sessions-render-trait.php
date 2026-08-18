@@ -57,6 +57,52 @@ trait ACDC_Sessions_Render_Trait {
     return 'Demi-journée ' . ( (int) $feuille->seance_index + 1 );
   }
 
+  /**
+   * ACDC 3.25.325 — LES MÊMES BOUTONS, AU SEUL ENDROIT QUI LES DESSINE.
+   *
+   * L'écran « Documents › Feuilles d'émargement » n'offrait AUCUN
+   * téléchargement : il listait les séances validées, leurs signatures, leur
+   * durée — et laissait l'exploitant repartir chercher le PDF dans « Séances ›
+   * Séances validées », qui, lui, les proposait. Deux écrans qui parlent de la
+   * même pièce, un seul qui la donne.
+   *
+   * Les boutons vivent désormais ici, et les deux écrans appellent cette porte :
+   * une demi-journée réclamée par un OPCO se télécharge du même geste où qu'on
+   * se trouve, et une correction faite une fois vaut pour les deux.
+   *
+   * @param int $session_id La séance concernée.
+   * @return void Écrit directement les liens.
+   */
+  private function acdc_emarg_boutons_pdf( $session_id ) {
+    $session_id = absint( $session_id );
+    if ( ! $session_id ) {
+      return;
+    }
+    $feuilles = $this->acdc_emarg_feuilles_signees( $session_id );
+    $lien = function ( $sid, $fid, $libelle ) {
+      $url = admin_url( 'admin-post.php?action=acdc_emarg_download_pdf&session_id=' . (int) $sid . ( $fid ? '&sheet_id=' . (int) $fid : '' ) );
+      printf(
+        '<a href="%s" class="acdc-button acdc-button-soft acdc-button-sm" style="display:inline-block;margin-top:6px;font-size:11px;padding:3px 9px;text-decoration:none" title="Télécharger cette feuille d\'émargement">📄 %s</a> ',
+        esc_url( wp_nonce_url( $url, 'acdc_emarg_pdf_' . (int) $sid ) ),
+        esc_html( $libelle )
+      );
+    };
+    if ( count( $feuilles ) > 1 ) {
+      foreach ( $feuilles as $f ) {
+        $lien( $session_id, (int) $f->id, $this->acdc_emarg_libelle_demi_journee( $f ) );
+      }
+      $lien( $session_id, 0, 'Tout' );
+      return;
+    }
+    if ( 1 === count( $feuilles ) ) {
+      $lien( $session_id, 0, 'PDF' );
+      return;
+    }
+    /* Aucune feuille signée : on le dit, plutôt que de proposer un
+       téléchargement qui rendrait un document vide. */
+    echo '<span style="font-size:11px;color:#8a96a8;">Aucune feuille signée</span>';
+  }
+
   private function render_front_sessions_validated_tab( $action, $item_id ) {
     if ( ! in_array( $action, array( 'list', 'view' ), true ) ) {
       $action = 'list';
@@ -271,25 +317,7 @@ trait ACDC_Sessions_Render_Trait {
                          Les demi-journées existent en base depuis toujours —
                          table d'émargement, une ligne par demi-journée avec ses
                          horaires et ses signatures. On les montre. */
-                      $feuilles = method_exists( $this, 'acdc_emarg_feuilles_signees' )
-                        ? $this->acdc_emarg_feuilles_signees( (int) $entry->id )
-                        : array();
-                      $lien_pdf = function ( $sid, $fid, $libelle ) {
-                        $url = admin_url( 'admin-post.php?action=acdc_emarg_download_pdf&session_id=' . (int) $sid . ( $fid ? '&sheet_id=' . (int) $fid : '' ) );
-                        printf(
-                          '<a href="%s" class="acdc-button acdc-button-soft acdc-button-sm" style="display:inline-block;margin-top:6px;font-size:11px;padding:3px 9px;text-decoration:none" title="Télécharger cette feuille d\'émargement">📄 %s</a> ',
-                          esc_url( wp_nonce_url( $url, 'acdc_emarg_pdf_' . (int) $sid ) ),
-                          esc_html( $libelle )
-                        );
-                      };
-                      if ( count( $feuilles ) > 1 ) {
-                        foreach ( $feuilles as $f ) {
-                          $lien_pdf( (int) $entry->id, (int) $f->id, $this->acdc_emarg_libelle_demi_journee( $f ) );
-                        }
-                        $lien_pdf( (int) $entry->id, 0, 'Tout' );
-                      } else {
-                        $lien_pdf( (int) $entry->id, 0, 'PDF' );
-                      }
+                      $this->acdc_emarg_boutons_pdf( (int) $entry->id );
                       ?>
                     </div>
                   <?php elseif ( 'none' === $t_status_s || ! $emarg_ses_s ) : ?>

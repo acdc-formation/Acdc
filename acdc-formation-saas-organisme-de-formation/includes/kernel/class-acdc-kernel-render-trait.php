@@ -11582,6 +11582,17 @@ trait ACDC_Kernel_Render_Trait {
     $base_url = is_admin() ? $this->admin_tab_url( $base_tab ) : $this->portal_page_url( array( 'tab' => $base_tab ) );
 
     $items = $this->get_need_analyses( $search, false );
+    /* ACDC 3.25.325 — L'ÉCRAN S'APPELLE « COMPLÉTÉES », IL LES MONTRAIT TOUTES.
+       Chaque ligne affichait « Complétée » et « Oui » écrits en dur, y compris
+       pour une analyse envoyée la veille et jamais ouverte. Un écran qui affirme
+       une complétude qu'il n'a pas vérifiée est pire qu'un écran vide : il fait
+       croire à une preuve. On ne garde donc que ce qui est réellement revenu —
+       statut « traité » ou pièce fabriquée. */
+    $items = array_values( array_filter( (array) $items, function ( $entry ) {
+      $statut = isset( $entry->statut ) ? (string) $entry->statut : '';
+      return in_array( $statut, array( 'traite', 'soumise' ), true )
+        || ! empty( $entry->document_url_apprenant );
+    } ) );
     $total = count( $items );
     $total_pages = max( 1, (int) ceil( $total / $per_page ) );
     if ( $paged > $total_pages ) {
@@ -11611,10 +11622,18 @@ trait ACDC_Kernel_Render_Trait {
       <?php if ( empty( $items ) ) : ?>
         <div class="acdc-empty-state" style="padding:72px 24px;text-align:center;"><div class="acdc-empty-state-icon" aria-hidden="true"><?php echo $this->render_inline_icon( 'need', 54 ); ?></div><p style="margin:0;color:#1E4777;">Aucune donnée ne correspond aux critères demandés.</p></div>
       <?php else : ?>
-        <div class="acdc-table-wrap"><table class="acdc-table acdc-table-needs-documents"><thead><tr><th><input type="checkbox" aria-label="Sélectionner les analyses"></th><th>Commanditaire</th><th>Analyse</th><th>Date ajout/passage</th><th>Validation du besoin</th><th>Formation souhaitée</th><th>Destinataire</th><th>Statut</th><th><span class="screen-reader-text">Menu</span></th><th><span class="screen-reader-text">Voir</span></th><th><span class="screen-reader-text">Modifier</span></th><th><span class="screen-reader-text">Supprimer</span></th></tr></thead><tbody>
+        <div class="acdc-table-wrap"><table class="acdc-table acdc-table-needs-documents"><thead><tr><th><input type="checkbox" aria-label="Sélectionner les analyses"></th><th>Commanditaire</th><th>Analyse</th><th>Date ajout/passage</th><th>Validation du besoin</th><th>Formation souhaitée</th><th>Destinataire</th><th>Statut</th><th>Document</th><th><span class="screen-reader-text">Menu</span></th><th><span class="screen-reader-text">Voir</span></th><th><span class="screen-reader-text">Modifier</span></th><th><span class="screen-reader-text">Supprimer</span></th></tr></thead><tbody>
             <?php foreach ( $items as $entry ) : ?>
-              <?php $view_url = is_admin() ? $this->admin_tab_url( 'need_analyses', array( 'action' => 'view', 'item_id' => (int) $entry->id ) ) : $this->portal_page_url( array( 'tab' => 'need_analyses', 'action' => 'view', 'item_id' => (int) $entry->id ) ); $edit_url = is_admin() ? $this->admin_tab_url( 'need_analyses', array( 'action' => 'edit', 'item_id' => (int) $entry->id ) ) : $this->portal_page_url( array( 'tab' => 'need_analyses', 'action' => 'edit', 'item_id' => (int) $entry->id ) ); $delete_url = wp_nonce_url( admin_url( 'admin-post.php?action=acdc_delete_need_analysis&analysis_id=' . (int) $entry->id . '&page=acdc-of-need-analyses' ), 'acdc_delete_need_analysis_' . (int) $entry->id ); $analysis_title = ! empty( $entry->title ) ? $entry->title : '—'; $commanditaire_label = ! empty( $entry->analysis_type ) ? $entry->analysis_type : '—'; $status_label = 'Complétée'; $validation_label = 'Oui'; $date_label = ! empty( $entry->updated_at ) ? mysql2date( 'j F Y', $entry->updated_at, true ) : '—'; $formation_label = $analysis_title; $destinataire_label = '—'; ?>
-              <tr><td><input type="checkbox" aria-label="Sélectionner cette analyse"></td><td><div><?php echo esc_html( $commanditaire_label ); ?></div><small><?php echo esc_html( $analysis_title ); ?></small></td><td><div>Plateforme</div><small><?php echo esc_html( $analysis_title ); ?></small></td><td><?php echo esc_html( $date_label ); ?></td><td><span class="acdc-doc-dot is-success"></span><?php echo esc_html( $validation_label ); ?></td><td><a href="<?php echo esc_url( $view_url ); ?>" class="acdc-program-link"><?php echo esc_html( $formation_label ); ?></a></td><td><?php echo esc_html( $destinataire_label ); ?></td><td><span class="acdc-doc-dot is-success"></span><?php echo esc_html( $status_label ); ?></td><td><div class="acdc-row-menu" data-acdc-row-menu><button type="button" class="acdc-row-menu-toggle" data-acdc-row-menu-toggle aria-expanded="false" title="Actions"><?php echo $this->render_inline_icon( 'more-horizontal', 25 ); ?></button><div class="acdc-row-menu-dropdown" data-acdc-row-menu-dropdown hidden><a href="<?php echo esc_url( $view_url ); ?>">Voir</a><a href="<?php echo esc_url( $edit_url ); ?>">Modifier</a><a href="<?php echo esc_url( $delete_url ); ?>" onclick="return confirm('Supprimer cette analyse du besoin ?');">Supprimer</a></div></div></td><td><a href="<?php echo esc_url( $view_url ); ?>" title="Voir" aria-label="Voir" class="acdc-row-view-link"><?php echo $this->render_inline_icon( 'view', 25 ); ?></a></td><td><a href="<?php echo esc_url( $edit_url ); ?>" title="Modifier" aria-label="Modifier" class="acdc-row-edit-link"><?php echo $this->render_inline_icon( 'edit-pencil', 25 ); ?></a></td><td><a href="<?php echo esc_url( $delete_url ); ?>" title="Supprimer" aria-label="Supprimer" class="acdc-row-delete-link" onclick="return confirm('Supprimer cette analyse du besoin ?');"><?php echo $this->render_inline_icon( 'trash-bin', 25 ); ?></a></td></tr>
+              <?php $view_url = is_admin() ? $this->admin_tab_url( 'need_analyses', array( 'action' => 'view', 'item_id' => (int) $entry->id ) ) : $this->portal_page_url( array( 'tab' => 'need_analyses', 'action' => 'view', 'item_id' => (int) $entry->id ) ); $edit_url = is_admin() ? $this->admin_tab_url( 'need_analyses', array( 'action' => 'edit', 'item_id' => (int) $entry->id ) ) : $this->portal_page_url( array( 'tab' => 'need_analyses', 'action' => 'edit', 'item_id' => (int) $entry->id ) ); $delete_url = wp_nonce_url( admin_url( 'admin-post.php?action=acdc_delete_need_analysis&analysis_id=' . (int) $entry->id . '&page=acdc-of-need-analyses' ), 'acdc_delete_need_analysis_' . (int) $entry->id ); $analysis_title = ! empty( $entry->title ) ? $entry->title : '—'; $commanditaire_label = ! empty( $entry->analysis_type ) ? $entry->analysis_type : '—'; $status_label = 'Complétée'; $validation_label = 'Oui';
+                /* ACDC 3.25.325 — Le PDF de l'analyse se télécharge d'ici. L'apprenant
+                   l'a dans son extranet depuis la 3.25.323 ; l'organisme, qui le joint
+                   à un dossier Qualiopi, devait le régénérer à la main. Quand la pièce
+                   est déjà fabriquée on sert le fichier ; sinon on passe par la porte
+                   qui le fabrique ET le range, pour qu'il existe la fois d'après. */
+                $__pdf_nad = ! empty( $entry->document_url_apprenant )
+                  ? (string) $entry->document_url_apprenant
+                  : wp_nonce_url( admin_url( 'admin-post.php?action=acdc_generate_nad_apprenant_pdf&nad_id=' . (int) $entry->id ), 'acdc_nad_apprenant_pdf_' . (int) $entry->id ); $date_label = ! empty( $entry->updated_at ) ? mysql2date( 'j F Y', $entry->updated_at, true ) : '—'; $formation_label = $analysis_title; $destinataire_label = '—'; ?>
+              <tr><td><input type="checkbox" aria-label="Sélectionner cette analyse"></td><td><div><?php echo esc_html( $commanditaire_label ); ?></div><small><?php echo esc_html( $analysis_title ); ?></small></td><td><div>Plateforme</div><small><?php echo esc_html( $analysis_title ); ?></small></td><td><?php echo esc_html( $date_label ); ?></td><td><span class="acdc-doc-dot is-success"></span><?php echo esc_html( $validation_label ); ?></td><td><a href="<?php echo esc_url( $view_url ); ?>" class="acdc-program-link"><?php echo esc_html( $formation_label ); ?></a></td><td><?php echo esc_html( $destinataire_label ); ?></td><td><span class="acdc-doc-dot is-success"></span><?php echo esc_html( $status_label ); ?></td><td><a class="acdc-button acdc-button-soft acdc-button-sm" style="font-size:11px;padding:3px 9px;text-decoration:none;" href="<?php echo esc_url( $__pdf_nad ); ?>" target="_blank" rel="noopener noreferrer">📄 Télécharger</a></td><td><div class="acdc-row-menu" data-acdc-row-menu><button type="button" class="acdc-row-menu-toggle" data-acdc-row-menu-toggle aria-expanded="false" title="Actions"><?php echo $this->render_inline_icon( 'more-horizontal', 25 ); ?></button><div class="acdc-row-menu-dropdown" data-acdc-row-menu-dropdown hidden><a href="<?php echo esc_url( $view_url ); ?>">Voir</a><a href="<?php echo esc_url( $edit_url ); ?>">Modifier</a><a href="<?php echo esc_url( $delete_url ); ?>" onclick="return confirm('Supprimer cette analyse du besoin ?');">Supprimer</a></div></div></td><td><a href="<?php echo esc_url( $view_url ); ?>" title="Voir" aria-label="Voir" class="acdc-row-view-link"><?php echo $this->render_inline_icon( 'view', 25 ); ?></a></td><td><a href="<?php echo esc_url( $edit_url ); ?>" title="Modifier" aria-label="Modifier" class="acdc-row-edit-link"><?php echo $this->render_inline_icon( 'edit-pencil', 25 ); ?></a></td><td><a href="<?php echo esc_url( $delete_url ); ?>" title="Supprimer" aria-label="Supprimer" class="acdc-row-delete-link" onclick="return confirm('Supprimer cette analyse du besoin ?');"><?php echo $this->render_inline_icon( 'trash-bin', 25 ); ?></a></td></tr>
             <?php endforeach; ?>
             </tbody></table></div>
         <?php if ( $total_pages > 1 ) : ?>
@@ -11688,6 +11707,7 @@ trait ACDC_Kernel_Render_Trait {
             <div><strong>Signature apprenant :</strong> Voir détails</div>
             <div><strong>Progression :</strong> Voir détails</div>
             <div><strong>État dossier :</strong> Voir détails</div>
+            <div><strong>Feuille à télécharger :</strong> <?php $this->acdc_emarg_boutons_pdf( (int) $session->id ); ?></div>
           </div>
         </div>
       </div>
@@ -11748,6 +11768,7 @@ trait ACDC_Kernel_Render_Trait {
                 <th>État dossier</th>
                 <th>Signature formateur</th>
                 <th>Signature apprenant</th>
+                <th>Feuille à télécharger</th>
                 <th><span class="screen-reader-text">Menu</span></th>
                 <th><span class="screen-reader-text">Voir</span></th>
               </tr>
@@ -11779,6 +11800,10 @@ trait ACDC_Kernel_Render_Trait {
                 <td><a href="<?php echo esc_url( $view_url ); ?>" class="acdc-table-inline-link"><?php echo esc_html( $entry->attendance_state_label ); ?> <?php echo $this->render_inline_icon( 'chevron-right', 14 ); ?></a></td>
                 <td><span class="acdc-status-pill acdc-status-pill-success"><?php echo esc_html( $entry->trainer_signature_label ); ?></span></td>
                 <td><a href="<?php echo esc_url( $view_url ); ?>" class="acdc-table-inline-link"><?php echo esc_html( $entry->learner_signature_label ); ?> <?php echo $this->render_inline_icon( 'chevron-right', 14 ); ?></a></td>
+                <?php /* ACDC 3.25.325 — L'écran qui s'appelle « Feuilles d'émargement »
+                         n'en donnait aucune : il fallait repartir dans « Séances ›
+                         Séances validées » pour télécharger. Mêmes boutons, même porte. */ ?>
+                <td><?php $this->acdc_emarg_boutons_pdf( (int) $entry->id ); ?></td>
                 <td>
                   <div class="acdc-row-menu" data-acdc-row-menu>
                     <button type="button" class="acdc-row-menu-toggle" data-acdc-row-menu-toggle aria-expanded="false" title="Actions"><?php echo $this->render_inline_icon( 'more-horizontal', 25 ); ?></button>
@@ -11932,7 +11957,8 @@ trait ACDC_Kernel_Render_Trait {
                 <th>Intitulé</th>
                 <th>Type</th>
                 <th>Entreprise</th>
-                <th>Contact</th>
+                <th>Apprenant</th>
+                <th>Score</th>
                 <th>Date</th>
                 <th>Actions</th>
               </tr>
@@ -11943,11 +11969,21 @@ trait ACDC_Kernel_Render_Trait {
                 <td><?php echo esc_html( $item->title ); ?></td>
                 <td><?php echo esc_html( $item->document_type ); ?></td>
                 <td><?php echo esc_html( ! empty( $item->company_name ) ? $item->company_name : '—' ); ?></td>
-                <td><?php echo esc_html( trim( $item->contact_name ) ?: '—' ); ?></td>
-                <td><?php echo esc_html( mysql2date( 'd/m/Y H:i', $item->created_at ) ); ?></td>
                 <td>
-                  <?php if ( ! empty( $item->file_url ) ) : ?>
-                    <a href="<?php echo esc_url( $item->file_url ); ?>" target="_blank" rel="noopener noreferrer">Ouvrir</a>
+                  <?php echo esc_html( trim( (string) $item->contact_name ) ?: '—' ); ?>
+                  <?php /* ACDC 3.25.325 — Un quiz rattaché à personne ne remonte dans aucun
+                           dossier et ne vaut rien comme preuve : on le signale ici plutôt que
+                           de le laisser passer pour une passation en règle. */ ?>
+                  <?php if ( isset( $item->rattache ) && ! $item->rattache ) : ?>
+                    <br><small style="color:#b45309;font-weight:600;">⚠ non rattaché à un apprenant</small>
+                  <?php endif; ?>
+                </td>
+                <td><?php echo esc_html( ! empty( $item->score_label ) ? $item->score_label : '—' ); ?></td>
+                <td><?php echo esc_html( $item->created_at ? mysql2date( 'd/m/Y H:i', $item->created_at ) : '—' ); ?></td>
+                <td>
+                  <?php $__lien = ! empty( $item->view_url ) ? (string) $item->view_url : (string) ( $item->file_url ?? '' ); ?>
+                  <?php if ( '' !== $__lien ) : ?>
+                    <a href="<?php echo esc_url( $__lien ); ?>">Voir le détail</a>
                   <?php else : ?>
                     —
                   <?php endif; ?>
