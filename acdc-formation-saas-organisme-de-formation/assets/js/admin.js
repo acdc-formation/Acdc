@@ -1131,7 +1131,19 @@
     });
   }
   function processLooseActionZones(root){
-    var selectors = ['.acdc-actions-cell', '.acdc-record-actions', '.acdc-page-actions', '.acdc-toolbar-actions', '.acdc-card-actions', '.acdc-form-actions'];
+    /* ACDC 3.25.324 — LE BAS D'UN FORMULAIRE N'EST PAS UNE COLONNE D'ACTIONS.
+       « .acdc-form-actions » figurait dans cette liste : les boutons « Annuler »
+       et « Valider » de tous les formulaires étaient donc remplacés par une
+       croix et une coche. Sur la convention, cela donnait deux petites icônes au
+       bas d'un formulaire de mille lignes — pendant que la barre du HAUT de la
+       même page gardait ses mots. Deux traitements pour les deux mêmes actions,
+       sur un seul écran.
+       L'iconisation a un sens dans une colonne d'actions, où la place est
+       comptée et où l'utilisateur balaie des lignes. Elle n'en a aucun sur le
+       geste qui ENGAGE le formulaire : une coche ne dit pas ce qu'elle valide,
+       et une croix ne dit pas ce qu'elle annule. Les zones de formulaire sortent
+       donc de la liste ; les colonnes d'actions y restent. */
+    var selectors = ['.acdc-actions-cell', '.acdc-record-actions', '.acdc-page-actions', '.acdc-toolbar-actions', '.acdc-card-actions'];
     Array.prototype.slice.call(root.querySelectorAll(selectors.join(','))).forEach(function(zone){
       if (zone.getAttribute('data-acdc-no-iconize')) { return; }
       if (zone.tagName === 'TD' || zone.tagName === 'TH') { processCell(zone); return; }
