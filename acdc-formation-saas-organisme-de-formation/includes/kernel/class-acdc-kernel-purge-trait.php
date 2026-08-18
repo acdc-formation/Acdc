@@ -101,6 +101,10 @@ trait ACDC_Kernel_Purge_Trait {
       ),
 
       'contracts' => array(
+        'sous_ensembles' => array(
+          'conv'  => array( 'label' => 'Conventions et contrats', 'tables' => array( $this->registration_contract_table ) ),
+          'files' => array( 'label' => 'Dossiers de formation et inscriptions', 'tables' => array( $this->training_registration_table ) ),
+        ),
         'label'   => 'Conventions, contrats et dossiers de formation',
         'menu'    => 'Actions de formation › Inscription / Suivi',
         'emporte' => 'Conventions et contrats d’inscription, dossiers de formation, inscriptions en cours et validées.',
@@ -111,6 +115,11 @@ trait ACDC_Kernel_Purge_Trait {
       ),
 
       'sessions' => array(
+        'sous_ensembles' => array(
+          'seances' => array( 'label' => 'Séances et groupes', 'tables' => array( $this->session_table, $this->group_table ) ),
+          'emarg'   => array( 'label' => 'Feuilles d’émargement et signatures', 'tables' => array( $wpdb->prefix . 'acdc_of_emarg_sessions', $wpdb->prefix . 'acdc_of_emarg_learners' ) ),
+          'ressources' => array( 'label' => 'Ressources et cahier de texte du formateur', 'tables' => array( $this->trainer_resource_table, $this->trainer_logbook_table ) ),
+        ),
         'label'   => 'Séances, groupes et émargements',
         'menu'    => 'Actions de formation › Séances',
         'emporte' => 'Séances, groupes, feuilles d’émargement et signatures de présence.',
@@ -127,6 +136,11 @@ trait ACDC_Kernel_Purge_Trait {
       ),
 
       'learners' => array(
+        'sous_ensembles' => array(
+          'fiches'  => array( 'label' => 'Fiches apprenants', 'tables' => array( $this->learner_table ) ),
+          'comptes' => array( 'label' => 'Comptes et sessions d’extranet', 'tables' => array( $this->learner_portal_account_table, $this->learner_portal_token_table, $this->learner_portal_session_table ) ),
+          'journaux'=> array( 'label' => 'Journaux de connexion', 'tables' => array( $this->learner_portal_log_table ) ),
+        ),
         'label'   => 'Apprenants et extranet apprenant',
         'menu'    => 'Config. pré-formation › Répertoires › Apprenants',
         'emporte' => 'Le répertoire des apprenants, leurs comptes d’extranet, leurs sessions de connexion et leurs journaux.',
@@ -140,6 +154,10 @@ trait ACDC_Kernel_Purge_Trait {
       ),
 
       'companies' => array(
+        'sous_ensembles' => array(
+          'entreprises' => array( 'label' => 'Commanditaires', 'tables' => array( $this->company_table ) ),
+          'contacts'    => array( 'label' => 'Contacts rattachés', 'tables' => array( $this->contact_table ) ),
+        ),
         'label'   => 'Commanditaires et contacts',
         'menu'    => 'Config. pré-formation › Répertoires › Commanditaires',
         'emporte' => 'Entreprises commanditaires et contacts rattachés.',
@@ -147,6 +165,14 @@ trait ACDC_Kernel_Purge_Trait {
       ),
 
       'trainers' => array(
+        'sous_ensembles' => array(
+          'fiches'      => array( 'label' => 'Fiches formateurs', 'tables' => array( $this->trainer_table ) ),
+          'contrats'    => array( 'label' => 'Contrats de mission', 'tables' => array( $this->trainer_contract_table ) ),
+          'bilans'      => array( 'label' => 'Bilans de fin de mission', 'tables' => array( $this->trainer_evaluation_table ) ),
+          'bibliotheque'=> array( 'label' => 'Bibliothèque personnelle', 'tables' => array( $this->trainer_document_table ) ),
+          'comptes'     => array( 'label' => 'Comptes et sessions de portail', 'tables' => array( $this->trainer_portal_account_table, $this->trainer_portal_token_table, $this->trainer_portal_session_table ) ),
+          'journaux'    => array( 'label' => 'Journaux de connexion', 'tables' => array( $this->trainer_portal_log_table ) ),
+        ),
         'label'   => 'Formateurs et portail formateur',
         'menu'    => 'Config. pré-formation › Répertoires › Formateurs',
         'emporte' => 'Le répertoire des formateurs, leurs contrats de mission, leurs bilans, leur bibliothèque personnelle et leurs comptes de portail.',
@@ -163,6 +189,19 @@ trait ACDC_Kernel_Purge_Trait {
       ),
 
       'formations' => array(
+        /* ACDC 3.25.322 — LE CATALOGUE N'EST PAS UNE DONNÉE DE DOSSIER.
+           Les vingt formations et leurs thématiques sont un travail de fond,
+           construit une fois et réutilisé à chaque dossier — exactement comme le
+           répertoire des financeurs. Les effacer avec un parcours de test, c'est
+           perdre des semaines de saisie pour repartir à zéro sur un essai.
+           Ce bloc rejoint donc les financeurs : décoché par « tout cocher », et
+           libéré seulement par un mot saisi exprès. */
+        'sensitive' => true,
+        'mot'       => 'FORMATIONS',
+        'sous_ensembles' => array(
+          'formations'  => array( 'label' => 'Formations du catalogue', 'tables' => array( $this->formation_table ) ),
+          'thematiques' => array( 'label' => 'Thématiques', 'tables' => array( $this->thematique_table ) ),
+        ),
         'label'   => 'Formations et thématiques',
         'menu'    => 'Config. pré-formation › Répertoires › Formations',
         'emporte' => 'Le catalogue des formations et les thématiques.',
@@ -171,6 +210,11 @@ trait ACDC_Kernel_Purge_Trait {
       ),
 
       'quizzes' => array(
+        'sous_ensembles' => array(
+          'modeles'       => array( 'label' => 'Quiz, questions et objectifs', 'tables' => array( $this->quiz_table, $this->evaluation_table, $qz . 'quizzes', $qz . 'questions', $qz . 'answers', $qz . 'objectives' ) ),
+          'participations'=> array( 'label' => 'Passations, participants et réponses', 'tables' => array( $qz . 'sessions', $qz . 'participants', $qz . 'player_answers' ) ),
+          'journaux'      => array( 'label' => 'Journaux du module', 'tables' => array( $qz . 'logs' ) ),
+        ),
         'label'   => 'Quiz, tests de positionnement et évaluations',
         'menu'    => 'Évaluation & Enquêtes › Avant / Pendant la formation',
         'emporte' => 'Les quiz et leurs questions, les évaluations, ainsi que toutes les participations et réponses.',
@@ -189,6 +233,11 @@ trait ACDC_Kernel_Purge_Trait {
       ),
 
       'surveys' => array(
+        'sous_ensembles' => array(
+          'campagnes' => array( 'label' => 'Campagnes et participants', 'tables' => array( $this->questionnaire_session_table, $this->questionnaire_participant_table ) ),
+          'reponses'  => array( 'label' => 'Réponses reçues', 'tables' => array( $this->questionnaire_answer_table ) ),
+          'journaux'  => array( 'label' => 'Actions et journaux d’envoi', 'tables' => array( $this->questionnaire_action_table, $this->questionnaire_log_table ) ),
+        ),
         'label'   => 'Enquêtes et questionnaires',
         'menu'    => 'Évaluation & Enquêtes › Après la formation, Enquêtes par public',
         'emporte' => 'Campagnes d’enquêtes, participants, réponses, actions et journaux d’envoi.',
@@ -277,6 +326,7 @@ trait ACDC_Kernel_Purge_Trait {
         'garde'     => '',
         'tables'    => array( $this->funder_table ),
         'sensitive' => true,
+        'mot'       => 'FINANCEURS',
       ),
     );
 
@@ -285,6 +335,34 @@ trait ACDC_Kernel_Purge_Trait {
        d'y penser à chaque appel. */
     foreach ( $groups as $key => $group ) {
       $tables = array_filter( array_map( 'strval', (array) ( $group['tables'] ?? array() ) ) );
+
+      /* ACDC 3.25.322 — LES SOUS-ENSEMBLES SONT LA VÉRITÉ, PAS UN DOUBLON.
+         Un bloc qui en déclare voit sa liste de tables RECONSTRUITE à partir
+         d'eux. Sans cette règle, les deux listes divergeraient au premier ajout
+         de table : on cocherait un sous-ensemble en croyant tout tenir, pendant
+         qu'une table oubliée partirait quand même — ou ne partirait jamais.
+         Une seule source, et elle est celle que l'écran montre. */
+      if ( ! empty( $group['sous_ensembles'] ) && is_array( $group['sous_ensembles'] ) ) {
+        $depuis_sous = array();
+        foreach ( $group['sous_ensembles'] as $sous_cle => $sous ) {
+          $sous_tables = array_values( array_unique( array_filter( array_map( 'strval', (array) ( $sous['tables'] ?? array() ) ) ) ) );
+          $groups[ $key ]['sous_ensembles'][ $sous_cle ]['tables'] = $sous_tables;
+          $depuis_sous = array_merge( $depuis_sous, $sous_tables );
+        }
+        /* Une table du bloc qu'aucun sous-ensemble ne réclame serait
+           silencieusement épargnée : on la rattache au premier plutôt que de la
+           laisser en dehors de toute case. */
+        $orphelines = array_diff( $tables, $depuis_sous );
+        if ( ! empty( $orphelines ) ) {
+          $premiere = array_key_first( $groups[ $key ]['sous_ensembles'] );
+          $groups[ $key ]['sous_ensembles'][ $premiere ]['tables'] = array_values( array_unique(
+            array_merge( $groups[ $key ]['sous_ensembles'][ $premiere ]['tables'], $orphelines )
+          ) );
+          $depuis_sous = array_merge( $depuis_sous, $orphelines );
+        }
+        $tables = $depuis_sous;
+      }
+
       $groups[ $key ]['tables'] = array_values( array_unique( $tables ) );
     }
 
@@ -299,12 +377,62 @@ trait ACDC_Kernel_Purge_Trait {
    * même phrase deux fois ne serait pas une confirmation.
    */
   private function acdc_purge_funders_confirmation_word() {
-    return 'FINANCEURS';
+    return $this->acdc_purge_mot_confirmation( 'funders' );
+  }
+
+  /**
+   * ACDC 3.25.322 — Le mot propre à un ensemble protégé.
+   *
+   * Il n'y en avait qu'un, pour les financeurs, écrit en dur. Le catalogue des
+   * formations mérite la même protection, et d'autres suivront : la règle vaut
+   * mieux qu'une seconde exception.
+   */
+  private function acdc_purge_mot_confirmation( $cle ) {
+    $groups = $this->acdc_purge_groups();
+    if ( ! empty( $groups[ $cle ]['mot'] ) ) {
+      return strtoupper( (string) $groups[ $cle ]['mot'] );
+    }
+    return strtoupper( (string) $cle );
   }
 
   /* ═══════════════════════════════════════════════════════════════════
      L'ÉCRAN
      ═══════════════════════════════════════════════════════════════════ */
+
+  /**
+   * ACDC 3.25.322 — LES CASES À L'INTÉRIEUR D'UN BLOC.
+   *
+   * Un bloc effaçait tout ou rien. Or « Formateurs et portail formateur »
+   * emporte d'un coup les fiches, les contrats de mission, les bilans, la
+   * bibliothèque et les comptes de portail : on veut souvent remettre à zéro les
+   * comptes d'un test sans perdre les fiches et les contrats signés.
+   *
+   * Chaque sous-ensemble a donc sa case. Elles sont cochées avec le bloc et
+   * décochées avec lui — mais on peut en retirer une à la main, et c'est tout
+   * l'intérêt. Un bloc dont on décoche TOUS les sous-ensembles ne supprime rien,
+   * même s'il reste coché : c'est la lecture la moins surprenante.
+   *
+   * Les blocs sans sous-ensembles ne changent pas d'un pixel.
+   */
+  private function acdc_rendre_sous_ensembles( $cle, $group, $counts = array() ) {
+    if ( empty( $group['sous_ensembles'] ) || ! is_array( $group['sous_ensembles'] ) ) {
+      return;
+    }
+    ?>
+    <span class="acdc-purge-sous">
+      <?php foreach ( $group['sous_ensembles'] as $sous_cle => $sous ) : ?>
+        <label class="acdc-purge-sous-item">
+          <input type="checkbox"
+                 name="acdc_purge_sous[<?php echo esc_attr( $cle ); ?>][]"
+                 value="<?php echo esc_attr( $sous_cle ); ?>"
+                 data-acdc-purge-sub="<?php echo esc_attr( $cle ); ?>"
+                 checked>
+          <span><?php echo esc_html( $sous['label'] ); ?></span>
+        </label>
+      <?php endforeach; ?>
+    </span>
+    <?php
+  }
 
   private function render_selective_purge_panel() {
     $groups     = $this->acdc_purge_groups();
@@ -334,7 +462,7 @@ trait ACDC_Kernel_Purge_Trait {
         <?php if ( is_admin() ) : ?><input type="hidden" name="page" value="acdc-of-dashboard"><?php endif; ?>
 
         <p style="margin:16px 0 10px;">
-          <button type="button" class="acdc-button acdc-button-soft" data-acdc-purge-all>Tout cocher (sauf les financeurs)</button>
+          <button type="button" class="acdc-button acdc-button-soft" data-acdc-purge-all>Tout cocher (sauf les ensembles protégés)</button>
           <button type="button" class="acdc-button acdc-button-soft" data-acdc-purge-none>Tout décocher</button>
         </p>
 
@@ -353,36 +481,44 @@ trait ACDC_Kernel_Purge_Trait {
                 <?php if ( ! empty( $group['garde'] ) ) : ?>
                   <small class="acdc-purge-keep">Conservé : <?php echo esc_html( $group['garde'] ); ?></small>
                 <?php endif; ?>
+                <?php $this->acdc_rendre_sous_ensembles( $key, $group, $counts ); ?>
               </span>
             </label>
           <?php endforeach; ?>
         </div>
 
-        <?php $funders = $groups['funders']; ?>
+        <?php
+        /* ACDC 3.25.322 — LA ZONE PROTÉGÉE N'EST PLUS RÉSERVÉE AUX FINANCEURS.
+           Elle était écrite pour un seul ensemble. Le catalogue des formations
+           est de la même nature : un travail de fond réutilisé à chaque dossier,
+           qu'un essai ne doit pas emporter. On boucle donc sur tous les
+           ensembles marqués sensibles. */
+        foreach ( $groups as $__cle_s => $__grp_s ) :
+          if ( empty( $__grp_s['sensitive'] ) ) { continue; }
+          $__mot = $this->acdc_purge_mot_confirmation( $__cle_s );
+        ?>
         <div class="acdc-purge-sensitive">
-          <h4>Financeurs — données réelles</h4>
-          <p>
-            C’est le seul répertoire de cette base qui ne contient pas des données fictives : les OPCO y sont de vrais
-            organismes, avec de vraies coordonnées. Il est exclu de « Tout cocher », et sa suppression demande sa propre
-            confirmation.
-          </p>
+          <h4><?php echo esc_html( $__grp_s['label'] ); ?> — à ne pas effacer par mégarde</h4>
+          <p><?php echo esc_html( $__grp_s['pourquoi_protege'] ?? 'Cet ensemble n’est pas une donnée de dossier : il est construit une fois et réutilisé. Il est exclu de « Tout cocher », et sa suppression demande sa propre confirmation.' ); ?></p>
           <label class="acdc-purge-item">
-            <input type="checkbox" name="acdc_purge_groups[]" value="funders">
+            <input type="checkbox" name="acdc_purge_groups[]" value="<?php echo esc_attr( $__cle_s ); ?>">
             <span>
-              <strong><?php echo esc_html( $funders['label'] ); ?></strong>
-              <?php if ( isset( $counts['funders'] ) ) : ?>
-                <em class="acdc-purge-count"><?php echo esc_html( $counts['funders'] ); ?> ligne<?php echo (int) $counts['funders'] > 1 ? 's' : ''; ?></em>
+              <strong><?php echo esc_html( $__grp_s['label'] ); ?></strong>
+              <?php if ( isset( $counts[ $__cle_s ] ) ) : ?>
+                <em class="acdc-purge-count"><?php echo esc_html( $counts[ $__cle_s ] ); ?> ligne<?php echo (int) $counts[ $__cle_s ] > 1 ? 's' : ''; ?></em>
               <?php endif; ?>
-              <small class="acdc-purge-menu"><?php echo esc_html( $funders['menu'] ); ?></small>
+              <small class="acdc-purge-menu"><?php echo esc_html( $__grp_s['menu'] ); ?></small>
+              <?php $this->acdc_rendre_sous_ensembles( $__cle_s, $__grp_s, $counts ); ?>
             </span>
           </label>
           <p style="margin-top:10px;">
             <label>
-              Pour les supprimer, saisissez <strong><?php echo esc_html( $this->acdc_purge_funders_confirmation_word() ); ?></strong> :
-              <input type="text" name="acdc_purge_funders_confirm" value="" placeholder="<?php echo esc_attr( $this->acdc_purge_funders_confirmation_word() ); ?>" autocomplete="off">
+              Pour le supprimer, saisissez <strong><?php echo esc_html( $__mot ); ?></strong> :
+              <input type="text" name="acdc_purge_confirm_<?php echo esc_attr( $__cle_s ); ?>" value="" placeholder="<?php echo esc_attr( $__mot ); ?>" autocomplete="off">
             </label>
           </p>
         </div>
+        <?php endforeach; ?>
 
         <div class="acdc-purge-confirm">
           <p>
@@ -417,6 +553,9 @@ trait ACDC_Kernel_Purge_Trait {
       .acdc-selective-purge .acdc-purge-menu{color:#8a6300!important;font-weight:600}
       .acdc-selective-purge .acdc-purge-keep{color:#1a7d3b!important}
       .acdc-selective-purge .acdc-purge-count{display:inline-block;margin-left:8px;padding:1px 8px;border-radius:999px;background:#f2f4f8;color:#1E4777;font-style:normal;font-size:11px;font-weight:700}
+      .acdc-selective-purge .acdc-purge-sous{display:block;margin-top:8px;padding-top:8px;border-top:1px dashed #e6ddc4}
+      .acdc-selective-purge .acdc-purge-sous-item{display:flex;gap:7px;align-items:center;margin-top:4px;font-size:12px;color:#374151}
+      .acdc-selective-purge .acdc-purge-sous-item input{margin:0}
       .acdc-selective-purge .acdc-purge-sensitive{margin-top:18px;padding:16px 18px;background:#fff7f7;border:1px solid #E06D6D;border-radius:10px}
       .acdc-selective-purge .acdc-purge-sensitive h4{margin:0 0 8px;color:#8f1d1d}
       .acdc-selective-purge .acdc-purge-confirm{margin-top:18px;padding-top:14px;border-top:1px solid #e6ddc4}
@@ -426,10 +565,26 @@ trait ACDC_Kernel_Purge_Trait {
     (function(){
       var all = document.querySelector('[data-acdc-purge-all]');
       var none = document.querySelector('[data-acdc-purge-none]');
-      function setAll(v){ document.querySelectorAll('[data-acdc-purge-box]').forEach(function(b){ b.checked = v; }); }
+
+      /* Les sous-ensembles d'un bloc suivent sa case, dans les deux sens : on
+         coche le bloc, tout part ; on le décoche, plus rien. Mais décocher UNE
+         ligne à la main ne décoche pas le bloc — c'est exactement l'usage
+         recherché : « tout ce bloc, sauf ça ». */
+      function sousDe(cle){ return document.querySelectorAll('[data-acdc-purge-sub="' + cle + '"]'); }
+      function suivre(box){
+        var cle = box.value;
+        sousDe(cle).forEach(function(s){ s.checked = box.checked; });
+      }
+      document.querySelectorAll('input[name="acdc_purge_groups[]"]').forEach(function(box){
+        box.addEventListener('change', function(){ suivre(box); });
+      });
+
+      function setAll(v){
+        document.querySelectorAll('[data-acdc-purge-box]').forEach(function(b){ b.checked = v; suivre(b); });
+      }
       if (all)  { all.addEventListener('click', function(){ setAll(true); }); }
       if (none) { none.addEventListener('click', function(){
-        document.querySelectorAll('input[name="acdc_purge_groups[]"]').forEach(function(b){ b.checked = false; });
+        document.querySelectorAll('input[name="acdc_purge_groups[]"]').forEach(function(b){ b.checked = false; suivre(b); });
       }); }
     })();
     </script>
@@ -509,16 +664,62 @@ trait ACDC_Kernel_Purge_Trait {
        pousserait à tout recommencer, et c'est en recommençant que l'on coche
        trop vite. */
     $funders_refused = false;
-    if ( in_array( 'funders', $requested, true ) ) {
-      $word = isset( $_POST['acdc_purge_funders_confirm'] ) ? strtoupper( trim( sanitize_text_field( wp_unslash( $_POST['acdc_purge_funders_confirm'] ) ) ) ) : '';
-      if ( $word !== strtoupper( $this->acdc_purge_funders_confirmation_word() ) ) {
-        $requested = array_values( array_diff( $requested, array( 'funders' ) ) );
-        $funders_refused = true;
+    $refuses         = array();
+    foreach ( $groups as $__cle_p => $__grp_p ) {
+      if ( empty( $__grp_p['sensitive'] ) || ! in_array( $__cle_p, $requested, true ) ) {
+        continue;
+      }
+      /* ACDC 3.25.322 — Chaque ensemble protégé a SON mot. L'ancien champ des
+         financeurs est encore lu, pour ne pas casser un signet ou un formulaire
+         en cache. */
+      $champ = 'acdc_purge_confirm_' . $__cle_p;
+      $saisi = isset( $_POST[ $champ ] ) ? $_POST[ $champ ] : ( 'funders' === $__cle_p && isset( $_POST['acdc_purge_funders_confirm'] ) ? $_POST['acdc_purge_funders_confirm'] : '' );
+      $saisi = strtoupper( trim( sanitize_text_field( wp_unslash( (string) $saisi ) ) ) );
+      if ( $saisi !== $this->acdc_purge_mot_confirmation( $__cle_p ) ) {
+        $requested = array_values( array_diff( $requested, array( $__cle_p ) ) );
+        $refuses[] = $__grp_p['label'];
+        if ( 'funders' === $__cle_p ) {
+          $funders_refused = true;
+        }
       }
     }
 
+    /* ACDC 3.25.322 — LES SOUS-ENSEMBLES DÉCIDENT DES TABLES.
+       Un bloc coché dont on a décoché des lignes ne doit emporter que celles
+       qui restent. Et un bloc dont on a TOUT décoché ne supprime rien, même
+       coché : c'est la lecture la moins surprenante de l'écran.
+       Le filtrage se fait ICI et non dans le navigateur : une case décochée à
+       l'écran ne prouve rien, seul ce que le serveur reçoit fait foi. */
+    $sous_recus = isset( $_POST['acdc_purge_sous'] ) && is_array( $_POST['acdc_purge_sous'] )
+      ? wp_unslash( $_POST['acdc_purge_sous'] )
+      : array();
+    foreach ( $requested as $__i => $__cle_g ) {
+      if ( empty( $groups[ $__cle_g ]['sous_ensembles'] ) ) {
+        continue;
+      }
+      $choisis = isset( $sous_recus[ $__cle_g ] ) ? array_map( 'sanitize_key', (array) $sous_recus[ $__cle_g ] ) : array();
+      $choisis = array_values( array_intersect( $choisis, array_keys( $groups[ $__cle_g ]['sous_ensembles'] ) ) );
+      if ( empty( $choisis ) ) {
+        unset( $requested[ $__i ] );
+        continue;
+      }
+      $tables_retenues = array();
+      foreach ( $choisis as $__sc ) {
+        $tables_retenues = array_merge( $tables_retenues, (array) $groups[ $__cle_g ]['sous_ensembles'][ $__sc ]['tables'] );
+      }
+      $groups[ $__cle_g ]['tables'] = array_values( array_unique( array_filter( $tables_retenues ) ) );
+    }
+    $requested = array_values( $requested );
+
     if ( empty( $requested ) ) {
-      $this->redirect_to_portal( 'settings', 'Suppression des financeurs refusée : mot de confirmation absent ou incorrect. Rien n’a été supprimé.', 'error' );
+      /* ACDC 3.25.322 — Dire LEQUEL des deux refus s'est produit. Le message
+         parlait des financeurs quoi qu'il arrive : devant un catalogue de
+         formations refusé, ou devant un bloc dont toutes les lignes avaient été
+         décochées, il envoyait chercher au mauvais endroit. */
+      $__pourquoi = ! empty( $refuses )
+        ? 'Suppression refusée pour : ' . implode( ', ', $refuses ) . '. Mot de confirmation absent ou incorrect.'
+        : 'Aucune ligne cochée à l’intérieur des ensembles retenus.';
+      $this->redirect_to_portal( 'settings', $__pourquoi . ' Rien n’a été supprimé.', 'error' );
     }
 
     $backup = $this->create_safety_backup_snapshot( 'purge_selected_data', array(
@@ -600,7 +801,10 @@ trait ACDC_Kernel_Purge_Trait {
     if ( $funders_refused ) {
       $message .= ' Les financeurs ont été ÉPARGNÉS : le mot de confirmation était absent ou incorrect.';
     }
+    if ( ! empty( $refuses ) ) {
+      $message .= ' Ensembles protégés épargnés faute de confirmation : ' . implode( ', ', $refuses ) . '.';
+    }
 
-    $this->redirect_to_portal( 'settings', $message, $funders_refused ? 'error' : 'success' );
+    $this->redirect_to_portal( 'settings', $message, ( $funders_refused || ! empty( $refuses ) ) ? 'error' : 'success' );
   }
 }
