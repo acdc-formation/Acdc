@@ -145,6 +145,16 @@ trait ACDC_Trainer_Portal_Quizzes_Render_Trait {
         }
         $quizzes = $this->get_qz_quizzes_for_trainer( $trainer_id, $args );
 
+        /* ACDC 3.25.325 — L'ORDRE DE LA LISTE EST CELUI DE LA JOURNÉE.
+           Les quiz sortaient du plus récemment modifié au plus ancien : un
+           classement de gestionnaire, pas de formateur. Le 18 août, l'évaluation
+           des acquis se présentait en tête et a été lancée en premier — avant
+           même le test de positionnement.
+           On range donc dans l'ordre où ils se passent : positionnement, puis
+           diagnostique, puis quiz live, puis acquis. À finalité égale, le plus
+           récemment modifié reste devant. */
+        $quizzes = $this->acdc_tp_ordonner_quiz( $quizzes );
+
         // Compteurs par finalité (pour les badges des onglets)
         $count_all = $this->count_qz_quizzes_for_trainer( $trainer_id, array( 'only_current' => true ) );
         $count_live = $this->count_qz_quizzes_for_trainer( $trainer_id, array( 'only_current' => true, 'purpose' => 'live' ) );
@@ -211,11 +221,6 @@ trait ACDC_Trainer_Portal_Quizzes_Render_Trait {
                    role="tab" aria-selected="<?php echo '' === $current_purpose ? 'true' : 'false'; ?>">
                     Tous <span class="acdc-trainer-portal-quizzes-count"><?php echo (int) $count_all; ?></span>
                 </a>
-                <a class="acdc-trainer-portal-quizzes-tab <?php echo 'live' === $current_purpose ? 'is-active' : ''; ?>"
-                   href="<?php echo esc_url( add_query_arg( 'purpose', 'live', $base_url ) ); ?>"
-                   role="tab" aria-selected="<?php echo 'live' === $current_purpose ? 'true' : 'false'; ?>">
-                    Quiz live <span class="acdc-trainer-portal-quizzes-count"><?php echo (int) $count_live; ?></span>
-                </a>
                 <a class="acdc-trainer-portal-quizzes-tab <?php echo 'positioning' === $current_purpose ? 'is-active' : ''; ?>"
                    href="<?php echo esc_url( add_query_arg( 'purpose', 'positioning', $base_url ) ); ?>"
                    role="tab" aria-selected="<?php echo 'positioning' === $current_purpose ? 'true' : 'false'; ?>">
@@ -225,6 +230,11 @@ trait ACDC_Trainer_Portal_Quizzes_Render_Trait {
                    href="<?php echo esc_url( add_query_arg( 'purpose', 'diagnostic', $base_url ) ); ?>"
                    role="tab" aria-selected="<?php echo 'diagnostic' === $current_purpose ? 'true' : 'false'; ?>">
                     Évaluations diagnostiques <span class="acdc-trainer-portal-quizzes-count"><?php echo (int) $count_diag; ?></span>
+                </a>
+                <a class="acdc-trainer-portal-quizzes-tab <?php echo 'live' === $current_purpose ? 'is-active' : ''; ?>"
+                   href="<?php echo esc_url( add_query_arg( 'purpose', 'live', $base_url ) ); ?>"
+                   role="tab" aria-selected="<?php echo 'live' === $current_purpose ? 'true' : 'false'; ?>">
+                    Quiz live <span class="acdc-trainer-portal-quizzes-count"><?php echo (int) $count_live; ?></span>
                 </a>
                 <a class="acdc-trainer-portal-quizzes-tab <?php echo 'assessment' === $current_purpose ? 'is-active' : ''; ?>"
                    href="<?php echo esc_url( add_query_arg( 'purpose', 'assessment', $base_url ) ); ?>"
@@ -268,6 +278,37 @@ trait ACDC_Trainer_Portal_Quizzes_Render_Trait {
         <?php endif; ?>
         <?php
         return ob_get_clean();
+    }
+
+    /**
+     * ACDC 3.25.325 — Les quiz dans l'ordre où ils se passent.
+     *
+     * Le formateur ne cherche pas « le dernier modifié » : il cherche celui
+     * qu'il doit lancer maintenant. La séquence pédagogique est fixe — on situe
+     * les acquis AVANT la formation (positionnement), on vérifie ce qui est su
+     * (diagnostique), on anime (quiz live), on mesure ce qui a été acquis.
+     *
+     * @param array $quizzes
+     * @return array
+     */
+    private function acdc_tp_ordonner_quiz( $quizzes ) {
+        $rang = array( 'positioning' => 1, 'diagnostic' => 2, 'live' => 3, 'assessment' => 4 );
+        $quizzes = array_values( (array) $quizzes );
+        /* usort n'est pas stable avant PHP 8 : on retient la position d'origine
+           pour départager, sans quoi l'ordre à finalité égale serait imprévisible. */
+        $indexes = array();
+        foreach ( $quizzes as $i => $q ) {
+            $indexes[ spl_object_hash( $q ) ] = $i;
+        }
+        usort( $quizzes, function ( $a, $b ) use ( $rang, $indexes ) {
+            $ra = isset( $rang[ (string) $a->quiz_purpose ] ) ? $rang[ (string) $a->quiz_purpose ] : 9;
+            $rb = isset( $rang[ (string) $b->quiz_purpose ] ) ? $rang[ (string) $b->quiz_purpose ] : 9;
+            if ( $ra !== $rb ) {
+                return $ra - $rb;
+            }
+            return $indexes[ spl_object_hash( $a ) ] - $indexes[ spl_object_hash( $b ) ];
+        } );
+        return $quizzes;
     }
 
     /**
@@ -327,7 +368,12 @@ trait ACDC_Trainer_Portal_Quizzes_Render_Trait {
                 ?>
                 <?php if ( $q_live_ready ) : ?>
                     <?php if ( 'active' === (string) $q->status ) : ?>
-                        <form method="post" action="<?php echo esc_url( admin_url( 'admin-post.php' ) ); ?>" style="display:inline">
+                        <?php /* ACDC 3.25.325 — L'écran d'animation s'ouvre à côté, pas à la
+                                 place. Le formateur lançait son quiz et perdait son extranet :
+                                 pour revenir à la liste des séances, il devait quitter la salle
+                                 des yeux. La partie vit dans son onglet, le portail reste dans
+                                 le sien. */ ?>
+                        <form method="post" action="<?php echo esc_url( admin_url( 'admin-post.php' ) ); ?>" style="display:inline" target="_blank">
                             <input type="hidden" name="action"   value="acdc_of_qz_launch_live" />
                             <input type="hidden" name="quiz_id"  value="<?php echo (int) $q->id; ?>" />
                             <?php wp_nonce_field( 'acdc_of_qz_launch_live_' . (int) $q->id ); ?>

@@ -972,7 +972,12 @@
             var av = (p && p.avatar === 'homme') ? 'homme' : 'femme';
             // Classe genre → CSS @media applique les positions et tailles
             block.className = 'acdc-qz-podium-block acdc-qz-podium-block-' + rank + ' is-' + av;
-            block.style.width = 'auto'; // reset tout ancien style width
+            /* ACDC 3.25.325 — Plus de largeur imposée ici. « width:auto » en style
+               en ligne battait la feuille de style : le bloc se dimensionnait sur
+               l'image du personnage à sa taille naturelle (1086 px), et la mise en
+               place proportionnelle sur la scène du podium n'avait plus aucun
+               effet. La largeur d'un bloc est celle de sa marche, et c'est le CSS
+               qui la connaît. */
             if (p) {
                 var avatarUrl = assets[rank+'-'+av]||'';
                 block.innerHTML = '<div class="acdc-qz-podium-name">'+esc(p.nickname)+'</div>'

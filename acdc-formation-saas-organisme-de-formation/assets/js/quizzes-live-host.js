@@ -563,10 +563,13 @@
             // Force le layout du podium en JS (contourne les conflits CSS)
             var stateEl = document.querySelector('.acdc-qz-host-state-podium');
             if (stateEl) {
-                stateEl.style.cssText = 'display:flex!important;flex-direction:column!important;position:fixed!important;top:0!important;left:0!important;right:0!important;bottom:0!important;width:100vw!important;height:100vh!important;box-sizing:border-box!important;padding-top:65.1vh!important;z-index:50!important;background:#fef8f2!important;';
+                /* ACDC 3.25.325 — Le « padding-top: 65,1vh » écrasait le conteneur du podium
+                   dans le dernier tiers de l'écran : la scène n'avait plus de place pour
+                   ses personnages. La hauteur est rendue au podium. */
+                stateEl.style.cssText = 'display:flex!important;flex-direction:column!important;position:fixed!important;top:0!important;left:0!important;right:0!important;bottom:0!important;width:100vw!important;height:100vh!important;box-sizing:border-box!important;z-index:50!important;background:#fef8f2!important;';
                 var wrap = stateEl.querySelector('.acdc-qz-podium-wrap');
                 if (wrap) {
-                    wrap.style.cssText = 'position:relative!important;flex:1!important;min-height:0!important;width:800px!important;max-width:100%!important;margin:0 auto!important;transform:none!important;top:auto!important;bottom:auto!important;left:auto!important;right:auto!important;';
+                    wrap.style.cssText = 'position:relative!important;flex:1!important;min-height:0!important;width:1000px!important;max-width:100%!important;margin:0 auto!important;transform:none!important;top:auto!important;bottom:auto!important;left:auto!important;right:auto!important;';
                 }
             }
             renderPodiumAnimated(list);
@@ -581,42 +584,13 @@
         var top3 = sorted.slice(0,3);
         var assets = window.acdcQzPodiumAssets || {};
 
-        // Positions exactes par avatar (calées sur le fichier Podium.png)
-        // Positions par breakpoint — ajustées pixel par pixel via retours visuels
-        // R1/R2/R3 : l = centre du personnage en % du wrap (800px), translateX(-50%) appliqué
-        // 1px = 0.125% sur un wrap de 800px
-        var w = window.innerWidth;
-        var PODIUM_POS;
-        if (w > 1366) {
-            // Écran large ≥2400px — calibré via DevTools (sans translateX)
-            PODIUM_POS = {
-                homme: {
-                    1: { b:'84%', l:'35%',   t:'none', r:null, ml:'0', mh:'55vh' },
-                    2: { b:'56%', l:'0%',    t:'none', r:null, ml:'0', mh:'55vh' },
-                    3: { b:'50%', l:'68.2%', t:'none', r:null, ml:'0', mh:'52.5vh' },
-                },
-                femme: {
-                    1: { b:'84%', l:'35%',   t:'none', r:null, ml:'0', mh:'55vh' },
-                    2: { b:'56%', l:'0%',    t:'none', r:null, ml:'0', mh:'55vh' },
-                    3: { b:'50%', l:'68.2%', t:'none', r:null, ml:'0', mh:'52.5vh' },
-                },
-            };
-        } else {
-            // Portable ≤1366px : R1 -25px, R2 +20px, R3 +5px
-            PODIUM_POS = {
-                homme: {
-                    1: { b:'27.8%', l:'47.3%', t:'translateX(-50%)', r:null, ml:'0', mh:'55vh' },
-                    2: { b:'18.0%', l:'33.7%', t:'translateX(-50%)', r:null, ml:'0', mh:'55vh' },
-                    3: { b:'15.7%', l:'69.4%', t:'translateX(-50%)', r:null, ml:'0', mh:'52.5vh' },
-                },
-                femme: {
-                    1: { b:'27.8%', l:'47.3%', t:'translateX(-50%)', r:null, ml:'0', mh:'55vh' },
-                    2: { b:'18.0%', l:'33.7%', t:'translateX(-50%)', r:null, ml:'0', mh:'55vh' },
-                    3: { b:'15.7%', l:'69.4%', t:'translateX(-50%)', r:null, ml:'0', mh:'52.5vh' },
-                },
-            };
-        }
-
+        /* ACDC 3.25.325 — LES POSITIONS NE SONT PLUS ÉCRITES ICI.
+           Ce fichier portait un septième jeu de coordonnées, en dur, qui doublait
+           les six tableaux du CSS — et qui les écrasait, puisqu'un style en ligne
+           gagne toujours. Deux endroits pour la même décision : celui qu'on
+           corrige n'est jamais celui qui s'applique.
+           Le podium est désormais une scène au rapport de son image, et les trois
+           places y sont mesurées une fois pour toutes dans quizzes-live.css. */
         // Structure : image podium en fond + blocs personnages
         container.innerHTML = ''; // position CSS absolute top:0 bottom:0 left:0 right:0 conservée
 
@@ -631,28 +605,13 @@
         [2,1,3].forEach(function(rank) {
             var p = top3[rank-1];
             var block = document.createElement('div');
-            block.className = 'acdc-qz-podium-block acdc-qz-podium-block-' + rank;
+            var av = (p && p.avatar === 'homme') ? 'homme' : 'femme';
+            block.className = 'acdc-qz-podium-block acdc-qz-podium-block-' + rank + ' is-' + av;
             if (p) {
-                var av = (p.avatar === 'homme') ? 'homme' : 'femme';
-                var pos = PODIUM_POS[av][rank];
                 var avatarUrl = assets[rank + '-' + av] || '';
                 block.innerHTML = '<div class="acdc-qz-podium-name">' + esc(p.nickname) + '</div>'
                     + '<div class="acdc-qz-podium-score">' + Math.round(p.score) + ' pts</div>'
                     + '<img class="acdc-qz-podium-avatar" src="' + avatarUrl + '" alt="" />';
-                // Positions inline — height-driven (vh)
-                block.style.bottom     = pos.b;
-                block.style.left       = pos.l  || 'auto';
-                block.style.right      = pos.r  || 'auto';
-                block.style.marginLeft = pos.ml || '0';
-                block.style.transform  = pos.t  || 'none';
-                block.style.width      = 'auto';
-                // Hauteur avatar en vh
-                var avatarImg = block.querySelector('.acdc-qz-podium-avatar');
-                if (avatarImg && pos.mh) {
-                    avatarImg.style.maxHeight = pos.mh;
-                    avatarImg.style.width     = 'auto';
-                    avatarImg.style.height    = 'auto';
-                }
             }
             container.appendChild(block);
         });

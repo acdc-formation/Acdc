@@ -514,6 +514,17 @@ trait ACDC_Quizzes_Engine_Trait {
             $q = $this->get_qz_question( (int) $session->current_question_id );
             if ( $q ) {
                 $answers_pub = $this->get_qz_answers_for_question_public( (int) $q->id );
+                /* ACDC 3.25.325 — LA BONNE RÉPONSE ÉTAIT TOUJOURS LA PREMIÈRE.
+                   En quiz live comme en passation individuelle, les propositions
+                   sortaient dans l'ordre de saisie — et un quiz se rédige en
+                   écrivant d'abord la bonne réponse.
+                   Ici, tout le monde regarde le même écran : la graine vient de
+                   la SÉANCE et de la question, jamais du joueur. Un seul ordre
+                   pour la salle, le même sur la révélation du formateur, et il
+                   ne bouge pas d'un rafraîchissement à l'autre. */
+                if ( in_array( (string) $q->type, array( self::ACDC_OF_QZ_QTYPE_QCM_SINGLE, self::ACDC_OF_QZ_QTYPE_QCM_MULTIPLE ), true ) ) {
+                    $answers_pub = $this->acdc_qz_melange_deterministe( $answers_pub, (int) $session->id * 1000 + (int) $q->id );
+                }
                 $type_labels = array(
                     'qcm_single'   => 'Une seule réponse',
                     'qcm_multiple' => 'Plusieurs réponses',
@@ -579,7 +590,9 @@ trait ACDC_Quizzes_Engine_Trait {
                     }
                     $total_pa       = $count_total_parts; // nb de participants, pas de lignes
                     $reveal_answers = array();
-                    $answers_db     = $this->get_qz_answers_for_question_public( (int) $q->id );
+                    /* La révélation reprend l'ordre DÉJÀ servi aux joueurs : le
+                       formateur commente ce qu'ils ont sous les yeux. */
+                    $answers_db     = $answers_pub;
                     foreach ( $answers_db as $a ) {
                         $cnt = isset( $vote_count[ (int) $a->id ] ) ? $vote_count[ (int) $a->id ] : 0;
                         $reveal_answers[] = array(

@@ -1412,6 +1412,22 @@ trait ACDC_Quizzes_Render_Trait {
         $name = "answers[{$question->id}]";
         $type = (string) $question->type;
 
+        /* ACDC 3.25.325 — LA BONNE RÉPONSE ÉTAIT TOUJOURS LA PREMIÈRE.
+           Les propositions sortaient dans l'ordre de saisie, et un quiz se
+           rédige en écrivant d'abord la bonne réponse : A était juste à chaque
+           question, et les choix multiples s'alignaient sur l'alphabet.
+           On mélange donc, avec une graine tirée de la question ET de
+           l'apprenant : chacun a son ordre, et il ne bouge pas s'il revient sur
+           la question. Le Vrai/Faux est laissé tel quel — « Faux » avant
+           « Vrai » ne trompe personne et se lit mal — et le sondage garde
+           l'ordre voulu par son auteur : il n'y a rien à y deviner. */
+        if ( in_array( $type, array( self::ACDC_OF_QZ_QTYPE_QCM_SINGLE, self::ACDC_OF_QZ_QTYPE_QCM_MULTIPLE ), true ) ) {
+            $answers = $this->acdc_qz_melange_deterministe(
+                $answers,
+                (int) $question->id * 1000 + ( isset( $GLOBALS['acdc_qz_current_participant_id'] ) ? (int) $GLOBALS['acdc_qz_current_participant_id'] : 0 )
+            );
+        }
+
         /* ACDC 3.25.168 — La consigne « plusieurs réponses possibles » était une ligne
            grise parmi d'autres, et le choix unique n'en portait aucune : l'apprenant
            découvrait la règle en cochant. C'est piégeux sur une évaluation dont le
@@ -1474,19 +1490,12 @@ trait ACDC_Quizzes_Render_Trait {
                 // Mélange déterministe basé sur l'ID de question + ID du participant.
                 // De cette façon, l'ordre affiché reste stable tant que l'apprenant n'a
                 // pas terminé (s'il revient en arrière, il retrouve son ordre courant).
-                $shuffled = $answers;
-                if ( count( $shuffled ) > 1 ) {
-                    $seed = (int) $question->id * 1000 + ( isset( $GLOBALS['acdc_qz_current_participant_id'] ) ? (int) $GLOBALS['acdc_qz_current_participant_id'] : 0 );
-                    mt_srand( $seed );
-                    // Fisher-Yates avec mt_rand pour reproductibilité
-                    for ( $i = count( $shuffled ) - 1; $i > 0; $i-- ) {
-                        $j = mt_rand( 0, $i );
-                        $tmp = $shuffled[ $i ];
-                        $shuffled[ $i ] = $shuffled[ $j ];
-                        $shuffled[ $j ] = $tmp;
-                    }
-                    mt_srand(); // remise du seed pour ne pas affecter le reste de PHP
-                }
+                /* ACDC 3.25.325 — Même porte que les QCM : un seul mélange dans
+                   tout le module, une seule façon de le semer. */
+                $shuffled = $this->acdc_qz_melange_deterministe(
+                    $answers,
+                    (int) $question->id * 1000 + ( isset( $GLOBALS['acdc_qz_current_participant_id'] ) ? (int) $GLOBALS['acdc_qz_current_participant_id'] : 0 )
+                );
                 $hidden_value = implode( ',', array_map( function( $a ) { return (int) $a->id; }, $shuffled ) );
                 ?>
                 <p class="acdc-qz-public-help-inline">

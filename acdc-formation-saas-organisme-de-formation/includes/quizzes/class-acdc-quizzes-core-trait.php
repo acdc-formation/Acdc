@@ -6175,4 +6175,118 @@ trait ACDC_Quizzes_Core_Trait {
 
         return $result;
     }
+
+    /**
+     * ACDC 3.25.325 — QUEL APPRENANT SE CACHE DERRIÈRE CE PSEUDO ?
+     *
+     * Le quiz live se rejoint avec un code PIN et un pseudo. Aucun identifiant
+     * ne circule : le participant restait non rattaché, et ses réponses
+     * n'atteignaient ni son dossier, ni son extranet, ni la preuve Qualiopi.
+     *
+     * On compare donc le pseudo aux apprenants de LA séance — trois personnes,
+     * pas un annuaire — sur les formes qu'un adulte tape spontanément : son
+     * prénom, son nom, les deux dans un sens ou dans l'autre, « Prénom N. », ou
+     * le début de son adresse e-mail.
+     *
+     * LA RÈGLE DE PRUDENCE. On ne rattache QUE si une seule personne correspond.
+     * Deux « Marie » dans la salle, et attribuer au hasard mettrait les réponses
+     * de l'une dans le dossier de l'autre — une erreur bien pire que l'absence
+     * de rattachement, et invisible.
+     *
+     * @param int    $formation_session_id La séance de formation concernée.
+     * @param string $pseudo               Le pseudo saisi par le participant.
+     * @return int L'identifiant de l'apprenant, ou 0 si le doute subsiste.
+     */
+    private function acdc_qz_apprenant_depuis_pseudo( $formation_session_id, $pseudo ) {
+        $cherche = $this->acdc_qz_pseudo_normalise( $pseudo );
+        if ( '' === $cherche || ! method_exists( $this, 'get_session' ) || ! method_exists( $this, 'acdc_session_learners' ) ) {
+            return 0;
+        }
+        $seance = $this->get_session( (int) $formation_session_id );
+        if ( ! $seance ) {
+            return 0;
+        }
+        $trouves = array();
+        foreach ( (array) $this->acdc_session_learners( $seance ) as $apprenant ) {
+            if ( empty( $apprenant->id ) ) {
+                continue;
+            }
+            $prenom = (string) ( $apprenant->first_name ?? '' );
+            $nom    = '' !== trim( (string) ( $apprenant->usage_last_name ?? '' ) )
+                ? (string) $apprenant->usage_last_name
+                : (string) ( $apprenant->last_name ?? '' );
+            $email  = (string) ( $apprenant->email ?? '' );
+            $avant_arobase = '';
+            if ( false !== strpos( $email, '@' ) ) {
+                $avant_arobase = substr( $email, 0, strpos( $email, '@' ) );
+            }
+            $formes = array(
+                $prenom,
+                $nom,
+                $prenom . ' ' . $nom,
+                $nom . ' ' . $prenom,
+                $prenom . ' ' . substr( $nom, 0, 1 ),
+                $email,
+                $avant_arobase,
+            );
+            foreach ( $formes as $forme ) {
+                $forme = $this->acdc_qz_pseudo_normalise( $forme );
+                if ( '' !== $forme && $forme === $cherche ) {
+                    $trouves[ (int) $apprenant->id ] = true;
+                    break;
+                }
+            }
+        }
+        return 1 === count( $trouves ) ? (int) key( $trouves ) : 0;
+    }
+
+    /**
+     * Un pseudo débarrassé de ce qui ne distingue pas : accents, casse,
+     * ponctuation, espaces multiples. « Bérengère V. » et « berengere v »
+     * désignent la même personne.
+     */
+    private function acdc_qz_pseudo_normalise( $texte ) {
+        $texte = remove_accents( (string) $texte );
+        $texte = strtolower( $texte );
+        $texte = preg_replace( '/[^a-z0-9]+/', ' ', $texte );
+        return trim( (string) preg_replace( '/\s+/', ' ', $texte ) );
+    }
+
+    /**
+     * ACDC 3.25.325 — UN MÉLANGE QUI NE CHANGE PAS ENTRE DEUX AFFICHAGES.
+     *
+     * Les propositions étaient servies dans l'ordre de saisie. Les quiz étant
+     * rédigés — à la main comme par import — en écrivant la bonne réponse en
+     * premier, la réponse A était la bonne à chaque question, et les réponses
+     * d'un choix multiple sortaient dans l'ordre de l'alphabet. Un apprenant
+     * qui coche A partout obtient 100 % sans rien savoir : l'évaluation ne
+     * mesure plus rien, et l'attestation qui en découle ne vaut rien.
+     *
+     * Le mélange doit être STABLE. Un apprenant qui revient sur une question,
+     * un écran formateur qui se rafraîchit toutes les deux secondes : si
+     * l'ordre changeait à chaque affichage, on ne pourrait plus ni cocher ni
+     * commenter. On sème donc le tirage avec une graine, et la même graine
+     * redonne toujours le même ordre.
+     *
+     * @param array $liste  Les propositions.
+     * @param int   $graine La graine du tirage.
+     * @return array
+     */
+    private function acdc_qz_melange_deterministe( $liste, $graine ) {
+        $liste = array_values( (array) $liste );
+        if ( count( $liste ) < 2 ) {
+            return $liste;
+        }
+        mt_srand( (int) $graine );
+        for ( $i = count( $liste ) - 1; $i > 0; $i-- ) {
+            $j   = mt_rand( 0, $i );
+            $tmp = $liste[ $i ];
+            $liste[ $i ] = $liste[ $j ];
+            $liste[ $j ] = $tmp;
+        }
+        /* On rend sa liberté au générateur : le reste de PHP ne doit pas hériter
+           de notre graine. */
+        mt_srand();
+        return $liste;
+    }
 }

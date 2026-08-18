@@ -2844,6 +2844,24 @@ trait ACDC_Quizzes_Actions_Trait {
          * direct, groupe, convention — comme partout ailleurs depuis la
          * 3.25.265.
          */
+        /* ACDC 3.25.325 — UN PSEUDO N'EST PAS UN ANONYMAT.
+           En salle, l'apprenant rejoint le quiz live avec le code PIN et un
+           pseudo : rien ne porte son identifiant. Le participant était donc
+           enregistré non rattaché, et le tableau des résultats affichait
+           « ⚠ non rattaché à un apprenant » sous des noms parfaitement lisibles
+           — « Bérengère », « Ilona », « Leandra ». Le formateur voit les
+           personnes, le plugin ne voit personne.
+           Ce n'est pas qu'un défaut d'affichage : un quiz rattaché à personne ne
+           remonte dans aucun dossier, ne paraît dans aucun extranet apprenant et
+           ne vaut rien comme preuve Qualiopi.
+           On rapproche donc le pseudo des apprenants de LA séance concernée —
+           une poignée de personnes, pas un annuaire. Le rattachement n'a lieu
+           que si UNE SEULE correspond : deux « Marie » dans la salle, et on
+           préfère ne rien affirmer plutôt que d'attribuer les réponses de l'une
+           au dossier de l'autre. */
+        if ( $learner_id <= 0 && ! empty( $session->formation_session_id ) ) {
+            $learner_id = $this->acdc_qz_apprenant_depuis_pseudo( (int) $session->formation_session_id, $nickname );
+        }
         $is_traceable = 0;
         if ( $learner_id > 0 && ! empty( $session->formation_session_id ) ) {
             $formation_session = method_exists( $this, 'get_session' )
@@ -2957,7 +2975,17 @@ trait ACDC_Quizzes_Actions_Trait {
            du chronomètre ne servait à rien. Deux secondes de tolérance couvrent la
            latence réseau et l'écart entre l'horloge du navigateur et celle du serveur.
            Une question sans limite de temps n'est évidemment jamais concernée. */
-        $time_limit_ms = (int) $question->time_limit * 1000;
+        /* ACDC 3.25.325 — LE SERVEUR CHRONOMÉTRAIT CE QUE L'ÉCRAN NE CHRONOMÈTRE PAS.
+           Ce contrôle lisait la colonne brute « time_limit ». Or l'écran, lui,
+           passe par qz_effective_time_limit(), qui neutralise le chronomètre
+           d'une réponse à RÉDIGER et rallonge celui d'une remise en ordre.
+           L'apprenant voyait donc une question sans compte à rebours, prenait le
+           temps d'écrire — et sa réponse était refusée « Temps écoulé », à tous
+           les coups, sur toutes les questions en texte libre. Constaté le
+           18 août : aucune réponse rédigée n'a été enregistrée.
+           Deux horloges pour une même question, et c'est la plus sévère qui
+           tranchait sans l'avoir annoncé. Il n'y en a plus qu'une. */
+        $time_limit_ms = (int) $this->qz_effective_time_limit( $question ) * 1000;
         if ( $time_limit_ms > 0 && $server_elapsed_ms > ( $time_limit_ms + 2000 ) ) {
             wp_send_json_error( array(
                 'code'    => 'qz_time_over',
@@ -2975,7 +3003,10 @@ trait ACDC_Quizzes_Actions_Trait {
             $score = 0;
         } elseif ( self::ACDC_OF_QZ_PURPOSE_LIVE === (string) $session->quiz_purpose ) {
             $score = $this->qz_calculate_kahoot_score(
-                (bool) $is_correct, $response_ms, (int) $question->time_limit
+                /* Même horloge que celle annoncée au joueur : noter la vitesse
+                   sur une limite qu'il n'a jamais vue fausserait le classement
+                   d'une remise en ordre, dont le temps est rallongé. */
+                (bool) $is_correct, $response_ms, (int) $this->qz_effective_time_limit( $question )
             ) * (float) $score_ratio;
         } else {
             $score = (float) $question->points_value * (float) $score_ratio;

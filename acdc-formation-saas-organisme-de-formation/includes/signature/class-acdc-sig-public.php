@@ -527,15 +527,33 @@ class ACDC_Sig_Public {
               btn.disabled=!(hasSig&&ck.checked&&accordOk());
               if(accordErr){accordErr.style.display=(hasSig&&ck.checked&&!accordOk())?'block':'none';}
             }
+            /* ACDC 3.25.325 — LE POIDS DE CE QU'ON ENVOIE.
+               Le canevas est dessiné à la densité de l'écran : sur un écran à
+               trois pixels physiques par pixel CSS, il fait 1800 px de large. On
+               l'envoyait tel quel, encodé en base64 — soit un tiers de plus. Le
+               document final n'en tire aucun bénéfice : à la taille où la
+               signature s'imprime, 1200 px de large sont déjà au-delà de ce que
+               le PDF restitue.
+               Ce plafond n'est pas cosmétique. Un envoi trop lourd peut être
+               refusé par la couche de sécurité de l'hébergeur AVANT d'atteindre
+               WordPress — le signataire reçoit alors une page d'erreur du
+               serveur, sans explication, au dernier geste. Plafonner supprime la
+               part variable : deux signatures du même document pèsent désormais
+               le même ordre de grandeur, quel que soit l'écran. */
+            function acdcExportSignature(source){
+              var max=1200,l=source.width,h=source.height;
+              if(l>max){h=Math.round(h*(max/l));l=max;}
+              var tmp=document.createElement('canvas');tmp.width=l;tmp.height=h;
+              var tctx=tmp.getContext('2d');
+              tctx.fillStyle='#ffffff';tctx.fillRect(0,0,l,h);
+              tctx.drawImage(source,0,0,l,h);
+              return tmp.toDataURL('image/png');
+            }
             document.getElementById('sig-form').addEventListener('submit',function(){
               // Fond blanc avant capture pour éviter le fond noir dans le certificat PDF
-              var tmp=document.createElement('canvas');tmp.width=c.width;tmp.height=c.height;
-              var tctx=tmp.getContext('2d');tctx.fillStyle='#ffffff';tctx.fillRect(0,0,tmp.width,tmp.height);
-              tctx.drawImage(c,0,0);inp.value=tmp.toDataURL('image/png');
+              inp.value=acdcExportSignature(c);
               if(accordCanvas&&accordHas){
-                var atmp=document.createElement('canvas');atmp.width=accordCanvas.width;atmp.height=accordCanvas.height;
-                var atctx=atmp.getContext('2d');atctx.fillStyle='#ffffff';atctx.fillRect(0,0,atmp.width,atmp.height);
-                atctx.drawImage(accordCanvas,0,0);accordData.value=atmp.toDataURL('image/png');
+                accordData.value=acdcExportSignature(accordCanvas);
               }
             });
         })();
@@ -628,7 +646,14 @@ class ACDC_Sig_Public {
         // garde initiale (~l.414) et ici : on redirige comme la garde initiale, sans
         // régénérer le PDF ni réécrire les empreintes.
         if ( $claimed < 1 ) {
-            wp_safe_redirect( $this->core->get_signature_page_url() . '?sig=' . urlencode( $token ) );
+            /* ACDC 3.25.325 — LA SECONDE TENTATIVE MÉRITE LA MÊME PAGE.
+               Quand la première soumission a bien scellé la demande mais que le
+               signataire n'a pas vu la confirmation — réponse perdue, page
+               d'erreur du serveur, retour arrière — il resigne. On l'envoyait
+               alors sur un écran laconique « déjà signé », qui ressemble à un
+               refus. Son geste a pourtant abouti : il voit désormais la même
+               confirmation que s'il avait réussi du premier coup. */
+            wp_safe_redirect( $this->core->get_signature_page_url() . '?sig=' . urlencode( $token ) . '&signed=1' );
             exit;
         }
 

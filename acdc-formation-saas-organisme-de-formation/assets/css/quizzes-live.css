@@ -284,44 +284,108 @@ body.page-template-default:has(.acdc-qz-live-player) {
     margin: 0 auto !important;
     flex: 1 !important;
     min-height: 0 !important;
-    width: 800px;
+    /* ACDC 3.25.325 — Même largeur de scène que la règle de base : deux valeurs
+       différentes pour le même conteneur, et les proportions se décalent. */
+    width: 1000px;
     max-width: 100%;
 }
 
 /* =====================================================
-   PODIUM — CSS unifié, table rase v40
-   Tout ce qui concerne le positionnement du podium est ici.
-   Breakpoints Elementor : 767 / 880 / 1024 / 1200 / 1366 / 2400
+   PODIUM — UNE SCÈNE, DES PROPORTIONS, PLUS DE TABLEAUX
+   ACDC 3.25.325.
+
+   CE QUI N'ALLAIT PAS. L'image du podium portait 60 % de vide : le dessin
+   n'occupait que 1021 × 581 pixels d'un fichier de 1086 × 1448. Servie en
+   « width: 103% » MAIS plafonnée en « max-height: 32vh », avec object-fit:
+   contain, elle se réduisait pour tenir dans la hauteur — et sa LARGEUR tombait
+   avec elle. Mesuré au navigateur sur un écran de 1920 × 1080 : un podium de
+   243 px de large sous des personnages de 507 px de haut. Le jouet et les
+   géants. C'est exactement ce que rapporte la recette du 18 août : « les
+   personnages ont la bonne taille, mais pas le podium ».
+
+   Et comme les blocs étaient placés en pourcentage du CONTENEUR pendant que
+   l'image se dimensionnait sur la HAUTEUR DE L'ÉCRAN, aucun réglage ne pouvait
+   être juste ailleurs que sur l'écran où il avait été fait à l'œil. D'où les
+   six jeux de coordonnées par point de rupture, en double (homme / femme), plus
+   un septième jeu écrit en dur dans le JavaScript de l'écran formateur.
+
+   CE QU'ON FAIT. L'image est recadrée sur son dessin. Le conteneur du podium
+   devient une SCÈNE qui porte exactement le rapport de l'image (1021/581) : dès
+   lors, un pourcentage dans la scène désigne le même point du dessin à toutes
+   les tailles. Les trois positions sont MESURÉES sur les pixels de l'image —
+   dessus des marches à 86,7 %, 56,3 % et 49,7 % de sa hauteur ; centres des
+   marches à 15,7 %, 49,5 % et 85,2 % de sa largeur — et non plus estimées.
+   Un seul jeu de règles, plus aucun tableau par écran.
    ===================================================== */
 
-/* --- Structure commune HOST + PLAYER --- */
 .acdc-qz-podium-wrap {
     flex: 1; min-height: 0;
     position: relative;
-    width: 800px; max-width: 100%;
+    width: 1000px; max-width: 100%;
     margin: 0 auto;
 }
-.acdc-qz-podium { position: absolute; bottom: 0; left: 0; right: 0; top: 0; }
+
+/* LA SCÈNE — même rapport que le dessin, posée au sol du conteneur. */
+.acdc-qz-podium {
+    position: absolute;
+    bottom: 14px; left: 50%;
+    transform: translateX(-50%);
+    /* DEUX BORNES, ET LE RAPPORT TOUJOURS RESPECTÉ. La scène prend 92 % de la
+       largeur disponible — sauf si la HAUTEUR ne suit pas : au-dessus de la
+       marche d'or il faut encore la place du personnage, sinon les têtes sortent
+       de l'écran, ce qui arrivait sur un portable de 768 px. « min() » retient la
+       plus contraignante des deux, et « aspect-ratio » déduit la hauteur : le
+       cadre a donc exactement le rapport du dessin, à toutes les tailles.
+       Une borne posée sur « max-width » aurait, elle, écrasé le rapport : la
+       hauteur restait celle demandée pendant que la largeur était rognée. */
+    width: min(92%, 86vh); height: auto;
+    aspect-ratio: 1021 / 581;
+    top: auto; right: auto;
+}
 .acdc-qz-podium-base {
-    position: absolute; bottom: -8px;
-    left: 50%; transform: translateX(-50%);
-    height: auto; object-fit: contain; object-position: bottom;
+    position: absolute; inset: 0;
+    width: 100%; height: 100%;
+    max-height: none;
+    object-fit: contain; object-position: bottom;
     pointer-events: none; z-index: 1;
 }
 .acdc-qz-podium-block {
     position: absolute; text-align: center; z-index: 15;
     opacity: 0; transition: opacity 0.7s ease;
     display: flex; flex-direction: column; align-items: center;
+    /* Un bloc large comme sa marche, recentré sur elle par la marge : le
+       « transform » est déjà pris par l'animation d'arrivée. */
+    width: 30%; margin-left: -15%;
 }
 .acdc-qz-podium-block.is-visible { opacity: 1; animation: acdc-qz-podium-rise 0.7s cubic-bezier(0.34,1.56,0.64,1) forwards; }
-.acdc-qz-podium-avatar { width: auto; height: auto; display: block; }
+.acdc-qz-podium-avatar { width: 132%; height: auto; max-width: none; display: block; }
 .acdc-qz-podium-name { font-size: 18px; font-weight: 800; color: #0f2c52; margin-bottom: 2px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 100%; }
 .acdc-qz-podium-score { font-size: 14px; font-weight: 700; color: #d6a353; margin-bottom: 4px; }
 
+/* Les trois places, mesurées sur le dessin. */
+.acdc-qz-podium-block-1 { bottom: 86.7%; left: 49.5%; right: auto; }
+.acdc-qz-podium-block-2 { bottom: 56.3%; left: 15.7%; right: auto; }
+.acdc-qz-podium-block-3 { bottom: 49.7%; left: 85.2%; right: auto; }
+
+.acdc-qz-player-podium-myrank { position: absolute; top: 25px; right: 25px; bottom: auto; }
+
+@media (max-width: 880px) {
+    /* Sur un téléphone, le nom et le score sous la marche deviennent illisibles
+       à cette échelle : on les réduit plutôt que de les laisser déborder. */
+    .acdc-qz-podium-name  { font-size: 12px; }
+    .acdc-qz-podium-score { font-size: 10px; }
+}
+
 /* --- Leaderboard HOST — structure --- */
 .acdc-qz-host-leaderboard-rest {
+    /* ACDC 3.25.325 — Une seule ancre, en bas à gauche de l'écran. Les valeurs
+       posées écran par écran — jusqu'à « bottom: 818px » — visaient un podium
+       qui ne faisait plus la même taille d'un poste à l'autre. Le classement se
+       lit à côté du podium, pas par-dessus. */
     position: absolute;
-    border-radius: 10px; overflow: hidden;
+    left: 24px; bottom: 24px;
+    max-height: 62vh;
+    border-radius: 10px; overflow: auto;
     background: rgba(255,255,255,0.95);
     box-shadow: 0 4px 14px rgba(0,0,0,.12);
     opacity: 0; transition: opacity 0.6s ease;
@@ -344,151 +408,41 @@ body.page-template-default:has(.acdc-qz-live-player) {
 .acdc-qz-leaderboard-table tbody tr:last-child td { border-bottom: none; }
 
 /* =====================================================
-   PLAYER — positions calibrées par breakpoint
-   left = bord gauche du bloc (pas de translateX sur les blocs player)
-   ===================================================== */
-
-/* Défaut — Écran large ≥2400px */
-.acdc-qz-podium-base                           { width: 103%; max-height: 32vh; }
-.acdc-qz-player-podium-myrank                  { position: absolute; top: 25px; right: 25px; bottom: auto; }
-.acdc-qz-podium-block-1.is-homme               { bottom: 28.0%; left: 39.0%; right: auto; }
-.acdc-qz-podium-block-1.is-homme .acdc-qz-podium-avatar { max-height: 47vh; }
-.acdc-qz-podium-block-2.is-homme               { bottom: 18.8%; left:  5.0%; right: auto; }
-.acdc-qz-podium-block-2.is-homme .acdc-qz-podium-avatar { max-height: 46vh; }
-.acdc-qz-podium-block-3.is-homme               { bottom: 17.1%; left: 68.0%; right: auto; }
-.acdc-qz-podium-block-3.is-homme .acdc-qz-podium-avatar { max-height: 45.5vh; }
-.acdc-qz-podium-block-1.is-femme               { bottom: 28.0%; left: 39.0%; right: auto; }
-.acdc-qz-podium-block-1.is-femme .acdc-qz-podium-avatar { max-height: 47vh; }
-.acdc-qz-podium-block-2.is-femme               { bottom: 18.8%; left:  5.0%; right: auto; }
-.acdc-qz-podium-block-2.is-femme .acdc-qz-podium-avatar { max-height: 46vh; }
-.acdc-qz-podium-block-3.is-femme               { bottom: 17.1%; left: 68.0%; right: auto; }
-.acdc-qz-podium-block-3.is-femme .acdc-qz-podium-avatar { max-height: 45.5vh; }
-
-@media (max-width: 1366px) { /* Portable */
-  .acdc-qz-podium-base                           { width: 103%; max-height: 32vh; }
-  .acdc-qz-player-podium-myrank                  { top: 25px; right: 25px; bottom: auto; }
-  .acdc-qz-podium-block-1.is-homme               { bottom: 29.0%; left: 50.0%; right: auto; }
-  .acdc-qz-podium-block-1.is-homme .acdc-qz-podium-avatar { max-height: 47vh; }
-  .acdc-qz-podium-block-2.is-homme               { bottom: 18.9%; left: 23.0%; right: auto; }
-  .acdc-qz-podium-block-2.is-homme .acdc-qz-podium-avatar { max-height: 46vh; }
-  .acdc-qz-podium-block-3.is-homme               { bottom: 16.9%; left: 61.0%; right: auto; }
-  .acdc-qz-podium-block-3.is-homme .acdc-qz-podium-avatar { max-height: 45.5vh; }
-  .acdc-qz-podium-block-1.is-femme               { bottom: 29.0%; left: 50.0%; right: auto; }
-  .acdc-qz-podium-block-1.is-femme .acdc-qz-podium-avatar { max-height: 47vh; }
-  .acdc-qz-podium-block-2.is-femme               { bottom: 18.9%; left: 23.0%; right: auto; }
-  .acdc-qz-podium-block-2.is-femme .acdc-qz-podium-avatar { max-height: 46vh; }
-  .acdc-qz-podium-block-3.is-femme               { bottom: 16.9%; left: 61.0%; right: auto; }
-  .acdc-qz-podium-block-3.is-femme .acdc-qz-podium-avatar { max-height: 45.5vh; }
-}
-@media (max-width: 1200px) { /* Tablette paysage */
-  .acdc-qz-podium-base                           { width: 103%; max-height: 32vh; }
-  .acdc-qz-player-podium-myrank                  { top: 25px; right: 25px; bottom: auto; }
-  .acdc-qz-podium-block-1.is-homme               { bottom: 29.0%; left: 50.0%; right: auto; }
-  .acdc-qz-podium-block-1.is-homme .acdc-qz-podium-avatar { max-height: 47vh; }
-  .acdc-qz-podium-block-2.is-homme               { bottom: 19.0%; left: 22.0%; right: auto; }
-  .acdc-qz-podium-block-2.is-homme .acdc-qz-podium-avatar { max-height: 46vh; }
-  .acdc-qz-podium-block-3.is-homme               { bottom: 17.1%; left: 61.6%; right: auto; }
-  .acdc-qz-podium-block-3.is-homme .acdc-qz-podium-avatar { max-height: 45.5vh; }
-  .acdc-qz-podium-block-1.is-femme               { bottom: 29.0%; left: 50.0%; right: auto; }
-  .acdc-qz-podium-block-1.is-femme .acdc-qz-podium-avatar { max-height: 47vh; }
-  .acdc-qz-podium-block-2.is-femme               { bottom: 19.0%; left: 22.0%; right: auto; }
-  .acdc-qz-podium-block-2.is-femme .acdc-qz-podium-avatar { max-height: 46vh; }
-  .acdc-qz-podium-block-3.is-femme               { bottom: 17.1%; left: 61.6%; right: auto; }
-  .acdc-qz-podium-block-3.is-femme .acdc-qz-podium-avatar { max-height: 45.5vh; }
-}
-@media (max-width: 1024px) { /* Tablette portrait */
-  .acdc-qz-podium-base                           { width: 103%; max-height: 32vh; }
-  .acdc-qz-player-podium-myrank                  { top: 25px; right: 25px; bottom: auto; }
-  .acdc-qz-podium                                { transform: translateY(-50px); }
-  .acdc-qz-podium-block-1.is-homme               { bottom: 28.7%; left: 38.1%; right: auto; }
-  .acdc-qz-podium-block-1.is-homme .acdc-qz-podium-avatar { max-height: 47vh; }
-  .acdc-qz-podium-block-2.is-homme               { bottom: 18.9%; left:  9.4%; right: auto; }
-  .acdc-qz-podium-block-2.is-homme .acdc-qz-podium-avatar { max-height: 46vh; }
-  .acdc-qz-podium-block-3.is-homme               { bottom: 17.0%; left: 66.9%; right: auto; }
-  .acdc-qz-podium-block-3.is-homme .acdc-qz-podium-avatar { max-height: 46vh; }
-  .acdc-qz-podium-block-1.is-femme               { bottom: 28.7%; left: 38.1%; right: auto; }
-  .acdc-qz-podium-block-1.is-femme .acdc-qz-podium-avatar { max-height: 47vh; }
-  .acdc-qz-podium-block-2.is-femme               { bottom: 18.9%; left:  9.4%; right: auto; }
-  .acdc-qz-podium-block-2.is-femme .acdc-qz-podium-avatar { max-height: 46vh; }
-  .acdc-qz-podium-block-3.is-femme               { bottom: 17.0%; left: 66.9%; right: auto; }
-  .acdc-qz-podium-block-3.is-femme .acdc-qz-podium-avatar { max-height: 46vh; }
-}
-@media (max-width: 880px) { /* Mobile Paysage */
-  .acdc-qz-podium-base                           { width: 103%; max-height: 32vh; }
-  .acdc-qz-player-podium-myrank                  { top: 25px; right: 25px; bottom: auto; }
-  .acdc-qz-podium-block-1.is-homme               { bottom: 29.0%; left: 50.0%; right: auto; }
-  .acdc-qz-podium-block-1.is-homme .acdc-qz-podium-avatar { max-height: 47vh; }
-  .acdc-qz-podium-block-2.is-homme               { bottom: 18.5%; left: 36.9%; right: auto; }
-  .acdc-qz-podium-block-2.is-homme .acdc-qz-podium-avatar { max-height: 46vh; }
-  .acdc-qz-podium-block-3.is-homme               { bottom: 16.1%; left: 55.4%; right: auto; }
-  .acdc-qz-podium-block-3.is-homme .acdc-qz-podium-avatar { max-height: 45.5vh; }
-  .acdc-qz-podium-block-1.is-femme               { bottom: 29.0%; left: 50.0%; right: auto; }
-  .acdc-qz-podium-block-1.is-femme .acdc-qz-podium-avatar { max-height: 47vh; }
-  .acdc-qz-podium-block-2.is-femme               { bottom: 18.5%; left: 36.9%; right: auto; }
-  .acdc-qz-podium-block-2.is-femme .acdc-qz-podium-avatar { max-height: 46vh; }
-  .acdc-qz-podium-block-3.is-femme               { bottom: 16.1%; left: 55.4%; right: auto; }
-  .acdc-qz-podium-block-3.is-femme .acdc-qz-podium-avatar { max-height: 45.5vh; }
-}
-@media (max-width: 767px) { /* Portrait mobile */
-  .acdc-qz-podium-base                           { width: 103%; max-height: 20vh; }
-  .acdc-qz-player-podium-myrank                  { top: 34px; right: 140px; bottom: auto; }
-  .acdc-qz-podium                                { transform: translateY(-150px); }
-  .acdc-qz-podium-block-1.is-homme               { bottom: 16.9%; left: 44.3%; right: auto; }
-  .acdc-qz-podium-block-1.is-homme .acdc-qz-podium-avatar { max-height: 30.5vh; }
-  .acdc-qz-podium-block-2.is-homme               { bottom: 11.6%; left: 29.0%; right: auto; }
-  .acdc-qz-podium-block-2.is-homme .acdc-qz-podium-avatar { max-height: 30.5vh; }
-  .acdc-qz-podium-block-3.is-homme               { bottom: 10.3%; left: 57.9%; right: auto; }
-  .acdc-qz-podium-block-3.is-homme .acdc-qz-podium-avatar { max-height: 30.5vh; }
-  .acdc-qz-podium-block-1.is-femme               { bottom: 16.9%; left: 44.3%; right: auto; }
-  .acdc-qz-podium-block-1.is-femme .acdc-qz-podium-avatar { max-height: 30.5vh; }
-  .acdc-qz-podium-block-2.is-femme               { bottom: 11.6%; left: 29.0%; right: auto; }
-  .acdc-qz-podium-block-2.is-femme .acdc-qz-podium-avatar { max-height: 30.5vh; }
-  .acdc-qz-podium-block-3.is-femme               { bottom: 10.3%; left: 57.9%; right: auto; }
-  .acdc-qz-podium-block-3.is-femme .acdc-qz-podium-avatar { max-height: 30.5vh; }
-}
-
-/* =====================================================
    HOST — leaderboard + image podium calibrés par breakpoint
    ===================================================== */
 
 /* Défaut — Écran large ≥2400px */
-.acdc-qz-host-state-podium .acdc-qz-podium-base { width: 100%; max-height: 40vh; }
-.acdc-qz-host-leaderboard-rest { bottom: 281px; left: 42px; min-width: 100px; font-size: 25px; }
+.acdc-qz-host-leaderboard-rest { min-width: 100px; font-size: 25px; }
 .acdc-qz-leaderboard-table thead th { font-size: 24px; padding: 14px 16px; }
 .acdc-qz-leaderboard-table tbody td { font-size: 25px; padding: 14px 16px; }
 .acdc-qz-leaderboard-badge { width: 29px; height: 29px; font-size: 15px; }
 
 @media (max-width: 1366px) { /* Portable */
-  .acdc-qz-host-state-podium .acdc-qz-podium-base { width: 80%; max-height: 32vh; }
-  .acdc-qz-host-leaderboard-rest { bottom: 311px; left: 28px; min-width: 100px; font-size: 14px; }
+    .acdc-qz-host-leaderboard-rest { min-width: 100px; font-size: 14px; }
   .acdc-qz-leaderboard-table thead th { font-size: 13px; padding: 6px 8px; }
   .acdc-qz-leaderboard-table tbody td { font-size: 14px; padding: 6px 8px; }
   .acdc-qz-leaderboard-badge { width: 17px; height: 17px; font-size: 9px; }
 }
 @media (max-width: 1200px) { /* Tablette paysage */
-  .acdc-qz-host-state-podium .acdc-qz-podium-base { width: 80%; max-height: 30vh; }
-  .acdc-qz-host-leaderboard-rest { bottom: 459px; left: 18px; min-width: 100px; font-size: 12px; }
+    .acdc-qz-host-leaderboard-rest { min-width: 100px; font-size: 12px; }
   .acdc-qz-leaderboard-table thead th { font-size: 11px; padding: 3px 5px; }
   .acdc-qz-leaderboard-table tbody td { font-size: 12px; padding: 3px 5px; }
   .acdc-qz-leaderboard-badge { width: 18px; height: 18px; font-size: 9px; }
 }
 @media (max-width: 1024px) { /* Tablette portrait */
-  .acdc-qz-host-state-podium .acdc-qz-podium-base { width: 80%; max-height: 29vh; }
-  .acdc-qz-host-leaderboard-rest { bottom: 818px; left: 20px; min-width: 130px; font-size: 12px; }
+    .acdc-qz-host-leaderboard-rest { min-width: 130px; font-size: 12px; }
   .acdc-qz-leaderboard-table thead th { font-size: 11px; padding: 3px 5px; }
   .acdc-qz-leaderboard-table tbody td { font-size: 12px; padding: 3px 5px; }
   .acdc-qz-leaderboard-badge { width: 15px; height: 15px; font-size: 8px; }
 }
 @media (max-width: 880px) { /* Mobile Paysage */
-  .acdc-qz-host-state-podium .acdc-qz-podium-base { width: 82%; max-height: 32.5vh; }
-  .acdc-qz-host-leaderboard-rest { bottom: 507px; left: 50px; min-width: 160px; font-size: 12px; }
+    .acdc-qz-host-leaderboard-rest { min-width: 160px; font-size: 12px; }
   .acdc-qz-leaderboard-table thead th { font-size: 11px; padding: 3px 5px; }
   .acdc-qz-leaderboard-table tbody td { font-size: 12px; padding: 3px 5px; }
   .acdc-qz-leaderboard-badge { width: 12px; height: 12px; font-size: 7px; }
 }
 @media (max-width: 767px) { /* Portrait mobile */
-  .acdc-qz-host-state-podium .acdc-qz-podium-base { width: 80%; max-height: 32vh; }
-  .acdc-qz-host-leaderboard-rest { bottom: 504px; left: 7px; min-width: 160px; font-size: 12px; }
+    .acdc-qz-host-leaderboard-rest { min-width: 160px; font-size: 12px; }
   .acdc-qz-leaderboard-table thead th { font-size: 11px; padding: 3px 5px; }
   .acdc-qz-leaderboard-table tbody td { font-size: 12px; padding: 3px 5px; }
   .acdc-qz-leaderboard-badge { width: 12px; height: 12px; font-size: 7px; }
@@ -730,10 +684,9 @@ body.page-template-default:has(.acdc-qz-live-player) {
     .acdc-qz-player-answer-btn { font-size: 16px; padding: 18px 16px; min-height: 60px; }
     /* Puzzle mobile — 1 colonne (slots en haut, bank en bas) */
     .acdc-qz-player-puzzle-inner { grid-template-columns: 1fr; }
-    /* Podium */
-    .acdc-qz-podium-block-1 { width: 44%; }
-    .acdc-qz-podium-block-2 { width: 38%; }
-    .acdc-qz-podium-block-3 { width: 38%; }
+    /* ACDC 3.25.325 — Plus d'élargissement des blocs sur téléphone : la scène
+       étant proportionnelle, un bloc plus large que sa marche décale le
+       personnage, puisqu'il est recentré par une marge calculée sur 30 %. */
 }
 
 /* Très petits écrans (<480px) — avatar cards compactes */
