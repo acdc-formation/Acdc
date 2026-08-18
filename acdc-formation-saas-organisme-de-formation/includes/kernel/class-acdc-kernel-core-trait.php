@@ -9049,10 +9049,28 @@ private function acdc_nom_fichier_sauvegarde( $quand = null ) {
     }
 
     $send_now = ( 0 === $send_delay );
+    /* ACDC 3.25.325 — LA SOCIÉTÉ EST CONNUE APRÈS COUP, LE TITRE ÉTAIT ÉCRIT AVANT.
+       La fiche société n'était chargée que si la convention portait elle-même
+       un « company_id ». Quand le commanditaire vient du prospect — le cas
+       courant — l'identifiant n'est retrouvé que quelques lignes plus bas, par
+       acdc_find_company_id_from_prospect(), et $company restait vide. Le titre
+       tombait alors sur le nom du SIGNATAIRE : le 18 août, l'analyse de
+       « Skill Conseil » s'est appelée « Analyse du besoin — Valeriano
+       Berengere », en tout point semblable à celle de l'apprenante du même nom.
+       Deux analyses à son nom, dont une qui ne lui appartenait pas.
+       On recharge donc la fiche maintenant que l'identifiant est résolu, et
+       à défaut on se rabat sur la raison sociale lue dans le libellé du
+       signataire. Un titre porte l'identité de qui répond : pour une
+       entreprise, c'est sa raison sociale. */
+    if ( ! $is_individual_cmd && empty( $company ) && $company_id ) {
+      $company = $wpdb->get_row( $wpdb->prepare( "SELECT * FROM {$this->company_table} WHERE id = %d", $company_id ) );
+    }
     // ACDC 3.21.29-hotfix4 — Nom du commanditaire dans le titre (société ou personne).
     $cmd_label_title = 'Commanditaire';
     if ( ! $is_individual_cmd && ! empty( $company ) && ! empty( $company->name ) ) {
       $cmd_label_title = (string) $company->name;
+    } elseif ( ! $is_individual_cmd && '' !== $cmd_company_hint ) {
+      $cmd_label_title = $cmd_company_hint;
     } elseif ( $cmd_nom || $cmd_prenom ) {
       $cmd_label_title = trim( $cmd_prenom . ' ' . $cmd_nom );
     }

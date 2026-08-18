@@ -72,6 +72,20 @@ $exiger(
     'Le recueil ne passe plus par la porte commune des noms de documents.'
 );
 
+/* 1 bis. LE RECUEIL — l'entité vient d'où l'écran l'écrit, et la date suit.
+      Le 18 août le fichier s'appelait encore « recueil-des-besoins.pdf » : je
+      cherchais l'entreprise sur « company_id », que la saisie d'un recueil ne
+      remplit pas, puis sur « company_name », qui n'existe pas dans cette table.
+      Un recueil se rattache à un PROSPECT. */
+$exiger(
+    (bool) preg_match( '/\$need->source_prospect_id.{0,200}get_prospect\(/s', $noyau_actions ),
+    'Le nom du recueil ne descend plus jusqu’au prospect : sans fiche entreprise — le cas courant à la saisie — le fichier redevient « recueil-des-besoins.pdf ».'
+);
+$exiger(
+    (bool) preg_match( "/NomDocument::composer\(\s*'recueil des besoins',\s*\\\$__entite_recueil,\s*\\\$__date_recueil/", $noyau_actions ),
+    'La date a disparu du nom du recueil : deux recueils du même client ne se distinguent plus.'
+);
+
 /* 2. LA CONVOCATION — le nom de la personne, et le jeton conservé. */
 $noyau_core = $code( 'includes/kernel/class-acdc-kernel-core-trait.php' );
 $exiger(
@@ -98,19 +112,39 @@ $exiger(
     'Le titre du devis n’est plus composé à partir du client et du numéro.'
 );
 
-/* 4. LA CONVENTION — le commanditaire en tête, sur toutes les voies. */
+/* 4. LA CONVENTION — le NOM du commanditaire, pas son type, et la version dite.
+      Ces règles remplacent celles de 3.25.320, qui n'exigeaient qu'un préfixe :
+      il était bien posé, mais composé à partir d'un nom que personne ne
+      résolvait, et le fichier du 18 août s'appelait « entreprise-Convention-… ».
+      Un balayage qui vérifie qu'une fonction est appelée ne dit rien de ce
+      qu'elle reçoit — on exige donc ici le contexte, faute duquel le nom
+      retombe sur le TYPE de commanditaire. */
 $conv = $code( 'includes/dossiers-contracts/class-acdc-dossiers-contracts-core-trait.php' );
+$deb_nom = strpos( $conv, 'private function get_registration_contract_display_file_name(' );
+$corps_nom = false !== $deb_nom ? substr( $conv, $deb_nom, 2200 ) : '';
 $exiger(
-    false !== strpos( $conv, 'acdc_prefixer_commanditaire' ),
-    'La convention ne porte plus le nom du commanditaire en tête : dix conventions de dix entreprises portent le même nom à la date près.'
+    '' !== $corps_nom,
+    'La composition du nom de la convention a disparu.'
 );
 $exiger(
-    substr_count( $conv, 'acdc_prefixer_commanditaire' ) >= 2,
-    'Le préfixe du commanditaire n’est plus appliqué : la fonction existe mais n’est appelée nulle part.'
+    '' !== $corps_nom && false !== strpos( $corps_nom, 'get_registration_contract_related_context( $contract )' ),
+    'Le nom de la convention se compose à nouveau sans contexte : privée de la fiche entreprise, du prospect et des apprenants, la résolution du commanditaire retombe sur son TYPE et le fichier s’appelle « entreprise-… ».'
 );
 $exiger(
-    (bool) preg_match( '/stripos\(\s*\$base,\s*\$prefixe/', $conv ),
-    'Le garde-fou anti-doublon a disparu : un document déjà préfixé le serait une seconde fois.'
+    '' !== $corps_nom && (bool) preg_match( "/NomDocument::composer\(\s*\\\$nature/", $corps_nom ),
+    'Le nom de la convention ne passe plus par la porte commune des noms de documents.'
+);
+$exiger(
+    '' !== $corps_nom && false !== strpos( $corps_nom, "'Convention signée'" ),
+    'La convention signée ne se distingue plus de la version vierge : c’est pourtant la seule que réclame un financeur.'
+);
+$exiger(
+    '' !== $corps_nom && (bool) preg_match( '/in_array\(\s*mb_strtolower\(\s*\$qui\s*\),\s*\$type_seul,\s*true\s*\)\s*\)\s*\{\s*\$qui = \'\';/s', $corps_nom ),
+    'Le garde-fou qui écarte un TYPE de commanditaire (« Entreprise », « Particulier ») a disparu du nom de fichier.'
+);
+$exiger(
+    (bool) preg_match( '/private function acdc_convention_signee\(/', $conv ),
+    'La reconnaissance de la version signée a disparu.'
 );
 
 /* 5. Aucune flèche brute ne subsiste dans le rendu : elles sortaient en

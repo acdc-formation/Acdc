@@ -2433,70 +2433,89 @@ trait ACDC_Dossiers_Contracts_Core_Trait {
   }
 
 
+  /**
+   * ACDC 3.25.325 — « entreprise-Convention-… » : LE TYPE À LA PLACE DU NOM.
+   *
+   * En 3.25.320 j'ai mis le commanditaire en tête du nom de fichier — en
+   * appelant la fonction qui le compose SANS son contexte. Or cette fonction ne
+   * lit ni la fiche entreprise, ni le prospect, ni les apprenants : elle les
+   * reçoit. Privée de tout, elle descend jusqu'à son dernier repli, le TYPE de
+   * commanditaire. D'où le fichier du 18 août : « entreprise-Convention-… »,
+   * qui ne distingue pas plus que « Convention-… ». J'avais posé le principe
+   * juste et oublié de lui donner de quoi travailler.
+   *
+   * On charge donc le contexte, comme le font tous les autres appelants, et on
+   * compose le nom entier par la porte commune plutôt que de rapiécer le nom du
+   * fichier stocké — celui-ci porte encore le titre de la formation en entier
+   * et n'a aucune raison de gouverner ce que lit l'exploitant.
+   *
+   * ET LA PIÈCE SIGNÉE LE DIT. Une fois la convention signée, « document_url »
+   * pointe sur le PDF signé : les deux téléchargements donnaient le même nom,
+   * impossible de distinguer dans un dossier la version vierge de la version
+   * probante. C'est celle-là qu'un OPCO réclame.
+   */
   private function get_registration_contract_display_file_name( $contract, $document = array() ) {
-    $base = '';
-    if ( ! empty( $document['path'] ) ) {
-      $base = basename( (string) $document['path'] );
-    } elseif ( ! empty( $document['url'] ) ) {
-      $path = wp_parse_url( (string) $document['url'], PHP_URL_PATH );
-      if ( $path ) {
-        $base = basename( $path );
-      }
+    $context = method_exists( $this, 'get_registration_contract_related_context' )
+      ? $this->get_registration_contract_related_context( $contract )
+      : array();
+    $display = $this->get_registration_contract_commanditaire_display_data( $contract, $context );
+
+    /* La raison sociale seule : le signataire est une personne, il n'a pas à
+       paraître dans le nom d'une pièce établie au nom d'une entreprise. */
+    $qui = isset( $display['summary'] ) ? trim( (string) $display['summary'] ) : '';
+    $type_seul = array( 'entreprise', 'particulier', 'independant', 'indépendant', 'salarie', 'salarié', 'apprenant', '—', '-' );
+    if ( in_array( mb_strtolower( $qui ), $type_seul, true ) ) {
+      $qui = '';
     }
-    if ( '' === $base && ! empty( $contract->title ) ) {
-      $base = sanitize_file_name( remove_accents( (string) $contract->title ) ) . '.pdf';
+
+    $est_personne = ! empty( $display['is_person'] );
+    $signee       = $this->acdc_convention_signee( $contract, $document );
+    if ( $est_personne ) {
+      $nature = $signee ? 'Contrat de formation signé' : 'Contrat de formation';
+    } else {
+      $nature = $signee ? 'Convention signée' : 'Convention de formation';
     }
-    if ( '' === $base ) {
-      $base = 'convention-de-formation.pdf';
+
+    /* La date qui compte : celle de la signature quand il y en a une, celle du
+       début de formation sinon. Jamais celle du téléchargement. */
+    $source_date = '';
+    if ( $signee && ! empty( $contract->signature_completed_at ) ) {
+      $source_date = (string) $contract->signature_completed_at;
+    } elseif ( ! empty( $contract->start_date ) ) {
+      $source_date = (string) $contract->start_date;
+    } elseif ( ! empty( $contract->created_at ) ) {
+      $source_date = (string) $contract->created_at;
     }
-    return $this->acdc_prefixer_commanditaire( $base, $contract );
+    $date = '' !== $source_date ? mysql2date( 'd-m-Y', $source_date ) : '';
+
+    return \ACDC\Support\NomDocument::composer( $nature, $qui, $date, 'pdf' );
   }
 
   /**
-   * ACDC 3.25.320 — LE COMMANDITAIRE EN TÊTE DU NOM DE FICHIER.
+   * La pièce servie est-elle la version SIGNÉE ?
    *
-   * Une convention s'appelait « Convention-LIntelligence-Artificielle-…-2-jours
-   * -14082026.pdf ». Le titre de la formation y tient toute la place, et il est
-   * le MÊME pour tous les clients : dans un dossier de téléchargements, dix
-   * conventions de dix entreprises portent dix noms identiques à la date près.
-   *
-   * Le nom du commanditaire passe donc devant. C'est lui qui distingue, et c'est
-   * ce qu'on cherche quand on ouvre le dossier. La règle vaut aussi pour la
-   * convention SIGNÉE, qui empruntait le même chemin.
-   *
-   * On ne renomme jamais le fichier sur le disque : seul le nom PROPOSÉ au
-   * téléchargement change. Les adresses déjà envoyées restent donc valides.
-   *
-   * @param string $base     Le nom tel qu'il aurait été proposé.
-   * @param object $contract La convention, d'où l'on tire le commanditaire.
-   * @return string
+   * À la signature, « document_url » est remplacée par l'adresse du PDF signé :
+   * le statut suffit donc dans le cas courant. On accepte aussi la comparaison
+   * directe, pour les écrans qui servent explicitement l'une ou l'autre.
    */
-  private function acdc_prefixer_commanditaire( $base, $contract ) {
-    $base = (string) $base;
-    $qui  = '';
-    if ( method_exists( $this, 'get_registration_contract_display_commanditaire_name' ) ) {
-      $qui = (string) $this->get_registration_contract_display_commanditaire_name( $contract );
+  private function acdc_convention_signee( $contract, $document = array() ) {
+    if ( ! $contract ) {
+      return false;
     }
-    $qui = trim( str_replace( '—', '', $qui ) );
-    if ( '' === $qui ) {
-      return $base;
+    $statut = isset( $contract->signature_status ) ? mb_strtolower( trim( (string) $contract->signature_status ) ) : '';
+    if ( in_array( $statut, array( 'completed', 'signed', 'signee', 'signée' ), true ) ) {
+      return true;
     }
-    $prefixe = \ACDC\Support\NomDocument::composer( $qui, '', '', '' );
-    if ( '' === $prefixe ) {
-      return $base;
+    $url_signee  = isset( $contract->signed_document_url ) ? (string) $contract->signed_document_url : '';
+    $chemin_signe = isset( $contract->signed_document_path ) ? (string) $contract->signed_document_path : '';
+    if ( '' === $url_signee && '' === $chemin_signe ) {
+      return false;
     }
-    /* Déjà en tête : on ne le met pas deux fois. Le cas se produit dès qu'un
-       document stocké a été nommé après cette correction. */
-    if ( 0 === stripos( $base, $prefixe . '-' ) ) {
-      return $base;
-    }
-    $extension = '';
-    if ( preg_match( '/\.[a-z0-9]{2,5}$/i', $base, $m_ext ) ) {
-      $extension = $m_ext[0];
-      $base      = substr( $base, 0, -strlen( $extension ) );
-    }
-    return $prefixe . '-' . $base . $extension;
+    $url    = isset( $document['url'] ) ? (string) $document['url'] : '';
+    $chemin = isset( $document['path'] ) ? (string) $document['path'] : '';
+    return ( '' !== $url && $url === $url_signee ) || ( '' !== $chemin && $chemin === $chemin_signe );
   }
+
 
 
   private function get_registration_contract_document_info( $contract ) {

@@ -1914,29 +1914,30 @@ trait ACDC_Learner_Portal_Core_Trait {
         ) );
       }
 
-      /* ACDC 3.25.306 — LA COLONNE INTERROGÉE N'ÉTAIT JAMAIS ÉCRITE.
-         Cette requête filtrait sur « apprenant_id », colonne ajoutée par une
-         migration en 3.25.22 et que RIEN dans le plugin ne renseigne : le seul
-         autre endroit qui la mentionne est sa propre création. Elle vaut donc
-         NULL partout, pour tous les dossiers, depuis toujours — et aucune
-         analyse du besoin n'est jamais apparue dans l'extranet apprenant.
-         Le PDF, lui, existe bien : document_url_apprenant est renseignée à la
-         génération. C'était le rattachement à l'apprenant qui manquait, pas le
-         document.
-         On interroge donc « dossier_id », qui est réellement écrite — c'est par
-         elle que la suppression d'un dossier emporte ses analyses. La colonne
-         apprenant_id reste acceptée : le jour où elle sera remplie, elle servira,
-         et d'ici là elle n'exclut plus personne. */
-      if ( ! empty( $registration->id ) || ! empty( $registration->learner_id ) ) {
+      /* ACDC 3.25.325 — LE DOSSIER EST PARTAGÉ, L'ANALYSE NE L'EST PAS.
+         En 3.25.306 j'ai écrit que « apprenant_id » n'était jamais renseignée
+         et je me suis rabattu sur « dossier_id ». C'était faux :
+         nad_auto_create_from_contract() écrit apprenant_id sur chacune des
+         analyses qu'elle fabrique à la signature de la convention. Ce que je
+         n'avais pas vu, c'est que ce dossier est COMMUN aux trois apprenants
+         d'une même session — interroger dossier_id, c'est donc montrer à
+         chaque apprenant les réponses de ses camarades, et par-dessus le
+         marché l'analyse du COMMANDITAIRE, qui contient le contexte
+         d'entreprise et n'appartient à aucun d'eux.
+         Une analyse du besoin est nominative : elle porte ce que la personne a
+         déclaré d'elle-même. Le seul rattachement qui vaut est donc celui à
+         l'apprenant, jamais celui au dossier. L'analyse du commanditaire, qui
+         n'a pas d'apprenant_id, ne peut plus atteindre aucun extranet
+         apprenant — c'est exactement l'effet recherché. */
+      if ( ! empty( $registration->learner_id ) ) {
         global $wpdb;
         $nads_apprenant = $wpdb->get_results( $wpdb->prepare(
           "SELECT id, title, updated_at, document_url_apprenant
            FROM {$this->need_analysis_table}
            WHERE is_model = 0
-             AND ( dossier_id = %d OR ( apprenant_id IS NOT NULL AND apprenant_id = %d ) )
+             AND apprenant_id IS NOT NULL AND apprenant_id = %d
              AND document_url_apprenant IS NOT NULL AND document_url_apprenant != ''
            ORDER BY id DESC",
-          (int) $registration->id,
           (int) $registration->learner_id
         ) );
         foreach ( $nads_apprenant as $nad_item ) {

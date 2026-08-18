@@ -77,6 +77,10 @@ lancent sans WordPress, en quelques secondes.
     php tests/scan-migrations-schema.php # une colonne ajoutée sans migration ne sort jamais (signature ET émargement)
     php tests/test-texte-alternatif.php # la version texte des e-mails : liens gardés, style perdu
     php tests/scan-audit-17-aout.php # les dix corrections de l'audit du 17 août
+    php tests/scan-purge-selective.php # la remise à zéro se choisit ligne par ligne
+    php tests/scan-workflow-et-remontees.php # une étape en attente est réexaminée, jamais oubliée
+    php tests/scan-actions-formulaire.php # le bas d'un formulaire n'est pas une colonne d'actions
+    php tests/scan-cloison-analyses.php # une analyse du besoin ne sort jamais de son apprenant
 
 Le dernier balaie tout le plugin et signale les fonctions qui utilisent `$wpdb`
 sans l'avoir importé — la faute qui a produit l'erreur fatale de la 3.25.236.

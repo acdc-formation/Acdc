@@ -4127,7 +4127,34 @@ public function handle_download_need_pdf() {
   if ( '' === $__entite_recueil && ! empty( $need->company_name ) ) {
     $__entite_recueil = (string) $need->company_name;
   }
-  $filename    = \ACDC\Support\NomDocument::composer( 'recueil des besoins', $__entite_recueil, '', 'pdf' );
+  /* ACDC 3.25.325 — J'INTERROGEAIS UNE COLONNE QUE L'ÉCRAN NE REMPLIT PAS.
+     En 3.25.320 j'ai mis l'entité dans le nom en la cherchant sur
+     « company_id » — et le 18 août le fichier s'appelait encore
+     « recueil-des-besoins.pdf ». Un recueil se saisit depuis un PROSPECT : la
+     fiche entreprise n'existe pas toujours au moment de la saisie, et c'est
+     « source_prospect_id » qui porte le rattachement. La colonne
+     « company_name » que je testais ensuite n'existe même pas dans cette table.
+     Même faute que sur la convention : du code qui cherche une donnée là où
+     l'écran en écrit une autre. On descend donc jusqu'au prospect, raison
+     sociale d'abord, personne à défaut. */
+  if ( '' === $__entite_recueil && ! empty( $need->source_prospect_id ) && method_exists( $this, 'get_prospect' ) ) {
+    $__pr = $this->get_prospect( (int) $need->source_prospect_id );
+    if ( $__pr ) {
+      if ( ! empty( $__pr->company_name ) ) {
+        $__entite_recueil = (string) $__pr->company_name;
+      } else {
+        $__entite_recueil = trim( (string) ( $__pr->first_name ?? '' ) . ' ' . (string) ( $__pr->last_name ?? '' ) );
+      }
+    }
+  }
+  /* La date qui compte pour un recueil est celle du recueil, pas celle du
+     téléchargement : deux recueils du même client se distinguent par elle. */
+  $__date_recueil = '';
+  $__source_date  = ! empty( $need->collection_date ) ? (string) $need->collection_date : ( ! empty( $need->created_at ) ? (string) $need->created_at : '' );
+  if ( '' !== $__source_date ) {
+    $__date_recueil = mysql2date( 'd-m-Y', $__source_date );
+  }
+  $filename    = \ACDC\Support\NomDocument::composer( 'recueil des besoins', $__entite_recueil, $__date_recueil, 'pdf' );
   /* ACDC 3.25.256 — Filet commun à toutes les fabrications de PDF : en cas
      d'échec, le document part en version imprimable plutôt que de laisser un
      écran blanc. L'erreur réelle est journalisée par render_html_pdf(). */
