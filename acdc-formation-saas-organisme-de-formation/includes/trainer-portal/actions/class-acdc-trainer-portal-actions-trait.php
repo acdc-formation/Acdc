@@ -772,15 +772,31 @@ trait ACDC_Trainer_Portal_Actions_Trait {
     }
 
     $existing = $wpdb->get_var( $wpdb->prepare( "SELECT report_submitted_at FROM {$this->session_table} WHERE id = %d LIMIT 1", $session_id ) );
-    $submitted_at = $existing ? $existing : current_time( 'mysql' );
 
     $data = array(
       'report_group_level'        => isset( $_POST['report_group_level'] ) ? sanitize_text_field( wp_unslash( $_POST['report_group_level'] ) ) : '',
       'report_objectives_reached' => isset( $_POST['report_objectives_reached'] ) ? sanitize_text_field( wp_unslash( $_POST['report_objectives_reached'] ) ) : '',
       'report_incidents'          => isset( $_POST['report_incidents'] ) ? sanitize_textarea_field( wp_unslash( $_POST['report_incidents'] ) ) : '',
       'report_recommendations'    => isset( $_POST['report_recommendations'] ) ? sanitize_textarea_field( wp_unslash( $_POST['report_recommendations'] ) ) : '',
-      'report_submitted_at'       => $submitted_at,
     );
+
+    /* ACDC 3.25.319 — UN BILAN VIDÉ N'EST PLUS UN BILAN RENDU.
+       La date de dépôt était conservée dès qu'elle existait, quoi qu'on
+       enregistre ensuite. Il n'y a pas de bouton « supprimer » : la seule façon
+       d'effacer un bilan — un essai, une saisie sur la mauvaise séance — est de
+       vider les champs et de réenregistrer. La séance restait alors marquée
+       « bilan rendu » avec un bilan vide, et l'indicateur 21 comptait une pièce
+       qui n'existait plus.
+       La date suit donc le contenu : posée au premier enregistrement utile,
+       retirée quand il ne reste rien. */
+    $rempli = false;
+    foreach ( $data as $valeur ) {
+      if ( '' !== trim( (string) $valeur ) ) {
+        $rempli = true;
+        break;
+      }
+    }
+    $data['report_submitted_at'] = $rempli ? ( $existing ? $existing : current_time( 'mysql' ) ) : null;
 
     $wpdb->update( $this->session_table, $data, array( 'id' => $session_id ) );
 
