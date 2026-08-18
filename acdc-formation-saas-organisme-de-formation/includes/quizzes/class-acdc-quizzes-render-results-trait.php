@@ -491,7 +491,7 @@ trait ACDC_Quizzes_Render_Results_Trait {
 
         <div class="acdc-qz-results-back-bar">
             <a class="acdc-button acdc-button-soft" href="<?php echo esc_url( $back_url ); ?>">
-                ← Retour
+                &larr; Retour
             </a>
         </div>
 
@@ -942,7 +942,7 @@ trait ACDC_Quizzes_Render_Results_Trait {
 
         <div class="acdc-qz-results-back-bar">
             <a class="acdc-button acdc-button-soft" href="<?php echo esc_url( $back_url ); ?>">
-                ← Retour à l'envoi
+                &larr; Retour à l'envoi
             </a>
         </div>
 

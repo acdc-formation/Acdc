@@ -1791,6 +1791,31 @@ trait ACDC_Dossiers_Contracts_Core_Trait {
         $program = $this->acdc_formation_programme_file( $program_row );
       }
     }
+    /* ACDC 3.25.320 — LE PROGRAMME GÉNÉRÉ COMPTE AUTANT QUE LE PROGRAMME
+       TÉLÉVERSÉ.
+       Ce bloc ne cherchait qu'un FICHIER déposé pour la formation. Or toutes les
+       formations n'en ont pas : le plugin sait aussi PRODUIRE le programme, et
+       c'est cette version que l'extranet de l'apprenant affiche — il l'ouvre
+       sans difficulté. L'e-mail de convention, lui, ne la connaissait pas.
+       Résultat constaté le 18/08 : le programme visible côté apprenant était
+       absent de l'e-mail de convention, sans qu'aucun écran ne le signale. Deux
+       voies pour la même pièce, une seule consultée.
+       On interroge donc la porte commune — la même que l'extranet — quand aucun
+       fichier n'a été retrouvé. Elle rend une adresse ; le lien suffit à
+       satisfaire l'obligation de porter le programme à la connaissance du
+       bénéficiaire, et la pièce jointe reste réservée au fichier local. */
+    if ( '' === $program['url'] ) {
+      $__formation_prog = $formation;
+      if ( empty( $__formation_prog ) && ! empty( $program_row ) ) {
+        $__formation_prog = $program_row;
+      }
+      if ( ! empty( $__formation_prog ) && method_exists( $this, 'acdc_formation_programme_url' ) ) {
+        $__url_prog = (string) $this->acdc_formation_programme_url( $__formation_prog );
+        if ( '' !== $__url_prog ) {
+          $program['url'] = $__url_prog;
+        }
+      }
+    }
     /* ACDC 3.25.305 — LE LIEN DU PROGRAMME DÉPENDAIT DE LA PIÈCE JOINTE.
        Tout ce bloc était gardé par « si le fichier a été retrouvé sur le
        disque ». Un programme parfaitement consultable par son adresse, mais
@@ -2409,19 +2434,68 @@ trait ACDC_Dossiers_Contracts_Core_Trait {
 
 
   private function get_registration_contract_display_file_name( $contract, $document = array() ) {
+    $base = '';
     if ( ! empty( $document['path'] ) ) {
-      return basename( (string) $document['path'] );
-    }
-    if ( ! empty( $document['url'] ) ) {
+      $base = basename( (string) $document['path'] );
+    } elseif ( ! empty( $document['url'] ) ) {
       $path = wp_parse_url( (string) $document['url'], PHP_URL_PATH );
       if ( $path ) {
-        return basename( $path );
+        $base = basename( $path );
       }
     }
-    if ( ! empty( $contract->title ) ) {
-      return sanitize_file_name( remove_accents( (string) $contract->title ) ) . '.pdf';
+    if ( '' === $base && ! empty( $contract->title ) ) {
+      $base = sanitize_file_name( remove_accents( (string) $contract->title ) ) . '.pdf';
     }
-    return 'convention-de-formation.pdf';
+    if ( '' === $base ) {
+      $base = 'convention-de-formation.pdf';
+    }
+    return $this->acdc_prefixer_commanditaire( $base, $contract );
+  }
+
+  /**
+   * ACDC 3.25.320 — LE COMMANDITAIRE EN TÊTE DU NOM DE FICHIER.
+   *
+   * Une convention s'appelait « Convention-LIntelligence-Artificielle-…-2-jours
+   * -14082026.pdf ». Le titre de la formation y tient toute la place, et il est
+   * le MÊME pour tous les clients : dans un dossier de téléchargements, dix
+   * conventions de dix entreprises portent dix noms identiques à la date près.
+   *
+   * Le nom du commanditaire passe donc devant. C'est lui qui distingue, et c'est
+   * ce qu'on cherche quand on ouvre le dossier. La règle vaut aussi pour la
+   * convention SIGNÉE, qui empruntait le même chemin.
+   *
+   * On ne renomme jamais le fichier sur le disque : seul le nom PROPOSÉ au
+   * téléchargement change. Les adresses déjà envoyées restent donc valides.
+   *
+   * @param string $base     Le nom tel qu'il aurait été proposé.
+   * @param object $contract La convention, d'où l'on tire le commanditaire.
+   * @return string
+   */
+  private function acdc_prefixer_commanditaire( $base, $contract ) {
+    $base = (string) $base;
+    $qui  = '';
+    if ( method_exists( $this, 'get_registration_contract_display_commanditaire_name' ) ) {
+      $qui = (string) $this->get_registration_contract_display_commanditaire_name( $contract );
+    }
+    $qui = trim( str_replace( '—', '', $qui ) );
+    if ( '' === $qui ) {
+      return $base;
+    }
+    $prefixe = \ACDC\Support\NomDocument::composer( $qui, '', '', '' );
+    if ( '' === $prefixe ) {
+      return $base;
+    }
+    /* Déjà en tête : on ne le met pas deux fois. Le cas se produit dès qu'un
+       document stocké a été nommé après cette correction. */
+    if ( 0 === stripos( $base, $prefixe . '-' ) ) {
+      return $base;
+    }
+    $extension = '';
+    if ( preg_match( '/\.[a-z0-9]{2,5}$/i', $base, $m_ext ) ) {
+      $extension = $m_ext[0];
+      $base      = substr( $base, 0, -strlen( $extension ) );
+    }
+    return $prefixe . '-' . $base . $extension;
   }
 
 

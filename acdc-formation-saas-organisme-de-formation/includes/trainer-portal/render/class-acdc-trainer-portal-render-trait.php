@@ -1191,7 +1191,7 @@ trait ACDC_Trainer_Portal_Render_Trait {
       .acdc-tportal-session-detail .acdc-back:hover{color:#1E4777}
     </style>
     <div class="acdc-tportal-session-detail">
-      <a class="acdc-back" href="<?php echo esc_url( $this->trainer_portal_page_url( 'sessions' ) ); ?>">← Retour à mes sessions</a>
+      <a class="acdc-back" href="<?php echo esc_url( $this->trainer_portal_page_url( 'sessions' ) ); ?>">&larr; Retour à mes sessions</a>
 
       <div class="acdc-panel">
         <h3><?php echo esc_html( $session->title ); ?></h3>

@@ -464,7 +464,7 @@ trait ACDC_Learner_Portal_Render_Trait {
       <div class="acdc-panel">
         <p>Résultat introuvable ou accès non autorisé.</p>
         <a class="acdc-button acdc-button-soft" href="<?php echo esc_url( $this->learner_portal_page_url( 'mes_quiz' ) ); ?>">
-          ← Retour à mes quiz
+          &larr; Retour à mes quiz
         </a>
       </div>
       <?php
@@ -500,7 +500,7 @@ trait ACDC_Learner_Portal_Render_Trait {
     <!-- Retour -->
     <div class="acdc-qz-results-back-bar">
       <a class="acdc-button acdc-button-soft" href="<?php echo esc_url( $back_url ); ?>">
-        ← Mes quiz
+        &larr; Mes quiz
       </a>
     </div>
 

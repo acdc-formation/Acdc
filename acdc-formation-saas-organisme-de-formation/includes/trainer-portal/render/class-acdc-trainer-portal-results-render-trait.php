@@ -99,7 +99,7 @@ trait ACDC_Trainer_Portal_Results_Render_Trait {
                 </div>
                 <div class="acdc-trainer-portal-quizzes-header-actions">
                     <a class="acdc-button acdc-button-soft" href="<?php echo esc_url( $this->trainer_portal_page_url( 'quizzes' ) ); ?>">
-                        ← Mes quiz
+                        &larr; Mes quiz
                     </a>
                 </div>
             </div>
@@ -193,7 +193,7 @@ trait ACDC_Trainer_Portal_Results_Render_Trait {
             ?>
             <div class="acdc-trainer-portal-quizzes-blocked">
                 <h1>Envoi introuvable</h1>
-                <p><a class="acdc-button acdc-button-soft" href="<?php echo esc_url( $this->trainer_portal_page_url( 'results' ) ); ?>">← Retour</a></p>
+                <p><a class="acdc-button acdc-button-soft" href="<?php echo esc_url( $this->trainer_portal_page_url( 'results' ) ); ?>">&larr; Retour</a></p>
             </div>
             <?php
             return ob_get_clean();
@@ -455,7 +455,7 @@ trait ACDC_Trainer_Portal_Results_Render_Trait {
         ?>
         <div class="acdc-tp-results">
             <p class="acdc-trainer-portal-breadcrumb">
-                <a href="<?php echo esc_url( $back_url ); ?>">← Retour à l'envoi</a>
+                <a href="<?php echo esc_url( $back_url ); ?>">&larr; Retour à l'envoi</a>
             </p>
 
             <?php if ( '' !== $notice_code ) : ?>

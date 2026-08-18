@@ -4596,6 +4596,92 @@ dbDelta( $sql_companies );
     }
   }
 
+  /**
+   * ACDC 3.25.320 — QUELLE ADRESSE EST RÉELLEMENT PARTIE.
+   *
+   * La 3.25.317 a remis le « From: » sur le domaine signé. Les e-mails
+   * continuent pourtant de partir en indésirables — donc quelque chose écrase
+   * cet en-tête APRÈS nous.
+   *
+   * C'est possible, et même courant : wp_mail() applique le filtre
+   * « wp_mail_from » après avoir lu nos en-têtes. Une extension d'envoi —
+   * WP Mail SMTP notamment, dont ce plugin connaît déjà la présence — propose
+   * une option « forcer l'adresse d'expédition » qui gagne contre tout ce que
+   * nous écrivons. Si cette adresse est hors du domaine signé, DMARC ne
+   * s'aligne pas, et aucune correction de notre côté n'y changera rien.
+   *
+   * On cesse donc de supposer. Ce crochet s'exécute au TOUT DERNIER moment,
+   * quand le message est composé et que plus personne ne le touchera : il
+   * relève l'expéditeur réel, l'enveloppe de retour, et dit si le domaine
+   * correspond à celui qu'on visait. Le résultat est lisible dans les réglages,
+   * et signalé s'il diverge.
+   *
+   * Priorité 99 : après « acdc_poser_version_texte », et après les extensions
+   * d'envoi, qui se branchent au plus tard à la priorité par défaut.
+   */
+  public function acdc_relever_expediteur_reel( $phpmailer ) {
+    if ( ! is_object( $phpmailer ) ) {
+      return;
+    }
+    $reel = isset( $phpmailer->From ) ? trim( (string) $phpmailer->From ) : '';
+    if ( '' === $reel ) {
+      return;
+    }
+
+    $attendu = '';
+    if ( method_exists( $this, 'acdc_get_transactional_email_branding' ) ) {
+      $marque  = $this->acdc_get_transactional_email_branding();
+      $attendu = isset( $marque['sender_email'] ) ? (string) $marque['sender_email'] : '';
+    }
+    $domaine_attendu = \ACDC\AdresseExpedition::domaine( $attendu );
+
+    $releve = array(
+      'expediteur_reel'   => $reel,
+      'expediteur_attendu'=> $attendu,
+      'enveloppe_retour'  => isset( $phpmailer->Sender ) ? trim( (string) $phpmailer->Sender ) : '',
+      'aligne'            => '' !== $domaine_attendu && \ACDC\AdresseExpedition::alignee( $reel, $domaine_attendu ),
+      'ecrase'            => ( '' !== $attendu && strtolower( $reel ) !== strtolower( $attendu ) ),
+      'releve_le'         => current_time( 'mysql' ),
+    );
+
+    update_option( 'acdc_expediteur_dernier_releve', $releve, false );
+  }
+
+  /**
+   * ACDC 3.25.320 — Le dernier relevé, pour les écrans qui veulent l'afficher.
+   *
+   * @return array Vide tant qu'aucun e-mail n'est parti depuis la mise à jour.
+   */
+  public function acdc_expediteur_dernier_releve() {
+    $releve = get_option( 'acdc_expediteur_dernier_releve', array() );
+    return is_array( $releve ) ? $releve : array();
+  }
+
+  /**
+   * ACDC 3.25.320 — L'avertissement qui nomme le coupable.
+   *
+   * Un expéditeur écrasé par une extension ne se voit nulle part : ni dans nos
+   * réglages, ni dans l'archive des e-mails, qui enregistre ce que NOUS avons
+   * demandé. Le gestionnaire cherche alors le défaut dans le plugin, où il
+   * n'est pas. On le dit donc à l'écran, une fois le fait constaté.
+   */
+  public function acdc_avertir_expediteur_desaligne() {
+    if ( ! is_admin() || ! current_user_can( 'manage_options' ) ) {
+      return;
+    }
+    $releve = $this->acdc_expediteur_dernier_releve();
+    if ( empty( $releve['expediteur_reel'] ) || ! empty( $releve['aligne'] ) ) {
+      return;
+    }
+    printf(
+      '<div class="notice notice-warning"><p><strong>ACDC — les e-mails partent d\'une adresse non alignée.</strong><br>Dernier envoi le %1$s : parti de <code>%2$s</code>, alors que le plugin demandait <code>%3$s</code>.%4$s<br>Tant que le domaine du « De : » ne correspond pas à celui qui porte les enregistrements SPF et DKIM, les messages seront classés en indésirables — aucune correction du plugin n\'y changera rien.</p></div>',
+      esc_html( isset( $releve['releve_le'] ) ? $releve['releve_le'] : '' ),
+      esc_html( $releve['expediteur_reel'] ),
+      esc_html( isset( $releve['expediteur_attendu'] ) ? $releve['expediteur_attendu'] : '—' ),
+      ! empty( $releve['ecrase'] ) ? '<br><strong>Une extension d\'envoi écrase l\'adresse</strong> — regardez l\'option « forcer l\'adresse d\'expédition » de WP Mail SMTP ou équivalent.' : ''
+    );
+  }
+
   public function acdc_journaliser( $action, $object_type, $object_id = 0, $result = 'success', $extra = array() ) {
     $this->log_action_event( $action, $object_type, $object_id, $result, $extra );
   }
@@ -7718,7 +7804,21 @@ private function acdc_nom_fichier_sauvegarde( $quand = null ) {
     wp_mkdir_p( $dir );
 
     $token    = substr( wp_hash( 'acdc-convocation-' . (int) $registration->id ), 0, 20 );
-    $filename = sanitize_file_name( 'convocation-' . (int) $registration->id . '-' . $token . '.pdf' );
+    /* ACDC 3.25.320 — LE NOM DE LA PERSONNE, PAS SON NUMÉRO DE LIGNE.
+       « convocation-3 » ne dit rien à qui l'enregistre : trois convocations
+       d'une même séance se distinguaient par un chiffre interne. Le jeton, lui,
+       RESTE : c'est lui qui rend l'adresse indevinable, et le retirer rouvrirait
+       l'énumération des convocations. Le nom s'insère donc entre les deux. */
+    $__qui = '';
+    if ( ! empty( $registration->learner_id ) && method_exists( $this, 'get_learner' ) ) {
+      $__ap = $this->get_learner( (int) $registration->learner_id );
+      if ( $__ap ) {
+        $__nom = ! empty( $__ap->usage_last_name ) ? $__ap->usage_last_name : ( $__ap->last_name ?? '' );
+        $__qui = trim( (string) ( $__ap->first_name ?? '' ) . ' ' . (string) $__nom );
+      }
+    }
+    $__base   = \ACDC\Support\NomDocument::composer( 'convocation', $__qui, '', '' );
+    $filename = sanitize_file_name( $__base . '-' . $token . '.pdf' );
     $path     = $dir . $filename;
     if ( false === file_put_contents( $path, $pdf ) ) { // phpcs:ignore WordPress.WP.AlternativeFunctions.file_system_operations_file_put_contents
       return $empty;

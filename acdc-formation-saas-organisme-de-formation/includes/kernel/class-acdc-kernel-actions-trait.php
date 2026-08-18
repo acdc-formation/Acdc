@@ -4112,7 +4112,22 @@ public function handle_download_need_pdf() {
   /* client_only = lien tokenisé = page 1 uniquement, même si admin connecté */
   $client_only = isset( $_GET['token'] ) && '' !== $_GET['token'];
   $html        = $this->acdc_build_need_pdf_html( $need, $source_prospect_id, $client_only );
-  $filename    = 'recueil-des-besoins-' . (int) $need_id . '.pdf';
+  /* ACDC 3.25.320 — LE NOM DIT DE QUI IL S'AGIT, PAS SON NUMÉRO INTERNE.
+     « recueil-des-besoins-2 » ne renseigne personne : le 2 est un identifiant
+     de base, il ne survit pas au téléchargement et deux recueils de deux
+     clients différents se ressemblent dans un dossier. On passe par la porte
+     commune des noms de documents, qui met l'entité dans le nom. */
+  $__entite_recueil = '';
+  if ( ! empty( $need->company_id ) && method_exists( $this, 'get_company' ) ) {
+    $__co = $this->get_company( (int) $need->company_id );
+    if ( $__co && ! empty( $__co->name ) ) {
+      $__entite_recueil = (string) $__co->name;
+    }
+  }
+  if ( '' === $__entite_recueil && ! empty( $need->company_name ) ) {
+    $__entite_recueil = (string) $need->company_name;
+  }
+  $filename    = \ACDC\Support\NomDocument::composer( 'recueil des besoins', $__entite_recueil, '', 'pdf' );
   /* ACDC 3.25.256 — Filet commun à toutes les fabrications de PDF : en cas
      d'échec, le document part en version imprimable plutôt que de laisser un
      écran blanc. L'erreur réelle est journalisée par render_html_pdf(). */

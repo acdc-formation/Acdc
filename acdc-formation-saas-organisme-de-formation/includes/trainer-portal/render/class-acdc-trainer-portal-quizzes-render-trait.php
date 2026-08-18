@@ -559,7 +559,7 @@ trait ACDC_Trainer_Portal_Quizzes_Render_Trait {
             <div class="acdc-trainer-portal-quizzes-blocked">
                 <h1>Quiz introuvable</h1>
                 <p>Ce quiz n'existe pas, ou il n'est pas rattaché à une formation que vous animez.</p>
-                <p><a class="acdc-button acdc-button-soft" href="<?php echo esc_url( $this->trainer_portal_page_url( 'quizzes' ) ); ?>">← Retour à la liste</a></p>
+                <p><a class="acdc-button acdc-button-soft" href="<?php echo esc_url( $this->trainer_portal_page_url( 'quizzes' ) ); ?>">&larr; Retour à la liste</a></p>
             </div>
             <?php
             return ob_get_clean();

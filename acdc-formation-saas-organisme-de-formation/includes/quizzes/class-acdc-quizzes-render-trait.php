@@ -1282,7 +1282,7 @@ trait ACDC_Quizzes_Render_Trait {
 
                         <div class="acdc-qz-public-q-nav">
                             <?php if ( $idx > 0 ) : ?>
-                                <button type="button" class="acdc-qz-public-button-soft" data-prev-question><?php esc_html_e( '← Précédente', 'acdc-formation-saas' ); ?></button>
+                                <button type="button" class="acdc-qz-public-button-soft" data-prev-question><?php esc_html_e( '&larr; Précédente', 'acdc-formation-saas' ); ?></button>
                             <?php endif; ?>
                             <?php if ( $idx < count( $questions ) - 1 ) : ?>
                                 <button type="button" class="acdc-qz-public-button-primary" data-next-question><?php esc_html_e( 'Suivante →', 'acdc-formation-saas' ); ?></button>
@@ -1970,7 +1970,7 @@ trait ACDC_Quizzes_Render_Trait {
                     </div>
                     <div id="acdc-qz-import-list-footer-2" hidden>
                         <button type="button" class="acdc-button acdc-button-soft" id="acdc-qz-import-list-back-btn">
-                            ← <?php esc_html_e( 'Corriger le fichier', 'acdc-formation-saas' ); ?>
+                            &larr; <?php esc_html_e( 'Corriger le fichier', 'acdc-formation-saas' ); ?>
                         </button>
                         <button type="button" class="acdc-button acdc-button-primary" id="acdc-qz-import-list-confirm-btn">
                             <span class="acdc-qz-import-btn-label">✅ <?php esc_html_e( 'Confirmer et créer le quiz', 'acdc-formation-saas' ); ?></span>

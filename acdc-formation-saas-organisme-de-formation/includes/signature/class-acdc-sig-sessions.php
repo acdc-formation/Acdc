@@ -204,7 +204,7 @@ class ACDC_Sig_Sessions {
         echo '<div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:16px">';
         echo '<div><h2 style="margin:0;color:#1a2744">' . esc_html( $session_title ) . '</h2>';
         if ( $session->formation_title ) echo '<p style="margin:4px 0 0;color:#666;font-size:13px">' . esc_html( $session->formation_title ) . ' — ' . esc_html( $dates ) . '</p>';
-        echo '</div><a href="' . esc_url( $back_url ) . '" class="button button-secondary">← Retour</a></div>';
+        echo '</div><a href="' . esc_url( $back_url ) . '" class="button button-secondary">&larr; Retour</a></div>';
 
         if ( empty( $learners ) ) {
             echo '<div class="acdc-sig-panel" style="text-align:center;padding:32px"><p style="color:#666">Aucun stagiaire inscrit.</p></div>';

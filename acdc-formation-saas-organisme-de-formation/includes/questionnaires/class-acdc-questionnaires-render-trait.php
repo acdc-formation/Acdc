@@ -530,7 +530,7 @@ Fin : " . $this->format_pdf_date( $context['end_date'] ) ); ?></div>
     $title = 'relance' === $state ? 'À Relancer' : 'À compléter';
     ?>
     <div class="acdc-mb-18">
-      <a class="acdc-button acdc-button-soft" href="<?php echo esc_url( $back_url ); ?>" style="min-width:44px;padding:10px 14px;">←</a>
+      <a class="acdc-button acdc-button-soft" href="<?php echo esc_url( $back_url ); ?>" style="min-width:44px;padding:10px 14px;">&larr;</a>
     </div>
     <?php if ( 'pending' === $state ) : ?>
       <div class="acdc-grid-2cols acdc-mb-18" style="gap:18px;">
@@ -620,7 +620,7 @@ Fin : " . $this->format_pdf_date( $context['end_date'] ) ); ?></div>
     $title = 'relance' === $state ? 'À Relancer' : 'À compléter';
     ?>
     <div class="acdc-mb-18">
-      <a class="acdc-button acdc-button-soft" href="<?php echo esc_url( $base_url ); ?>" style="min-width:44px;padding:10px 14px;">←</a>
+      <a class="acdc-button acdc-button-soft" href="<?php echo esc_url( $base_url ); ?>" style="min-width:44px;padding:10px 14px;">&larr;</a>
     </div>
     <?php if ( 'pending' === $state ) : ?>
       <div class="acdc-grid-2cols acdc-mb-18" style="gap:18px;">
@@ -701,7 +701,7 @@ Fin : " . $this->format_pdf_date( $context['end_date'] ) ); ?></div>
     $title = 'relance' === $state ? 'À Relancer' : 'À compléter';
     ?>
     <div class="acdc-mb-18">
-      <a class="acdc-button acdc-button-soft" href="<?php echo esc_url( $base_url ); ?>" style="min-width:44px;padding:10px 14px;">←</a>
+      <a class="acdc-button acdc-button-soft" href="<?php echo esc_url( $base_url ); ?>" style="min-width:44px;padding:10px 14px;">&larr;</a>
     </div>
     <?php if ( 'pending' === $state ) : ?>
       <div class="acdc-grid-2cols acdc-mb-18" style="gap:18px;">
@@ -1253,7 +1253,7 @@ public function render_quality_compliance_shortcode( $atts = array() ) {
   private function render_survey_back_link( $url ) {
     ?>
     <div class="acdc-mb-18">
-      <a class="acdc-button acdc-button-soft" href="<?php echo esc_url( $url ); ?>">← Retour à la liste</a>
+      <a class="acdc-button acdc-button-soft" href="<?php echo esc_url( $url ); ?>">&larr; Retour à la liste</a>
     </div>
     <?php
   }
@@ -1923,7 +1923,7 @@ public function render_quality_compliance_shortcode( $atts = array() ) {
       </div>
     </section>
     <div class="acdc-mb-18">
-      <a class="acdc-button" href="<?php echo esc_url( $dashboard_url ); ?>" class="acdc-button acdc-button-neutral" style="min-width:44px;padding:10px 14px;">←</a>
+      <a class="acdc-button" href="<?php echo esc_url( $dashboard_url ); ?>" class="acdc-button acdc-button-neutral" style="min-width:44px;padding:10px 14px;">&larr;</a>
     </div>
     <div class="acdc-grid-2cols" style="gap:18px;">
       <a href="<?php echo esc_url( add_query_arg( array( 'scope' => 'action' ), $base_url ) ); ?>" class="acdc-panel" style="min-height:98px;display:flex;flex-direction:column;justify-content:center;align-items:center;text-align:center;text-decoration:none;">

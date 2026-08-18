@@ -325,6 +325,13 @@ class ACDC_Formation_SAAS_Plugin {
        endroit par lequel TOUS les e-mails passent, y compris ceux qu'un autre
        greffon enverrait. Et on ne remplace jamais une version texte déjà posée. */
     add_action( 'phpmailer_init', array( $this, 'acdc_poser_version_texte' ) );
+    /* ACDC 3.25.320 — Relever l'expéditeur RÉEL, au tout dernier moment.
+       Priorité 99 : après nous, et après les extensions d'envoi, dont l'option
+       « forcer l'adresse d'expédition » gagne contre l'en-tête que nous posons.
+       Sans cette mesure, un expéditeur écrasé reste invisible et l'on cherche
+       le défaut dans le plugin, où il n'est pas. */
+    add_action( 'phpmailer_init', array( $this, 'acdc_relever_expediteur_reel' ), 99 );
+    add_action( 'admin_notices', array( $this, 'acdc_avertir_expediteur_desaligne' ) );
     add_action( 'acdc_of_workflow_cron', array( $this, 'acdc_wf_cron' ) );
     /* ACDC 3.25.310 — Le cron de WordPress ne se déclenche qu'au passage d'un
        visiteur : sur un site peu fréquenté, le rendez-vous au quart d'heure

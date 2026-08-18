@@ -1540,6 +1540,35 @@ trait ACDC_Dossiers_Contracts_Render_Trait {
                désigné » sans qu'on puisse y remédier. */
             $rc_trainers    = method_exists( $this, 'get_trainers' ) ? (array) $this->get_trainers() : array();
             $rc_trainer_sel = isset( $contract->trainer_id ) ? (int) $contract->trainer_id : 0;
+            /* ACDC 3.25.320 — LE FORMATEUR CHOISI DANS LA PROPOSITION SUIT.
+               La convention naît d'une proposition commerciale où un formateur a
+               DÉJÀ été désigné — c'est lui qui a été annoncé au client, et c'est
+               pour lui que le contrat de sous-traitance sera réclamé. Cette
+               liste repartait pourtant à vide, et il fallait le resaisir de
+               mémoire. Une resaisie, c'est une occasion de se tromper : rien ne
+               signalait un formateur différent de celui promis.
+               On ne PRÉSÉLECTIONNE que sur une convention encore neuve : sur une
+               convention déjà enregistrée, le choix de l'utilisateur prime, même
+               s'il diffère de la proposition. */
+            if ( $rc_trainer_sel <= 0 && empty( $contract->id ) ) {
+              $__prop_id = isset( $contract->source_prospect_id ) ? (int) $contract->source_prospect_id : 0;
+              if ( $__prop_id > 0 && method_exists( $this, 'get_proposal_table' ) ) {
+                global $wpdb;
+                $__table_prop    = $this->get_proposal_table();
+                $__prop_trainers = $wpdb->get_var( $wpdb->prepare(
+                  "SELECT trainer_ids FROM {$__table_prop}
+                    WHERE source_prospect_id = %d AND trainer_ids <> ''
+                    ORDER BY id DESC LIMIT 1",
+                  $__prop_id
+                ) );
+                if ( ! empty( $__prop_trainers ) ) {
+                  $__liste = array_filter( array_map( 'absint', explode( ',', (string) $__prop_trainers ) ) );
+                  if ( ! empty( $__liste ) ) {
+                    $rc_trainer_sel = (int) reset( $__liste );
+                  }
+                }
+              }
+            }
             ?>
             <div class="acdc-contract-label">Formateur désigné</div>
             <div>
@@ -3022,7 +3051,7 @@ public function render_admin_registration_contract_page() { $this->render_admin_
           <p style="margin:4px 0 0;color:#9ca3af;font-size:12px;"><?php echo esc_html( count( $registrations ) ); ?> inscription(s) liée(s)</p>
         </div>
         <div>
-          <a class="acdc-button acdc-button-soft" href="<?php echo esc_url( $list_url ); ?>">← Retour à la liste</a>
+          <a class="acdc-button acdc-button-soft" href="<?php echo esc_url( $list_url ); ?>">&larr; Retour à la liste</a>
         </div>
       </div>
       <div class="acdc-inline-wrap" style="margin-top:16px;gap:8px;flex-wrap:wrap;">

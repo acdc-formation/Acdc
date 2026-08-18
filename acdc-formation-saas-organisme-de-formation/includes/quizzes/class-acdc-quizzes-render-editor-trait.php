@@ -1457,7 +1457,7 @@ trait ACDC_Quizzes_Render_Editor_Trait {
                     <!-- Footer étape 2 -->
                     <div id="acdc-qz-import-footer-2" hidden>
                         <button type="button" class="acdc-button acdc-button-soft" id="acdc-qz-import-back-btn">
-                            ← <?php esc_html_e( 'Corriger le fichier', 'acdc-formation-saas' ); ?>
+                            &larr; <?php esc_html_e( 'Corriger le fichier', 'acdc-formation-saas' ); ?>
                         </button>
                         <button type="button" class="acdc-button acdc-button-primary" id="acdc-qz-import-confirm-btn">
                             <span class="acdc-qz-import-btn-label">✅ <?php esc_html_e( 'Confirmer l\'import', 'acdc-formation-saas' ); ?></span>

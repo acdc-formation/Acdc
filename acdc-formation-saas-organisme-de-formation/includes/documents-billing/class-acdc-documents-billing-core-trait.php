@@ -1483,7 +1483,18 @@ trait ACDC_Documents_Billing_Core_Trait {
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Modèle de devis - ACDC-Formation</title>
+  <?php
+  /* ACDC 3.25.320 — LE TITRE EST LE NOM DU FICHIER.
+     Ce devis est servi en HTML : quand on l'enregistre, le navigateur ne
+     regarde pas l'adresse mais le TITRE de la page. Il valait « Modèle de devis
+     - ACDC-Formation » — le nom du gabarit, identique pour tous les clients et
+     tous les devis. Le fichier stocké portait pourtant déjà le bon nom depuis
+     la 3.25.310 : seul l'enregistrement manuel restait en arrière.
+     On y met la même chose : la nature, le client, le numéro, la date. */
+  $__titre_devis = trim( 'Devis — ' . ( '' !== (string) $client_name ? $client_name . ' — ' : '' ) . $number
+    . ( ! empty( $row['emission_date'] ) ? ' — ' . $row['emission_date'] : '' ) );
+  ?>
+  <title><?php echo esc_html( $__titre_devis ); ?></title>
   <style>
     :root {--navy:#0C2D52;--gold:#C5A253;--gold-soft:#E8D8B1;--ink:#1f2937;--muted:#6b7280;--line:#d7dde6;--paper:#ffffff;}
     @page {size:A4 portrait;margin:0;}

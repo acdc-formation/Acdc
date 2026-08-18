@@ -1306,7 +1306,7 @@ trait ACDC_Compliance_Quality_Render_Trait {
     ?>
     <section class="acdc-section-head">
       <div><h2><?php echo esc_html( $page_title ); ?></h2></div>
-      <a class="acdc-button acdc-button-soft" href="<?php echo esc_url( $list_url ); ?>">← Retour</a>
+      <a class="acdc-button acdc-button-soft" href="<?php echo esc_url( $list_url ); ?>">&larr; Retour</a>
     </section>
     <div class="acdc-panel">
       <form method="post" action="<?php echo esc_url( $this->portal_page_url( array( 'tab' => 'external_missions' ) ) ); ?>" class="acdc-form">

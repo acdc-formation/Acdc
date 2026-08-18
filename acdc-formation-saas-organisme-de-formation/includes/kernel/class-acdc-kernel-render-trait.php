@@ -4541,7 +4541,7 @@ trait ACDC_Kernel_Render_Trait {
       </div>
       <div class="acdc-inline-wrap">
         <?php if ( in_array( $action, array( 'view', 'edit', 'new' ), true ) ) : ?>
-          <a class="acdc-button acdc-button-soft" href="<?php echo esc_url( $base_url ); ?>">← Retour à la liste</a>
+          <a class="acdc-button acdc-button-soft" href="<?php echo esc_url( $base_url ); ?>">&larr; Retour à la liste</a>
         <?php else : ?>
           <a class="acdc-button acdc-button-soft" href="<?php echo esc_url( add_query_arg( array( 'nad_subtab' => 'blocks' ), $base_url ) ); ?>">Bibliothèque des blocs</a>
           <button type="button" class="acdc-button acdc-button-soft" data-acdc-open-modal="acdc-create-need-analysis-from-model-modal">Créer depuis le modèle</button>
@@ -4874,7 +4874,7 @@ trait ACDC_Kernel_Render_Trait {
         <p>Blocs de questions modulaires — communs, profils, thématiques et personnalisés.</p>
       </div>
       <div class="acdc-inline-wrap">
-        <a class="acdc-button acdc-button-soft" href="<?php echo esc_url( $base_url ); ?>">← Retour aux analyses</a>
+        <a class="acdc-button acdc-button-soft" href="<?php echo esc_url( $base_url ); ?>">&larr; Retour aux analyses</a>
         <a class="acdc-button acdc-button-soft" href="<?php echo esc_url( wp_nonce_url( add_query_arg( array( 'nad_subtab' => 'blocks', 'nad_reset_blocs' => '1' ), $base_url ), 'acdc_reset_nad_system_blocs' ) ); ?>" onclick="return confirm('Réinitialiser tous les blocs et questions système ? Les blocs personnalisés ne seront pas affectés.');">↺ Réinitialiser les blocs système</a>
         <a class="acdc-button acdc-button-primary" href="<?php echo esc_url( add_query_arg( array( 'nad_subtab' => 'block_new' ), $base_url ) ); ?>">Créer un bloc</a>
       </div>
@@ -5069,7 +5069,7 @@ trait ACDC_Kernel_Render_Trait {
     $bloc         = $nad_block_id ? $this->get_need_block( $nad_block_id ) : null;
     if ( ! $bloc ) {
       echo '<div class="acdc-notice acdc-notice-error">Bloc introuvable.</div>';
-      echo '<p><a class="acdc-button acdc-button-soft" href="' . esc_url( add_query_arg( array( 'nad_subtab' => 'blocks' ), $base_url ) ) . '">← Retour</a></p>';
+      echo '<p><a class="acdc-button acdc-button-soft" href="' . esc_url( add_query_arg( array( 'nad_subtab' => 'blocks' ), $base_url ) ) . '">&larr; Retour</a></p>';
       return;
     }
     $questions    = $this->get_need_questions( (int) $bloc->id );
@@ -5083,7 +5083,7 @@ trait ACDC_Kernel_Render_Trait {
         <p><?php echo esc_html( $this->need_block_type_label( $bloc->type_bloc ) ); ?><?php echo $bloc->profil_lie ? ' — ' . esc_html( $this->need_profil_label( $bloc->profil_lie ) ) : ''; ?><?php echo $bloc->thematique_liee ? ' — ' . esc_html( $this->need_thematique_label( $bloc->thematique_liee ) ) : ''; ?></p>
       </div>
       <div class="acdc-inline-wrap">
-        <a class="acdc-button acdc-button-soft" href="<?php echo esc_url( add_query_arg( array( 'nad_subtab' => 'blocks' ), $base_url ) ); ?>">← Bibliothèque</a>
+        <a class="acdc-button acdc-button-soft" href="<?php echo esc_url( add_query_arg( array( 'nad_subtab' => 'blocks' ), $base_url ) ); ?>">&larr; Bibliothèque</a>
         <a class="acdc-button acdc-button-primary" href="<?php echo esc_url( add_query_arg( array( 'nad_subtab' => 'question_new', 'nad_block_id' => (int) $bloc->id ), $base_url ) ); ?>">Ajouter une question</a>
       </div>
     </section>
@@ -5287,7 +5287,7 @@ trait ACDC_Kernel_Render_Trait {
           — Modifié le <?php echo esc_html( mysql2date( 'j F Y', $analysis->updated_at ) ); ?>
         </p>
         <a class="acdc-button acdc-button-soft" href="<?php echo esc_url( add_query_arg( array( 'action' => 'edit', 'item_id' => (int) $analysis->id ), $base_url ) ); ?>">Modifier</a>
-        <a class="acdc-button acdc-button-soft" href="<?php echo esc_url( $base_url ); ?>" style="margin-left:8px;">← Retour</a>
+        <a class="acdc-button acdc-button-soft" href="<?php echo esc_url( $base_url ); ?>" style="margin-left:8px;">&larr; Retour</a>
       </div>
       <?php if ( ! empty( $nad_prefill ) ) : ?>
       <div style="background:#fbf8f7;border:1px solid #f0e6dc;border-radius:10px;padding:18px 24px;margin-bottom:20px;">
@@ -6221,7 +6221,7 @@ trait ACDC_Kernel_Render_Trait {
               <?php endforeach; ?>
               <div class="nad-nav">
                 <?php if ( $si > 0 ) : ?>
-                  <button type="button" class="nad-btn nad-btn-secondary" onclick="nadGoTo(<?php echo $si-1; ?>,<?php echo $total_sections; ?>)">← Précédent</button>
+                  <button type="button" class="nad-btn nad-btn-secondary" onclick="nadGoTo(<?php echo $si-1; ?>,<?php echo $total_sections; ?>)">&larr; Précédent</button>
                 <?php else : ?>
                   <span></span>
                 <?php endif; ?>
@@ -9704,7 +9704,7 @@ trait ACDC_Kernel_Render_Trait {
           <span style="line-height:1.4;">Envoyer le recueil au prospect par e-mail<br><small style="color:#8a6d2a;">Coché : le recueil est envoyé au prospect dès l'enregistrement. Décochez pour enregistrer sans envoyer (brouillon).</small></span>
         </div>
         <div class="acdc-need-form-row">
-          <a class="acdc-button acdc-button-soft" href="<?php echo esc_url( $cancel_need_url_local ); ?>" data-acdc-no-iconize="1">← Retour à la liste</a>
+          <a class="acdc-button acdc-button-soft" href="<?php echo esc_url( $cancel_need_url_local ); ?>" data-acdc-no-iconize="1">&larr; Retour à la liste</a>
           <button type="submit" class="acdc-button acdc-button-primary" data-acdc-no-iconize="1">Enregistrer</button>
         </div>
       </div>
@@ -13089,7 +13089,7 @@ trait ACDC_Kernel_Render_Trait {
         <?php if ( ! in_array( $action, array( 'new', 'edit', 'view' ), true ) ) : ?>
           <a class="acdc-button acdc-button-primary" href="<?php echo esc_url( add_query_arg( 'action', 'new', $base_url ) ); ?>">Créer une thématique</a>
         <?php else : ?>
-          <a class="acdc-button acdc-button-soft" href="<?php echo esc_url( $base_url ); ?>">← Retour</a>
+          <a class="acdc-button acdc-button-soft" href="<?php echo esc_url( $base_url ); ?>">&larr; Retour</a>
         <?php endif; ?>
       </div>
     </section>
@@ -14080,7 +14080,11 @@ trait ACDC_Kernel_Render_Trait {
       <section class="acdc-section-head">
         <div>
           <h2>Rendez-vous préalables</h2>
-          <p>Suivi des rendez-vous post-formation liés aux apprenants et aux dates de séances.</p>
+          <?php /* ACDC 3.25.320 — Le sous-titre disait « post-formation » sous un
+                    titre « préalables ». Ce sont deux moments opposés du
+                    parcours : un rendez-vous préalable se tient AVANT l'entrée
+                    en formation, pour cadrer le besoin. */ ?>
+          <p>Suivi des rendez-vous tenus avant l'entrée en formation, liés aux apprenants et aux dates de séances.</p>
         </div>
         <div class="acdc-inline-wrap">
           <a class="acdc-button acdc-button-primary" href="<?php echo esc_url( $base_new_url ); ?>">Créer rendez-vous préalable</a>
