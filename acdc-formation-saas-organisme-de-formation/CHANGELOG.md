@@ -4,6 +4,46 @@ Toutes les modifications notables de ce projet sont documentées ici.
 Format inspiré de [Keep a Changelog](https://keepachangelog.com/fr/1.1.0/).
 L'historique détaillé antérieur est archivé dans [`release-notes/`](release-notes/).
 
+## [3.25.326] — 2026-08-19
+
+### Corrigé — Une enquête par formation, pas par journée
+
+**Les apprenants ont reçu l'enquête de satisfaction le soir du premier jour.** Formation des
+18 et 19 août, fin annoncée le 19 à 17 h : l'enquête est partie le 18 à 19 h, et elle serait
+repartie le 19 au soir.
+
+Toute la mécanique d'automatisation des enquêtes prenait pour unité la SÉANCE — une ligne
+par journée dans la liste des candidates, un déclenchement calculé sur la fin de cette
+journée-là, un garde-fou anti-doublon comparant le numéro de séance. Une formation de deux
+jours fabriquait donc deux enquêtes, dont la première avant la fin de la formation. Ce n'est
+pas un décalage d'horaire : c'est une unité de compte fausse. Une enquête de satisfaction
+porte sur un PARCOURS, et l'apprenant n'en a qu'un avis, à la fin.
+
+Les six enquêtes — intermédiaire, à chaud, à froid, formateur, entreprise, financeur — se
+décident désormais sur la séance qui CLÔT le parcours, avec une fenêtre allant du début de
+la première séance à la fin de la dernière. Un parcours réunit les séances d'une même
+formation pour un même commanditaire qui se suivent ; plus de trois semaines d'intervalle
+ouvrent un nouveau parcours.
+
+**C'est aussi la piste la plus probable du courrier indésirable.** Les convocations, les
+certificats et les conventions arrivent en boîte de réception ; seules les enquêtes
+finissaient en indésirables. Elles partaient en double : deux messages identiques, vers les
+trois mêmes adresses, à quelques minutes d'intervalle — le motif même que cherche un filtre.
+L'authentification n'y est pour rien, ces envois passent par la même porte et le même
+« From: » que les autres.
+
+- **Le doublon déjà en file ne part pas.** La correction empêche d'en fabriquer un second,
+  elle ne défait pas ceux qui existent : avant chaque envoi, une enquête du même type déjà
+  partie pour le parcours écarte celle-ci, avec un statut visible et son motif.
+- **L'e-mail d'enquête** ne salue plus deux fois le destinataire et son objet est borné : il
+  reprenait le libellé interne de l'envoi, près de deux cents caractères.
+- **Un réglage d'expéditeur qui ne commandait rien** a été retiré du module questionnaires :
+  il composait un « From: » que personne ne passait à l'envoi. L'adresse d'expédition se
+  décide à un seul endroit.
+
+Vérifications : 89 balayages verts, dont `scan-enquete-par-parcours.php` (20 règles), chaque
+règle éprouvée en sabotant la correction.
+
 ## [3.25.325] — 2026-08-18
 
 ### Corrigé — Les relevés de la première journée de formation réelle

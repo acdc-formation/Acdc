@@ -117,7 +117,11 @@ foreach ( $fichiers as $chemin ) {
         );
     }
 }
-$exiger( $sites >= 4, sprintf( 'Seulement %d compositions de « From: » examinées : le balayage ne trouve plus le code qu’il surveille.', $sites ) );
+/* ACDC 3.25.326 — Le seuil passe de 4 à 3 : les questionnaires n'en composent
+   plus aucun. Ils en composaient trois, dans un tableau d'en-têtes que personne
+   ne passait à l'envoi — du code mort qui donnait à croire qu'un réglage de ce
+   module gouvernait l'expédition. Voir la règle 5. */
+$exiger( $sites >= 3, sprintf( 'Seulement %d compositions de « From: » examinées : le balayage ne trouve plus le code qu’il surveille.', $sites ) );
 
 /* ------------------------------------------------------------------------
  * 3. Aucun repli sur « admin_email » pour un expéditeur
@@ -147,13 +151,46 @@ $exiger(
 );
 
 /* ------------------------------------------------------------------------
- * 5. Les questionnaires ne laissent plus « WordPress décider »
+ * 5. Les questionnaires ne composent plus d'expéditeur du tout
+ *
+ * ACDC 3.25.326 — La règle précédente exigeait que leur réglage ne puisse pas
+ * rendre une adresse vide. Elle défendait un chemin qui n'existe plus : ces
+ * en-têtes n'étaient jamais passés à l'envoi. Un réglage qui ne commande rien
+ * n'a pas besoin d'être juste, il a besoin de disparaître — sinon c'est là
+ * qu'on cherchera la panne le jour où un e-mail partira de travers.
  * --------------------------------------------------------------------- */
-$quest = (string) file_get_contents( $racine . '/includes/questionnaires/class-acdc-questionnaires-core-trait.php' );
-$exiger(
-    (bool) preg_match( '/empty\(\s*\$settings\[.sender_email.\]\s*\).{0,400}AdresseExpedition::resoudre/s', $quest ),
-    'Les réglages des questionnaires peuvent à nouveau rendre une adresse d’expédition vide : WordPress y remet « wordpress@ » suivi du domaine du site, qui n’est pas le domaine signé. Ce sont ces envois-là qui partaient en indésirables.'
-);
+/* Le code SEUL : la note qui explique le retrait cite forcément le nom de la
+   fonction retirée. Prendre un commentaire pour du code est la faute que ce
+   dépôt a déjà commise trois fois — on laisse PHP découper. */
+$acdc_code_nu = function ( $chemin ) {
+    $sans = '';
+    foreach ( token_get_all( (string) file_get_contents( $chemin ) ) as $jeton ) {
+        if ( is_array( $jeton ) ) {
+            if ( T_COMMENT === $jeton[0] || T_DOC_COMMENT === $jeton[0] ) {
+                $sans .= str_repeat( "\n", substr_count( $jeton[1], "\n" ) );
+                continue;
+            }
+            $sans .= $jeton[1];
+            continue;
+        }
+        $sans .= $jeton;
+    }
+    return $sans;
+};
+foreach ( array(
+    'includes/questionnaires/class-acdc-questionnaires-core-trait.php',
+    'includes/questionnaires/class-acdc-questionnaires-actions-trait.php',
+) as $relatif ) {
+    $quest = $acdc_code_nu( $racine . '/' . $relatif );
+    $exiger(
+        ! preg_match( "/\\\$headers\[\]\s*=\s*'From: /", $quest ),
+        sprintf( '%s recompose un « From: » pour les enquêtes. Il ne sera pas transmis à l’envoi — la porte commune décide — mais il fera croire qu’un réglage de ce module gouverne l’expédition.', $relatif )
+    );
+    $exiger(
+        false === strpos( $quest, 'get_questionnaire_mail_settings' ),
+        sprintf( '%s rappelle un réglage d’expéditeur propre aux questionnaires : l’adresse d’expédition se décide à un seul endroit, src/AdresseExpedition.php.', $relatif )
+    );
+}
 
 if ( $echecs ) {
     foreach ( $echecs as $e ) {

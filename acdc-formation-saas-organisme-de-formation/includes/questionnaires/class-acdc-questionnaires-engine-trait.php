@@ -124,6 +124,11 @@ trait ACDC_Questionnaires_Engine_Trait {
          loin derrière : elle poserait une question à laquelle la personne ne
          peut plus répondre honnêtement. Elle attend une décision. */
       'trop_tardive'           => 'Trop tardive',
+      /* ACDC 3.25.326 — Une enquête du même type est déjà partie pour ce
+         parcours : celle-ci est écartée, et le dit. Un statut inconnu de cette
+         table s'afficherait « Doublon parcours » par défaut — lisible, mais
+         c'est justement ce qu'on ne veut plus laisser au hasard. */
+      'doublon_parcours'       => 'Doublon — déjà envoyée pour ce parcours',
       'prete'                  => 'Prête',
       'ouverte'                => 'Ouverte',
       'en_cours'               => 'En cours',
@@ -155,6 +160,7 @@ trait ACDC_Questionnaires_Engine_Trait {
       'sans_destinataire'     => 'Sans destinataire',
       'echec_envoi'           => 'Échec d’envoi',
       'trop_tardive'          => 'Trop tardive',
+      'doublon_parcours'      => 'Doublon — déjà envoyée pour ce parcours',
       'ouverte'               => 'Ouverte',
       'commencee'             => 'Commencée',
       'partiellement_repondue'=> 'Partiellement répondue',

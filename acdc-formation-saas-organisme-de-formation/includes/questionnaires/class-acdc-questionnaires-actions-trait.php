@@ -1599,17 +1599,7 @@ trait ACDC_Questionnaires_Actions_Trait {
     if ( ! $email ) {
       wp_die( esc_html( 'Aucune adresse e-mail exploitable pour ce participant.' ) );
     }
-    $settings = $this->get_questionnaire_mail_settings();
-    $sender_name = sanitize_text_field( (string) ( $settings['sender_name'] ?? '' ) );
-    $sender_email = sanitize_email( (string) ( $settings['sender_email'] ?? '' ) );
-    $reply_to = sanitize_email( ! empty( $settings['reply_to'] ) ? (string) $settings['reply_to'] : $sender_email );
-    $headers = array( 'Content-Type: text/html; charset=UTF-8' );
-    if ( $sender_email ) {
-      $headers[] = 'From: ' . ( $sender_name ? $sender_name . ' <' . $sender_email . '>' : $sender_email );
-    }
-    if ( $reply_to ) {
-      $headers[] = 'Reply-To: ' . $reply_to;
-    }
+    /* ACDC 3.25.326 — En-têtes morts retirés : voir send_questionnaire_session_emails(). */
     $url = add_query_arg(
       array(
         'token' => rawurlencode( (string) $session->public_token ),
@@ -1617,8 +1607,7 @@ trait ACDC_Questionnaires_Actions_Trait {
       ),
       $this->get_questionnaire_public_base_url()
     );
-    $body = '<p>Bonjour ' . esc_html( $this->get_questionnaire_session_participant_display_name( $participant ) ) . ',</p>';
-    $body .= '<p>Voici un rappel pour répondre au questionnaire : <strong>' . esc_html( $session->session_title ) . '</strong>.</p>';
+    $body = '<p>Voici un rappel pour répondre au questionnaire : <strong>' . esc_html( $session->session_title ) . '</strong>.</p>';
     $body .= '<p><a href="' . esc_url( $url ) . '">Accéder au questionnaire</a></p>';
     $sent = $this->acdc_send_transactional_email(
       $email,

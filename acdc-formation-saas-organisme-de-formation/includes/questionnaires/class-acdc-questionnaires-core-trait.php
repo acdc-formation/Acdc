@@ -3417,41 +3417,14 @@ Vos réponses nous permettront d’évaluer nos pratiques, d’identifier des ax
   }
 
 
-  private function get_questionnaire_mail_settings() {
-    $defaults = array(
-      'sender_name' => 'ACDC-Formation',
-      /* ACDC 3.25.317 — « WordPress décidera » était la mauvaise réponse.
-         La 3.25.290 avait retiré l'adresse d'expédition écrite en dur, pour
-         qu'un changement d'entité ne laisse pas les questionnaires partir de
-         l'ancienne boîte. L'intention était bonne, la conséquence non : à
-         défaut, WordPress compose « wordpress@ » suivi du domaine du SITE —
-         « acdcformation.com » — qui n'est pas le domaine SIGNÉ,
-         « acdc-formation.com ». Un tiret d'écart, et DMARC ne s'aligne plus.
-         Ce sont précisément ces envois-là qui partaient en indésirables.
-         Le défaut redevient donc l'adresse du domaine signé, et le réglage de
-         la fiche la remplace dès qu'il est saisi — ce qui répond au besoin
-         d'origine sans casser l'alignement. */
-      'sender_email' => \ACDC\AdresseExpedition::resoudre(
-        array(),
-        (string) apply_filters( 'acdc_email_expediteur', \ACDC\AdresseExpedition::DEFAUT )
-      ),
-      'reply_to' => '',
-    );
-    $settings = $this->get_marketing_store( 'settings', array() );
-    $settings = is_array( $settings ) ? $settings : array();
-    $settings = wp_parse_args( $settings, $defaults );
-    /* wp_parse_args ne comble que les clés ABSENTES : une adresse enregistrée
-       puis vidée reste vide, et l'en-tête « From: » disparaît — auquel cas
-       WordPress remet son « wordpress@domaine-du-site », non signé. On repasse
-       donc par la porte commune, qui tranche dans tous les cas. */
-    if ( empty( $settings['sender_email'] ) ) {
-      $settings['sender_email'] = \ACDC\AdresseExpedition::resoudre(
-        array(),
-        (string) apply_filters( 'acdc_email_expediteur', \ACDC\AdresseExpedition::DEFAUT )
-      );
-    }
-    return $settings;
-  }
+  /* ACDC 3.25.326 — get_questionnaire_mail_settings() a été retiré.
+     Elle composait un expéditeur pour les enquêtes, que plus rien ne lisait
+     depuis que tous les envois passent par la porte commune. Une fonction qui
+     calcule une adresse dont personne ne se sert entretient l'idée qu'un
+     réglage de ce module gouverne l'expédition : il ne la gouverne pas, et
+     c'est là qu'on perd une demi-journée quand un e-mail part de travers.
+     L'adresse d'expédition est décidée à un seul endroit : src/AdresseExpedition.php. */
+
 
 
   private function update_questionnaire_session_settings( $session_id, $extra ) {
@@ -3489,21 +3462,32 @@ Vos réponses nous permettront d’évaluer nos pratiques, d’identifier des ax
 
   private function send_questionnaire_session_emails( $session, $source, $targets = array() ) {
     global $wpdb;
-    $mail_settings = $this->get_questionnaire_mail_settings();
-    $sender_name = sanitize_text_field( (string) $mail_settings['sender_name'] );
-    $sender_email = sanitize_email( (string) $mail_settings['sender_email'] );
-    $reply_to = sanitize_email( ! empty( $mail_settings['reply_to'] ) ? (string) $mail_settings['reply_to'] : $sender_email );
+    /* ACDC 3.25.326 — L'EXPÉDITEUR DES ENQUÊTES ÉTAIT DU CODE MORT.
+       Ces trois lignes composaient un « From: » à partir des réglages du module
+       questionnaires, et l'assemblaient dans un tableau d'en-têtes… que
+       personne ne passait à l'envoi. Depuis la 3.25.317, l'adresse d'expédition
+       est une décision unique, prise par src/AdresseExpedition.php, parce que
+       c'est son domaine que DMARC vérifie. Un réglage qui ne commande rien
+       fait chercher la panne là où elle n'est pas : on le retire. */
     $source_scope_data = $source ? $source : $this->get_questionnaire_source_data( $session->source_type, $session->source_id );
     $is_annual_campaign = $this->is_questionnaire_annual_campaign_source( $source_scope_data );
     $annual_campaign_year = $this->get_questionnaire_annual_campaign_year_value( $session, $source_scope_data );
-    $subject = $session->session_title . ( $is_annual_campaign ? ' — campagne annuelle ' . $annual_campaign_year : '' );
-    $headers = array( 'Content-Type: text/html; charset=UTF-8' );
-    if ( $sender_email ) {
-      $headers[] = 'From: ' . ( $sender_name ? $sender_name . ' <' . $sender_email . '>' : $sender_email );
+    /* ACDC 3.25.326 — UN OBJET QUI SE LIT, ET UN SEUL BONJOUR.
+       L'objet reprenait le libellé INTERNE de l'envoi — « Enquête à chaud — »
+       suivi du titre du modèle puis du titre de la séance, soit près de deux
+       cents caractères tronqués par toutes les messageries. Et le corps
+       ouvrait sur « Bonjour Prénom » alors que le gabarit commun salue déjà :
+       le destinataire lisait son prénom deux fois. Rien de tout cela ne
+       classe seul un message en indésirable, mais c'est la signature d'un
+       envoi automatique mal tenu, et cela s'ajoute au reste. */
+    $subject = trim( (string) $session->session_title );
+    if ( $source && ! empty( $source['title'] ) ) {
+      $subject = trim( (string) $source['title'] );
     }
-    if ( $reply_to ) {
-      $headers[] = 'Reply-To: ' . $reply_to;
+    if ( function_exists( 'mb_strlen' ) && mb_strlen( $subject ) > 110 ) {
+      $subject = rtrim( mb_substr( $subject, 0, 110 ), " -—," ) . '…';
     }
+    $subject .= ( $is_annual_campaign ? ' — campagne annuelle ' . $annual_campaign_year : '' );
     if ( empty( $targets ) || ! is_array( $targets ) ) {
       $targets = $this->get_questionnaire_delivery_targets( $session );
     }
@@ -3523,8 +3507,7 @@ Vos réponses nous permettront d’évaluer nos pratiques, d’identifier des ax
       }
       $recipient_name = $this->get_questionnaire_session_participant_display_name( $participant );
       $url = $this->build_questionnaire_participant_public_url( $session, $participant );
-      $body  = '<p>Bonjour ' . esc_html( $recipient_name ) . ',</p>';
-      $body .= '<p>Vous pouvez répondre au questionnaire <strong>' . esc_html( $session->session_title ) . '</strong>.</p>';
+      $body  = '<p>Vous pouvez répondre au questionnaire <strong>' . esc_html( $session->session_title ) . '</strong>.</p>';
       if ( $is_annual_campaign ) {
         $body .= '<p><strong>Campagne annuelle :</strong> ' . esc_html( (string) $annual_campaign_year ) . '</p>';
       }
@@ -8473,6 +8456,197 @@ private function maybe_auto_create_questionnaire_actions_from_response( $session
     return $wpdb->get_results( "SELECT s.*, f.title AS formation_title, f.intermediate_survey_enabled FROM {$this->session_table} s LEFT JOIN {$this->formation_table} f ON f.id = s.formation_id WHERE s.is_draft = 0 AND COALESCE(f.intermediate_survey_enabled,0) = 1 AND ( s.start_at IS NOT NULL OR s.start_date IS NOT NULL ) AND ( s.end_at IS NOT NULL OR s.end_date IS NOT NULL ) AND COALESCE(s.status,'') NOT IN ('Annulée','Annulee','Brouillon') ORDER BY COALESCE(s.start_at, CONCAT(s.start_date,' 08:00:00')) ASC, s.id ASC" );
   }
 
+  /**
+   * ACDC 3.25.326 — UNE ENQUÊTE PAR FORMATION, PAS PAR JOURNÉE.
+   *
+   * CE QUI EST ARRIVÉ LE 18 AOÛT. Une formation de deux jours, 18 et 19 août,
+   * fin annoncée le 19 à 17 h. Les apprenants ont reçu l'enquête à chaud le 18
+   * à 19 h — le soir du PREMIER jour, la formation à peine commencée. Et ils
+   * l'auraient reçue une seconde fois le 19.
+   *
+   * LA RACINE. Toute cette mécanique prend pour unité la SÉANCE. La liste des
+   * candidates rend une ligne par séance, la date de déclenchement se calcule
+   * sur la fin de CETTE séance, et le garde-fou anti-doublon compare le numéro
+   * de séance. Une formation de deux jours fabrique donc deux enquêtes, dont la
+   * première part avant la fin de la formation. Ce n'est pas un décalage
+   * d'horaire : c'est une unité de compte fausse. Une enquête de satisfaction
+   * porte sur un PARCOURS — l'apprenant n'en a qu'un avis, à la fin.
+   *
+   * Et le doublon ne coûte pas qu'une question posée deux fois : deux messages
+   * identiques aux trois mêmes adresses à quelques minutes d'intervalle, c'est
+   * exactement le motif que cherchent les filtres anti-spam. Les autres e-mails
+   * du parcours — convocations, certificats — partent une fois et arrivent ;
+   * les enquêtes partaient en double et finissaient en indésirables.
+   *
+   * CE QU'EST UN PARCOURS ICI. Les séances d'une même formation, pour un même
+   * commanditaire, qui se suivent. « Qui se suivent » se mesure : un intervalle
+   * de plus de trois semaines entre deux séances ouvre un nouveau parcours —
+   * c'est la même formation vendue une seconde fois, pas la suite de la
+   * première. On ne s'appuie pas sur la convention pour ce découpage : sa
+   * colonne « company_id » est trop souvent vide, comme la 3.25.321 l'a montré.
+   *
+   * @param object $training_session Une séance quelconque du parcours.
+   * @return array Les séances du parcours, de la première à la dernière.
+   */
+  private function acdc_survey_seances_du_parcours( $training_session ) {
+    global $wpdb;
+    static $cache = array();
+
+    $sid = ! empty( $training_session->id ) ? (int) $training_session->id : 0;
+    if ( ! $sid ) {
+      return array();
+    }
+    if ( isset( $cache[ $sid ] ) ) {
+      return $cache[ $sid ];
+    }
+
+    $formation_id = ! empty( $training_session->formation_id ) ? (int) $training_session->formation_id : 0;
+    if ( $formation_id <= 0 || empty( $this->session_table ) ) {
+      $cache[ $sid ] = array( $training_session );
+      return $cache[ $sid ];
+    }
+
+    $company_id = ! empty( $training_session->company_id ) ? (int) $training_session->company_id : 0;
+    $rows = (array) $wpdb->get_results( $wpdb->prepare(
+      "SELECT id, formation_id, company_id, title, status, start_at, end_at, start_date, end_date
+         FROM {$this->session_table}
+        WHERE formation_id = %d
+          AND COALESCE(company_id, 0) = %d
+          AND COALESCE(is_draft, 0) = 0
+          AND COALESCE(status, '') NOT IN ('Annulée', 'Annulee', 'Brouillon')
+        ORDER BY COALESCE(start_at, CONCAT(start_date, ' 08:00:00')) ASC, id ASC",
+      $formation_id,
+      $company_id
+    ) );
+    if ( empty( $rows ) ) {
+      $cache[ $sid ] = array( $training_session );
+      return $cache[ $sid ];
+    }
+
+    /* Trois semaines : au-delà, ce n'est plus la suite d'un parcours mais une
+       nouvelle session de la même formation. La valeur est généreuse à dessein —
+       découper trop tôt renverrait au défaut qu'on corrige. */
+    $ecart_max = 21 * DAY_IN_SECONDS;
+    $groupes   = array();
+    $courant   = array();
+    $fin_prec  = 0;
+    foreach ( $rows as $row ) {
+      $debut = $this->acdc_survey_seance_debut_ts( $row );
+      $fin   = $this->acdc_survey_seance_fin_ts( $row );
+      if ( ! empty( $courant ) && $fin_prec > 0 && $debut > 0 && ( $debut - $fin_prec ) > $ecart_max ) {
+        $groupes[] = $courant;
+        $courant   = array();
+      }
+      $courant[] = $row;
+      $fin_prec  = max( $fin_prec, $fin );
+      if ( 1 === count( $courant ) ) {
+        $fin_prec = $fin;
+      }
+    }
+    if ( ! empty( $courant ) ) {
+      $groupes[] = $courant;
+    }
+
+    foreach ( $groupes as $groupe ) {
+      foreach ( $groupe as $row ) {
+        if ( (int) $row->id === $sid ) {
+          $cache[ $sid ] = $groupe;
+          return $groupe;
+        }
+      }
+    }
+
+    $cache[ $sid ] = array( $training_session );
+    return $cache[ $sid ];
+  }
+
+  /** Le début d'une séance, horaire d'abord, date à défaut. */
+  private function acdc_survey_seance_debut_ts( $seance ) {
+    if ( ! empty( $seance->start_at ) ) {
+      return (int) strtotime( (string) $seance->start_at );
+    }
+    if ( ! empty( $seance->start_date ) ) {
+      return (int) strtotime( substr( (string) $seance->start_date, 0, 10 ) . ' 08:00:00' );
+    }
+    return 0;
+  }
+
+  /** La fin d'une séance ; à défaut d'heure de fin, la journée est bornée à 17 h. */
+  private function acdc_survey_seance_fin_ts( $seance ) {
+    if ( ! empty( $seance->end_at ) ) {
+      return (int) strtotime( (string) $seance->end_at );
+    }
+    if ( ! empty( $seance->end_date ) ) {
+      return (int) strtotime( substr( (string) $seance->end_date, 0, 10 ) . ' 17:00:00' );
+    }
+    $debut = $this->acdc_survey_seance_debut_ts( $seance );
+    return $debut > 0 ? (int) strtotime( wp_date( 'Y-m-d', $debut ) . ' 17:00:00' ) : 0;
+  }
+
+  /**
+   * Cette séance est-elle celle qui CLÔT son parcours ?
+   *
+   * C'est elle, et elle seule, qui porte les enquêtes de fin. Les journées
+   * intermédiaires n'en déclenchent aucune.
+   */
+  private function acdc_survey_est_fin_de_parcours( $training_session ) {
+    $seances = $this->acdc_survey_seances_du_parcours( $training_session );
+    if ( empty( $seances ) ) {
+      return true;
+    }
+    $derniere = null;
+    $fin_max  = -1;
+    foreach ( $seances as $seance ) {
+      $fin = $this->acdc_survey_seance_fin_ts( $seance );
+      if ( $fin > $fin_max || ( $fin === $fin_max && (int) $seance->id > (int) $derniere->id ) ) {
+        $fin_max  = $fin;
+        $derniere = $seance;
+      }
+    }
+    return $derniere && (int) $derniere->id === (int) $training_session->id;
+  }
+
+  /** Les identifiants des séances du parcours — la clé anti-doublon. */
+  private function acdc_survey_ids_du_parcours( $training_session ) {
+    $ids = array();
+    foreach ( $this->acdc_survey_seances_du_parcours( $training_session ) as $seance ) {
+      if ( ! empty( $seance->id ) ) {
+        $ids[] = (int) $seance->id;
+      }
+    }
+    if ( empty( $ids ) && ! empty( $training_session->id ) ) {
+      $ids[] = (int) $training_session->id;
+    }
+    return $ids;
+  }
+
+  /**
+   * Une enquête de ce type a-t-elle DÉJÀ été programmée pour ce parcours ?
+   *
+   * Le garde-fou d'origine comparait la seule séance porteuse. Ajouter une
+   * journée à une formation déplaçait donc la séance de clôture, et une seconde
+   * enquête naissait pour le même parcours. On interroge toutes ses séances.
+   */
+  private function acdc_survey_parcours_deja_programme( $source_type, $survey_id, $training_session ) {
+    global $wpdb;
+    if ( empty( $this->questionnaire_session_table ) ) {
+      return false;
+    }
+    $ids = $this->acdc_survey_ids_du_parcours( $training_session );
+    if ( empty( $ids ) ) {
+      return false;
+    }
+    $marques = implode( ',', array_fill( 0, count( $ids ), '%d' ) );
+    $valeurs = array_merge( array( (string) $source_type, absint( $survey_id ) ), $ids );
+    // phpcs:ignore WordPress.DB.PreparedSQLPlaceholders.UnfinishedPrepare
+    $trouve = $wpdb->get_var( $wpdb->prepare(
+      "SELECT id FROM {$this->questionnaire_session_table}
+        WHERE source_type = %s AND source_id = %d AND seance_id IN ({$marques}) LIMIT 1",
+      $valeurs
+    ) );
+    return ! empty( $trouve );
+  }
+
   private function get_mid_survey_session_window( $training_session ) {
     $start_ref = '';
     $end_ref = '';
@@ -8482,6 +8656,33 @@ private function maybe_auto_create_questionnaire_actions_from_response( $session
     }
     $start_ts = $start_ref ? strtotime( $start_ref ) : 0;
     $end_ts   = $end_ref ? strtotime( $end_ref ) : 0;
+
+    /* ACDC 3.25.326 — LA FENÊTRE EST CELLE DU PARCOURS, PAS D'UNE JOURNÉE.
+       Toutes les enquêtes se calent sur cette fenêtre : la fin pour l'enquête à
+       chaud, le milieu pour l'intermédiaire, la fin plus le délai pour celle à
+       froid. Bornée à une seule séance, elle faisait partir l'enquête de fin le
+       soir du premier jour d'une formation de deux jours. On prend donc le début
+       de la PREMIÈRE séance du parcours et la fin de la DERNIÈRE. */
+    $seances = $training_session ? $this->acdc_survey_seances_du_parcours( $training_session ) : array();
+    if ( count( $seances ) > 1 ) {
+      $debut_parcours = 0;
+      $fin_parcours   = 0;
+      foreach ( $seances as $seance ) {
+        $d = $this->acdc_survey_seance_debut_ts( $seance );
+        $f = $this->acdc_survey_seance_fin_ts( $seance );
+        if ( $d > 0 && ( 0 === $debut_parcours || $d < $debut_parcours ) ) {
+          $debut_parcours = $d;
+          $start_ref      = ! empty( $seance->start_at ) ? (string) $seance->start_at : ( ! empty( $seance->start_date ) ? substr( (string) $seance->start_date, 0, 10 ) . ' 08:00:00' : $start_ref );
+        }
+        if ( $f > $fin_parcours ) {
+          $fin_parcours = $f;
+          $end_ref      = ! empty( $seance->end_at ) ? (string) $seance->end_at : ( ! empty( $seance->end_date ) ? substr( (string) $seance->end_date, 0, 10 ) . ' 17:00:00' : $end_ref );
+        }
+      }
+      if ( $debut_parcours > 0 ) { $start_ts = $debut_parcours; }
+      if ( $fin_parcours > 0 )   { $end_ts   = $fin_parcours; }
+    }
+
     if ( ! $start_ts || ! $end_ts || $end_ts < $start_ts ) {
       return array();
     }
@@ -8524,12 +8725,13 @@ private function maybe_auto_create_questionnaire_actions_from_response( $session
   }
 
   private function has_existing_mid_survey_automated_session( $survey_id, $training_session_id ) {
+    /* ACDC 3.25.326 — Le doublon se juge sur le PARCOURS, pas sur la séance. */
     global $wpdb;
-    if ( empty( $this->questionnaire_session_table ) ) {
+    $seance = $wpdb->get_row( $wpdb->prepare( "SELECT * FROM {$this->session_table} WHERE id = %d", absint( $training_session_id ) ) );
+    if ( ! $seance ) {
       return false;
     }
-    $found = $wpdb->get_var( $wpdb->prepare( "SELECT id FROM {$this->questionnaire_session_table} WHERE source_type = %s AND source_id = %d AND seance_id = %d LIMIT 1", 'mid_survey', absint( $survey_id ), absint( $training_session_id ) ) );
-    return ! empty( $found );
+    return $this->acdc_survey_parcours_deja_programme( 'mid_survey', $survey_id, $seance );
   }
 
   private function create_mid_survey_automated_session( $survey, $training_session, $survey_settings, $scheduled_at ) {
@@ -8628,6 +8830,12 @@ private function maybe_auto_create_questionnaire_actions_from_response( $session
         continue;
       }
       foreach ( (array) $training_sessions as $training_session ) {
+        /* ACDC 3.25.326 — Seule la séance qui CLÔT le parcours porte l'enquête.
+           Les journées intermédiaires en fabriquaient chacune une : deux jours de
+           formation, deux enquêtes, la première partie le soir du premier jour. */
+        if ( ! $this->acdc_survey_est_fin_de_parcours( $training_session ) ) {
+          continue;
+        }
         if ( empty( $training_session->id ) || $this->has_existing_mid_survey_automated_session( (int) $survey->id, (int) $training_session->id ) ) {
           continue;
         }
@@ -8715,12 +8923,13 @@ private function maybe_auto_create_questionnaire_actions_from_response( $session
   }
 
   private function has_existing_hot_survey_automated_session( $survey_id, $training_session_id ) {
+    /* ACDC 3.25.326 — Le doublon se juge sur le PARCOURS, pas sur la séance. */
     global $wpdb;
-    if ( empty( $this->questionnaire_session_table ) ) {
+    $seance = $wpdb->get_row( $wpdb->prepare( "SELECT * FROM {$this->session_table} WHERE id = %d", absint( $training_session_id ) ) );
+    if ( ! $seance ) {
       return false;
     }
-    $found = $wpdb->get_var( $wpdb->prepare( "SELECT id FROM {$this->questionnaire_session_table} WHERE source_type = %s AND source_id = %d AND seance_id = %d LIMIT 1", 'hot_survey', absint( $survey_id ), absint( $training_session_id ) ) );
-    return ! empty( $found );
+    return $this->acdc_survey_parcours_deja_programme( 'hot_survey', $survey_id, $seance );
   }
 
   private function create_hot_survey_automated_session( $survey, $training_session, $survey_settings, $scheduled_at ) {
@@ -8819,6 +9028,12 @@ private function maybe_auto_create_questionnaire_actions_from_response( $session
         continue;
       }
       foreach ( (array) $training_sessions as $training_session ) {
+        /* ACDC 3.25.326 — Seule la séance qui CLÔT le parcours porte l'enquête.
+           Les journées intermédiaires en fabriquaient chacune une : deux jours de
+           formation, deux enquêtes, la première partie le soir du premier jour. */
+        if ( ! $this->acdc_survey_est_fin_de_parcours( $training_session ) ) {
+          continue;
+        }
         if ( empty( $training_session->id ) || $this->has_existing_hot_survey_automated_session( (int) $survey->id, (int) $training_session->id ) ) {
           continue;
         }
@@ -8923,12 +9138,13 @@ private function maybe_auto_create_questionnaire_actions_from_response( $session
   }
 
   private function has_existing_cold_survey_automated_session( $survey_id, $training_session_id ) {
+    /* ACDC 3.25.326 — Le doublon se juge sur le PARCOURS, pas sur la séance. */
     global $wpdb;
-    if ( empty( $this->questionnaire_session_table ) ) {
+    $seance = $wpdb->get_row( $wpdb->prepare( "SELECT * FROM {$this->session_table} WHERE id = %d", absint( $training_session_id ) ) );
+    if ( ! $seance ) {
       return false;
     }
-    $found = $wpdb->get_var( $wpdb->prepare( "SELECT id FROM {$this->questionnaire_session_table} WHERE source_type = %s AND source_id = %d AND seance_id = %d LIMIT 1", 'cold_survey', absint( $survey_id ), absint( $training_session_id ) ) );
-    return ! empty( $found );
+    return $this->acdc_survey_parcours_deja_programme( 'cold_survey', $survey_id, $seance );
   }
 
   private function create_cold_survey_automated_session( $survey, $training_session, $survey_settings, $scheduled_at ) {
@@ -9027,6 +9243,12 @@ private function maybe_auto_create_questionnaire_actions_from_response( $session
         continue;
       }
       foreach ( (array) $training_sessions as $training_session ) {
+        /* ACDC 3.25.326 — Seule la séance qui CLÔT le parcours porte l'enquête.
+           Les journées intermédiaires en fabriquaient chacune une : deux jours de
+           formation, deux enquêtes, la première partie le soir du premier jour. */
+        if ( ! $this->acdc_survey_est_fin_de_parcours( $training_session ) ) {
+          continue;
+        }
         if ( empty( $training_session->id ) || $this->has_existing_cold_survey_automated_session( (int) $survey->id, (int) $training_session->id ) ) {
           continue;
         }
@@ -9129,21 +9351,33 @@ private function maybe_auto_create_questionnaire_actions_from_response( $session
   }
 
   private function has_existing_trainer_survey_automated_session( $survey_id, $training_session_id ) {
+    /* ACDC 3.25.326 — Le doublon se juge sur le PARCOURS, pas sur la séance. */
     global $wpdb;
-    if ( empty( $this->questionnaire_session_table ) ) { return false; }
-    return ! empty( $wpdb->get_var( $wpdb->prepare( "SELECT id FROM {$this->questionnaire_session_table} WHERE source_type = %s AND source_id = %d AND seance_id = %d LIMIT 1", 'trainer_survey', absint( $survey_id ), absint( $training_session_id ) ) ) );
+    $seance = $wpdb->get_row( $wpdb->prepare( "SELECT * FROM {$this->session_table} WHERE id = %d", absint( $training_session_id ) ) );
+    if ( ! $seance ) {
+      return false;
+    }
+    return $this->acdc_survey_parcours_deja_programme( 'trainer_survey', $survey_id, $seance );
   }
 
   private function has_existing_company_survey_automated_session( $survey_id, $training_session_id ) {
+    /* ACDC 3.25.326 — Le doublon se juge sur le PARCOURS, pas sur la séance. */
     global $wpdb;
-    if ( empty( $this->questionnaire_session_table ) ) { return false; }
-    return ! empty( $wpdb->get_var( $wpdb->prepare( "SELECT id FROM {$this->questionnaire_session_table} WHERE source_type = %s AND source_id = %d AND seance_id = %d LIMIT 1", 'company_survey', absint( $survey_id ), absint( $training_session_id ) ) ) );
+    $seance = $wpdb->get_row( $wpdb->prepare( "SELECT * FROM {$this->session_table} WHERE id = %d", absint( $training_session_id ) ) );
+    if ( ! $seance ) {
+      return false;
+    }
+    return $this->acdc_survey_parcours_deja_programme( 'company_survey', $survey_id, $seance );
   }
 
   private function has_existing_funder_survey_automated_session( $survey_id, $training_session_id ) {
+    /* ACDC 3.25.326 — Le doublon se juge sur le PARCOURS, pas sur la séance. */
     global $wpdb;
-    if ( empty( $this->questionnaire_session_table ) ) { return false; }
-    return ! empty( $wpdb->get_var( $wpdb->prepare( "SELECT id FROM {$this->questionnaire_session_table} WHERE source_type = %s AND source_id = %d AND seance_id = %d LIMIT 1", 'funder_survey', absint( $survey_id ), absint( $training_session_id ) ) ) );
+    $seance = $wpdb->get_row( $wpdb->prepare( "SELECT * FROM {$this->session_table} WHERE id = %d", absint( $training_session_id ) ) );
+    if ( ! $seance ) {
+      return false;
+    }
+    return $this->acdc_survey_parcours_deja_programme( 'funder_survey', $survey_id, $seance );
   }
 
   /**
@@ -9435,6 +9669,12 @@ private function maybe_auto_create_questionnaire_actions_from_response( $session
       if ( ! in_array( $trigger_mode, array( 'automatic', 'manual_auto' ), true ) ) { continue; }
       if ( isset( $survey_settings['is_active'] ) && '0' === (string) $survey_settings['is_active'] ) { continue; }
       foreach ( (array) $training_sessions as $ts ) {
+        /* ACDC 3.25.326 — Seule la séance qui CLÔT le parcours porte l'enquête.
+           Les journées intermédiaires en fabriquaient chacune une : deux jours de
+           formation, deux enquêtes, la première partie le soir du premier jour. */
+        if ( ! $this->acdc_survey_est_fin_de_parcours( $ts ) ) {
+          continue;
+        }
         if ( empty( $ts->id ) || $this->has_existing_trainer_survey_automated_session( (int) $survey->id, (int) $ts->id ) ) { continue; }
         if ( $this->acdc_survey_exists_for_formation( 'trainer_survey', (int) $survey->id, $ts ) ) { continue; }
         $scheduled_at = $this->compute_trainer_survey_automation_trigger_at( $ts, $survey_settings );
@@ -9458,6 +9698,12 @@ private function maybe_auto_create_questionnaire_actions_from_response( $session
       if ( ! in_array( $trigger_mode, array( 'automatic', 'manual_auto' ), true ) ) { continue; }
       if ( isset( $survey_settings['is_active'] ) && '0' === (string) $survey_settings['is_active'] ) { continue; }
       foreach ( (array) $training_sessions as $ts ) {
+        /* ACDC 3.25.326 — Seule la séance qui CLÔT le parcours porte l'enquête.
+           Les journées intermédiaires en fabriquaient chacune une : deux jours de
+           formation, deux enquêtes, la première partie le soir du premier jour. */
+        if ( ! $this->acdc_survey_est_fin_de_parcours( $ts ) ) {
+          continue;
+        }
         if ( empty( $ts->id ) || $this->has_existing_company_survey_automated_session( (int) $survey->id, (int) $ts->id ) ) { continue; }
         if ( $this->acdc_survey_exists_for_formation( 'company_survey', (int) $survey->id, $ts ) ) { continue; }
         $scheduled_at = $this->compute_company_survey_automation_trigger_at( $ts, $survey_settings );
@@ -9481,6 +9727,12 @@ private function maybe_auto_create_questionnaire_actions_from_response( $session
       if ( ! in_array( $trigger_mode, array( 'automatic', 'manual_auto' ), true ) ) { continue; }
       if ( isset( $survey_settings['is_active'] ) && '0' === (string) $survey_settings['is_active'] ) { continue; }
       foreach ( (array) $training_sessions as $ts ) {
+        /* ACDC 3.25.326 — Seule la séance qui CLÔT le parcours porte l'enquête.
+           Les journées intermédiaires en fabriquaient chacune une : deux jours de
+           formation, deux enquêtes, la première partie le soir du premier jour. */
+        if ( ! $this->acdc_survey_est_fin_de_parcours( $ts ) ) {
+          continue;
+        }
         if ( empty( $ts->id ) || $this->has_existing_funder_survey_automated_session( (int) $survey->id, (int) $ts->id ) ) { continue; }
         if ( $this->acdc_survey_exists_for_formation( 'funder_survey', (int) $survey->id, $ts ) ) { continue; }
         $scheduled_at = $this->compute_funder_survey_automation_trigger_at( $ts, $survey_settings );
@@ -9665,6 +9917,79 @@ private function maybe_auto_create_questionnaire_actions_from_response( $session
    * pourquoi. Même principe que « sans destinataire » posé en 3.25.302 — un
    * dossier qu'on peut vérifier plutôt qu'un dossier faussement rassurant.
    */
+  /**
+   * ACDC 3.25.326 — LE DOUBLON DÉJÀ EN FILE NE PART PAS.
+   *
+   * La correction du jour empêche de FABRIQUER deux enquêtes pour un même
+   * parcours. Elle ne défait pas celles qui existent déjà : le 18 août, deux
+   * enquêtes à chaud ont été créées pour la formation des 18 et 19, la première
+   * est partie le soir même, la seconde attend son tour. Sans ce contrôle, elle
+   * partirait quand même — et c'est précisément le second message identique aux
+   * mêmes adresses qui fait basculer l'ensemble en indésirables.
+   *
+   * On regarde donc, juste avant d'envoyer, si une enquête du même type a déjà
+   * été expédiée pour une séance du même parcours. Si oui, celle-ci n'est ni
+   * envoyée ni perdue : elle prend un statut visible, avec son motif.
+   *
+   * @return bool Vrai si l'envoi doit être abandonné.
+   */
+  private function acdc_enquete_doublon_de_parcours( $session ) {
+    global $wpdb;
+
+    $types = array( 'mid_survey', 'hot_survey', 'cold_survey', 'trainer_survey', 'company_survey', 'funder_survey' );
+    if ( empty( $session->seance_id ) || ! in_array( (string) $session->source_type, $types, true ) ) {
+      return false;
+    }
+    $seance = $wpdb->get_row( $wpdb->prepare( "SELECT * FROM {$this->session_table} WHERE id = %d", (int) $session->seance_id ) );
+    if ( ! $seance ) {
+      return false;
+    }
+    $ids = $this->acdc_survey_ids_du_parcours( $seance );
+    if ( count( $ids ) < 2 ) {
+      return false;
+    }
+    $marques = implode( ',', array_fill( 0, count( $ids ), '%d' ) );
+    $valeurs = array_merge(
+      array( (string) $session->source_type, (int) $session->source_id, (int) $session->id ),
+      $ids
+    );
+    // phpcs:ignore WordPress.DB.PreparedSQLPlaceholders.UnfinishedPrepare
+    $deja = $wpdb->get_row( $wpdb->prepare(
+      "SELECT id, dispatch_sent_at FROM {$this->questionnaire_session_table}
+        WHERE source_type = %s AND source_id = %d AND id <> %d
+          AND seance_id IN ({$marques})
+          AND dispatch_sent_at IS NOT NULL
+        ORDER BY dispatch_sent_at ASC LIMIT 1",
+      $valeurs
+    ) );
+    if ( ! $deja ) {
+      return false;
+    }
+
+    $settings = $this->get_questionnaire_session_settings_array( $session );
+    $settings['dispatch_motif'] = sprintf(
+      'Une enquête du même type est déjà partie pour ce parcours le %s (envoi n°%d). Un second message identique aux mêmes destinataires n’ajoute rien et fait basculer les précédents en indésirables.',
+      mysql2date( 'd/m/Y à H\hi', (string) $deja->dispatch_sent_at ),
+      (int) $deja->id
+    );
+    $wpdb->update(
+      $this->questionnaire_session_table,
+      array(
+        'status'                => 'doublon_parcours',
+        'session_settings_json' => wp_json_encode( $settings ),
+        'updated_at'            => $this->now_mysql(),
+      ),
+      array( 'id' => (int) $session->id ),
+      array( '%s', '%s', '%s' ),
+      array( '%d' )
+    );
+    $this->log_action_event( 'enquete_doublon_parcours', 'questionnaire_session', (int) $session->id, 'warning', array(
+      'type'      => (string) $session->source_type,
+      'deja_envoyee' => (int) $deja->id,
+    ) );
+    return true;
+  }
+
   private function acdc_marquer_enquete_tardive( $session, $retard_max_jours ) {
     global $wpdb;
     $settings = $this->get_questionnaire_session_settings_array( $session );
@@ -9734,6 +10059,10 @@ private function maybe_auto_create_questionnaire_actions_from_response( $session
          envoi qu'on subit. */
       if ( $this->acdc_enquete_trop_tardive( $session, $retard_max_jours ) ) {
         $this->acdc_marquer_enquete_tardive( $session, $retard_max_jours );
+        continue;
+      }
+      /* ACDC 3.25.326 — Une enquête déjà partie pour ce parcours suffit. */
+      if ( $this->acdc_enquete_doublon_de_parcours( $session ) ) {
         continue;
       }
       $source = $this->get_questionnaire_source_data( $session->source_type, $session->source_id );
@@ -9921,17 +10250,7 @@ private function maybe_auto_create_questionnaire_actions_from_response( $session
           }
           if ( $email ) {
             $__servis[] = strtolower( trim( (string) $email ) );
-            $settings_mail = $this->get_questionnaire_mail_settings();
-            $sender_name = sanitize_text_field( (string) ( $settings_mail['sender_name'] ?? '' ) );
-            $sender_email = sanitize_email( (string) ( $settings_mail['sender_email'] ?? '' ) );
-            $reply_to = sanitize_email( ! empty( $settings_mail['reply_to'] ) ? (string) $settings_mail['reply_to'] : $sender_email );
-            $headers = array( 'Content-Type: text/html; charset=UTF-8' );
-            if ( $sender_email ) {
-              $headers[] = 'From: ' . ( $sender_name ? $sender_name . ' <' . $sender_email . '>' : $sender_email );
-            }
-            if ( $reply_to ) {
-              $headers[] = 'Reply-To: ' . $reply_to;
-            }
+            /* ACDC 3.25.326 — En-têtes morts retirés : voir send_questionnaire_session_emails(). */
             $url = add_query_arg(
               array(
                 'token' => rawurlencode( (string) $session->public_token ),
@@ -9939,8 +10258,7 @@ private function maybe_auto_create_questionnaire_actions_from_response( $session
               ),
               $this->get_questionnaire_public_base_url()
             );
-            $body = '<p>Bonjour ' . esc_html( $this->get_questionnaire_session_participant_display_name( $participant ) ) . ',</p>';
-            $body .= '<p>Nous vous rappelons que le questionnaire <strong>' . esc_html( $session->session_title ) . '</strong> est toujours disponible.</p>';
+            $body = '<p>Nous vous rappelons que le questionnaire <strong>' . esc_html( $session->session_title ) . '</strong> est toujours disponible.</p>';
             $body .= '<p><a href="' . esc_url( $url ) . '">Répondre au questionnaire</a></p>';
             if ( $this->acdc_send_transactional_email( $email, $session->session_title . ' — rappel', array( 'greeting_name' => $this->get_questionnaire_session_participant_display_name( $participant ), 'intro_html' => '', 'body_html' => $body, 'footer_notice' => 'Cet e-mail a été envoyé dans le cadre du suivi de votre questionnaire. Vos données sont traitées conformément au RGPD.' ), array( 'source_module' => 'questionnaires', 'source_action' => 'questionnaire_reminder', 'email_category' => 'questionnaire', 'email_audience' => 'destinataire' ) ) ) {
               $wpdb->update(
