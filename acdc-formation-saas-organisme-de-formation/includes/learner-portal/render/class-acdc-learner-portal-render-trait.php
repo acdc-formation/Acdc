@@ -415,7 +415,10 @@ trait ACDC_Learner_Portal_Render_Trait {
                  avec un « & » à un permalien sans paramètre, il produisait une
                  adresse que WordPress ne savait pas résoudre. */
               $detail_url = $this->learner_portal_page_url( 'mes_quiz', array( 'qz_participant' => (int) $p->participant_id ) );
-              $has_pdf    = ! empty( $p->result_document_url );
+              /* ACDC 3.25.328 — Le PDF ne dépend plus d'une colonne que rien
+                 n'écrit : il se fabrique à la demande, à partir des mêmes
+                 données que l'écran. Il est donc TOUJOURS disponible. */
+              $pdf_url    = $this->acdc_learner_quiz_result_pdf_url( (int) $p->participant_id );
             ?>
               <tr>
                 <td><strong><?php echo esc_html( $p->quiz_title ); ?></strong></td>
@@ -425,10 +428,8 @@ trait ACDC_Learner_Portal_Render_Trait {
                 <td><?php echo $result_label; ?></td>
                 <td>
                   <a href="<?php echo esc_url( $detail_url ); ?>">Voir le détail</a>
-                  <?php if ( $has_pdf ) : ?>
-                    &nbsp;·&nbsp;
-                    <a href="<?php echo esc_url( (string) $p->result_document_url ); ?>" target="_blank" rel="noopener">PDF</a>
-                  <?php endif; ?>
+                  &nbsp;·&nbsp;
+                  <a href="<?php echo esc_url( $pdf_url ); ?>">PDF</a>
                 </td>
               </tr>
             <?php endforeach; ?>
@@ -484,7 +485,7 @@ trait ACDC_Learner_Portal_Render_Trait {
     $score_pct      = null !== $p->total_score_percentage
       ? number_format( (float) $p->total_score_percentage, 1, ',', ' ' ) . ' %'
       : null;
-    $has_pdf        = ! empty( $p->result_document_url );
+    $pdf_url        = $this->acdc_learner_quiz_result_pdf_url( (int) $p->id );
     $back_url       = $this->learner_portal_page_url( 'mes_quiz' );
 
     // Statut résultat
@@ -519,15 +520,11 @@ trait ACDC_Learner_Portal_Render_Trait {
           <?php echo esc_html( $this->learner_portal_format_date( $p->completed_at, true ) ); ?>
         <?php endif; ?>
       </p>
-      <?php if ( $has_pdf ) : ?>
-        <div style="margin-top:12px;">
-          <a class="acdc-button acdc-button-primary"
-             href="<?php echo esc_url( (string) $p->result_document_url ); ?>"
-             download target="_blank">
-            📄 Télécharger mes résultats (PDF)
-          </a>
-        </div>
-      <?php endif; ?>
+      <div style="margin-top:12px;">
+        <a class="acdc-button acdc-button-primary" href="<?php echo esc_url( $pdf_url ); ?>">
+          📄 Télécharger mes résultats (PDF)
+        </a>
+      </div>
     </header>
 
     <!-- Détail question par question -->
@@ -620,15 +617,11 @@ trait ACDC_Learner_Portal_Render_Trait {
     <?php endif; ?>
 
     <!-- Bouton PDF en pied de page -->
-    <?php if ( $has_pdf ) : ?>
-      <div style="padding:0 0 24px;">
-        <a class="acdc-button acdc-button-primary"
-           href="<?php echo esc_url( (string) $p->result_document_url ); ?>"
-           download target="_blank">
-          📄 Télécharger mes résultats (PDF)
-        </a>
-      </div>
-    <?php endif; ?>
+    <div style="padding:0 0 24px;">
+      <a class="acdc-button acdc-button-primary" href="<?php echo esc_url( $pdf_url ); ?>">
+        📄 Télécharger mes résultats (PDF)
+      </a>
+    </div>
     <?php
   }
 

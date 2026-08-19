@@ -694,6 +694,15 @@ trait ACDC_Learner_Portal_Core_Trait {
        apprenant depuis la 3.21.06 ; celle des quiz À FAIRE, non. Deux écrans
        voisins, deux définitions de « ses quiz ». Il n'y en a plus qu'une. */
     $learner_table = $wpdb->prefix . 'acdc_of_learners';
+    /* ACDC 3.25.328 — L'ADRESSE N'EST PLUS LE SEUL CHEMIN.
+       Un participant rattaché à un apprenant en salle porte « learner_id » et
+       rien d'autre : ni adresse sur sa ligne, ni garantie que la fiche
+       apprenant en ait une, ni qu'elle soit la même que celle du compte. Le
+       19 août, trois évaluations des acquis rattachées à la main ne sont
+       pourtant remontées dans aucun extranet. On accepte donc les deux
+       chemins : l'identifiant d'apprenant du compte, ET l'adresse. */
+    $ids_app = $this->learner_portal_learner_ids( $this->learner_portal_get_account_by_email( $email ) );
+    $ou_app  = empty( $ids_app ) ? '' : ' OR p.learner_id IN (' . implode( ',', array_map( 'absint', $ids_app ) ) . ')';
     return (array) $wpdb->get_results( $wpdb->prepare(
       "SELECT p.id AS participant_id, p.status AS participant_status,
               p.secure_token, p.token_expires_at, p.invited_at,
@@ -705,7 +714,7 @@ trait ACDC_Learner_Portal_Core_Trait {
        INNER JOIN {$tbl_s} s ON s.id = p.session_id
        INNER JOIN {$tbl_q} q ON q.id = s.quiz_id
        LEFT  JOIN {$learner_table} l ON l.id = p.learner_id
-       WHERE ( p.email = %s OR l.email = %s )
+       WHERE ( p.email = %s OR l.email = %s {$ou_app} )
          AND p.status IN ('pending','invited','opened','started','partial')
          AND ( p.token_expires_at IS NULL OR p.token_expires_at > NOW() )
          AND p.is_anonymized = 0
@@ -744,6 +753,254 @@ trait ACDC_Learner_Portal_Core_Trait {
     return trim( trim( (string) ( $learner->first_name ?? '' ) ) . ' ' . $last );
   }
 
+  /**
+   * ACDC 3.25.328 — LE PDF DE RÉSULTAT, FABRIQUÉ À LA DEMANDE.
+   *
+   * L'extranet portait déjà, à trois endroits, un bouton « Télécharger mes
+   * résultats (PDF) » conditionné à une colonne « result_document_url » que
+   * RIEN dans le plugin n'écrit — et qu'aucune migration ne crée. Le bouton
+   * n'est donc jamais apparu à personne. Encore un écran qui lit une donnée que
+   * personne ne produit.
+   *
+   * Plutôt que d'inventer un stockage, on fabrique la pièce quand elle est
+   * demandée, à partir des MÊMES données que l'écran : ce qui est affiché est
+   * ce qui est imprimé, et il n'y a pas deux vérités à maintenir.
+   *
+   * @param object $p Le participant, tel que get_learner_quiz_participant() le rend.
+   * @return string Le HTML du document.
+   */
+  private function acdc_learner_quiz_result_pdf_html( $p ) {
+    $purpose_labels = array(
+      'live'        => 'Quiz live',
+      'positioning' => 'Test de positionnement',
+      'diagnostic'  => 'Évaluation diagnostique',
+      'assessment'  => 'Évaluation des acquis',
+      'poll'        => 'Sondage',
+    );
+
+    $questions = $this->get_qz_questions_for_quiz( (int) $p->quiz_id );
+    $reponses  = $this->get_qz_answers_by_participant( (int) $p->id );
+
+    $classes_badge = array(
+      'correct' => 'b-ok',
+      'partial' => 'b-part',
+      'wrong'   => 'b-ko',
+      'pending' => 'b-att',
+    );
+
+    $questions_data = array();
+    foreach ( (array) $questions as $q ) {
+      $a       = isset( $reponses[ (int) $q->id ] ) ? $reponses[ (int) $q->id ] : null;
+      $is_open = defined( 'static::ACDC_OF_QZ_QTYPE_OPEN_TEXT' ) ? ( static::ACDC_OF_QZ_QTYPE_OPEN_TEXT === $q->type ) : ( 'open_text' === $q->type );
+      $is_poll = 'poll' === $q->type;
+
+      $badge_label = '';
+      $badge_class = '';
+      if ( ! $is_poll && $a && null !== $a->is_correct ) {
+        $verdict     = $this->qz_answer_verdict( $a->is_correct, isset( $a->score_ratio ) ? $a->score_ratio : null );
+        $badge_label = (string) $verdict['label'];
+        $badge_class = isset( $classes_badge[ $verdict['state'] ] ) ? $classes_badge[ $verdict['state'] ] : 'b-att';
+      } elseif ( $is_open && $a ) {
+        $badge_label = 'En cours de correction';
+        $badge_class = 'b-att';
+      }
+
+      $choisis = array();
+      if ( $a && ! empty( $a->answer_ids_json ) ) {
+        $decode = json_decode( (string) $a->answer_ids_json, true );
+        if ( is_array( $decode ) ) {
+          $choisis = array_map( 'intval', $decode );
+        }
+      }
+
+      $options = array();
+      if ( ! $is_open ) {
+        foreach ( (array) $this->get_qz_answers_for_question_public( (int) $q->id ) as $opt ) {
+          $coche = in_array( (int) $opt->id, $choisis, true );
+          $juste = ! $is_poll && 1 === (int) $opt->is_correct;
+          if ( ! $coche && ! $juste ) {
+            continue;
+          }
+          /* On n'imprime que ce qui APPREND quelque chose : ce que la personne a
+             coché, et ce qu'il fallait cocher. La liste complète des
+             distracteurs ferait trois pages sans rien démontrer. */
+          if ( $is_poll ) {
+            $marque = '—';
+            $classe = 'q-neutre';
+          } elseif ( $coche && $juste ) {
+            $marque = '✔ Votre réponse — juste';
+            $classe = 'q-ok';
+          } elseif ( $coche ) {
+            $marque = '✘ Votre réponse';
+            $classe = 'q-ko';
+          } else {
+            $marque = '➜ Réponse attendue';
+            $classe = 'q-ok';
+          }
+          $options[] = array(
+            'texte'  => (string) $opt->text,
+            'marque' => $marque,
+            'classe' => $classe,
+          );
+        }
+      }
+
+      $questions_data[] = array(
+        'title'         => (string) $q->title,
+        'badge_label'   => $badge_label,
+        'badge_class'   => $badge_class,
+        'reponse_libre' => ( $is_open && $a ) ? (string) $a->answer_text : '',
+        'options'       => $options,
+      );
+    }
+
+    $verdict_label = '';
+    $verdict_class = '';
+    if ( null !== $p->is_passed ) {
+      $verdict_label = 1 === (int) $p->is_passed ? 'Réussi' : 'Non réussi';
+      $verdict_class = 1 === (int) $p->is_passed ? 'b-ok' : 'b-ko';
+    }
+
+    $identite = $this->acdc_org_identity();
+    $logo_url = '';
+    if ( method_exists( $this, 'acdc_get_transactional_email_branding' ) ) {
+      $marque   = $this->acdc_get_transactional_email_branding();
+      $logo_url = ! empty( $marque['logo_url'] ) ? (string) $marque['logo_url'] : '';
+    }
+
+    $nom_apprenant = trim( (string) ( $p->learner_full_name ?? '' ) );
+    if ( '' === $nom_apprenant ) {
+      $nom_apprenant = trim( (string) ( $p->full_name ?? '' ) );
+    }
+    if ( '' === $nom_apprenant ) {
+      $nom_apprenant = trim( (string) ( $p->nickname ?? '' ) );
+    }
+
+    $data = array(
+      'logo_url'        => $logo_url,
+      'org_name'        => $identite['raison_sociale'],
+      'org_sub'         => '',
+      'org_addr'        => \ACDC\Support\OrgIdentity::addressLines( $identite ),
+      'org_siret'       => $identite['siret'],
+      'org_nda'         => $identite['nda'],
+      'org_email'       => $identite['email'],
+      'org_tel'         => $identite['telephone'],
+      'org_web'         => \ACDC\Support\OrgIdentity::siteAffiche( $identite ),
+      'titre_document'  => 'Résultat — ' . (string) $p->quiz_title,
+      'learner_name'    => $nom_apprenant,
+      'formation_title' => (string) ( $p->formation_title ?? '' ),
+      'purpose_label'   => isset( $purpose_labels[ $p->quiz_purpose ] ) ? $purpose_labels[ $p->quiz_purpose ] : ucfirst( (string) $p->quiz_purpose ),
+      'completed_at'    => ! empty( $p->completed_at ) ? mysql2date( 'd/m/Y à H\hi', $p->completed_at ) : '',
+      'score_label'     => null !== $p->total_score_percentage ? number_format( (float) $p->total_score_percentage, 1, ',', ' ' ) . ' %' : '',
+      'verdict_label'   => $verdict_label,
+      'verdict_class'   => $verdict_class,
+      'seuil_label'     => ! empty( $p->passing_score ) ? ( (float) $p->passing_score ) . ' %' : '',
+      'edite_le'        => date_i18n( 'd/m/Y à H\hi' ),
+      'questions'       => $questions_data,
+    );
+
+    $template = dirname( dirname( dirname( plugin_dir_path( __FILE__ ) ) ) ) . '/includes/pdf-templates/resultat-quiz.php';
+    if ( ! file_exists( $template ) ) {
+      return '<html><body>Gabarit du résultat introuvable.</body></html>';
+    }
+    ob_start();
+    include $template;
+    return ob_get_clean();
+  }
+
+  /**
+   * L'adresse de téléchargement du résultat, pour l'apprenant connecté.
+   */
+  private function acdc_learner_quiz_result_pdf_url( $participant_id ) {
+    return wp_nonce_url(
+      admin_url( 'admin-post.php?action=acdc_learner_download_quiz_result&participant_id=' . (int) $participant_id ),
+      'acdc_learner_download_quiz_result_' . (int) $participant_id
+    );
+  }
+
+  /**
+   * Téléchargement du résultat par l'apprenant lui-même.
+   *
+   * Le compte de portail n'est pas un compte WordPress : l'action est donc
+   * ouverte aux visiteurs non connectés à WordPress, et c'est la session du
+   * portail qui fait autorité — exactement comme pour les documents de séance.
+   */
+  public function handle_learner_download_quiz_result() {
+    $account        = $this->learner_portal_require_auth();
+    $participant_id = isset( $_GET['participant_id'] ) ? absint( wp_unslash( $_GET['participant_id'] ) ) : 0;
+
+    if ( ! isset( $_GET['_wpnonce'] ) || ! wp_verify_nonce( sanitize_text_field( wp_unslash( $_GET['_wpnonce'] ) ), 'acdc_learner_download_quiz_result_' . $participant_id ) ) {
+      $this->learner_portal_redirect( 'mes_quiz', 'Jeton de téléchargement invalide.', 'error' );
+    }
+
+    /* La même porte que l'écran : un participant qui n'est pas le sien ne se
+       télécharge pas davantage qu'il ne s'affiche. */
+    $p = $this->get_learner_quiz_participant( $participant_id, $account->email );
+    if ( ! $p ) {
+      $this->learner_portal_redirect( 'mes_quiz', 'Résultat introuvable ou accès non autorisé.', 'error' );
+    }
+
+    $this->learner_portal_log_event( $account->id, 'quiz_result_downloaded', array(
+      'participant_id' => $participant_id,
+    ) );
+
+    $nom = \ACDC\Support\NomDocument::composer(
+      'resultat ' . (string) $p->quiz_title,
+      trim( (string) ( $p->learner_full_name ?? $p->full_name ?? $p->nickname ?? '' ) ),
+      ! empty( $p->completed_at ) ? mysql2date( 'd-m-Y', $p->completed_at ) : '',
+      'pdf'
+    );
+
+    /* ACDC 3.25.256 — Filet commun à toutes les fabrications de PDF : en cas
+       d'échec, le document part en version imprimable plutôt que de laisser un
+       écran blanc à l'apprenant. */
+    $html = $this->acdc_learner_quiz_result_pdf_html( $p );
+    try {
+      $this->render_html_pdf( $html, $nom, 'attachment' );
+    } catch ( \Throwable $e ) {
+      while ( ob_get_level() ) { ob_end_clean(); }
+      nocache_headers();
+      header( 'Content-Type: text/html; charset=UTF-8' );
+      echo '<div style="max-width:800px;margin:12px auto;padding:10px 14px;border:1px solid #e8c97a;background:#fff8e8;border-radius:6px;font-family:sans-serif;font-size:13px;color:#7a5c00;">Le PDF n\'a pas pu être fabriqué : voici la version imprimable. Utilisez « Imprimer » puis « Enregistrer au format PDF ».</div>' . $html; // phpcs:ignore WordPress.Security.EscapeOutput
+    }
+    exit;
+  }
+
+  /**
+   * ACDC 3.25.328 — LES APPRENANTS D'UN COMPTE, PAR IDENTIFIANT.
+   *
+   * Tout l'extranet retrouve ses données par l'ADRESSE E-MAIL du compte. C'est
+   * la clé la plus fragile qui soit : une fiche apprenant sans adresse, ou dont
+   * l'adresse a été corrigée après coup, cesse d'être reconnue — et l'écran se
+   * contente d'être vide, sans rien dire.
+   *
+   * Un compte de portail porte pourtant son apprenant : « primary_learner_id »,
+   * posé à la création. On s'en sert, et l'on garde l'adresse comme second
+   * chemin plutôt que comme seul chemin. Les deux réunis couvrent les deux
+   * façons d'arriver dans un quiz : invité par e-mail, ou rattaché en salle.
+   *
+   * @param object $account Le compte de portail.
+   * @return int[] Les identifiants d'apprenant de ce compte.
+   */
+  private function learner_portal_learner_ids( $account ) {
+    global $wpdb;
+
+    $ids = array();
+    if ( $account && ! empty( $account->primary_learner_id ) ) {
+      $ids[] = (int) $account->primary_learner_id;
+    }
+    $email = $account && ! empty( $account->email ) ? sanitize_email( (string) $account->email ) : '';
+    if ( '' !== $email ) {
+      foreach ( (array) $wpdb->get_col( $wpdb->prepare(
+        "SELECT id FROM {$this->learner_table} WHERE email = %s",
+        $email
+      ) ) as $id ) {
+        $ids[] = (int) $id;
+      }
+    }
+    return array_values( array_unique( array_filter( $ids ) ) );
+  }
+
   public function get_learner_completed_quizzes( $email ) {
     global $wpdb;
     $email = sanitize_email( $email );
@@ -763,6 +1020,15 @@ trait ACDC_Learner_Portal_Core_Trait {
 
     // Jointure via email direct OU via learner_id (couvre les participants live identifiés)
     $learner_table = $wpdb->prefix . 'acdc_of_learners';
+    /* ACDC 3.25.328 — L'ADRESSE N'EST PLUS LE SEUL CHEMIN.
+       Un participant rattaché à un apprenant en salle porte « learner_id » et
+       rien d'autre : ni adresse sur sa ligne, ni garantie que la fiche
+       apprenant en ait une, ni qu'elle soit la même que celle du compte. Le
+       19 août, trois évaluations des acquis rattachées à la main ne sont
+       pourtant remontées dans aucun extranet. On accepte donc les deux
+       chemins : l'identifiant d'apprenant du compte, ET l'adresse. */
+    $ids_app = $this->learner_portal_learner_ids( $this->learner_portal_get_account_by_email( $email ) );
+    $ou_app  = empty( $ids_app ) ? '' : ' OR p.learner_id IN (' . implode( ',', array_map( 'absint', $ids_app ) ) . ')';
     return $wpdb->get_results( $wpdb->prepare(
       "SELECT p.id AS participant_id, p.status AS participant_status,
               p.completed_at, p.total_score, p.total_score_percentage, p.is_passed,
@@ -773,7 +1039,7 @@ trait ACDC_Learner_Portal_Core_Trait {
        INNER JOIN {$tbl_s} s ON s.id = p.session_id
        INNER JOIN {$tbl_q} q ON q.id = s.quiz_id
        LEFT  JOIN {$learner_table} l ON l.id = p.learner_id
-       WHERE (p.email = %s OR l.email = %s)
+       WHERE (p.email = %s OR l.email = %s {$ou_app})
          AND p.status = 'completed'
          AND p.is_anonymized = 0
        ORDER BY p.completed_at DESC
@@ -805,19 +1071,39 @@ trait ACDC_Learner_Portal_Core_Trait {
       return null;
     }
     $learner_table  = $wpdb->prefix . 'acdc_of_learners';
+    /* ACDC 3.25.328 — L'ADRESSE N'EST PLUS LE SEUL CHEMIN.
+       Un participant rattaché à un apprenant en salle porte « learner_id » et
+       rien d'autre : ni adresse sur sa ligne, ni garantie que la fiche
+       apprenant en ait une, ni qu'elle soit la même que celle du compte. Le
+       19 août, trois évaluations des acquis rattachées à la main ne sont
+       pourtant remontées dans aucun extranet. On accepte donc les deux
+       chemins : l'identifiant d'apprenant du compte, ET l'adresse. */
+    $ids_app = $this->learner_portal_learner_ids( $this->learner_portal_get_account_by_email( $email ) );
+    $ou_app  = empty( $ids_app ) ? '' : ' OR p.learner_id IN (' . implode( ',', array_map( 'absint', $ids_app ) ) . ')';
     $has_result_col = $this->acdc_schema_has_column( $tbl_p, 'result_document_url' );
     $result_col_sql = $has_result_col ? 'p.result_document_url,' : "'' AS result_document_url,";
 
     return $wpdb->get_row( $wpdb->prepare(
+      /* ACDC 3.25.328 — « quiz_id » N'ÉTAIT PAS DANS LA SÉLECTION.
+         La vue détaillée appelle get_qz_questions_for_quiz( $p->quiz_id ) —
+         une colonne que cette requête ne rendait pas : la table des
+         participants ne la porte pas, et seul le TITRE du quiz était joint.
+         L'apprenant qui ouvrait « Voir le détail » lisait donc « Les questions
+         de ce quiz ne sont plus disponibles », quel que soit le quiz. On ajoute
+         aussi le nom de l'apprenant et le titre de la formation, dont le PDF a
+         besoin pour nommer qui a passé quoi. */
       "SELECT p.*, {$result_col_sql}
-              q.title AS quiz_title, q.quiz_purpose, q.pass_threshold AS passing_score,
-              s.id AS session_id_ref
+              q.id AS quiz_id, q.title AS quiz_title, q.quiz_purpose, q.pass_threshold AS passing_score,
+              s.id AS session_id_ref, s.formation_id,
+              f.title AS formation_title,
+              TRIM(CONCAT(COALESCE(l.first_name,''), ' ', COALESCE(NULLIF(l.usage_last_name,''), l.last_name, ''))) AS learner_full_name
        FROM {$tbl_p} p
        INNER JOIN {$tbl_s} s ON s.id = p.session_id
        INNER JOIN {$tbl_q} q ON q.id = s.quiz_id
+       LEFT  JOIN {$this->formation_table} f ON f.id = s.formation_id
        LEFT  JOIN {$learner_table} l ON l.id = p.learner_id
        WHERE p.id = %d
-         AND (p.email = %s OR l.email = %s)
+         AND (p.email = %s OR l.email = %s {$ou_app})
          AND p.is_anonymized = 0
        LIMIT 1",
       $participant_id, $email, $email

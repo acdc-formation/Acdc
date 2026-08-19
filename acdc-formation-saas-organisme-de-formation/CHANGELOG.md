@@ -4,6 +4,31 @@ Toutes les modifications notables de ce projet sont documentées ici.
 Format inspiré de [Keep a Changelog](https://keepachangelog.com/fr/1.1.0/).
 L'historique détaillé antérieur est archivé dans [`release-notes/`](release-notes/).
 
+## [3.25.328] — 2026-08-19
+
+### Corrigé — L'apprenant lit ses résultats, et peut les emporter
+
+**Les évaluations rattachées ne remontaient dans aucun extranet.** Tout le portail retrouve
+ses données par l'ADRESSE E-MAIL du compte ; or un participant rattaché en salle porte
+« learner_id » et rien d'autre — ni adresse recopiée sur sa ligne, ni garantie que la fiche
+apprenant en ait une, ni qu'elle soit celle du compte. L'écran restait vide, sans rien dire.
+Les trois listes de quiz reconnaissent maintenant l'apprenant par l'identifiant que porte son
+compte, l'adresse restant un second chemin plutôt que le seul.
+
+- **« Voir le détail » n'affichait aucune question.** La vue appelle
+  `get_qz_questions_for_quiz( $p->quiz_id )` — une colonne que la requête ne rendait pas : la
+  table des participants ne la porte pas, et seul le TITRE du quiz était joint. Quel que soit
+  le quiz, l'apprenant lisait « Les questions de ce quiz ne sont plus disponibles ».
+- **Le bouton PDF n'existait pour personne.** Il était conditionné à une colonne
+  `result_document_url` que rien n'écrit et qu'aucune migration ne crée : trois écrans la
+  testaient, aucun ne pouvait afficher le bouton. Le document se fabrique désormais à la
+  demande, à partir des mêmes données que l'écran — score, verdict, et chaque question avec la
+  réponse donnée et la réponse attendue — sous la charte commune des documents. Il est donc
+  toujours disponible.
+
+Vérifications : 91 balayages verts, dont `scan-resultats-apprenant.php` (16 règles), chaque
+règle éprouvée en sabotant la correction.
+
 ## [3.25.327] — 2026-08-19
 
 ### Corrigé — Un quiz se rattache toujours à quelqu'un

@@ -465,6 +465,12 @@ class ACDC_Formation_SAAS_Plugin {
     add_action( 'admin_post_nopriv_acdc_trainer_unlock_session_documents', array( $this, 'handle_trainer_unlock_session_documents' ) );
     add_action( 'admin_post_acdc_learner_download_session_document', array( $this, 'handle_learner_download_session_document' ) );
     add_action( 'admin_post_nopriv_acdc_learner_download_session_document', array( $this, 'handle_learner_download_session_document' ) );
+    /* ACDC 3.25.328 — Le résultat de quiz en PDF, pour l'apprenant lui-même.
+       Le compte de portail n'est pas un compte WordPress : l'action doit être
+       ouverte aux visiteurs non connectés, c'est la session du portail qui
+       fait autorité. */
+    add_action( 'admin_post_acdc_learner_download_quiz_result', array( $this, 'handle_learner_download_quiz_result' ) );
+    add_action( 'admin_post_nopriv_acdc_learner_download_quiz_result', array( $this, 'handle_learner_download_quiz_result' ) );
     add_action( 'admin_post_acdc_admin_download_session_document', array( $this, 'handle_admin_download_session_document' ) );
     add_action( 'admin_post_acdc_admin_delete_session_document', array( $this, 'handle_admin_delete_session_document' ) );
     /* ACDC 3.25.208 — L'avis de déblocage part par le cron, hors de la requête
