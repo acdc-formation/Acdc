@@ -425,7 +425,7 @@ trait ACDC_Quizzes_Engine_Trait {
         }
         $tbl_p = $this->get_qz_table( 'participants' );
         $participants = $wpdb->get_results( $wpdb->prepare(
-            "SELECT id, nickname, avatar, total_score, status FROM {$tbl_p}
+            "SELECT id, nickname, avatar, total_score, status, learner_id FROM {$tbl_p}
              WHERE session_id=%d AND status NOT IN ('cancelled')
              ORDER BY joined_at ASC",
             (int) $session->id
@@ -480,6 +480,12 @@ trait ACDC_Quizzes_Engine_Trait {
                     'score'           => (float) $p->total_score,
                     'status'          => (string) $p->status,
                     'tab_switch'      => isset( $tab_switch_map[ (int) $p->id ] ) ? (int) $tab_switch_map[ (int) $p->id ] : 0,
+                    /* ACDC 3.25.327 — Le formateur doit voir, DÈS LE SALON, qu'un
+                       joueur n'est rattaché à aucun apprenant. Le 19 août, les trois
+                       évaluations des acquis sont allées au bout avant que le défaut
+                       n'apparaisse — sur l'écran de résultats, quand il était trop
+                       tard pour le corriger. */
+                    'rattache'        => ! empty( $p->learner_id ),
                 );
             }, $participants ),
         );

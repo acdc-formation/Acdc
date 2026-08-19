@@ -128,9 +128,13 @@ $exiger(
 
 /* --- 5. UN PSEUDO SE RATTACHE, MAIS JAMAIS AU HASARD --- */
 $quiz_noyau = $lire( 'includes/quizzes/class-acdc-quizzes-core-trait.php' );
+/* ACDC 3.25.327 — La fonction reçoit désormais la LISTE des inscrits au lieu
+   de résoudre elle-même une séance : une partie lancée depuis l'extranet
+   formateur n'en porte aucune, et c'est ce qui a laissé les trois évaluations
+   du 19 août rattachées à personne. */
 $exiger(
-    (bool) preg_match( '/private function acdc_qz_apprenant_depuis_pseudo\(/', $quiz_noyau ),
-    'Le rapprochement d’un pseudo avec les apprenants de la séance a disparu : les résultats du quiz live redeviennent « non rattaché à un apprenant ».'
+    (bool) preg_match( '/private function acdc_qz_apprenant_depuis_pseudo_dans\(\s*\$inscrits/', $quiz_noyau ),
+    'Le rapprochement d’un pseudo avec les apprenants de la partie a disparu : les résultats du quiz live redeviennent « non rattaché à un apprenant ».'
 );
 $exiger(
     (bool) preg_match( '/1 === count\( \$trouves \)/', $quiz_noyau ),
@@ -138,7 +142,7 @@ $exiger(
 );
 $quiz_actions = $lire( 'includes/quizzes/class-acdc-quizzes-actions-trait.php' );
 $exiger(
-    (bool) preg_match( '/\$learner_id = \$this->acdc_qz_apprenant_depuis_pseudo\(/', $quiz_actions ),
+    (bool) preg_match( '/\$learner_id = \$this->acdc_qz_apprenant_depuis_pseudo_dans\(\s*\$inscrits/', $quiz_actions ),
     'Le rapprochement existe mais n’est plus appelé à l’entrée dans la partie.'
 );
 

@@ -303,9 +303,18 @@
             return;
         }
         ajax('acdc_of_qz_get_session_learners', {pin: pin}, function(j) {
+            /* ACDC 3.25.327 — LE REPLI EN INVITÉ NE DOIT PLUS ÊTRE MUET.
+               Quand la liste ne venait pas, l'écran affichait simplement le champ
+               « Pseudo », comme si c'était le fonctionnement normal. Personne ne
+               pouvait deviner que le rattachement au dossier venait de sauter :
+               le 19 août, trois évaluations des acquis sont allées au bout ainsi.
+               On le dit maintenant, à l'apprenant comme au formateur qui regarde
+               par-dessus son épaule. */
+            var noteEl = document.getElementById('acdc-qz-player-guest-note');
             if (!j.success) {
                 if (learnerPickEl) learnerPickEl.style.display = 'none';
                 if (nicknameWrapEl) { nicknameWrapEl.style.display = ''; }
+                if (noteEl) { noteEl.textContent = 'La liste des apprenants n’a pas pu être chargée : vous rejoindrez en invité, et vos réponses ne seront rattachées à aucun dossier.'; noteEl.style.display = ''; }
                 return;
             }
             var learners = j.data.learners || [];
@@ -313,8 +322,10 @@
                 // Pas d'apprenants → formulaire classique
                 if (learnerPickEl) learnerPickEl.style.display = 'none';
                 if (nicknameWrapEl) nicknameWrapEl.style.display = '';
+                if (noteEl) { noteEl.textContent = 'Aucun apprenant n’est rattaché à cette formation : vous rejoindrez en invité, et vos réponses ne seront rattachées à aucun dossier.'; noteEl.style.display = ''; }
                 return;
             }
+            if (noteEl) { noteEl.style.display = 'none'; }
             // Afficher les cartes apprenants
             var listEl = document.getElementById('acdc-qz-player-learner-list');
             listEl.innerHTML = '';

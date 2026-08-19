@@ -4,6 +4,35 @@ Toutes les modifications notables de ce projet sont documentées ici.
 Format inspiré de [Keep a Changelog](https://keepachangelog.com/fr/1.1.0/).
 L'historique détaillé antérieur est archivé dans [`release-notes/`](release-notes/).
 
+## [3.25.327] — 2026-08-19
+
+### Corrigé — Un quiz se rattache toujours à quelqu'un
+
+**Les trois évaluations des acquis du 19 août sont restées « non rattaché à un apprenant ».**
+Une évaluation des acquis qui ne se rattache à personne ne valide rien : c'est elle qui décide
+si les acquis le sont, et elle est opposable.
+
+L'écran où l'apprenant choisit son nom n'affichait la liste que si la partie portait une
+SÉANCE. Or le bouton « Lancer en live » de l'extranet formateur ne demande aucune séance et
+n'en transmet aucune : la liste était vide, personne ne pouvait se désigner, aucun identifiant
+n'était envoyé — et le contrôle d'appartenance, corrigé en 3.25.266 puis en 3.25.271, n'avait
+toujours rien à vérifier. Deux corrections sur la serrure, et la porte n'était pas montrée.
+
+Quatre couches, pour qu'aucune ne puisse échouer en silence :
+
+- **La liste descend à la formation** quand la partie ne porte pas de séance. Une seule porte
+  sert désormais les trois besoins : la liste proposée à l'apprenant, le contrôle de son choix,
+  et le rattrapage par le pseudo.
+- **Le lancement rattache la séance du jour** lorsqu'elle ne fait aucun doute — ce dont dépend
+  la traçabilité Qualiopi. À défaut, on ne devine pas.
+- **Le repli en invité s'annonce** : l'apprenant lit qu'il rejoindra sans rattachement, et le
+  formateur voit dans le salon, avant l'épreuve, quel joueur n'est rattaché à personne.
+- **Ce qui est passé sans rattachement se rattrape** : l'écran de résultats propose de
+  rattacher un participant à un apprenant de cette partie — jamais à l'annuaire entier.
+
+Vérifications : 90 balayages verts, dont `scan-rattachement-quiz.php` (16 règles), chaque règle
+éprouvée en sabotant la correction.
+
 ## [3.25.326] — 2026-08-19
 
 ### Corrigé — Une enquête par formation, pas par journée

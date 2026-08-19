@@ -215,7 +215,16 @@
             if (p.tab_switch > 0) tabSwitchIds[p.id] = p.tab_switch;
             var warn = tabSwitchIds[p.id] ? ' has-tab-switch' : '';
             var warnBadge = tabSwitchIds[p.id] ? ' <span class="acdc-qz-tab-switch-badge" title="Changements d\'onglet détectés">⚠️ ' + tabSwitchIds[p.id] + '</span>' : '';
-            html += '<li class="acdc-qz-host-participant' + warn + '" data-pid="' + p.id + '"><span>' + (p.avatar==='homme'?'👨':(p.avatar==='femme'?'👩':'🧑')) + '</span><span>' + esc(p.nickname) + '</span>' + warnBadge + '</li>';
+            /* ACDC 3.25.327 — Un joueur non rattaché se voit AVANT la partie.
+               Le 19 août, les trois évaluations des acquis sont allées au bout
+               et le défaut n'est apparu que sur l'écran de résultats, quand il
+               était trop tard : une évaluation qui ne se rattache à personne ne
+               valide aucun acquis. Le formateur peut maintenant demander à la
+               personne de se reconnecter en choisissant son nom. */
+            var libre = (p.rattache === false)
+                ? ' <span class="acdc-qz-unlinked-badge" title="Ce joueur n\'a pas choisi son nom : ses réponses n\'iront dans aucun dossier">⚠️ non rattaché</span>'
+                : '';
+            html += '<li class="acdc-qz-host-participant' + warn + '" data-pid="' + p.id + '"><span>' + (p.avatar==='homme'?'👨':(p.avatar==='femme'?'👩':'🧑')) + '</span><span>' + esc(p.nickname) + '</span>' + libre + warnBadge + '</li>';
         });
         ul.innerHTML = html;
     }

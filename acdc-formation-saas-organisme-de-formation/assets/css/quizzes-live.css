@@ -870,6 +870,25 @@ body.page-template-default:has(.acdc-qz-live-player) {
 .acdc-qz-host-participant.has-tab-switch::after {
     content: ' ⚠️'; font-size: 13px;
 }
+.acdc-qz-tab-switch-badge {
+    font-size: 11px; font-weight: 700; color: #b45309;
+    background: #fef3c7; border-radius: 6px; padding: 1px 6px; white-space: nowrap;
+}
+/* ACDC 3.25.327 — Un joueur qui n'a pas choisi son nom : ses réponses n'iront
+   dans aucun dossier, et une évaluation des acquis rattachée à personne ne
+   valide rien. Le formateur le voit dans le salon, quand il peut encore lui
+   demander de se reconnecter — et non sur l'écran de résultats, trop tard. */
+/* ACDC 3.25.327 — L'avertissement de repli en invité, côté apprenant. */
+.acdc-qz-player-guest-note {
+    width: 100%; margin: 10px 0 0; padding: 10px 12px;
+    background: #fff4e5; border: 1px solid #f0c98a; border-radius: 8px;
+    font-size: 12.5px; line-height: 1.5; color: #8a5a12; text-align: center;
+}
+.acdc-qz-unlinked-badge {
+    font-size: 11px; font-weight: 700; color: #b45309;
+    background: #fff4e5; border: 1px solid #f0c98a; border-radius: 6px;
+    padding: 1px 6px; white-space: nowrap;
+}
 
 /* ACDC 3.25.168 — Consigne de saisie sous l'énoncé (« une seule » / « plusieurs »
    réponses). Elle n'existait qu'en pied d'écran, en gris et en petit corps : sur une

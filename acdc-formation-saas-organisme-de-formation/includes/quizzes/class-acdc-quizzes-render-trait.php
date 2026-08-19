@@ -1765,6 +1765,13 @@ trait ACDC_Quizzes_Render_Trait {
                             </p>
                         </div>
 
+                        <?php /* ACDC 3.25.327 — Le repli en invité s'annonce. Sans cette
+                                 ligne, l'apprenant ne voyait aucune différence entre
+                                 « je suis rattaché à mon dossier » et « je joue en
+                                 invité » : le 19 août, trois évaluations des acquis
+                                 sont allées au bout sans rattachement. */ ?>
+                        <p id="acdc-qz-player-guest-note" class="acdc-qz-player-guest-note" style="display:none;"></p>
+
                         <div id="acdc-qz-player-nickname-wrap" class="acdc-qz-player-join-fields" style="display:none;">
                             <label class="acdc-qz-player-field">
                                 <span class="acdc-qz-player-field-label">Pseudo</span>

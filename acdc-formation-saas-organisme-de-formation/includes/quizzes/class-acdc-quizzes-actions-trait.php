@@ -110,6 +110,8 @@ trait ACDC_Quizzes_Actions_Trait {
 
         /* Admin-post — Lancement et envoi (stubs) */
         add_action( 'admin_post_acdc_of_qz_launch_live',         array( $this, 'handle_acdc_of_qz_launch_live' ) );
+        /* ACDC 3.25.327 — Rattachement manuel d'un participant à un apprenant. */
+        add_action( 'admin_post_acdc_of_qz_attach_participant', array( $this, 'handle_acdc_of_qz_attach_participant' ) );
         add_action( 'admin_post_acdc_of_qz_send_async',          array( $this, 'handle_acdc_of_qz_send_async' ) );
         add_action( 'admin_post_acdc_of_qz_send_reminder',       array( $this, 'handle_acdc_of_qz_send_reminder' ) );
         add_action( 'admin_post_acdc_of_qz_cancel_session',      array( $this, 'handle_acdc_of_qz_cancel_session' ) );
@@ -1719,6 +1721,69 @@ trait ACDC_Quizzes_Actions_Trait {
         );
     }
     public function handle_acdc_of_qz_activate_version()    { $this->qz_stub_admin_post( 'activate_version' ); }
+    /**
+     * ACDC 3.25.327 — RATTACHER UN PARTICIPANT APRÈS COUP.
+     *
+     * Le 19 août, trois évaluations des acquis ont été passées jusqu'au bout
+     * sans qu'aucune ne se rattache à un apprenant : l'écran de choix du nom
+     * n'avait rien à proposer. Les réponses existent, les scores aussi — ce qui
+     * manque est le lien. Refaire passer l'épreuve à trois personnes pour un
+     * défaut d'affichage n'est pas une réparation acceptable.
+     *
+     * On rattache donc à la main, depuis l'écran de résultats, et seulement à un
+     * apprenant de CETTE partie : la même liste que celle proposée au joueur.
+     * Un identifiant arbitraire est refusé — sinon on offrirait un moyen commode
+     * de verser les réponses de n'importe qui dans n'importe quel dossier.
+     */
+    public function handle_acdc_of_qz_attach_participant() {
+        global $wpdb;
+
+        $participant_id = isset( $_POST['participant_id'] ) ? absint( wp_unslash( $_POST['participant_id'] ) ) : 0;
+        $learner_id     = isset( $_POST['learner_id'] ) ? absint( wp_unslash( $_POST['learner_id'] ) ) : 0;
+        $this->qz_check_admin_request( 'acdc_of_qz_attach_participant_' . $participant_id, '_wpnonce' );
+
+        $tbl_p = $this->get_qz_table( 'participants' );
+        $tbl_s = $this->get_qz_table( 'sessions' );
+        $participant = $participant_id ? $wpdb->get_row( $wpdb->prepare( "SELECT * FROM {$tbl_p} WHERE id = %d", $participant_id ) ) : null;
+        if ( ! $participant ) {
+            wp_die( esc_html__( 'Participant introuvable.', 'acdc-formation-saas' ) );
+        }
+        $session = $wpdb->get_row( $wpdb->prepare( "SELECT * FROM {$tbl_s} WHERE id = %d", (int) $participant->session_id ) );
+        if ( ! $session ) {
+            wp_die( esc_html__( 'Partie introuvable.', 'acdc-formation-saas' ) );
+        }
+
+        $ids_inscrits = array();
+        foreach ( (array) $this->acdc_qz_apprenants_de_la_partie( $session ) as $inscrit ) {
+            $ids_inscrits[] = (int) $inscrit->id;
+        }
+        if ( $learner_id <= 0 || ! in_array( $learner_id, $ids_inscrits, true ) ) {
+            wp_die( esc_html__( 'Cet apprenant ne fait pas partie de cette formation.', 'acdc-formation-saas' ) );
+        }
+
+        $wpdb->update(
+            $tbl_p,
+            array(
+                'learner_id'         => $learner_id,
+                'qualiopi_traceable' => 1,
+                'updated_at'         => current_time( 'mysql' ),
+            ),
+            array( 'id' => $participant_id ),
+            array( '%d', '%d', '%s' ),
+            array( '%d' )
+        );
+
+        if ( method_exists( $this, 'log_action_event' ) ) {
+            $this->log_action_event( 'qz_participant_rattache', 'qz_participant', $participant_id, 'success', array(
+                'learner_id' => $learner_id,
+                'session_id' => (int) $participant->session_id,
+            ) );
+        }
+
+        wp_safe_redirect( wp_get_referer() ? wp_get_referer() : admin_url() );
+        exit;
+    }
+
     public function handle_acdc_of_qz_launch_live() {
         if ( ! is_user_logged_in() ) {
             wp_die( 'Non connecté', 'Erreur', array( 'response' => 401 ) );
@@ -1734,6 +1799,30 @@ trait ACDC_Quizzes_Actions_Trait {
         $quiz_obj = $this->get_qz_quiz( $quiz_id );
         if ( $quiz_obj && ! empty( $quiz_obj->formation_id ) ) {
             $formation_id = (int) $quiz_obj->formation_id;
+        }
+        /* ACDC 3.25.327 — LA SÉANCE DU JOUR, QUAND ELLE NE FAIT AUCUN DOUTE.
+           Le bouton « Lancer en live » de l'extranet formateur ne demande pas de
+           séance et n'en transmettait aucune. La partie naissait donc sans
+           rattachement à une journée de formation — ce dont dépendent la
+           traçabilité Qualiopi et, jusqu'à aujourd'hui, la liste des apprenants
+           proposée à l'écran.
+           On rattache la séance de la formation qui a lieu AUJOURD'HUI. S'il n'y
+           en a pas, on ne devine pas : la liste des apprenants descend alors à
+           la formation, et le quiz reste rattachable. */
+        if ( $formation_session_id <= 0 && $formation_id > 0 ) {
+            global $wpdb;
+            $aujourdhui = current_time( 'Y-m-d' );
+            $formation_session_id = (int) $wpdb->get_var( $wpdb->prepare(
+                "SELECT id FROM {$this->session_table}
+                  WHERE formation_id = %d
+                    AND COALESCE(is_draft, 0) = 0
+                    AND COALESCE(status, '') NOT IN ('Annulée', 'Annulee', 'Brouillon')
+                    AND %s BETWEEN COALESCE(start_date, DATE(start_at)) AND COALESCE(end_date, end_date, DATE(COALESCE(end_at, start_at)), COALESCE(start_date, DATE(start_at)))
+                  ORDER BY COALESCE(start_at, CONCAT(start_date, ' 08:00:00')) ASC, id ASC
+                  LIMIT 1",
+                $formation_id,
+                $aujourdhui
+            ) );
         }
         $session_id = $this->create_qz_live_session( $quiz_id, get_current_user_id(), $formation_id, $formation_session_id );
         if ( is_wp_error( $session_id ) ) {
@@ -2739,7 +2828,7 @@ trait ACDC_Quizzes_Actions_Trait {
         }
         $tbl_s = $this->get_qz_table( 'sessions' );
         $session = $wpdb->get_row( $wpdb->prepare(
-            "SELECT id, formation_session_id FROM {$tbl_s}
+            "SELECT id, formation_id, formation_session_id FROM {$tbl_s}
              WHERE pin_code = %s AND delivery_mode = 'live' AND status IN ('lobby','in_progress') LIMIT 1",
             $pin
         ) );
@@ -2747,10 +2836,13 @@ trait ACDC_Quizzes_Actions_Trait {
             set_transient( $qz_rl_key, $qz_rl_cnt + 1, 10 * MINUTE_IN_SECONDS );
             wp_send_json_error( array( 'message' => 'PIN invalide ou partie terminée' ), 404 );
         }
-        // Pas de formation_session_id → pas d'apprenants identifiables
-        if ( empty( $session->formation_session_id ) ) {
-            wp_send_json_success( array( 'learners' => array() ) );
-        }
+        /* ACDC 3.25.327 — « Pas de séance, pas d'apprenants » : c'était la ligne
+           qui vidait la liste. Le bouton « Lancer en live » de l'extranet
+           formateur ne transmet aucune séance — donc, pour toutes les parties
+           lancées par ce chemin, l'apprenant n'avait aucun nom à choisir, et les
+           trois évaluations du 19 août sont restées rattachées à personne.
+           On descend désormais jusqu'à la FORMATION, que la partie porte
+           toujours. */
         /* ACDC 3.25.271 — J'AVAIS RÉPARÉ LA SERRURE, PAS LA SONNETTE.
          *
          * La 3.25.266 a corrigé le CONTRÔLE d'appartenance : quand un
@@ -2768,20 +2860,8 @@ trait ACDC_Quizzes_Actions_Trait {
          * demande pas d'adresse. Un quiz ne doit pas dépendre d'une donnée dont
          * il n'a pas besoin.
          */
-        $formation_session = method_exists( $this, 'get_session' )
-            ? $this->get_session( (int) $session->formation_session_id )
-            : null;
-        $learners = array();
-        if ( $formation_session && method_exists( $this, 'acdc_session_learners' ) ) {
-            foreach ( (array) $this->acdc_session_learners( $formation_session ) as $sl ) {
-                $learners[] = (object) array(
-                    'id'         => (int) $sl->id,
-                    'first_name' => (string) $sl->first_name,
-                    'last_name'  => (string) ( ! empty( $sl->usage_last_name ) ? $sl->usage_last_name : $sl->last_name ),
-                );
-            }
-        }
-        wp_send_json_success( array( 'learners' => $learners ) );
+        $learners = $this->acdc_qz_apprenants_de_la_partie( $session );
+        wp_send_json_success( array( 'learners' => array_values( $learners ) ) );
     }
 
         public function ajax_acdc_of_qz_player_join() {
@@ -2844,39 +2924,39 @@ trait ACDC_Quizzes_Actions_Trait {
          * direct, groupe, convention — comme partout ailleurs depuis la
          * 3.25.265.
          */
-        /* ACDC 3.25.325 — UN PSEUDO N'EST PAS UN ANONYMAT.
-           En salle, l'apprenant rejoint le quiz live avec le code PIN et un
-           pseudo : rien ne porte son identifiant. Le participant était donc
-           enregistré non rattaché, et le tableau des résultats affichait
-           « ⚠ non rattaché à un apprenant » sous des noms parfaitement lisibles
-           — « Bérengère », « Ilona », « Leandra ». Le formateur voit les
-           personnes, le plugin ne voit personne.
-           Ce n'est pas qu'un défaut d'affichage : un quiz rattaché à personne ne
-           remonte dans aucun dossier, ne paraît dans aucun extranet apprenant et
-           ne vaut rien comme preuve Qualiopi.
-           On rapproche donc le pseudo des apprenants de LA séance concernée —
-           une poignée de personnes, pas un annuaire. Le rattachement n'a lieu
-           que si UNE SEULE correspond : deux « Marie » dans la salle, et on
-           préfère ne rien affirmer plutôt que d'attribuer les réponses de l'une
-           au dossier de l'autre. */
-        if ( $learner_id <= 0 && ! empty( $session->formation_session_id ) ) {
-            $learner_id = $this->acdc_qz_apprenant_depuis_pseudo( (int) $session->formation_session_id, $nickname );
+        /* ACDC 3.25.327 — LE RATTACHEMENT SE JOUE ICI, ET IL NE DOIT PLUS
+           DÉPENDRE D'UNE SÉANCE.
+           Le contrôle d'appartenance ne s'exécutait que si la partie portait une
+           séance : lancée depuis l'extranet formateur, elle n'en porte pas, et
+           l'apprenant restait non rattaché quoi qu'il ait choisi. On interroge
+           la même porte que la liste proposée à l'écran — séance si elle existe,
+           formation sinon — pour que ce qui est proposé et ce qui est accepté
+           soient toujours la même chose. */
+        $inscrits = $this->acdc_qz_apprenants_de_la_partie( $session );
+        $ids_inscrits = array();
+        foreach ( (array) $inscrits as $inscrit ) {
+            $ids_inscrits[] = (int) $inscrit->id;
         }
+
+        /* ACDC 3.25.325 — UN PSEUDO N'EST PAS UN ANONYMAT.
+           En salle, l'apprenant rejoint avec le code PIN et un pseudo. S'il n'a
+           pas choisi son nom dans la liste, on rapproche ce pseudo des inscrits
+           de la partie — une poignée de personnes, pas un annuaire. Le
+           rattachement n'a lieu que si UNE SEULE correspond : deux « Marie »
+           dans la salle, et l'on préfère ne rien affirmer plutôt que de verser
+           les réponses de l'une au dossier de l'autre. */
+        if ( $learner_id <= 0 ) {
+            $learner_id = $this->acdc_qz_apprenant_depuis_pseudo_dans( $inscrits, $nickname );
+        }
+
+        /* Un identifiant qui n'est pas dans la liste ne prouve rien : il a pu
+           être forgé. On le refuse — mais seulement si l'on a bien une liste à
+           laquelle le comparer, sans quoi on écarterait un rattachement juste
+           faute de savoir le vérifier. */
         $is_traceable = 0;
-        if ( $learner_id > 0 && ! empty( $session->formation_session_id ) ) {
-            $formation_session = method_exists( $this, 'get_session' )
-                ? $this->get_session( (int) $session->formation_session_id )
-                : null;
-            $session_learner_ids = array();
-            if ( $formation_session && method_exists( $this, 'acdc_session_learners' ) ) {
-                foreach ( (array) $this->acdc_session_learners( $formation_session ) as $sl ) {
-                    if ( ! empty( $sl->id ) ) {
-                        $session_learner_ids[] = (int) $sl->id;
-                    }
-                }
-            }
-            if ( ! in_array( $learner_id, $session_learner_ids, true ) ) {
-                $learner_id = 0; // Apprenant non reconnu sur cette séance
+        if ( $learner_id > 0 ) {
+            if ( ! empty( $ids_inscrits ) && ! in_array( $learner_id, $ids_inscrits, true ) ) {
+                $learner_id = 0;
             } else {
                 $is_traceable = 1;
             }

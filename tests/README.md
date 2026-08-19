@@ -84,6 +84,7 @@ lancent sans WordPress, en quelques secondes.
     php tests/scan-proposition-financiere.php # le prix annoncé est celui qui sera facturé
     php tests/scan-podium-proportions.php # le podium à l'échelle de ceux qui montent dessus
     php tests/scan-enquete-par-parcours.php # une enquête par formation, pas par journée
+    php tests/scan-rattachement-quiz.php # un quiz se rattache toujours à quelqu'un
     php tests/scan-quiz-et-documents.php # chaque écran lit la source qui est réellement écrite
 
 Le dernier balaie tout le plugin et signale les fonctions qui utilisent `$wpdb`

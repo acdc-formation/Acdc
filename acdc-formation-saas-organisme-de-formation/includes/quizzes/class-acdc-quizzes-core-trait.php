@@ -6177,57 +6177,41 @@ trait ACDC_Quizzes_Core_Trait {
     }
 
     /**
-     * ACDC 3.25.325 — QUEL APPRENANT SE CACHE DERRIÈRE CE PSEUDO ?
+     * ACDC 3.25.327 — LE PSEUDO, RAPPROCHÉ DE LA LISTE DÉJÀ RÉSOLUE.
      *
-     * Le quiz live se rejoint avec un code PIN et un pseudo. Aucun identifiant
-     * ne circule : le participant restait non rattaché, et ses réponses
-     * n'atteignaient ni son dossier, ni son extranet, ni la preuve Qualiopi.
+     * Cette fonction recevait l'identifiant d'une SÉANCE et résolvait elle-même
+     * les apprenants. Elle ne servait donc à rien pour une partie lancée depuis
+     * l'extranet formateur, qui n'en porte pas — le cas exact du 19 août. Elle
+     * reçoit désormais la liste, résolue une seule fois par
+     * acdc_qz_apprenants_de_la_partie(), séance ou formation.
      *
-     * On compare donc le pseudo aux apprenants de LA séance — trois personnes,
-     * pas un annuaire — sur les formes qu'un adulte tape spontanément : son
-     * prénom, son nom, les deux dans un sens ou dans l'autre, « Prénom N. », ou
-     * le début de son adresse e-mail.
+     * On compare le pseudo aux formes qu'un adulte tape spontanément : son
+     * prénom, son nom, les deux dans un sens ou dans l'autre, « Prénom N. ».
      *
      * LA RÈGLE DE PRUDENCE. On ne rattache QUE si une seule personne correspond.
-     * Deux « Marie » dans la salle, et attribuer au hasard mettrait les réponses
-     * de l'une dans le dossier de l'autre — une erreur bien pire que l'absence
-     * de rattachement, et invisible.
      *
-     * @param int    $formation_session_id La séance de formation concernée.
-     * @param string $pseudo               Le pseudo saisi par le participant.
+     * @param array  $inscrits Les apprenants de la partie.
+     * @param string $pseudo   Le pseudo saisi.
      * @return int L'identifiant de l'apprenant, ou 0 si le doute subsiste.
      */
-    private function acdc_qz_apprenant_depuis_pseudo( $formation_session_id, $pseudo ) {
+    private function acdc_qz_apprenant_depuis_pseudo_dans( $inscrits, $pseudo ) {
         $cherche = $this->acdc_qz_pseudo_normalise( $pseudo );
-        if ( '' === $cherche || ! method_exists( $this, 'get_session' ) || ! method_exists( $this, 'acdc_session_learners' ) ) {
-            return 0;
-        }
-        $seance = $this->get_session( (int) $formation_session_id );
-        if ( ! $seance ) {
+        if ( '' === $cherche || empty( $inscrits ) ) {
             return 0;
         }
         $trouves = array();
-        foreach ( (array) $this->acdc_session_learners( $seance ) as $apprenant ) {
+        foreach ( (array) $inscrits as $apprenant ) {
             if ( empty( $apprenant->id ) ) {
                 continue;
             }
             $prenom = (string) ( $apprenant->first_name ?? '' );
-            $nom    = '' !== trim( (string) ( $apprenant->usage_last_name ?? '' ) )
-                ? (string) $apprenant->usage_last_name
-                : (string) ( $apprenant->last_name ?? '' );
-            $email  = (string) ( $apprenant->email ?? '' );
-            $avant_arobase = '';
-            if ( false !== strpos( $email, '@' ) ) {
-                $avant_arobase = substr( $email, 0, strpos( $email, '@' ) );
-            }
+            $nom    = (string) ( $apprenant->last_name ?? '' );
             $formes = array(
                 $prenom,
                 $nom,
                 $prenom . ' ' . $nom,
                 $nom . ' ' . $prenom,
                 $prenom . ' ' . substr( $nom, 0, 1 ),
-                $email,
-                $avant_arobase,
             );
             foreach ( $formes as $forme ) {
                 $forme = $this->acdc_qz_pseudo_normalise( $forme );
@@ -6288,5 +6272,96 @@ trait ACDC_Quizzes_Core_Trait {
            de notre graine. */
         mt_srand();
         return $liste;
+    }
+
+    /**
+     * ACDC 3.25.327 — QUI PEUT REJOINDRE CETTE PARTIE ?
+     *
+     * CE QUI EST ARRIVÉ LE 19 AOÛT. Le formateur lance l'évaluation des acquis
+     * depuis son extranet, les trois apprenantes rejoignent, répondent, le
+     * podium s'affiche — et les trois résultats portent « ⚠ non rattaché à un
+     * apprenant ». Une évaluation des acquis qui ne se rattache à personne ne
+     * vaut rien : c'est elle qui décide si les acquis sont validés.
+     *
+     * LA RACINE. L'écran qui propose à l'apprenant de choisir son nom
+     * n'affichait la liste que si la partie portait une SÉANCE. Or le bouton
+     * « Lancer en live » de l'extranet formateur ne demande pas de séance et
+     * n'en transmet aucune : la liste était donc vide, personne ne pouvait se
+     * désigner, aucun identifiant n'était envoyé — et le contrôle
+     * d'appartenance, corrigé en 3.25.266 puis en 3.25.271, n'avait toujours
+     * rien à vérifier. Trois corrections successives sur la serrure, et la
+     * porte n'était même pas montrée.
+     *
+     * CE QU'ON FAIT. À défaut de séance, on descend à la FORMATION — que la
+     * partie porte toujours. Le résolveur de formation réunit les apprenants
+     * par leurs DOSSIERS d'inscription et par les séances, ce qui rattrape les
+     * deux façons dont ils arrivent dans le plugin. Une seule porte, utilisée
+     * par les trois endroits qui en ont besoin : la liste proposée à
+     * l'apprenant, le contrôle de son choix, et le rapprochement par pseudo.
+     *
+     * @param object $qz_session La partie (table des sessions de quiz).
+     * @return array<object> id, first_name, last_name — jamais d'adresse e-mail.
+     */
+    private function acdc_qz_apprenants_de_la_partie( $qz_session ) {
+        global $wpdb;
+
+        if ( ! $qz_session ) {
+            return array();
+        }
+
+        /* 1. La séance, quand la partie en porte une : c'est le rattachement le
+              plus précis, et il exclut les apprenants d'une autre session de la
+              même formation. */
+        if ( ! empty( $qz_session->formation_session_id )
+            && method_exists( $this, 'get_session' )
+            && method_exists( $this, 'acdc_session_learners' ) ) {
+            $seance = $this->get_session( (int) $qz_session->formation_session_id );
+            if ( $seance ) {
+                $sortie = array();
+                foreach ( (array) $this->acdc_session_learners( $seance ) as $sl ) {
+                    if ( empty( $sl->id ) ) {
+                        continue;
+                    }
+                    $sortie[] = (object) array(
+                        'id'         => (int) $sl->id,
+                        'first_name' => (string) $sl->first_name,
+                        'last_name'  => (string) ( ! empty( $sl->usage_last_name ) ? $sl->usage_last_name : $sl->last_name ),
+                    );
+                }
+                if ( ! empty( $sortie ) ) {
+                    return $sortie;
+                }
+            }
+        }
+
+        /* 2. À défaut, la FORMATION. C'est le cas du bouton « Lancer en live »
+              de l'extranet formateur, qui ne demande pas de séance. */
+        $formation_id = ! empty( $qz_session->formation_id ) ? (int) $qz_session->formation_id : 0;
+        if ( $formation_id <= 0 || ! method_exists( $this, 'acdc_learners_for_formations' ) ) {
+            return array();
+        }
+        $ids = $this->acdc_learners_for_formations( array( $formation_id ) );
+        $ids = array_values( array_unique( array_filter( array_map( 'absint', (array) $ids ) ) ) );
+        if ( empty( $ids ) ) {
+            return array();
+        }
+        $marques = implode( ',', array_fill( 0, count( $ids ), '%d' ) );
+        // phpcs:ignore WordPress.DB.PreparedSQLPlaceholders.UnfinishedPrepare
+        $lignes = (array) $wpdb->get_results( $wpdb->prepare(
+            "SELECT id, first_name, last_name, usage_last_name
+               FROM {$this->learner_table}
+              WHERE id IN ({$marques})
+              ORDER BY first_name ASC, last_name ASC, id ASC",
+            $ids
+        ) );
+        $sortie = array();
+        foreach ( $lignes as $ligne ) {
+            $sortie[] = (object) array(
+                'id'         => (int) $ligne->id,
+                'first_name' => (string) $ligne->first_name,
+                'last_name'  => (string) ( ! empty( $ligne->usage_last_name ) ? $ligne->usage_last_name : $ligne->last_name ),
+            );
+        }
+        return $sortie;
     }
 }

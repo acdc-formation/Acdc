@@ -609,6 +609,31 @@ trait ACDC_Quizzes_Render_Results_Trait {
                                     <strong><?php echo esc_html( $p_name ?: '—' ); ?></strong>
                                     <?php if ( empty( $p->learner_id ) && '' === trim( (string) $p->email ) ) : ?>
                                         <br><small style="color:#b45309;font-weight:600;">⚠ non rattaché à un apprenant</small>
+                                        <?php
+                                        /* ACDC 3.25.327 — RATTACHER APRÈS COUP, PLUTÔT QUE DE PERDRE L'ÉPREUVE.
+                                           Un participant non rattaché ne remonte dans aucun dossier : son
+                                           évaluation des acquis ne valide rien, et refaire passer l'épreuve à
+                                           trois personnes pour un défaut d'écran n'est pas une option. On
+                                           propose donc de le rattacher ici, à un apprenant de CETTE partie —
+                                           la même liste que celle offerte au joueur, jamais l'annuaire entier. */
+                                        $__inscrits = method_exists( $this, 'acdc_qz_apprenants_de_la_partie' )
+                                            ? $this->acdc_qz_apprenants_de_la_partie( $session )
+                                            : array();
+                                        if ( ! empty( $__inscrits ) ) :
+                                        ?>
+                                        <form method="post" action="<?php echo esc_url( admin_url( 'admin-post.php' ) ); ?>" style="margin:6px 0 0;display:flex;gap:6px;align-items:center;flex-wrap:wrap;">
+                                            <?php wp_nonce_field( 'acdc_of_qz_attach_participant_' . (int) $p->id ); ?>
+                                            <input type="hidden" name="action" value="acdc_of_qz_attach_participant">
+                                            <input type="hidden" name="participant_id" value="<?php echo (int) $p->id; ?>">
+                                            <select name="learner_id" style="font-size:12px;padding:3px 6px;border-radius:6px;border:1px solid #dfe5ee;">
+                                                <option value="">— Rattacher à —</option>
+                                                <?php foreach ( $__inscrits as $__ins ) : ?>
+                                                    <option value="<?php echo (int) $__ins->id; ?>"><?php echo esc_html( trim( $__ins->first_name . ' ' . $__ins->last_name ) ); ?></option>
+                                                <?php endforeach; ?>
+                                            </select>
+                                            <button type="submit" class="acdc-button acdc-button-soft" style="font-size:11px;padding:3px 10px;">Rattacher</button>
+                                        </form>
+                                        <?php endif; ?>
                                     <?php endif; ?>
                                     <?php if ( ! empty( $p->email ) && $p->full_name ) : ?>
                                         <small><?php echo esc_html( $p->email ); ?></small>
