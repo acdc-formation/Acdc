@@ -62,32 +62,39 @@ trait ACDC_Documents_Billing_Render_Trait {
     $this->render_front_quotes_list( $scope );
   }
 
+  /**
+   * ACDC 3.25.329 — DEUX PANNEAUX QUI NE DISENT RIEN.
+   *
+   * L'onglet Devis s'ouvrait sur deux grandes cartes — « Actions de
+   * formation » et « Prestations annexes » — qui n'affichaient ni un nombre,
+   * ni une date, ni un montant : deux boutons déguisés en tableau de bord.
+   * Il fallait un clic pour apprendre qu'une des deux listes était vide, un
+   * retour et un second clic pour voir l'autre. Trois gestes pour l'écran
+   * qu'on ouvre le plus souvent.
+   *
+   * Les deux listes tiennent l'une sous l'autre : on voit les devis en
+   * arrivant. Les portées restent distinctes — elles ne se mélangent pas,
+   * elles se montrent ensemble. Le paramètre `scope` continue de fonctionner
+   * pour qui arrive avec un lien direct, et le contexte prospect/proposition
+   * du menu ⋯ garde son raccourci vers le formulaire de création.
+   */
   private function render_front_quotes_hub() {
     $base_url = is_admin() ? admin_url( 'admin.php?page=acdc-of-dashboard' ) : $this->portal_page_url( array( 'tab' => 'quotes' ) );
-    /* Contexte prospect/proposition venant du menu ⋯ : on le propage et, s'il est présent,
-       on saute directement au formulaire de création (pré-rempli) au lieu de la liste. */
+    /* Contexte prospect/proposition venant du menu ⋯ : s'il est présent, on
+       saute directement au formulaire de création plutôt que d'imposer la
+       lecture des deux listes à quelqu'un qui vient créer un devis. */
     $passthrough = array();
     if ( ! empty( $_GET['prospect_id'] ) ) { $passthrough['prospect_id'] = absint( wp_unslash( $_GET['prospect_id'] ) ); }
     if ( ! empty( $_GET['proposal_id'] ) ) { $passthrough['proposal_id'] = absint( wp_unslash( $_GET['proposal_id'] ) ); }
-    $direct_create = ! empty( $passthrough ) ? array( 'quote_action' => 'create' ) : array();
-    $action_url    = add_query_arg( array_merge( array( 'tab' => 'quotes', 'scope' => 'action' ), $direct_create, $passthrough ), $base_url );
-    $ancillary_url = add_query_arg( array_merge( array( 'tab' => 'quotes', 'scope' => 'ancillary' ), $direct_create, $passthrough ), $base_url );
-    ?>
-    <section class="acdc-section-head" style="align-items:flex-start;"><div><h2>Devis</h2></div></section>
-    <div class="acdc-grid-2cols" style="gap:18px;">
-      <a href="<?php echo esc_url( $action_url ); ?>" class="acdc-panel" style="min-height:98px;display:flex;flex-direction:column;justify-content:center;align-items:center;text-align:center;text-decoration:none;">
-        <h3 style="margin:0 0 10px;color:#C5A253;font-size:18px;">Actions de formation</h3>
-        <p style="margin:0;color:#1E4777;">Devis</p>
-      </a>
-      <a href="<?php echo esc_url( $ancillary_url ); ?>" class="acdc-panel" style="min-height:98px;display:flex;flex-direction:column;justify-content:center;align-items:center;text-align:center;text-decoration:none;">
-        <h3 style="margin:0 0 10px;color:#C5A253;font-size:18px;">Prestations annexes</h3>
-        <p style="margin:0;color:#1E4777;">Devis</p>
-      </a>
-    </div>
-    <?php
+    if ( ! empty( $passthrough ) ) {
+      wp_safe_redirect( add_query_arg( array_merge( array( 'tab' => 'quotes', 'scope' => 'action', 'quote_action' => 'create' ), $passthrough ), $base_url ) );
+      exit;
+    }
+    $this->render_front_quotes_list( 'action', true );
+    $this->render_front_quotes_list( 'ancillary', true );
   }
 
-  private function render_front_quotes_list( $scope ) {
+  private function render_front_quotes_list( $scope, $combinee = false ) {
     $base_url    = is_admin() ? admin_url( 'admin.php?page=acdc-of-dashboard' ) : $this->portal_page_url( array( 'tab' => 'quotes' ) );
     $back_url    = add_query_arg( array( 'tab' => 'quotes' ), $base_url );
     $scope_label = 'ancillary' === $scope ? 'Prestations annexes' : 'Actions de formation';
@@ -831,24 +838,16 @@ trait ACDC_Documents_Billing_Render_Trait {
     $this->render_front_invoices_list( $scope );
   }
 
+  /**
+   * ACDC 3.25.329 — Même correction que pour les devis, même raison : deux
+   * cartes sans contenu remplacées par les deux listes réelles.
+   */
   private function render_front_invoices_hub() {
-    $base_url = is_admin() ? admin_url( 'admin.php?page=acdc-of-dashboard' ) : $this->portal_page_url( array( 'tab' => 'invoices_credit_notes' ) );
-    ?>
-    <section class="acdc-section-head" style="align-items:flex-start;"><div><h2>Factures &amp; Avoirs</h2></div></section>
-    <div class="acdc-grid-2cols" style="gap:18px;">
-      <a href="<?php echo esc_url( add_query_arg( array( 'tab' => 'invoices_credit_notes', 'scope' => 'action' ), $base_url ) ); ?>" class="acdc-panel" style="min-height:98px;display:flex;flex-direction:column;justify-content:center;align-items:center;text-align:center;text-decoration:none;">
-        <h3 style="margin:0 0 10px;color:#C5A253;font-size:18px;">Actions de formation</h3>
-        <p style="margin:0;color:#1E4777;">Factures &amp; Avoirs</p>
-      </a>
-      <a href="<?php echo esc_url( add_query_arg( array( 'tab' => 'invoices_credit_notes', 'scope' => 'ancillary' ), $base_url ) ); ?>" class="acdc-panel" style="min-height:98px;display:flex;flex-direction:column;justify-content:center;align-items:center;text-align:center;text-decoration:none;">
-        <h3 style="margin:0 0 10px;color:#C5A253;font-size:18px;">Prestations annexes</h3>
-        <p style="margin:0;color:#1E4777;">Factures &amp; Avoirs</p>
-      </a>
-    </div>
-    <?php
+    $this->render_front_invoices_list( 'action', true );
+    $this->render_front_invoices_list( 'ancillary', true );
   }
 
-  private function render_front_invoices_list( $scope ) {
+  private function render_front_invoices_list( $scope, $combinee = false ) {
     $base_url = is_admin() ? admin_url( 'admin.php?page=acdc-of-dashboard' ) : $this->portal_page_url( array( 'tab' => 'invoices_credit_notes' ) );
     $back_url = add_query_arg( array( 'tab' => 'invoices_credit_notes' ), $base_url );
     $scope_label = 'ancillary' === $scope ? 'Prestations annexes' : 'Actions de formation';
@@ -865,13 +864,15 @@ trait ACDC_Documents_Billing_Render_Trait {
     }
     $settings_url = is_admin() ? admin_url( 'admin.php?page=acdc-of-dashboard&tab=billing_settings' ) : $this->portal_page_url( array( 'tab' => 'billing_settings' ) );
     ?>
-    <?php if ( $is_demo ) : ?>
+    <?php if ( $is_demo && ( ! $combinee || 'action' === $scope ) ) : ?>
     <div class="acdc-alert" style="background:#fff8e1;border-left:4px solid #d6a353;padding:14px 18px;border-radius:8px;margin-bottom:18px;display:flex;align-items:center;gap:12px;">
       <?php echo $this->render_inline_icon( 'alert-triangle', 20 ); ?>
       <span><strong>Module en mode démonstration.</strong> Les données affichées sont fictives. <a href="<?php echo esc_url( $settings_url ); ?>">Activez la facturation réelle dans les Réglages</a> pour créer de vraies factures.</span>
     </div>
     <?php endif; ?>
+    <?php if ( ! $combinee ) : ?>
     <div class="acdc-mb-18"><a class="acdc-button acdc-button-soft" href="<?php echo esc_url( $back_url ); ?>" style="min-width:44px;padding:10px 14px;">&larr;</a></div>
+    <?php endif; ?>
     <section class="acdc-section-head" style="display:flex;justify-content:space-between;align-items:center;gap:12px;flex-wrap:wrap;">
       <div><h2>Factures &amp; Avoirs : <?php echo esc_html( $scope_label ); ?></h2></div>
       <?php if ( ! $is_demo && current_user_can( 'manage_options' ) ) : ?>
@@ -892,7 +893,7 @@ trait ACDC_Documents_Billing_Render_Trait {
     </div>
     <div class="acdc-panel acdc-table-panel">
       <div class="acdc-table-wrap">
-        <table class="acdc-table acdc-quotes-table" data-acdc-table-id="invoices-list"><thead><tr><th>NUMÉRO</th><th>TYPE</th><th>COMMANDITAIRE</th><th>FINANCEUR</th><th>STATUT</th><th>DERNIÈRE RELANCE</th><th>FORMATION</th><th>APPRENANT(S)</th><th>DATE D'ÉMISSION</th><th>DATE D'ÉCHÉANCE</th><th>TARIF HT</th><th>MONTANT TVA</th><th>TARIF TTC</th><th></th><th></th></tr></thead><tbody>
+        <table class="acdc-table acdc-quotes-table" data-acdc-table-id="invoices-list"><thead><tr><th>NUMÉRO</th><th>TYPE</th><th>COMMANDITAIRE</th><th>FINANCEUR</th><th>STATUT</th><th>DERNIÈRE RELANCE</th><th>FORMATION</th><th>APPRENANT(S)</th><th>DATE D'ÉMISSION</th><th>DATE D'ÉCHÉANCE</th><th>TARIF HT</th><th>MONTANT TVA</th><th>TARIF TTC</th><th>ACTIONS</th></tr></thead><tbody>
         <?php foreach ( $rows as $row ) :
           $view_url = add_query_arg( array( 'tab' => 'invoices_credit_notes', 'scope' => $scope, 'invoice_action' => 'view', 'invoice_id' => (int) $row['id'] ), $base_url );
           $download_url = $this->secure_admin_post_url( 'acdc_download_invoice_document', array( 'invoice_id' => (int) $row['id'], 'scope' => $scope ), 'acdc_download_invoice_document_' . (int) $row['id'] );
@@ -912,20 +913,37 @@ trait ACDC_Documents_Billing_Render_Trait {
             <td><?php echo esc_html( $row['tarif_ht'] ); ?></td>
             <td><?php echo esc_html( $row['montant_tva'] ); ?></td>
             <td><?php echo esc_html( $row['tarif_ttc'] ); ?></td>
-            <td class="acdc-row-actions-menu-cell">
-              <button type="button" class="acdc-row-menu-button" data-acdc-row-menu-toggle aria-label="Actions"><?php echo $this->render_inline_icon( 'more-horizontal', 25 ); ?></button>
-              <div class="acdc-row-menu">
-                <a href="<?php echo esc_url( $download_url ); ?>">Télécharger la facture</a>
-                <?php if ( ! $is_demo ) : ?>
-                <a href="<?php echo esc_url( $delete_url ); ?>" onclick="return confirm('Supprimer cette facture ?');">Supprimer</a>
-                <?php endif; ?>
+            <?php /* ACDC 3.25.329 — LA COLONNE ACTIONS DES FACTURES ÉTAIT INUTILISABLE.
+              Deux causes, la seconde expliquant la première. (1) Le menu était
+              posé en position:absolute DANS le conteneur à défilement du
+              tableau : dès qu'il dépassait, il était rogné — d'où les demi-
+              libellés « …harger la » et « Supprimer » qui flottaient hors du
+              cadre sur la capture. (2) Ce tableau réimplémentait son propre
+              menu, avec sa propre feuille de style et son propre script, en
+              réutilisant la classe .acdc-row-menu — qui désigne le CONTENEUR
+              partout ailleurs dans le plugin et le PANNEAU ici. Le mécanisme
+              commun et le mécanisme local se disputaient donc les mêmes
+              éléments : l'un montrait, l'autre cachait.
+              La cellule reprend le balisage commun. Le menu est alors déplacé
+              hors du tableau par le mécanisme partagé, et n'est plus rogné par
+              rien. Les deux colonnes sans en-tête deviennent une colonne
+              ACTIONS, comme sur les autres écrans. */ ?>
+            <td class="acdc-actions-cell-icons acdc-invoices-actions-cell">
+              <div class="acdc-row-menu" data-acdc-row-menu>
+                <button type="button" class="acdc-row-action-icon acdc-row-menu-toggle" data-acdc-row-menu-toggle aria-expanded="false" aria-label="Actions complémentaires"><?php echo $this->render_inline_icon( 'more-horizontal', 25 ); ?></button>
+                <div class="acdc-row-menu-dropdown" data-acdc-row-menu-dropdown hidden>
+                  <a href="<?php echo esc_url( $download_url ); ?>">Télécharger la facture</a>
+                  <?php if ( ! $is_demo ) : ?>
+                  <a href="<?php echo esc_url( $delete_url ); ?>" onclick="return confirm('Supprimer cette facture ?');">Supprimer</a>
+                  <?php endif; ?>
+                </div>
               </div>
+              <a class="acdc-row-action-icon acdc-row-view-link" href="<?php echo esc_url( $view_url ); ?>" title="Voir" aria-label="Voir la facture"><?php echo $this->render_inline_icon( 'eye', 25 ); ?></a>
             </td>
-            <td><a class="acdc-row-view-link" href="<?php echo esc_url( $view_url ); ?>" title="Voir"><?php echo $this->render_inline_icon( 'view', 25 ); ?></a></td>
           </tr>
         <?php endforeach; ?>
         <?php if ( empty( $rows ) && ! $is_demo ) : ?>
-          <tr><td colspan="15" style="text-align:center;padding:28px;color:#6b7280;">Aucune facture. <a href="<?php echo esc_url( add_query_arg( array( 'tab' => 'quotes' ), $base_url ) ); ?>">Convertissez un devis en facture →</a></td></tr>
+          <tr><td colspan="14" style="text-align:center;padding:28px;color:#6b7280;">Aucune facture. <a href="<?php echo esc_url( add_query_arg( array( 'tab' => 'quotes' ), $base_url ) ); ?>">Convertissez un devis en facture →</a></td></tr>
         <?php endif; ?>
         </tbody></table>
       </div>
@@ -936,17 +954,9 @@ trait ACDC_Documents_Billing_Render_Trait {
     <style>
       .acdc-filter-toggle-icons-only{padding:0;border:none;background:transparent;color:#1E4777;display:inline-flex;align-items:center;gap:8px;cursor:pointer}.acdc-filter-toggle-icons-only:hover{color:#0C2D52}
       .acdc-quotes-table th{font-size:11px}.acdc-quotes-table td{vertical-align:top}.acdc-status-badge{display:inline-block;padding:6px 10px;border-radius:999px;font-size:11px;font-weight:700}.acdc-status-badge-late{background:#f8e79c;color:#b68000}.acdc-status-badge-paid{background:#d6f7d6;color:#3ca64d}
-      .acdc-row-actions-menu-cell{position:relative}.acdc-row-menu-button{padding:0;border:none;background:transparent;color:#1E4777;cursor:pointer}.acdc-row-menu{position:absolute;right:18px;top:26px;z-index:50;min-width:230px;background:#fff;border:1px solid #dce4ec;border-radius:10px;box-shadow:0 18px 42px rgba(12,45,82,.14);padding:8px;display:none}.acdc-row-menu a{display:block;padding:10px 12px;color:#5b6880;text-decoration:none;border-radius:10px}.acdc-row-menu a:hover{background:#F6F8FB;color:#0C2D52}.acdc-row-actions-menu-cell.is-open .acdc-row-menu{display:block}
       .acdc-quotes-footer{display:flex;align-items:center;gap:10px;padding:14px 10px 2px;color:#1E4777}.acdc-page-current{width:28px;height:28px;border-radius:999px;background:#E9C77C;color:#0B0706;display:flex;align-items:center;justify-content:center}.acdc-page-meta{margin-left:auto}
-      .acdc-row-view-link{display:inline-flex;color:#1E4777;text-decoration:none}.acdc-row-view-link:hover{color:#0C2D52}
       .acdc-modal-dialog-email{width:min(1180px,94vw)}
     </style>
-    <script>
-      document.addEventListener('DOMContentLoaded', function(){
-        document.querySelectorAll('[data-acdc-row-menu-toggle]').forEach(function(btn){ btn.addEventListener('click', function(e){ e.preventDefault(); e.stopPropagation(); var cell=btn.closest('.acdc-row-actions-menu-cell'); document.querySelectorAll('.acdc-row-actions-menu-cell.is-open').forEach(function(other){ if(other!==cell){other.classList.remove('is-open');} }); if(cell){ cell.classList.toggle('is-open'); } }); });
-        document.addEventListener('click', function(){ document.querySelectorAll('.acdc-row-actions-menu-cell.is-open').forEach(function(cell){ cell.classList.remove('is-open'); }); });
-      });
-    </script>
     <?php
   }
 

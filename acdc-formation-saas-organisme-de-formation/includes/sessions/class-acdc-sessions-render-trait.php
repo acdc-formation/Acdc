@@ -388,7 +388,7 @@ trait ACDC_Sessions_Render_Trait {
       <?php endif; ?>
     </div>
     <style>
-      .acdc-search-row{display:flex;align-items:center;justify-content:space-between;gap:18px}.acdc-filter-toggle{display:inline-flex;align-items:center;gap:8px;border:none;background:transparent;color:#1E4777;font-size:12px;font-weight:600;letter-spacing:.03em;cursor:pointer}.acdc-sessions-filters-panel{margin-top:18px;padding:18px 22px;background:#dfe8f0;border-radius:10px}.acdc-sessions-filters-grid{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:16px}.acdc-sessions-filters-grid label{display:flex;flex-direction:column;gap:8px;font-size:12px;color:#1E4777;font-weight:600;text-transform:uppercase}.acdc-sessions-filters-grid input,.acdc-sessions-filters-grid select{width:100%}..acdc-table-sessions-validated th:last-child,.acdc-table-sessions-validated td:last-child{text-align:center}.acdc-table-sessions-validated th{white-space:normal!important;word-break:break-word!important;overflow:visible!important}.acdc-status-pill{display:inline-flex;align-items:center;justify-content:center;padding:6px 12px;border-radius:999px;font-size:11px;font-weight:700;letter-spacing:.03em}.acdc-status-pill-success{background:#d9f3e5;color:#35b37e}.acdc-table-inline-link{display:inline-flex;align-items:center;gap:6px;color:#1E4777;text-decoration:none}.acdc-sessions-actions-inline{display:inline-flex;align-items:center;gap:4px;flex-wrap:nowrap}.acdc-table-sessions-validated small{display:block;margin-top:4px;color:#1E4777}@media (max-width:1200px){.acdc-sessions-filters-grid{grid-template-columns:repeat(2,minmax(0,1fr))}}@media (max-width:900px){.acdc-search-row{flex-direction:column;align-items:stretch}.acdc-sessions-filters-grid{grid-template-columns:1fr}}
+      .acdc-search-row{display:flex;align-items:center;justify-content:space-between;gap:18px}.acdc-filter-toggle{display:inline-flex;align-items:center;gap:8px;border:none;background:transparent;color:#1E4777;font-size:12px;font-weight:600;letter-spacing:.03em;cursor:pointer}.acdc-sessions-filters-panel{margin-top:18px;padding:18px 22px;background:#dfe8f0;border-radius:10px}.acdc-sessions-filters-grid{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:16px}.acdc-sessions-filters-grid label{display:flex;flex-direction:column;gap:8px;font-size:12px;color:#1E4777;font-weight:600;text-transform:uppercase}.acdc-sessions-filters-grid input,.acdc-sessions-filters-grid select{width:100%}.acdc-table-sessions-validated th:last-child,.acdc-table-sessions-validated td:last-child{text-align:center}.acdc-table-sessions-validated th{white-space:normal!important;word-break:break-word!important;overflow:visible!important}.acdc-status-pill{display:inline-flex;align-items:center;justify-content:center;padding:6px 12px;border-radius:999px;font-size:11px;font-weight:700;letter-spacing:.03em}.acdc-status-pill-success{background:#d9f3e5;color:#35b37e}.acdc-table-inline-link{display:inline-flex;align-items:center;gap:6px;color:#1E4777;text-decoration:none}.acdc-sessions-actions-inline{display:inline-flex;align-items:center;gap:4px;flex-wrap:nowrap}.acdc-table-sessions-validated small{display:block;margin-top:4px;color:#1E4777}@media (max-width:1200px){.acdc-sessions-filters-grid{grid-template-columns:repeat(2,minmax(0,1fr))}}@media (max-width:900px){.acdc-search-row{flex-direction:column;align-items:stretch}.acdc-sessions-filters-grid{grid-template-columns:1fr}}
     </style>
     <script>
       (function(){
@@ -559,6 +559,15 @@ trait ACDC_Sessions_Render_Trait {
           if ( ! empty( $day_events ) ) {
             $classes[] = 'has-events';
           }
+          /* ACDC 3.25.329 — LE PASSÉ SE VOIT. Une journée révolue garde sa
+             place et son contenu, mais s'estompe et se hachure : sur un mois
+             en cours, l'œil doit trouver d'un coup ce qui reste à faire. Le
+             jour même n'est PAS du passé — il est encore en train de se
+             produire. */
+          $est_passee = ( $day_key < $today_key );
+          if ( $est_passee ) {
+            $classes[] = 'is-passee';
+          }
           ?>
           <div class="<?php echo esc_attr( implode( ' ', $classes ) ); ?>">
             <div class="acdc-calendar-day-number"><?php echo esc_html( gmdate( 'j', $day_ts ) ); ?></div>
@@ -579,7 +588,20 @@ trait ACDC_Sessions_Render_Trait {
                     $meta_parts[] = $event->location;
                   }
                   ?>
-                  <a class="acdc-calendar-event acdc-calendar-event-session" href="<?php echo esc_url( $event_url ); ?>">
+                  <?php
+                  /* La couleur vient de la thématique du répertoire. Sans
+                     thématique renseignée, on ne peint rien plutôt que
+                     d'inventer une couleur : une teinte arbitraire ferait
+                     croire à un regroupement qui n'existe pas. */
+                  $teinte = '';
+                  if ( ! empty( $event->thematique_couleur ) && preg_match( '/^#[0-9a-fA-F]{6}$/', (string) $event->thematique_couleur ) ) {
+                    $teinte = (string) $event->thematique_couleur;
+                  }
+                  ?>
+                  <a class="acdc-calendar-event acdc-calendar-event-session<?php echo $teinte ? ' has-teinte' : ''; ?>"<?php echo $teinte ? ' style="--acdc-cal-teinte:' . esc_attr( $teinte ) . ';"' : ''; ?> href="<?php echo esc_url( $event_url ); ?>">
+                    <?php if ( ! empty( $event->thematique_label ) ) : ?>
+                      <span class="acdc-calendar-event-thematique"><?php echo esc_html( $event->thematique_label ); ?></span>
+                    <?php endif; ?>
                     <span class="acdc-calendar-event-time"><?php echo esc_html( ! empty( $event->start_date ) && ! empty( $event->end_date ) && $event->start_date !== $event->end_date ? mysql2date( 'd/m', $event->start_date ) . ' → ' . mysql2date( 'd/m', $event->end_date ) : mysql2date( 'd/m/Y', ! empty( $event->start_date ) ? $event->start_date : $event->end_date ) ); ?></span>
                     <span class="acdc-calendar-event-title"><?php echo esc_html( $event_title ); ?></span>
                     <?php if ( ! empty( $meta_parts ) ) : ?>
@@ -1250,8 +1272,16 @@ trait ACDC_Sessions_Render_Trait {
           <tbody>
           <?php if ( ! empty( $sessions ) ) : ?>
             <?php foreach ( $sessions as $entry ) : ?>
-              <tr>
-                <td><?php echo esc_html( $entry->title ); ?></td>
+              <?php
+              /* ACDC 3.25.329 — Même code couleur que le calendrier, et même
+                 estompage du passé : les deux écrans montrent les mêmes
+                 séances, ils doivent les distinguer de la même manière. */
+              $teinte = ( ! empty( $entry->thematique_couleur ) && preg_match( '/^#[0-9a-fA-F]{6}$/', (string) $entry->thematique_couleur ) ) ? (string) $entry->thematique_couleur : '';
+              $fin_s  = ! empty( $entry->end_date ) ? (string) $entry->end_date : (string) ( $entry->start_date ?? '' );
+              $passee = ( '' !== $fin_s && $fin_s < current_time( 'Y-m-d' ) );
+              ?>
+              <tr class="acdc-session-row<?php echo $passee ? ' is-passee' : ''; ?>"<?php echo $teinte ? ' style="--acdc-cal-teinte:' . esc_attr( $teinte ) . ';"' : ''; ?>>
+                <td<?php echo $teinte ? ' class="acdc-session-teinte"' : ''; ?>><?php echo esc_html( $entry->title ); ?><?php if ( ! empty( $entry->thematique_label ) ) : ?><small class="acdc-session-thematique"><?php echo esc_html( $entry->thematique_label ); ?></small><?php endif; ?></td>
                 <?php /* ACDC 3.25.277 — Ce tableau n'a pas de colonne « Format » :
                          la modalité s'écrit donc dans la cellule Formation, sans
                          quoi deux séances de la même formation en présentiel et

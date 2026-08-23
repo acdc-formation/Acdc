@@ -291,6 +291,9 @@ trait ACDC_Dossiers_Contracts_Render_Trait {
             $comp      = $this->compute_registration_completude_score( $entry );
             $comp_pct  = $comp['percent'];
             $comp_dot  = $comp_pct >= 75 ? '#35b37e' : ( $comp_pct >= 40 ? '#f0b45e' : '#e06d6d' );
+            /* ACDC 3.25.329 — La colonne Statut ne disait que l'état commercial
+               du dossier. Elle dit maintenant aussi où en est la FORMATION. */
+            $fin_parcours = $this->acdc_registration_formation_terminee( $entry );
             /* Badge PSH — lecture réponses NAD liées au dossier */
             $psh_badge_level = 'none';
             if ( ! empty( $entry->id ) ) {
@@ -319,6 +322,9 @@ trait ACDC_Dossiers_Contracts_Render_Trait {
               <td>
                 <div style="display:flex;align-items:center;gap:6px;flex-wrap:wrap;">
                   <span style="display:inline-block;padding:3px 10px;border-radius:20px;font-size:11px;font-weight:700;color:#fff;background:<?php echo esc_attr( $wf_color ); ?>;white-space:nowrap;"><?php echo esc_html( $wf_label ); ?></span>
+                  <?php if ( ! empty( $fin_parcours['terminee'] ) ) : ?>
+                  <span title="Dernière séance du parcours : <?php echo esc_attr( mysql2date( 'j F Y', $fin_parcours['fin'] ) ); ?>" style="display:inline-block;padding:3px 10px;border-radius:20px;font-size:11px;font-weight:700;color:#fff;background:#1a7a50;white-space:nowrap;">Formation terminée</span>
+                  <?php endif; ?>
                   <span title="Complétude : <?php echo (int) $comp_pct; ?>%" style="display:inline-flex;align-items:center;gap:3px;font-size:11px;font-weight:700;color:<?php echo esc_attr( $comp_dot ); ?>;white-space:nowrap;">
                     <span style="display:inline-block;width:8px;height:8px;border-radius:50%;background:<?php echo esc_attr( $comp_dot ); ?>;"></span><?php echo (int) $comp_pct; ?>%
                   </span>

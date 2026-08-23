@@ -209,7 +209,7 @@ trait ACDC_Evaluations_Core_Trait {
       if ( ! empty( $context['end_date'] ) ) {
         $end_ts = strtotime( (string) $context['end_date'] . ' 23:59:59' );
         if ( $end_ts && $end_ts < current_time( 'timestamp' ) ) {
-          $state = 'Formation terminée - ---';
+          $state = 'Formation terminée';
         }
       }
       $rows[] = array(

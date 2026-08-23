@@ -684,9 +684,9 @@ trait ACDC_Settings_Catalog_Render_Trait {
             <td><div style="width:56px;height:56px;border:1px solid #dce4ec;border-radius:4px;background:repeating-linear-gradient(45deg,#111 0,#111 2px,#fff 2px,#fff 4px);"></div></td>
             <td><?php if ( ! empty( $row->catalog_image_url ) ) : ?><img src="<?php echo esc_url( $row->catalog_image_url ); ?>" alt="" style="width:36px;height:22px;object-fit:cover;border-radius:2px;"><?php else : ?>—<?php endif; ?></td>
             <td><?php echo esc_html( (int) $row->catalog_order ); ?></td>
-            <td class="acdc-row-actions-menu-cell">
+            <td class="acdc-actions-cell-icons">
               <div class="acdc-row-menu" data-acdc-row-menu>
-                <button type="button" class="acdc-row-menu-toggle" data-acdc-row-menu-toggle aria-expanded="false" aria-label="Actions"><?php echo $this->render_inline_icon( 'more-horizontal', 25 ); ?></button>
+                <button type="button" class="acdc-row-action-icon acdc-row-menu-toggle" data-acdc-row-menu-toggle aria-expanded="false" aria-label="Actions"><?php echo $this->render_inline_icon( 'more-horizontal', 25 ); ?></button>
                 <div class="acdc-row-menu-dropdown" data-acdc-row-menu-dropdown hidden>
                   <a href="#" data-acdc-modal-open="acdc-catalog-order-modal" data-formation-id="<?php echo esc_attr( $row->id ); ?>" data-formation-title="<?php echo esc_attr( $row->title ); ?>" data-catalog-order="<?php echo esc_attr( (int) $row->catalog_order ); ?>">Définir l'ordre d'affichage</a>
                   <a href="#" data-acdc-modal-open="acdc-catalog-remove-modal" data-formation-id="<?php echo esc_attr( $row->id ); ?>" data-formation-title="<?php echo esc_attr( $row->title ); ?>">Supprimer du catalogue</a>
@@ -701,31 +701,28 @@ trait ACDC_Settings_Catalog_Render_Trait {
     </div>
     <?php $this->render_catalog_order_modal(); ?>
     <?php $this->render_catalog_remove_modal(); ?>
-    <style>.acdc-catalog-table td,.acdc-catalog-table th{vertical-align:middle}.acdc-row-actions-menu-cell{position:relative}.acdc-row-menu{position:relative;display:inline-flex;align-items:center;justify-content:center}.acdc-row-menu-toggle{display:inline-flex;align-items:center;justify-content:center;width:34px;height:34px;border:none;background:transparent;color:#1E4777;cursor:pointer}.acdc-row-menu-dropdown{position:absolute;top:38px;right:0;min-width:240px;padding:10px 0;background:#fff;border:1px solid #dce4ec;border-radius:10px;box-shadow:0 10px 30px rgba(28,44,64,.12);z-index:100}.acdc-row-menu-dropdown a{display:block;padding:14px 18px;color:#1E4777;text-decoration:none;font-size:15px;font-weight:600}.acdc-row-menu-dropdown a:hover{background:#F6F8FB}</style>
+    <?php /* ACDC 3.25.329 — DES RÈGLES LOCALES QUI DÉBORDAIENT DE LEUR PAGE.
+      Cette feuille redéfinissait .acdc-row-menu, .acdc-row-menu-toggle et
+      .acdc-row-menu-dropdown SANS les rattacher au tableau du catalogue :
+      elles s'appliquaient donc à tous les menus de la page. Or le mécanisme
+      commun déplace le menu hors du tableau, dans le corps du document, pour
+      qu'il ne soit pas rogné par le défilement — un « position:absolute;
+      top:38px » le renvoyait alors se coller en haut de la page.
+      Seul reste ce qui est réellement propre au catalogue. */ ?>
+    <style>.acdc-catalog-table td,.acdc-catalog-table th{vertical-align:middle}</style>
     <script>
     document.addEventListener('DOMContentLoaded', function(){
-      function closeCatalogMenus(){
-        document.querySelectorAll('[data-acdc-row-menu-dropdown]').forEach(function(menu){ menu.hidden = true; });
-        document.querySelectorAll('[data-acdc-row-menu-toggle]').forEach(function(btn){ btn.setAttribute('aria-expanded','false'); });
-      }
-      document.querySelectorAll('[data-acdc-row-menu-toggle]').forEach(function(btn){
-        btn.addEventListener('click', function(e){
-          e.preventDefault();
-          e.stopPropagation();
-          var wrapper = btn.closest('[data-acdc-row-menu]');
-          var dropdown = wrapper ? wrapper.querySelector('[data-acdc-row-menu-dropdown]') : null;
-          var open = btn.getAttribute('aria-expanded') === 'true';
-          closeCatalogMenus();
-          if (dropdown && !open) {
-            dropdown.hidden = false;
-            btn.setAttribute('aria-expanded','true');
-          }
-        });
-      });
+      /* ACDC 3.25.329 — CE SCRIPT FERMAIT LES MENUS DES AUTRES.
+         Il posait un second écouteur de clic sur TOUS les boutons
+         [data-acdc-row-menu-toggle] de la page, puis cherchait le panneau
+         dans le conteneur du bouton. Le mécanisme commun ayant déjà déplacé
+         ce panneau hors du tableau, la recherche ne trouvait rien et le
+         script se rabattait sur « fermer tous les menus » — y compris celui
+         que le mécanisme commun venait d'ouvrir. Le menu clignotait.
+         Le catalogue utilise exactement le balisage commun : il n'a pas
+         besoin de son propre menu. Seules restent ici les fenêtres modales
+         du catalogue, qui, elles, lui appartiennent. */
       document.addEventListener('click', function(e){
-        if (!e.target.closest('[data-acdc-row-menu]')) {
-          closeCatalogMenus();
-        }
         var trigger=e.target.closest('[data-acdc-modal-open="acdc-catalog-order-modal"]');
         if(trigger){
           var modal=document.getElementById('acdc-catalog-order-modal');
@@ -733,13 +730,13 @@ trait ACDC_Settings_Catalog_Render_Trait {
             modal.querySelector('input[name="formation_id"]').value=trigger.getAttribute('data-formation-id')||'';
             modal.querySelector('input[name="catalog_order"]').value=trigger.getAttribute('data-catalog-order')||'1';
           }
-          closeCatalogMenus();
+          /* Le mécanisme commun referme le menu au clic : rien à faire ici. */
         }
         var trigger2=e.target.closest('[data-acdc-modal-open="acdc-catalog-remove-modal"]');
         if(trigger2){
           var modal2=document.getElementById('acdc-catalog-remove-modal');
           if(modal2){ modal2.querySelector('input[name="formation_id"]').value=trigger2.getAttribute('data-formation-id')||''; }
-          closeCatalogMenus();
+          /* Idem : la fermeture du menu est prise en charge en commun. */
         }
       });
     });

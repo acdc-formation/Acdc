@@ -4,6 +4,88 @@ Toutes les modifications notables de ce projet sont documentées ici.
 Format inspiré de [Keep a Changelog](https://keepachangelog.com/fr/1.1.0/).
 L'historique détaillé antérieur est archivé dans [`release-notes/`](release-notes/).
 
+## [3.25.329] — 2026-08-23
+
+### Corrigé — Le cachet, le certificat, et sept écrans de la recette du 23 août
+
+**Le cachet et la signature arrivaient dans un carré blanc.** Sur le certificat de réalisation
+et sur l'attestation, le tampon mordait sur le nom du signataire et sur le pied de page. Les
+fichiers sont pourtant des PNG à fond transparent : c'est la préparation d'image qui les
+APLATISSAIT sur du blanc, parce que le moteur PDF maison n'écrivait que du JPEG — une image
+opaque par construction. Le blanc n'était pas un défaut d'affichage, il était peint dans le
+document. La transparence d'un PDF se porte à côté de l'image, dans un `/SMask` : le canal
+alpha est désormais extrait et attaché. Le masque est déposé dans un registre indexé par la
+clé de l'image plutôt que rendu par la valeur de retour — une vingtaine d'endroits fabriquent
+un élément « image » champ par champ, et le vingt-et-unième, écrit demain, l'aurait oublié.
+
+**Le certificat de réalisation sortait sous forme de diplôme.** Paysage, cadre navy, nom en
+capitales de 22 points : la forme d'un document qu'on affiche au mur. Or le certificat ne
+s'affiche pas, il se TRANSMET — c'est la pièce que le financeur classe, et son modèle est
+publié. Il reprend donc l'A4 portrait, le texte rédigé à la première personne, les mentions
+dans leur ordre imposé et les quatre cases à cocher de la nature de l'action. L'attestation de
+fin de formation, elle, GARDE le cadre du diplôme : c'est la pièce de l'apprenant, celle qu'il
+montre. Les deux se ressemblaient parce qu'elles partageaient un gabarit, pas parce qu'elles
+s'adressaient au même lecteur.
+
+**Rattacher un apprenant à un quiz ne servait à rien.** Le rattachement n'écrivait que
+`learner_id`, alors que le moteur des pièces de fin interroge `registration_id` — le DOSSIER,
+pas la personne. Une fois les trois apprenants rattachés à la main, leurs résultats restaient
+invisibles pour le certificat, pour l'attestation et pour la pastille « Évaluation des
+acquis ». Le rattachement résout maintenant le dossier, et le moteur accepte les deux clés
+réunies par un OU : une participation jouée AVANT le rattachement ne porte pas de dossier.
+
+**Cinq pastilles de complétude attendaient un PDF, pas un fait.** Elles ne lisaient que la
+colonne du document archivé — écrite au passage d'une routine ou au téléchargement depuis
+l'administration. L'apprenant pouvait avoir passé son évaluation et répondu à l'enquête à
+chaud sans qu'aucune ne verdisse jamais : dossier bloqué à 65 % sur une formation terminée et
+émargée. Elles lisent le fait d'abord, le document ensuite.
+
+- **La colonne actions des factures était inutilisable.** Le menu était posé en
+  `position:absolute` DANS le conteneur à défilement du tableau — donc rogné — et ce tableau
+  réimplémentait son propre menu en réutilisant la classe `.acdc-row-menu`, qui désigne le
+  CONTENEUR partout ailleurs et le PANNEAU ici : le mécanisme commun et le mécanisme local se
+  disputaient les mêmes éléments. Même famille sur l'écran du catalogue, dont les règles de
+  style et le script n'étaient rattachés à rien et fermaient les menus de toute la page.
+- **Les deux panneaux vides de Devis et de Factures** n'affichaient ni un nombre, ni une date,
+  ni un montant : deux boutons déguisés en tableau de bord, trois gestes pour voir des listes
+  souvent vides. Les listes tiennent l'une sous l'autre, portées distinctes.
+- **Trois mots pour un seul écran** — le menu disait « Commanditaires », la page
+  « Entreprises », la colonne « Entreprise ». Le mot du métier gagne, celui qui figure sur la
+  convention et sur la facture. La colonne « Prospect » disparaît : elle affichait un croix
+  rouge pour un commanditaire venu d'un prospect.
+- **Qualité & conformité sort des enquêtes** — réclamations, sous-traitants, locaux, BPF,
+  veille : aucun questionnaire là-dedans. Section à part entière, entre Comptabilité et Outils
+  et statistiques. L'audit Qualiopi la rejoint : il était rangé sous « Paramètres », à côté des
+  réglages du plugin, alors que c'est l'écran qu'on ouvre avec un auditeur en face de soi.
+- **Le calendrier et la liste des séances** portent le code couleur de la thématique — pris
+  dans son répertoire, jamais inventé — et estompent le passé sous un hachurage. Le survol rend
+  au passé sa lisibilité pleine : estomper n'est pas cacher.
+- **« Formation terminée »** apparaît dans la colonne Statut des apprenants inscrits, lue sur
+  les séances du parcours et non sur un champ que quelqu'un devrait penser à cocher — les
+  brouillons ne comptent pas, et une séance de la même formation animée pour une autre
+  entreprise non plus.
+- **Les certificats déjà archivés auraient continué de sortir à l'ancien format.** Le certificat
+  est STOCKÉ par la routine de clôture, et le téléchargement servait le fichier stocké sans le
+  regarder : installer la correction n'aurait rien changé à ce qu'on télécharge — le pire des
+  cas, une correction qu'on croit livrée. Le format se lit maintenant DANS le fichier (une boîte
+  de page plus large que haute désigne l'ancien diplôme) ; la copie périmée est reconstruite et
+  réécrite à la même adresse, pour que le lien de l'extranet apprenant suive sans rien casser.
+- **L'enquête entreprise n'avait pas de destinataire de repli.** Faute de contact rattaché
+  portant une adresse, le code se rabattait sur `enterprise_contact_email` — une clé qui existe
+  bien dans le plugin, mais sur la fiche de L'ORGANISME DE FORMATION : la table des
+  commanditaires range l'adresse dans `email`. La condition était toujours fausse. C'est le
+  premier point de la recette : « toutes les enquêtes ont été envoyées et complétées sauf pour
+  Skill conseil et TEST—AFDAS (pas reçu) ».
+- Quatre libellés « Formation terminée - --- » traînaient la place d'une mention jamais écrite,
+  et un sélecteur CSS à double point n'avait jamais pu s'appliquer.
+
+Vérifications : 94 balayages et tests verts, dont `scan-cachet-transparent.php` (12 règles,
+qui construit un vrai PDF et relit les octets du masque), `scan-certificat-normalise.php`
+(21 règles, qui construit le document, mesure sa page, et éprouve la détection des copies
+périmées sur deux vrais PDF) et `scan-recette-23-aout.php`
+(50 règles). Quatorze sabotages éprouvés, dont trois qui ont révélé des règles incapables
+d'échouer — corrigées avant livraison.
+
 ## [3.25.328] — 2026-08-19
 
 ### Corrigé — L'apprenant lit ses résultats, et peut les emporter

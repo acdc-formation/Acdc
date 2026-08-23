@@ -312,7 +312,7 @@ trait ACDC_Questionnaires_Core_Trait {
       if ( ! empty( $context['end_date'] ) ) {
         $end_ts = strtotime( (string) $context['end_date'] . ' 23:59:59' );
         if ( $end_ts && $end_ts < current_time( 'timestamp' ) ) {
-          $state = 'Formation terminée - ---';
+          $state = 'Formation terminée';
         }
       }
       $rows[] = array(
@@ -519,7 +519,7 @@ trait ACDC_Questionnaires_Core_Trait {
       if ( ! empty( $context['end_date'] ) ) {
         $end_ts = strtotime( (string) $context['end_date'] . ' 23:59:59' );
         if ( $end_ts && $end_ts < current_time( 'timestamp' ) ) {
-          $state = 'Formation terminée - ---';
+          $state = 'Formation terminée';
         }
       }
       $rows[] = array(
@@ -724,7 +724,7 @@ trait ACDC_Questionnaires_Core_Trait {
       if ( ! empty( $context['end_date'] ) ) {
         $end_ts = strtotime( (string) $context['end_date'] . ' 23:59:59' );
         if ( $end_ts && $end_ts < current_time( 'timestamp' ) ) {
-          $state = 'Formation terminée - ---';
+          $state = 'Formation terminée';
         }
       }
       $rows[] = array(
@@ -3245,14 +3245,32 @@ Vos réponses nous permettront d’évaluer nos pratiques, d’identifier des ax
           'pseudo' => trim( (string) ( $contact->first_name ?? '' ) . ' ' . (string) ( $contact->last_name ?? '' ) ),
         );
       } elseif ( ! empty( $session->company_id ) ) {
+        /* ACDC 3.25.329 — CE REPLI NE POUVAIT PAS FONCTIONNER.
+           Il lisait « $company->enterprise_contact_email ». Cette clé existe
+           bien dans le plugin — mais c'est celle de la fiche de L'ORGANISME
+           DE FORMATION, pas une colonne de la table des commanditaires, qui
+           range l'adresse dans « email ». La condition était donc toujours
+           fausse : sans contact rattaché portant une adresse, l'enquête
+           entreprise n'avait AUCUN destinataire.
+           Et le silence était total : sans destinataire, le compteur de
+           cibles reste à zéro, la session ne passe jamais à « envoyée », et
+           l'étape du workflow reste « en attente d'un préalable » — c'est
+           exactement ce que montre la recette pour Skill Conseil. Personne
+           n'était prévenu que rien ne partirait jamais.
+           On lit la colonne que l'écran REMPLIT, et le nom du signataire
+           quand il est connu : « Bonjour Skill Conseil » n'est pas une
+           formule qu'on adresse à quelqu'un. */
         $company = $this->get_company( (int) $session->company_id );
-        if ( $company && ! empty( $company->enterprise_contact_email ) && is_email( $company->enterprise_contact_email ) ) {
+        $company_email = ( $company && ! empty( $company->email ) ) ? sanitize_email( (string) $company->email ) : '';
+        if ( '' !== $company_email && is_email( $company_email ) ) {
+          $signataire = trim( (string) ( $company->signer_first_name ?? '' ) . ' ' . (string) ( $company->signer_last_name ?? '' ) );
+          $affichage  = ( '' !== $signataire ) ? $signataire : ( ! empty( $company->name ) ? (string) $company->name : 'Entreprise' );
           $targets[] = array(
             'recipient_type' => 'company_signatory',
             'company_contact_id' => 0,
-            'email' => sanitize_email( (string) $company->enterprise_contact_email ),
-            'full_name' => ! empty( $company->name ) ? (string) $company->name : 'Entreprise',
-            'pseudo' => ! empty( $company->name ) ? (string) $company->name : 'Entreprise',
+            'email' => $company_email,
+            'full_name' => $affichage,
+            'pseudo' => $affichage,
           );
         }
       }

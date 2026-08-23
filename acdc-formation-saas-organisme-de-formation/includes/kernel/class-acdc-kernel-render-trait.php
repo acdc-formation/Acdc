@@ -1085,26 +1085,6 @@ trait ACDC_Kernel_Render_Trait {
         ),
       ),
       array(
-        'type' => 'group',
-        'label' => 'Qualité & conformité',
-        'icon' => 'improvement',
-        'items' => array(
-          array( 'tab' => 'quality', 'label' => 'Hub qualité', 'icon' => 'improvement' ),
-          array( 'tab' => 'complaints', 'label' => 'Réclamations', 'icon' => 'alert' ),
-          array( 'tab' => 'continuous_improvement', 'label' => 'Améliorations continues', 'icon' => 'improvement' ),
-          array( 'tab' => 'conseil_perfectionnement', 'label' => 'Conseil de perfectionnement', 'icon' => 'improvement' ),
-          array( 'tab' => 'psh_partners', 'label' => 'Partenaires PSH', 'icon' => 'improvement' ),
-          array( 'tab' => 'training_sites', 'label' => 'Locaux & équipements', 'icon' => 'improvement' ),
-          array( 'tab' => 'subcontractors', 'label' => 'Sous-traitants', 'icon' => 'improvement' ),
-          array( 'tab' => 'bpf', 'label' => 'BPF', 'icon' => 'bpf' ),
-          array( 'tab' => 'external_missions', 'label' => 'Prestations extérieures', 'icon' => 'services' ),
-          array( 'tab' => 'ancillary_services', 'label' => 'Prestations annexes', 'icon' => 'services' ),
-          array( 'tab' => 'learner_deadlines', 'label' => 'Échéances apprenants', 'icon' => 'deadline' ),
-          array( 'tab' => 'rating_alerts', 'label' => 'Alertes notations', 'icon' => 'alert' ),
-          array( 'tab' => 'watch_ia', 'label' => 'Veille IA', 'icon' => 'watch' ),
-        ),
-      ),
-      array(
         'type' => 'section',
         'label' => 'Actions de formation',
       ),
@@ -1232,6 +1212,44 @@ trait ACDC_Kernel_Render_Trait {
           array( 'tab' => 'billing_settings', 'label' => 'Paramètres', 'icon' => 'settings' ),
         ),
       ),
+      /* ACDC 3.25.329 — QUALITÉ & CONFORMITÉ SORT DES ENQUÊTES.
+         Ce groupe était rangé sous « Évaluation & Enquêtes », aux côtés des
+         tests de positionnement et des enquêtes à chaud. Or il ne contient
+         aucune enquête : réclamations, sous-traitants, locaux, BPF,
+         partenaires PSH, veille — ce sont les pièces de la démarche qualité
+         de l'organisme, pas des questionnaires envoyés à quelqu'un. Rangé
+         là, il obligeait à chercher le BPF dans le menu des enquêtes.
+         Il devient une section à part entière, entre Comptabilité et Outils
+         et statistiques : à la hauteur de ce qu'il pèse un jour d'audit. */
+      array(
+        'type' => 'section',
+        'label' => 'Qualité & conformité',
+      ),
+      array(
+        'type' => 'group',
+        'label' => 'Qualité & conformité',
+        'icon' => 'improvement',
+        'items' => array(
+          array( 'tab' => 'quality', 'label' => 'Hub qualité', 'icon' => 'improvement' ),
+          array( 'tab' => 'complaints', 'label' => 'Réclamations', 'icon' => 'alert' ),
+          array( 'tab' => 'continuous_improvement', 'label' => 'Améliorations continues', 'icon' => 'improvement' ),
+          array( 'tab' => 'conseil_perfectionnement', 'label' => 'Conseil de perfectionnement', 'icon' => 'improvement' ),
+          array( 'tab' => 'psh_partners', 'label' => 'Partenaires PSH', 'icon' => 'improvement' ),
+          array( 'tab' => 'training_sites', 'label' => 'Locaux & équipements', 'icon' => 'improvement' ),
+          array( 'tab' => 'subcontractors', 'label' => 'Sous-traitants', 'icon' => 'improvement' ),
+          array( 'tab' => 'bpf', 'label' => 'BPF', 'icon' => 'bpf' ),
+          array( 'tab' => 'external_missions', 'label' => 'Prestations extérieures', 'icon' => 'services' ),
+          array( 'tab' => 'ancillary_services', 'label' => 'Prestations annexes', 'icon' => 'services' ),
+          array( 'tab' => 'learner_deadlines', 'label' => 'Échéances apprenants', 'icon' => 'deadline' ),
+          array( 'tab' => 'rating_alerts', 'label' => 'Alertes notations', 'icon' => 'alert' ),
+          array( 'tab' => 'watch_ia', 'label' => 'Veille IA', 'icon' => 'watch' ),
+          /* ACDC 3.25.329 — L'audit Qualiopi était rangé sous « Paramètres »,
+             entre les réglages du plugin et l'exploration contrôlée. C'est
+             l'écran qu'on ouvre le jour où un auditeur est en face de soi :
+             il appartient à la démarche qualité, pas à la configuration. */
+          array( 'tab' => 'audit', 'label' => 'Audit Qualiopi', 'icon' => 'evaluation_result' ),
+        ),
+      ),
       array(
         'type' => 'section',
         'label' => 'Outils et statistiques',
@@ -1264,7 +1282,6 @@ trait ACDC_Kernel_Render_Trait {
         'items' => array(
           array( 'tab' => 'settings', 'label' => 'Réglages', 'icon' => 'settings' ),
           array( 'tab' => 'agent_audit', 'label' => 'Exploration contrôlée', 'icon' => 'watch' ),
-          array( 'tab' => 'audit', 'label' => 'Audit Qualiopi', 'icon' => 'evaluation_result' ),
         ),
       ),
     );
@@ -12243,7 +12260,13 @@ trait ACDC_Kernel_Render_Trait {
     $company  = $item_id ? $this->get_company( $item_id ) : null;
     $companies = $this->get_companies();
     $new_url = is_admin() ? admin_url( 'admin.php?page=acdc-of-companies&action=new' ) : $this->portal_page_url( array( 'tab' => 'companies', 'action' => 'new' ) );
-    $page_title = $this->acdc_get_action_page_title( $action, 'Entreprises', 'Créer une entreprise', 'Modifier une entreprise', 'Voir une entreprise' );
+    /* ACDC 3.25.329 — UN SEUL NOM POUR UNE SEULE CHOSE.
+       Le menu disait « Commanditaires », la page disait « Entreprises », la
+       colonne disait « Entreprise » : trois mots pour le même écran, et
+       l'utilisateur qui cherche son commanditaire doit deviner qu'il est
+       rangé sous entreprise. Le mot du métier gagne — c'est celui qui figure
+       sur la convention, sur la facture et dans le workflow. */
+    $page_title = $this->acdc_get_action_page_title( $action, 'Commanditaires', 'Créer un commanditaire', 'Modifier un commanditaire', 'Voir un commanditaire' );
     $page_description = 'Gestion des structures clientes et commanditaires.';
     if ( 'new' === $action ) {
       $page_description = 'Création d’une structure cliente ou commanditaire.';
@@ -12263,7 +12286,7 @@ trait ACDC_Kernel_Render_Trait {
         <button type="button" class="acdc-button acdc-button-soft" data-acdc-modal-open="acdc-direct-email-modal-company-<?php echo (int) $company->id; ?>">&#x2709; Envoyer un e-mail</button>
         <?php endif; ?>
         <?php if ( 'new' !== $action ) : ?>
-        <a class="acdc-button acdc-button-primary" href="<?php echo esc_url( $new_url ); ?>">Créer une entreprise</a>
+        <a class="acdc-button acdc-button-primary" href="<?php echo esc_url( $new_url ); ?>">Créer un commanditaire</a>
         <?php endif; ?>
       </div>
     </section>
@@ -12322,8 +12345,7 @@ trait ACDC_Kernel_Render_Trait {
           <thead>
             <tr>
               <th>SIRET / N° d’identification</th>
-              <th>Entreprise</th>
-              <th>Prospect</th>
+              <th>Commanditaire</th>
               <th>Adresse</th>
               <th>Code postal</th>
               <th>Ville</th>
@@ -12347,7 +12369,6 @@ trait ACDC_Kernel_Render_Trait {
                 $signatory_email      = ! empty( $entry->email ) ? (string) $entry->email : ( $signatory && ! empty( $signatory->email ) ? (string) $signatory->email : '' );
                 $signature_label      = isset( $entry->signature_documents ) && '' !== trim( (string) $entry->signature_documents ) ? (string) $entry->signature_documents : $this->acdc_build_company_signature_documents_label( $signatory_first_name, $signatory_last_name, $signatory_quality );
                 if ( '' === trim( (string) $signature_label ) ) { $signature_label = ! empty( $entry->name ) ? (string) $entry->name : '—'; }
-                $is_prospect = isset( $entry->is_prospect ) ? (bool) $entry->is_prospect : ( isset( $entry->prospect ) ? (bool) $entry->prospect : false );
                 $base = is_admin() ? admin_url( 'admin.php?page=acdc-of-companies' ) : $this->portal_page_url( array( 'tab' => 'companies' ) );
                 $need_url = is_admin() ? admin_url( 'admin.php?page=acdc-of-need-analyses&action=new&company_id=' . (int) $entry->id ) : $this->portal_page_url( array( 'tab' => 'need_analyses', 'action' => 'new', 'company_id' => (int) $entry->id ) );
                 /* ACDC 3.25.157 — LOT 2 : deux slugs inexistants dans ce menu.
@@ -12367,7 +12388,6 @@ trait ACDC_Kernel_Render_Trait {
               <tr>
                 <td class="acdc-nowrap"><?php echo esc_html( $entry->siret ?: '—' ); ?></td>
                 <td><strong><?php echo esc_html( $entry->name ?: '—' ); ?></strong></td>
-                <td class="acdc-company-prospect-cell"><span class="acdc-prospect-indicator <?php echo $is_prospect ? 'is-yes' : 'is-no'; ?>"><?php echo $is_prospect ? '✓' : '×'; ?></span></td>
                 <td><?php echo esc_html( $entry->address ?: '—' ); ?></td>
                 <td class="acdc-nowrap"><?php echo esc_html( $entry->postal_code ?: '—' ); ?></td>
                 <td><?php echo esc_html( $entry->city ?: '—' ); ?></td>
@@ -12387,15 +12407,15 @@ trait ACDC_Kernel_Render_Trait {
                         <a href="<?php echo esc_url( $register_url ); ?>">Inscrire en formation</a>
                       </div>
                     </div>
-                    <a class="acdc-row-action-icon acdc-row-view-link" href="<?php echo esc_url( add_query_arg( array( 'action' => 'view', 'item_id' => $entry->id ), $base ) ); ?>" title="Voir" aria-label="Voir l’entreprise"><?php echo $this->render_inline_icon( 'eye', 25 ); ?></a>
-                    <a class="acdc-row-action-icon acdc-row-edit-link" href="<?php echo esc_url( add_query_arg( array( 'action' => 'edit', 'item_id' => $entry->id ), $base ) ); ?>" title="Modifier" aria-label="Modifier l’entreprise"><?php echo $this->render_inline_icon( 'edit', 25 ); ?></a>
-                    <a class="acdc-row-action-icon acdc-row-delete-link" href="<?php echo esc_url( wp_nonce_url( admin_url( 'admin-post.php?action=acdc_delete_company&company_id=' . $entry->id ), 'acdc_delete_company_' . $entry->id ) ); ?>" title="Supprimer" aria-label="Supprimer l’entreprise" onclick="return confirm('Supprimer cette entreprise ?');"><?php echo $this->render_inline_icon( 'trash', 25 ); ?></a>
+                    <a class="acdc-row-action-icon acdc-row-view-link" href="<?php echo esc_url( add_query_arg( array( 'action' => 'view', 'item_id' => $entry->id ), $base ) ); ?>" title="Voir" aria-label="Voir le commanditaire"><?php echo $this->render_inline_icon( 'eye', 25 ); ?></a>
+                    <a class="acdc-row-action-icon acdc-row-edit-link" href="<?php echo esc_url( add_query_arg( array( 'action' => 'edit', 'item_id' => $entry->id ), $base ) ); ?>" title="Modifier" aria-label="Modifier le commanditaire"><?php echo $this->render_inline_icon( 'edit', 25 ); ?></a>
+                    <a class="acdc-row-action-icon acdc-row-delete-link" href="<?php echo esc_url( wp_nonce_url( admin_url( 'admin-post.php?action=acdc_delete_company&company_id=' . $entry->id ), 'acdc_delete_company_' . $entry->id ) ); ?>" title="Supprimer" aria-label="Supprimer le commanditaire" onclick="return confirm('Supprimer ce commanditaire ?');"><?php echo $this->render_inline_icon( 'trash', 25 ); ?></a>
                   </div>
                 </td>
               </tr>
             <?php endforeach; ?>
           <?php else : ?>
-            <tr><td colspan="12"><?php echo esc_html( '' !== $c_search ? 'Aucune entreprise ne correspond à cette recherche.' : 'Aucune entreprise enregistrée.' ); ?></td></tr>
+            <tr><td colspan="11"><?php echo esc_html( '' !== $c_search ? 'Aucun commanditaire ne correspond à cette recherche.' : 'Aucun commanditaire enregistré.' ); ?></td></tr>
           <?php endif; ?>
           </tbody>
         </table>
@@ -15092,7 +15112,30 @@ private function _build_simple_pdf_string( $pages ) {
   foreach ( $pages as $page_lines ) {
     foreach ( $page_lines as $line ) {
       if ( isset( $line['type'] ) && 'image' === $line['type'] && ! empty( $line['image_key'] ) && ! isset( $image_map[ $line['image_key'] ] ) && ! empty( $line['image_data'] ) ) {
-        $image_object = "<< /Type /XObject /Subtype /Image /Width " . (int) $line['image_width'] . " /Height " . (int) $line['image_height'] . " /ColorSpace /DeviceRGB /BitsPerComponent 8 /Filter /DCTDecode /Length " . strlen( $line['image_data'] ) . " >>
+        /* ACDC 3.25.329 — LA MOITIÉ QUI MANQUAIT AU CACHET.
+           Une image DCTDecode est opaque par construction : le fond
+           transparent d'un PNG de signature arrivait donc en blanc, posé
+           comme un timbre sur le pied du document. La transparence se
+           déclare à côté de l'image, dans un /SMask : une seconde image en
+           niveaux de gris, de MÊMES dimensions, où 255 est opaque.
+           On ne l'écrit que si la préparation a effectivement extrait un
+           canal alpha — une image sans transparence garde exactement le
+           chemin d'avant. */
+        $smask_ref = '';
+        $alpha = '';
+        if ( ! empty( $line['alpha_data'] ) ) {
+          $alpha = (string) $line['alpha_data'];
+        } elseif ( ! empty( $this->acdc_pdf_masques[ $line['image_key'] ] ) ) {
+          $alpha = (string) $this->acdc_pdf_masques[ $line['image_key'] ];
+        }
+        if ( '' !== $alpha ) {
+          $smask_id = $add_object( "<< /Type /XObject /Subtype /Image /Width " . (int) $line['image_width'] . " /Height " . (int) $line['image_height'] . " /ColorSpace /DeviceGray /BitsPerComponent 8 /Filter /FlateDecode /Length " . strlen( $alpha ) . " >>
+stream
+" . $alpha . "
+endstream" );
+          $smask_ref = ' /SMask ' . $smask_id . ' 0 R';
+        }
+        $image_object = "<< /Type /XObject /Subtype /Image /Width " . (int) $line['image_width'] . " /Height " . (int) $line['image_height'] . " /ColorSpace /DeviceRGB /BitsPerComponent 8 /Filter /DCTDecode" . $smask_ref . " /Length " . strlen( $line['image_data'] ) . " >>
 stream
 " . $line['image_data'] . "
 endstream";
@@ -15332,7 +15375,7 @@ public function render_admin_control_center_page() {
   $links = array(
     'Prospects' => 'acdc-of-prospects',
     'Apprenants' => 'acdc-of-learners',
-    'Entreprises' => 'acdc-of-companies',
+    'Commanditaires' => 'acdc-of-companies',
     'Formations' => 'acdc-of-formations',
     'Documents' => 'acdc-of-documents',
     'Enquêtes intermédiaires' => 'acdc-of-mid-surveys',

@@ -1773,6 +1773,19 @@ trait ACDC_Quizzes_Actions_Trait {
             array( '%d' )
         );
 
+        /* ACDC 3.25.329 — RATTACHER À UNE PERSONNE NE SUFFIT PAS.
+           Le rattachement n'écrivait que learner_id. Or le moteur des pièces
+           de fin — celui qui décide si l'attestation est due — interroge
+           « WHERE qp.registration_id IN (…) » : le DOSSIER, pas la personne.
+           Une fois les trois apprenants rattachés à la main, leurs résultats
+           restaient donc invisibles pour le certificat, pour l'attestation et
+           pour la pastille « Évaluation des acquis ». Le rattachement
+           paraissait fait et ne servait à rien.
+           La résolution du dossier existait déjà et se faisait ailleurs, à la
+           fin d'une partie. On l'appelle ici aussi : c'est le même geste. */
+        $participant->learner_id = $learner_id;
+        $this->qz_resolve_registration_id_and_generate_pdf( $participant, (int) $participant->session_id );
+
         if ( method_exists( $this, 'log_action_event' ) ) {
             $this->log_action_event( 'qz_participant_rattache', 'qz_participant', $participant_id, 'success', array(
                 'learner_id' => $learner_id,

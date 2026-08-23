@@ -252,14 +252,31 @@ trait ACDC_Completion_Documents_Trait {
     $where  = array( "qq.quiz_purpose = 'assessment'", 'qp.completed_at IS NOT NULL' );
     $params = array();
 
+    /* ACDC 3.25.329 — DEUX CLÉS POUR UNE MÊME PERSONNE.
+       Le dossier et l'apprenant désignent la même chose vue de deux côtés,
+       et une participation peut ne porter que l'un des deux : celles jouées
+       avant le rattachement n'ont pas de dossier, et celles rattachées par
+       la fiche d'un autre parcours n'ont pas ce dossier-ci. Chercher par le
+       dossier SEUL — ce que faisait ce code dès qu'un dossier était fourni,
+       c'est-à-dire toujours, puisque l'appelant en fournit un — revenait à
+       déclarer « acquis non évalués » pour des résultats bien présents en
+       base. C'est ce qui laissait la pastille grise après un rattachement.
+       Les deux clés sont désormais réunies par un OU : on cherche la
+       personne, quel que soit le chemin par lequel elle a été reconnue. */
+    $cles   = array();
     if ( ! empty( $registration_ids ) ) {
       $ph      = implode( ',', array_fill( 0, count( $registration_ids ), '%d' ) );
-      $where[] = "qp.registration_id IN ({$ph})";
+      $cles[]  = "qp.registration_id IN ({$ph})";
       $params  = array_merge( $params, $registration_ids );
-    } else {
-      $where[]  = 'qp.learner_id = %d';
+    }
+    if ( (int) $learner_id > 0 ) {
+      $cles[]   = 'qp.learner_id = %d';
       $params[] = (int) $learner_id;
     }
+    if ( empty( $cles ) ) {
+      return $out;
+    }
+    $where[] = '( ' . implode( ' OR ', $cles ) . ' )';
 
     $sql = "SELECT qp.total_score_percentage, qp.is_passed, qp.completed_at, qq.title
               FROM {$qz_p} qp

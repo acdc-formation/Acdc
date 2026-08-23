@@ -159,3 +159,88 @@
         min-height: auto;
     }
 }
+
+/* ── ACDC 3.25.329 — Codes couleur par thématique, et le passé qui s'estompe ──
+   La recette du 23/08 : « ce serait bien d'avoir des codes couleur en fonction
+   des thématiques et quand la date est passée, mettre la couleur en estompé et
+   hachuré ».
+
+   La teinte n'est pas choisie ici : elle vient du répertoire des thématiques
+   (couleur_hex), portée jusqu'à l'événement dans --acdc-cal-teinte. Une séance
+   dont la formation n'a pas de thématique garde l'habillage d'origine — on ne
+   peint pas au hasard, une couleur arbitraire ferait croire à un regroupement.
+
+   Le hachurage se pose sur la CASE, l'estompage sur son CONTENU : hachurer le
+   contenu rendrait les titres illisibles, alors que le but est justement de
+   pouvoir encore les lire. */
+
+.acdc-calendar-event.has-teinte {
+    background: color-mix(in srgb, var(--acdc-cal-teinte) 14%, #fff);
+    border-color: color-mix(in srgb, var(--acdc-cal-teinte) 55%, #fff);
+    border-left: 4px solid var(--acdc-cal-teinte);
+}
+
+.acdc-calendar-event-thematique {
+    font-size: 10px;
+    line-height: 14px;
+    font-weight: 700;
+    letter-spacing: .04em;
+    text-transform: uppercase;
+    color: var(--acdc-cal-teinte, var(--acdc-text-muted));
+}
+
+/* Repli pour les navigateurs sans color-mix : la bordure gauche suffit à
+   distinguer les thématiques, et rien ne casse. */
+@supports not (background: color-mix(in srgb, #000 10%, #fff)) {
+    .acdc-calendar-event.has-teinte {
+        background: var(--acdc-primary-soft);
+        border-color: var(--acdc-border);
+    }
+}
+
+.acdc-calendar-day.is-passee {
+    background-image: repeating-linear-gradient(-45deg, rgba(12, 45, 82, .035) 0, rgba(12, 45, 82, .035) 5px, transparent 5px, transparent 11px);
+}
+
+.acdc-calendar-day.is-passee .acdc-calendar-events,
+.acdc-calendar-day.is-passee .acdc-calendar-day-number {
+    opacity: .52;
+    filter: saturate(.55);
+}
+
+/* Le survol rend au passé sa lisibilité pleine : estomper n'est pas cacher. */
+.acdc-calendar-day.is-passee:hover .acdc-calendar-events,
+.acdc-calendar-day.is-passee:focus-within .acdc-calendar-events {
+    opacity: 1;
+    filter: none;
+}
+
+/* ── ACDC 3.25.329 — Les mêmes repères dans la LISTE des séances ────────────
+   La recette parle des « onglets séance ET calendrier ». Deux écrans qui
+   montrent les mêmes objets et les distinguent différemment obligent à
+   réapprendre le code en passant de l'un à l'autre. */
+
+.acdc-session-row td.acdc-session-teinte {
+    box-shadow: inset 4px 0 0 0 var(--acdc-cal-teinte);
+}
+
+.acdc-session-thematique {
+    display: block;
+    margin-top: 3px;
+    font-size: 10px;
+    font-weight: 700;
+    letter-spacing: .04em;
+    text-transform: uppercase;
+    color: var(--acdc-cal-teinte, var(--acdc-text-muted));
+}
+
+.acdc-session-row.is-passee td {
+    opacity: .58;
+    filter: saturate(.55);
+    background-image: repeating-linear-gradient(-45deg, rgba(12, 45, 82, .035) 0, rgba(12, 45, 82, .035) 5px, transparent 5px, transparent 11px);
+}
+
+.acdc-session-row.is-passee:hover td {
+    opacity: 1;
+    filter: none;
+}

@@ -544,6 +544,26 @@ public function handle_save_quiz() {
   $filename = $this->get_completion_certificate_display_file_name( $registration, $context, $document );
   $mode = ( isset( $_GET['mode'] ) && 'inline' === sanitize_key( wp_unslash( $_GET['mode'] ) ) ) ? 'inline' : 'attachment';
   if ( ! empty( $document['path'] ) && file_exists( $document['path'] ) ) {
+    /* ACDC 3.25.329 — LA COPIE ARCHIVÉE PEUT ÊTRE À L'ANCIEN FORMAT.
+       Le certificat de réalisation est STOCKÉ par la routine de clôture, et
+       ce téléchargement sert le fichier stocké sans le regarder. Après le
+       passage du certificat au format normalisé — A4 portrait, texte rédigé —
+       tous les dossiers déjà clôturés auraient donc continué de rendre
+       l'ancien diplôme, cachet posé sur son carré blanc. Installer la
+       correction n'aurait rien changé à ce qu'on télécharge : le pire des
+       cas, une correction qu'on croit livrée.
+       Le format se LIT dans le fichier, il ne se devine pas : l'ancien
+       certificat est à l'italienne, le nouveau à la française. Une boîte de
+       page plus large que haute désigne donc une copie périmée. On la
+       reconstruit, on l'écrit à la MÊME adresse — pour que l'extranet de
+       l'apprenant, qui pointe cette adresse, suive sans rien casser — et on
+       la sert. Le dossier se remet à jour tout seul, une fois. */
+    if ( $this->acdc_certificat_archive_est_perime( $document['path'] ) ) {
+      $pdf = $this->_build_simple_pdf_string( $this->build_completion_certificate_pdf_pages( $registration, $context ) );
+      if ( is_string( $pdf ) && 0 === strpos( $pdf, '%PDF-' ) && is_writable( $document['path'] ) ) {
+        @file_put_contents( $document['path'], $pdf );
+      }
+    }
     $mime = 'application/pdf';
     while ( ob_get_level() ) { ob_end_clean(); }
     nocache_headers();
@@ -554,6 +574,32 @@ public function handle_save_quiz() {
   }
   $pages = $this->build_completion_certificate_pdf_pages( $registration, $context );
   $this->render_simple_pdf( $pages, $filename, $mode );
+}
+
+/**
+ * ACDC 3.25.329 — Cette copie archivée est-elle à l'ancien format ?
+ *
+ * On lit la première boîte de page du PDF. Le certificat de réalisation est
+ * désormais en A4 PORTRAIT ; l'ancien était à l'italienne. Une boîte plus
+ * large que haute est donc, sans ambiguïté, une copie d'avant.
+ *
+ * On mesure plutôt que de comparer des dates de fichier : une date de
+ * modification se perd à la moindre restauration de sauvegarde, alors que le
+ * format, lui, est dans le document.
+ *
+ * @param string $chemin Chemin du PDF stocké.
+ * @return bool
+ */
+private function acdc_certificat_archive_est_perime( $chemin ) {
+  $chemin = (string) $chemin;
+  if ( '' === $chemin || ! is_readable( $chemin ) ) {
+    return false;
+  }
+  $tete = (string) @file_get_contents( $chemin, false, null, 0, 65536 );
+  if ( '' === $tete || ! preg_match( '#/MediaBox\s*\[\s*0\s+0\s+([0-9.]+)\s+([0-9.]+)\s*\]#', $tete, $m ) ) {
+    return false;
+  }
+  return ( (float) $m[1] > (float) $m[2] );
 }public function handle_update_completion_certificate_document() {
   if ( ! is_user_logged_in() || ! $this->is_admin_manager() ) {
     wp_die( esc_html( 'Accès refusé.' ) );

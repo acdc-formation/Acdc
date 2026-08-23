@@ -16,9 +16,14 @@ trait ACDC_Sessions_Core_Trait {
 
   private function get_sessions() {
     global $wpdb;
-    $sql = "SELECT s.*, f.title AS formation_title, f.modality AS formation_modality, e.name AS company_name
+    /* ACDC 3.25.329 — La thématique et sa couleur accompagnent la séance
+       jusqu'à la liste, comme jusqu'au calendrier : les deux écrans montrent
+       les mêmes objets et doivent les distinguer de la même manière. */
+    $sql = "SELECT s.*, f.title AS formation_title, f.modality AS formation_modality, f.thematique AS thematique_code,
+          t.label AS thematique_label, t.couleur_hex AS thematique_couleur, e.name AS company_name
         FROM {$this->session_table} s
         LEFT JOIN {$this->formation_table} f ON f.id = s.formation_id
+        LEFT JOIN {$this->thematique_table} t ON t.code = f.thematique
         LEFT JOIN {$this->company_table} e ON e.id = s.company_id
         ORDER BY s.start_date DESC, s.id DESC";
     return $wpdb->get_results( $sql );
@@ -544,9 +549,17 @@ trait ACDC_Sessions_Core_Trait {
     $month_start = sprintf( '%04d-%02d-01', $year, $month );
     $month_end   = gmdate( 'Y-m-t', gmmktime( 12, 0, 0, $month, 1, $year ) );
 
-    $sql = "SELECT s.*, f.title AS formation_title, f.modality AS formation_modality, e.name AS company_name
+    /* ACDC 3.25.329 — LA THÉMATIQUE VOYAGE AVEC LA SÉANCE.
+       Le calendrier peignait toutes les séances de la même couleur : sur un
+       mois chargé, rien ne distinguait deux parcours. La thématique porte
+       déjà sa couleur dans son répertoire (couleur_hex) — il ne manquait que
+       la jointure pour l'amener jusqu'ici. Le lien passe par le CODE de la
+       thématique, seule colonne que porte la fiche formation. */
+    $sql = "SELECT s.*, f.title AS formation_title, f.modality AS formation_modality, f.thematique AS thematique_code,
+             t.label AS thematique_label, t.couleur_hex AS thematique_couleur, e.name AS company_name
       FROM {$this->session_table} s
       LEFT JOIN {$this->formation_table} f ON f.id = s.formation_id
+      LEFT JOIN {$this->thematique_table} t ON t.code = f.thematique
       LEFT JOIN {$this->company_table} e ON e.id = s.company_id
       WHERE COALESCE(DATE(s.start_at), s.start_date, DATE(s.end_at), s.end_date) IS NOT NULL
         AND COALESCE(DATE(s.start_at), s.start_date, DATE(s.end_at), s.end_date) <= %s

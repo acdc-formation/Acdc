@@ -7525,7 +7525,7 @@ private function acdc_nom_fichier_sauvegarde( $quand = null ) {
       if ( ! empty( $context['end_date'] ) ) {
         $end_ts = strtotime( (string) $context['end_date'] . ' 23:59:59' );
         if ( $end_ts && $end_ts < current_time( 'timestamp' ) ) {
-          $state = 'Formation terminée - ---';
+          $state = 'Formation terminée';
         }
       }
       $rows[] = array(
@@ -11282,7 +11282,7 @@ private function acdc_nom_fichier_sauvegarde( $quand = null ) {
       if ( ! empty( $context['end_date'] ) ) {
         $end_ts = strtotime( (string) $context['end_date'] . ' 23:59:59' );
         if ( $end_ts && $end_ts < current_time( 'timestamp' ) ) {
-          $state = 'Formation terminée - ---';
+          $state = 'Formation terminée';
         }
       }
       $rows[] = array(
@@ -11518,7 +11518,7 @@ private function acdc_nom_fichier_sauvegarde( $quand = null ) {
     if ( ! empty( $context['end_date'] ) ) {
       $end_ts = strtotime( (string) $context['end_date'] . ' 23:59:59' );
       if ( $end_ts && $end_ts < current_time( 'timestamp' ) ) {
-        $state = 'Formation terminée - ---';
+        $state = 'Formation terminée';
       }
     }
     $rows[] = array(
@@ -11533,86 +11533,148 @@ private function acdc_nom_fichier_sauvegarde( $quand = null ) {
   if ( empty( $context ) ) {
     $context = $this->get_completion_certificate_context( $registration );
   }
-  $profile = $this->get_company_profile_options();
-  $logo = $this->prepare_pdf_jpeg_image( $this->acdc_resolve_pdf_logo_url(), 160, 58 );
-  /* Le cachet passe par la charte (acdc_pdf_charte_stamp), plus bas. */
-  $navy = '#0C2D52';
-  $gold = '#C5A253';
-  $gold_soft = '#E8D8B1';
+
+  /* ACDC 3.25.329 — LE CERTIFICAT N'EST PAS UN DIPLÔME.
+     Il sortait à l'italienne, encadré de navy et de doré, le nom du
+     bénéficiaire en capitales de 22 points au milieu de la page : la forme
+     d'un document qu'on affiche au mur. Or le certificat de réalisation ne
+     s'affiche pas — il se TRANSMET. C'est la pièce que le financeur classe
+     pour solder un dossier, et son modèle est publié : A4 portrait, texte
+     rédigé à la première personne, mentions dans un ordre imposé, cases à
+     cocher pour la nature de l'action.
+     L'attestation de fin de formation, elle, GARDE le cadre du diplôme :
+     c'est la pièce de l'apprenant, celle qu'il montre. Les deux documents
+     avaient la même allure parce qu'ils partageaient un gabarit, pas parce
+     qu'ils avaient le même destinataire. Ils divergent ici, et c'est le
+     destinataire qui décide. */
+  $navy  = '#0C2D52';
+  $gold  = '#C5A253';
   $muted = '#6b7280';
-  $paper = '#fffdf8';
-  $pages = array();
+  $ink   = '#1e2a36';
+
+  $marge   = 62;
+  $largeur = 595 - ( 2 * $marge );
+
+  $signataire = trim( (string) ( $context['signatory_name'] ?? '' ) );
+  $qualite    = trim( (string) ( $context['signatory_role'] ?? '' ) );
+  $organisme  = trim( (string) ( $context['issuer_name'] ?? '' ) );
+  $apprenant  = trim( (string) ( $context['learner_name'] ?? '' ) );
+  $formation  = trim( (string) ( $context['formation_title'] ?? '' ) );
+  $heures     = trim( (string) ( $context['duration'] ?? '' ) );
+  if ( ! empty( $context['hours_label'] ) ) {
+    $heures = (string) $context['hours_label'];
+  }
+
+  /* L'employeur du bénéficiaire — « salarié(e) de l'entreprise … ». Le modèle
+     le demande ; sans commanditaire rattaché, la mention se tait plutôt que
+     d'écrire un tiret sur une pièce officielle. */
+  $employeur = '';
+  if ( ! empty( $context['company'] ) && ! empty( $context['company']->name ) ) {
+    $employeur = (string) $context['company']->name;
+  } elseif ( ! empty( $registration->company_label ) ) {
+    $employeur = (string) $registration->company_label;
+  }
+
   $page = array(
-    array( 'type' => 'page_meta', 'width' => 842, 'height' => 595 ),
-    array( 'type' => 'rect', 'x' => 0, 'y' => 0, 'width' => 842, 'height' => 595, 'fill_color' => $paper ),
-    array( 'type' => 'rect', 'x' => 14, 'y' => 14, 'width' => 814, 'height' => 567, 'stroke_color' => $navy, 'line_width' => 14 ),
-    array( 'type' => 'rect', 'x' => 28, 'y' => 28, 'width' => 786, 'height' => 539, 'stroke_color' => $gold, 'line_width' => 2 ),
-    array( 'text' => 'Document officiel', 'x' => 340, 'y' => 505, 'size' => 10, 'font' => 'Helvetica', 'color' => $gold ),
-    array( 'text' => 'CERTIFICAT DE RÉALISATION', 'x' => 250, 'y' => 480, 'size' => 18, 'font' => 'Helvetica-Bold', 'color' => $navy ),
-    array( 'text' => 'Action de formation', 'x' => 350, 'y' => 462, 'size' => 10, 'font' => 'Helvetica', 'color' => $muted ),
-    array( 'text' => 'Certificat', 'x' => 700, 'y' => 535, 'size' => 10, 'font' => 'Helvetica', 'color' => $muted ),
-    array( 'text' => 'Référence : CF / ' . (int) $registration->id . ' / ' . date_i18n( 'Y' ), 'x' => 640, 'y' => 522, 'size' => 9, 'font' => 'Helvetica', 'color' => $muted ),
-    array( 'text' => 'Je soussigné(e) ' . $context['signatory_name'] . ', représentant légal du dispensateur de formation ACDC-Formation atteste que', 'x' => 96, 'y' => 405, 'size' => 11, 'font' => 'Helvetica', 'color' => '#1e2a36' ),
-    array( 'text' => strtoupper( $context['learner_name'] ), 'x' => 250, 'y' => 375, 'size' => 22, 'font' => 'Helvetica-Bold', 'color' => $navy ),
-    array( 'type' => 'rect', 'x' => 195, 'y' => 365, 'width' => 450, 'height' => 0.8, 'fill_color' => $gold_soft ),
-    array( 'text' => 'a suivi l’action de formation', 'x' => 330, 'y' => 342, 'size' => 11, 'font' => 'Helvetica', 'color' => '#1e2a36' ),
-    array( 'text' => $context['formation_title'], 'x' => 140, 'y' => 318, 'size' => 14, 'font' => 'Helvetica-Bold', 'color' => $navy ),
-    array( 'type' => 'rect', 'x' => 115, 'y' => 308, 'width' => 610, 'height' => 0.8, 'fill_color' => $gold_soft ),
+    array( 'type' => 'page_meta', 'width' => 595, 'height' => 842 ),
   );
+
+  $logo = $this->prepare_pdf_jpeg_image( $this->acdc_resolve_pdf_logo_url(), 120, 44 );
   if ( $logo ) {
-    $page[] = array( 'type' => 'image', 'image_key' => $logo['key'], 'image_data' => $logo['data'], 'image_width' => $logo['width'], 'image_height' => $logo['height'], 'display_width' => $logo['display_width'], 'display_height' => $logo['display_height'], 'x' => 58, 'y' => 505 );
+    $page[] = array( 'type' => 'image', 'image_key' => $logo['key'], 'image_data' => $logo['data'], 'image_width' => $logo['width'], 'image_height' => $logo['height'], 'display_width' => $logo['display_width'], 'display_height' => $logo['display_height'], 'x' => $marge, 'y' => 762 );
   } else {
-    $page[] = array( 'text' => 'ACDC-FORMATION', 'x' => 60, 'y' => 530, 'size' => 14, 'font' => 'Helvetica-Bold', 'color' => $navy );
+    $page[] = array( 'text' => 'ACDC-FORMATION', 'x' => $marge, 'y' => 778, 'size' => 13, 'font' => 'Helvetica-Bold', 'color' => $navy );
   }
-  $meta_x = 88
-  ;
-  $meta_y = 235;
-  $box_w = 155;
-  $box_h = 58;
-  $gap = 15;
-  $meta = array(
-    array( 'Dates', 'Du ' . $this->format_pdf_date( $context['start_date'] ) . ' au ' . $this->format_pdf_date( $context['end_date'] ) ),
-    array( 'Format', $context['format'] ),
-    array( 'Durée', $context['duration'] ),
-    array( 'Assiduité', $context['assiduity'] ),
-  );
-  foreach ( $meta as $idx => $item ) {
-    $x = $meta_x + ( $idx * ( $box_w + $gap ) );
-    $page[] = array( 'type' => 'rect', 'x' => $x, 'y' => $meta_y, 'width' => $box_w, 'height' => $box_h, 'stroke_color' => '#d8dee7', 'line_width' => 1 );
-    $page[] = array( 'type' => 'rect', 'x' => $x, 'y' => $meta_y + $box_h - 3, 'width' => $box_w, 'height' => 3, 'fill_color' => $gold );
-    $page[] = array( 'text' => strtoupper( $item[0] ), 'x' => $x + 12, 'y' => $meta_y + 38, 'size' => 8.5, 'font' => 'Helvetica', 'color' => $muted );
-    foreach ( $this->pdf_wrap_text( $item[1], 26 ) as $line_index => $line ) {
-      $page[] = array( 'text' => $line, 'x' => $x + 12, 'y' => $meta_y + 20 - ( $line_index * 12 ), 'size' => 10.5, 'font' => 'Helvetica-Bold', 'color' => $navy );
+  $page[] = array( 'text' => 'Certificat', 'x' => 440, 'y' => 790, 'size' => 9.5, 'font' => 'Helvetica', 'color' => $muted );
+  $page[] = array( 'text' => 'Référence : CF / ' . (int) $registration->id . ' / ' . date_i18n( 'Y' ), 'x' => 380, 'y' => 776, 'size' => 9, 'font' => 'Helvetica', 'color' => $muted );
+
+  /* Le titre est centré à l'œil : la police Helvetica de ce moteur n'expose
+     pas ses métriques ici, on approche par la largeur moyenne. */
+  $titre = 'CERTIFICAT DE RÉALISATION';
+  $titre_x = max( $marge, (int) round( ( 595 - ( strlen( $titre ) * 20 * 0.62 ) ) / 2 ) );
+  $page[] = array( 'text' => $titre, 'x' => $titre_x, 'y' => 726, 'size' => 20, 'font' => 'Helvetica-Bold', 'color' => $navy );
+  $page[] = array( 'type' => 'rect', 'x' => $marge, 'y' => 714, 'width' => $largeur, 'height' => 1.2, 'fill_color' => $gold );
+
+  $y = 692;
+  $ligne = function ( $texte, $taille = 10.5, $police = 'Helvetica', $couleur = null, $saut = 15 ) use ( &$page, &$y, $marge, $ink ) {
+    $page[] = array( 'text' => $texte, 'x' => $marge, 'y' => $y, 'size' => $taille, 'font' => $police, 'color' => ( null === $couleur ? $ink : $couleur ) );
+    $y -= $saut;
+  };
+  $paragraphe = function ( $texte, $taille = 10.5, $police = 'Helvetica', $couleur = null, $largeur_car = 92, $saut = 15 ) use ( &$page, &$y, $marge, $ink ) {
+    foreach ( $this->pdf_wrap_text( $texte, $largeur_car ) as $l ) {
+      $page[] = array( 'text' => $l, 'x' => $marge, 'y' => $y, 'size' => $taille, 'font' => $police, 'color' => ( null === $couleur ? $ink : $couleur ) );
+      $y -= $saut;
     }
+  };
+
+  $entete = 'Je soussigné(e) ' . $signataire . ( '' !== $qualite ? ', ' . $qualite : '' ) . ', représentant légal du dispensateur de l’action concourant au développement des compétences' . ( '' !== $organisme ? ' ' . $organisme : '' ) . ',';
+  $paragraphe( $entete );
+  $y -= 4;
+  $ligne( 'atteste que :', 11, 'Helvetica-Bold', $navy, 20 );
+
+  $ligne( 'Mme/M. ' . $apprenant, 13, 'Helvetica-Bold', $navy, 19 );
+  if ( '' !== $employeur ) {
+    $ligne( 'salarié(e) de l’entreprise ' . $employeur, 10.5, 'Helvetica', $ink, 18 );
   }
-  $legal = "Sans préjudice des délais imposés par les règles fiscales, comptables ou commerciales, je m'engage à conserver l'ensemble des pièces justificatives qui ont permis d'établir le présent certificat pendant une durée de 3 (trois) ans à compter de la fin de l'année du dernier paiement.";
-  $page[] = array( 'type' => 'rect', 'x' => 95, 'y' => 160, 'width' => 652, 'height' => 45, 'stroke_color' => '#d8dee7', 'line_width' => 1 );
-  foreach ( $this->pdf_wrap_text( $legal, 118 ) as $i => $line ) {
-    $page[] = array( 'text' => $line, 'x' => 105, 'y' => 190 - ( $i * 10 ), 'size' => 8.5, 'font' => 'Helvetica', 'color' => '#5b6775' );
+  $paragraphe( 'a suivi l’action : ' . $formation, 10.5, 'Helvetica', $ink, 92, 15 );
+  $y -= 6;
+
+  /* ── La nature de l'action, en cases à cocher ──────────────────────────
+     Les caractères ☐ et ☒ n'existent pas dans l'encodage WinAnsi de ce
+     moteur : ils sortiraient en points d'interrogation sur la pièce même
+     qui doit être lisible par un financeur. Les cases sont donc DESSINÉES. */
+  $ligne( 'Nature de l’action concourant au développement des compétences :', 10, 'Helvetica', $muted, 20 );
+  $natures = array(
+    array( 'action de formation', true ),
+    array( 'bilan de compétences', false ),
+    array( 'action de VAE', false ),
+    array( 'action de formation par apprentissage', false ),
+  );
+  foreach ( $natures as $nature ) {
+    $page[] = array( 'type' => 'rect', 'x' => $marge + 12, 'y' => $y - 1, 'width' => 9, 'height' => 9, 'stroke_color' => '#8c97a6', 'line_width' => 0.8 );
+    if ( $nature[1] ) {
+      $page[] = array( 'type' => 'rect', 'x' => $marge + 14, 'y' => $y + 1, 'width' => 5, 'height' => 5, 'fill_color' => $navy );
+    }
+    $page[] = array( 'text' => $nature[0], 'x' => $marge + 30, 'y' => $y, 'size' => 10.5, 'font' => 'Helvetica', 'color' => $ink );
+    $y -= 15;
   }
-  $page[] = array( 'text' => 'ACDC', 'x' => 75, 'y' => 78, 'size' => 18, 'font' => 'Helvetica-Bold', 'color' => $gold );
-  $page[] = array( 'text' => 'Formation', 'x' => 75, 'y' => 60, 'size' => 16, 'font' => 'Helvetica-Bold', 'color' => $navy );
-  $page[] = array( 'text' => 'Action de formation / Certificat de réalisation', 'x' => 130, 'y' => 70, 'size' => 9, 'font' => 'Helvetica', 'color' => $muted );
-  $page[] = array( 'text' => 'Pour le dispensateur de la formation', 'x' => 325, 'y' => 90, 'size' => 9, 'font' => 'Helvetica', 'color' => $muted );
-  $page[] = array( 'type' => 'rect', 'x' => 300, 'y' => 80, 'width' => 180, 'height' => 0.8, 'fill_color' => $navy );
-  $page[] = array( 'text' => 'Fait à : ' . $context['issuer_city'], 'x' => 610, 'y' => 92, 'size' => 9.5, 'font' => 'Helvetica', 'color' => '#475569' );
-  $page[] = array( 'text' => 'Le : ' . date_i18n( 'd/m/Y' ), 'x' => 610, 'y' => 78, 'size' => 9.5, 'font' => 'Helvetica', 'color' => '#475569' );
-  $page[] = array( 'text' => $this->acdc_org_identity()['raison_sociale'], 'x' => 610, 'y' => 53, 'size' => 10.5, 'font' => 'Helvetica-Bold', 'color' => $navy );
-  $page[] = array( 'text' => 'Organisme de formation', 'x' => 610, 'y' => 40, 'size' => 9.5, 'font' => 'Helvetica', 'color' => '#475569' );
-  /* ACDC 3.25.264 — LE CACHET RECOUVRAIT LA DATE.
-     Posé en (612, 55), il montait jusqu'à y=120 et passait sur « Fait à : … »
-     et « Le : … », imprimés en 92 et 78 : sur le document livré, le tampon
-     barrait la date d'émission. Il descend sous les mentions, et sa taille
-     vient de la charte comme partout ailleurs. La forme normalisée du
-     certificat n'est pas en cause — un cachet qui masque une mention n'est
-     pas une mise en page, c'est un défaut. */
-  $stamp_line = $this->acdc_pdf_charte_stamp( 612, 8 );
+  $y -= 6;
+
+  $ligne( 'qui s’est déroulée du ' . $this->format_pdf_date( $context['start_date'] ?? '' ) . ' au ' . $this->format_pdf_date( $context['end_date'] ?? '' ), 10.5, 'Helvetica', $ink, 18 );
+  $ligne( 'pour une durée de ' . ( '' !== $heures ? $heures : '—' ) . ' (nombre d’heures réalisées).', 10.5, 'Helvetica', $ink, 22 );
+
+  $legal = 'Sans préjudice des délais imposés par les règles fiscales, comptables ou commerciales, je m’engage à conserver l’ensemble des pièces justificatives qui ont permis d’établir le présent certificat pendant une durée de 3 (trois) ans à compter de la fin de l’année du dernier paiement. En cas de cofinancement des fonds européens la durée de conservation est étendue conformément aux obligations conventionnelles spécifiques.';
+  $paragraphe( $legal, 9.5, 'Helvetica', '#4a5563', 102, 12 );
+
+  /* ── Le pied : lieu, date, et le cadre de signature du modèle ────────── */
+  $bas = 150;
+  $page[] = array( 'text' => 'Fait à : ' . (string) ( $context['issuer_city'] ?? '' ), 'x' => $marge, 'y' => $bas + 78, 'size' => 10.5, 'font' => 'Helvetica', 'color' => $ink );
+  $page[] = array( 'text' => 'Le : ' . date_i18n( 'd/m/Y' ), 'x' => $marge, 'y' => $bas + 58, 'size' => 10.5, 'font' => 'Helvetica', 'color' => $ink );
+
+  $cadre_x = 285;
+  $cadre_w = 248;
+  $cadre_h = 118;
+  $page[] = array( 'type' => 'rect', 'x' => $cadre_x, 'y' => $bas, 'width' => $cadre_w, 'height' => $cadre_h, 'stroke_color' => $navy, 'line_width' => 0.9 );
+  $page[] = array( 'text' => 'Cachet et signature', 'x' => $cadre_x + 66, 'y' => $bas + $cadre_h - 18, 'size' => 9.5, 'font' => 'Helvetica', 'color' => $muted );
+  $page[] = array( 'text' => 'du responsable du dispensateur de formation', 'x' => $cadre_x + 14, 'y' => $bas + $cadre_h - 31, 'size' => 8.5, 'font' => 'Helvetica', 'color' => $muted );
+  $page[] = array( 'text' => trim( $signataire . ( '' !== $qualite ? ' — ' . $qualite : '' ) ), 'x' => $cadre_x + 14, 'y' => $bas + 10, 'size' => 9, 'font' => 'Helvetica-Bold', 'color' => $navy );
+
+  /* Le cachet tient DANS le cadre : c'est le cadre qui donne sa taille, pas
+     l'inverse. Un tampon qui déborde sur la date, on l'a déjà vu en 3.25.264. */
+  $stamp_line = $this->acdc_pdf_charte_stamp( $cadre_x + 40, $bas + 24, $cadre_w - 80, $cadre_h - 66 );
   if ( $stamp_line ) {
     $page[] = $stamp_line;
   }
-  $pages[] = $page;
-  return $pages;
-}private function get_end_training_certificate_document_info( $registration, $context = array() ) {
+
+  $page[] = array( 'type' => 'rect', 'x' => $marge, 'y' => 96, 'width' => 150, 'height' => 0.6, 'fill_color' => '#c3cad4' );
+  $page[] = array( 'text' => '1  Lorsque l’action est mise en œuvre dans le cadre d’un projet de transition professionnelle, le certificat', 'x' => $marge, 'y' => 82, 'size' => 7.5, 'font' => 'Helvetica', 'color' => $muted );
+  $page[] = array( 'text' => '   de réalisation doit être transmis mensuellement.', 'x' => $marge, 'y' => 72, 'size' => 7.5, 'font' => 'Helvetica', 'color' => $muted );
+  $page[] = array( 'text' => '2  Dans le cadre des formations à distance, prendre en compte la réalisation des activités pédagogiques', 'x' => $marge, 'y' => 60, 'size' => 7.5, 'font' => 'Helvetica', 'color' => $muted );
+  $page[] = array( 'text' => '   et le temps estimé pour les réaliser.', 'x' => $marge, 'y' => 50, 'size' => 7.5, 'font' => 'Helvetica', 'color' => $muted );
+
+  return array( $page );
+}
+private function get_end_training_certificate_document_info( $registration, $context = array() ) {
   $info = array(
     'url'   => '',
     'path'  => '',
@@ -11736,7 +11798,7 @@ private function acdc_nom_fichier_sauvegarde( $quand = null ) {
     if ( ! empty( $context['end_date'] ) ) {
       $end_ts = strtotime( (string) $context['end_date'] . ' 23:59:59' );
       if ( $end_ts && $end_ts < current_time( 'timestamp' ) ) {
-        $state = 'Formation terminée - ---';
+        $state = 'Formation terminée';
       }
     }
     $rows[] = array(
@@ -13226,7 +13288,7 @@ public function register_admin_menu() {
   add_submenu_page( 'acdc-of-dashboard', 'Apprenants', 'Apprenants', 'manage_options', 'acdc-of-learners', array( $this, 'render_admin_learners_page' ) );
   add_submenu_page( 'acdc-of-dashboard', 'Formations', 'Formations', 'manage_options', 'acdc-of-formations', array( $this, 'render_admin_formations_page' ) );
   add_submenu_page( 'acdc-of-dashboard', 'Groupes', 'Groupes', 'manage_options', 'acdc-of-groups', array( $this, 'render_admin_groups_page' ) );
-  add_submenu_page( 'acdc-of-dashboard', 'Entreprises', 'Entreprises', 'manage_options', 'acdc-of-companies', array( $this, 'render_admin_companies_page' ) );
+  add_submenu_page( 'acdc-of-dashboard', 'Commanditaires', 'Commanditaires', 'manage_options', 'acdc-of-companies', array( $this, 'render_admin_companies_page' ) );
   add_submenu_page( 'acdc-of-dashboard', 'Financeurs', 'Financeurs', 'manage_options', 'acdc-of-funders', array( $this, 'render_admin_funders_page' ) );
   add_submenu_page( 'acdc-of-dashboard', 'Formateurs', 'Formateurs', 'manage_options', 'acdc-of-trainers', array( $this, 'render_admin_trainers_page' ) );
   add_submenu_page( 'acdc-of-dashboard', 'Quiz', 'Quiz', 'manage_options', 'acdc-of-quiz', array( $this, 'render_admin_quiz_page' ) );
@@ -13690,6 +13752,39 @@ private function acdc_pdf_asset_is_readable( $url ) {
     return null;
   }
 
+  /* ACDC 3.25.329 — LE FOND BLANC DU CACHET.
+     Le cachet et la signature sont des PNG à fond TRANSPARENT. Ils
+     arrivaient pourtant sur le certificat et l'attestation posés sur un
+     rectangle blanc qui mordait sur le pied de page : la préparation
+     d'image aplatissait l'image sur du blanc avant de l'encoder en JPEG,
+     parce que le moteur PDF maison ne savait écrire que du DCTDecode,
+     c'est-à-dire une image OPAQUE.
+     La transparence d'un PDF ne se porte pas dans l'image : elle se porte
+     à côté, dans un /SMask — une seconde image, en niveaux de gris, où le
+     blanc est opaque et le noir transparent. On extrait donc le canal
+     alpha ici, et le moteur l'attache là-bas. Sans les deux moitiés, la
+     correction ne vaut rien : un canal alpha qu'aucun objet ne référence
+     ne masque rien du tout. */
+  $alpha_source = $this->acdc_pdf_image_a_de_la_transparence( $raw );
+  if ( $alpha_source && ( $width * $height ) > 1200000 ) {
+    /* Le masque se construit pixel par pixel : on borne la surface à
+       parcourir avant de l'entamer, sinon un cachet scanné en 4000 px fait
+       seize millions de tours de boucle pour un timbre de 6 cm. */
+    $reduit = min( 1, sqrt( 1200000 / ( $width * $height ) ) );
+    $nw = max( 1, (int) round( $width * $reduit ) );
+    $nh = max( 1, (int) round( $height * $reduit ) );
+    $petit = imagecreatetruecolor( $nw, $nh );
+    if ( $petit ) {
+      imagealphablending( $petit, false );
+      imagesavealpha( $petit, true );
+      imagecopyresampled( $petit, $image, 0, 0, 0, 0, $nw, $nh, $width, $height );
+      imagedestroy( $image );
+      $image  = $petit;
+      $width  = $nw;
+      $height = $nh;
+    }
+  }
+
   $ratio = min( $max_width / $width, $max_height / $height, 1 );
   $display_width = max( 1, (int) round( $width * $ratio ) );
   $display_height = max( 1, (int) round( $height * $ratio ) );
@@ -13705,6 +13800,11 @@ private function acdc_pdf_asset_is_readable( $url ) {
   imagesavealpha( $flattened, false );
   imagecopy( $flattened, $image, 0, 0, 0, 0, $width, $height );
 
+  $alpha_data = '';
+  if ( $alpha_source ) {
+    $alpha_data = $this->acdc_pdf_masque_alpha( $image, $width, $height );
+  }
+
   ob_start();
   imageinterlace( $flattened, true );
   imagejpeg( $flattened, null, 92 );
@@ -13716,14 +13816,90 @@ private function acdc_pdf_asset_is_readable( $url ) {
     return null;
   }
 
+  /* ACDC 3.25.329 — LE MASQUE SE RANGE AVEC SA CLÉ, PAS AVEC SON APPELANT.
+     Une vingtaine d'endroits fabriquent un élément « image » à la main, en
+     recopiant clé, données et dimensions champ par champ. Rendre le masque
+     par la valeur de retour aurait obligé ces vingt endroits à le recopier
+     eux aussi — et le vingt-et-unième, écrit demain, l'aurait oublié : le
+     cachet serait revenu sur fond blanc sans que personne ne comprenne
+     pourquoi. Le masque est donc déposé ici, indexé par la clé de l'image ;
+     le moteur PDF le retrouve tout seul au moment d'écrire. */
+  $key = md5( $jpeg . $alpha_data );
+  if ( '' !== $alpha_data ) {
+    $this->acdc_pdf_masques[ $key ] = $alpha_data;
+  }
+
   return array(
-    'key' => md5( $jpeg ),
+    'key' => $key,
     'data' => $jpeg,
+    'alpha_data' => $alpha_data,
     'width' => $width,
     'height' => $height,
     'display_width' => $display_width,
     'display_height' => $display_height,
   );
+}
+
+/**
+ * ACDC 3.25.329 — Les canaux alpha préparés pendant la requête, par clé
+ * d'image. Voir prepare_pdf_jpeg_image() et _build_simple_pdf_string().
+ *
+ * @var array<string,string>
+ */
+private $acdc_pdf_masques = array();
+
+/**
+ * ACDC 3.25.329 — L'image porte-t-elle un canal alpha ?
+ *
+ * On lit l'en-tête PNG plutôt que de parcourir les pixels : l'octet 25 de
+ * l'IHDR donne le type de couleur — 4 (gris + alpha) et 6 (RVB + alpha) en
+ * portent un, et le type 3 (palette) peut porter un chunk tRNS. Une image
+ * opaque doit sortir d'ici par « non » : c'est ce « non » qui garantit que
+ * le chemin d'avant — logos, photos, JPEG — ne change pas d'un pixel.
+ *
+ * @param string $raw Contenu binaire du fichier image.
+ * @return bool
+ */
+private function acdc_pdf_image_a_de_la_transparence( $raw ) {
+  $raw = is_string( $raw ) ? $raw : '';
+  if ( strlen( $raw ) < 26 || "\x89PNG\r\n\x1a\n" !== substr( $raw, 0, 8 ) ) {
+    return false;
+  }
+  $color_type = ord( $raw[25] );
+  if ( 4 === $color_type || 6 === $color_type ) {
+    return true;
+  }
+  return ( 3 === $color_type && false !== strpos( $raw, 'tRNS' ) );
+}
+
+/**
+ * ACDC 3.25.329 — Le canal alpha, en niveaux de gris, prêt pour un /SMask.
+ *
+ * GD compte l'alpha à l'envers de PDF et sur sept bits : 0 = opaque,
+ * 127 = transparent. Le masque PDF attend l'inverse sur huit bits :
+ * 255 = opaque, 0 = transparent. L'inversion est le cœur du calcul — la
+ * manquer retournerait le document, cachet effacé et fond peint.
+ *
+ * @param resource|\GdImage $image  Image source.
+ * @param int               $width  Largeur.
+ * @param int               $height Hauteur.
+ * @return string Flux comprimé, ou '' si la compression n'est pas disponible.
+ */
+private function acdc_pdf_masque_alpha( $image, $width, $height ) {
+  if ( ! function_exists( 'gzcompress' ) ) {
+    return '';
+  }
+  $gris = '';
+  for ( $y = 0; $y < $height; $y++ ) {
+    $ligne = '';
+    for ( $x = 0; $x < $width; $x++ ) {
+      $alpha = ( imagecolorat( $image, $x, $y ) >> 24 ) & 0x7F;
+      $ligne .= chr( 255 - (int) round( $alpha * 255 / 127 ) );
+    }
+    $gris .= $ligne;
+  }
+  $compresse = gzcompress( $gris, 6 );
+  return ( false === $compresse ) ? '' : $compresse;
 }private function pdf_hex_to_rgb( $color ) {
   $color = is_scalar( $color ) ? trim( (string) $color ) : '';
   if ( '' === $color ) {
@@ -14086,10 +14262,20 @@ private function acdc_pdf_asset_is_readable( $url ) {
       $criteria[] = array( 'label' => 'Test de positionnement', 'ok' => $doc( $registration, 'positioning_result_document' ), 'points' => 10 );
     }
 
+    /* ACDC 3.25.329 — CES TROIS PASTILLES ATTENDAIENT UN PDF, PAS UN FAIT.
+       Elles ne lisaient que la colonne du document archivé. Or le document
+       n'est écrit qu'au passage d'une routine ou au téléchargement depuis
+       l'administration : l'apprenant pouvait avoir passé son évaluation et
+       répondu à l'enquête à chaud — les résultats sont en base, l'écran des
+       enquêtes affiche « Répondue » — sans que la pastille verdisse jamais.
+       C'est ce que montre la recette : dossier bloqué à 65 %, cinq pastilles
+       grises sur une formation terminée et émargée.
+       Elles lisent désormais le FAIT d'abord, le document ensuite. Le
+       document reste une preuve valable ; il n'est plus la seule. */
     $criteria[] = array( 'label' => 'Émargement',               'ok' => $this->acdc_registration_attendance_complete( $registration ), 'points' => 10 );
-    $criteria[] = array( 'label' => 'Évaluation diagnostique',  'ok' => $doc( $registration, 'mid_survey_document' ),                  'points' => 5 );
-    $criteria[] = array( 'label' => 'Évaluation des acquis',    'ok' => $doc( $registration, 'evaluation_result_document' ),           'points' => 10 );
-    $criteria[] = array( 'label' => 'Enquête à chaud',          'ok' => $doc( $registration, 'hot_survey_document' ),                  'points' => 10 );
+    $criteria[] = array( 'label' => 'Évaluation diagnostique',  'ok' => $doc( $registration, 'mid_survey_document' ) || $this->acdc_registration_quiz_passe( $registration, 'diagnostic' ),  'points' => 5 );
+    $criteria[] = array( 'label' => 'Évaluation des acquis',    'ok' => $doc( $registration, 'evaluation_result_document' ) || $this->acdc_registration_quiz_passe( $registration, 'assessment' ), 'points' => 10 );
+    $criteria[] = array( 'label' => 'Enquête à chaud',          'ok' => $doc( $registration, 'hot_survey_document' ) || $this->acdc_registration_enquete_repondue( $registration, 'hot_survey' ), 'points' => 10 );
     /* ACDC 3.25.264 — CES DEUX LIGNES ÉTAIENT INVERSÉES.
        « Attestation de formation » cochait la présence du CERTIFICAT DE
        RÉALISATION, et « Certificat de formation » celle de l'ATTESTATION —
@@ -14100,7 +14286,7 @@ private function acdc_pdf_asset_is_readable( $url ) {
        Ce sont désormais les noms que la loi leur donne. */
     $criteria[] = array( 'label' => 'Certificat de réalisation',       'ok' => $doc( $registration, 'completion_certificate_document' ),   'points' => 10 );
     $criteria[] = array( 'label' => 'Attestation de fin de formation', 'ok' => $doc( $registration, 'end_training_certificate_document' ), 'points' => 5 );
-    $criteria[] = array( 'label' => 'Enquête à froid',          'ok' => $doc( $registration, 'cold_survey_document' ),                 'points' => 5 );
+    $criteria[] = array( 'label' => 'Enquête à froid',          'ok' => $doc( $registration, 'cold_survey_document' ) || $this->acdc_registration_enquete_repondue( $registration, 'cold_survey' ), 'points' => 5 );
 
     $total  = 0;
     $earned = 0;
@@ -14116,6 +14302,154 @@ private function acdc_pdf_asset_is_readable( $url ) {
       'total'    => $total,
       'criteria' => $criteria,
     );
+  }
+
+  /**
+   * ACDC 3.25.329 — LA FORMATION EST-ELLE TERMINÉE ?
+   *
+   * La colonne « Statut » d'Apprenants inscrits n'affichait que l'état
+   * COMMERCIAL du dossier — « Dossier créé » — sur une formation achevée et
+   * émargée depuis cinq jours. C'est le reproche de la recette : cet écran
+   * doit dire où en est la FORMATION, pas seulement où en est la vente.
+   *
+   * La fin se lit sur les séances du parcours, pas sur un champ que
+   * quelqu'un devrait penser à cocher. Le résultat est mis en cache par
+   * formation le temps de la requête : la liste affiche souvent plusieurs
+   * apprenants d'un même parcours, et il n'y a aucune raison de reposer la
+   * même question à la base pour chacun.
+   *
+   * @param object $registration Le dossier d'inscription.
+   * @return array{terminee:bool, fin:string}
+   */
+  private function acdc_registration_formation_terminee( $registration ) {
+    global $wpdb;
+    static $cache = array();
+
+    $formation_id = isset( $registration->formation_id ) ? (int) $registration->formation_id : 0;
+    if ( $formation_id <= 0 || empty( $this->session_table ) ) {
+      return array( 'terminee' => false, 'fin' => '' );
+    }
+
+    /* Une séance de la MÊME formation animée pour une autre entreprise
+       n'appartient pas à ce parcours : la cloison posée en 3.25.321 tient
+       aussi ici. La clé de cache porte donc les deux identifiants. */
+    $company_id = isset( $registration->company_id ) ? (int) $registration->company_id : 0;
+    $cle        = $formation_id . ':' . $company_id;
+    if ( isset( $cache[ $cle ] ) ) {
+      return $cache[ $cle ];
+    }
+
+    $sql    = "SELECT MAX(COALESCE(end_at, end_date, start_at, start_date)) FROM {$this->session_table} WHERE formation_id = %d AND is_draft = 0";
+    $params = array( $formation_id );
+    if ( $company_id > 0 ) {
+      $sql     .= ' AND ( company_id = %d OR company_id IS NULL OR company_id = 0 )';
+      $params[] = $company_id;
+    }
+
+    $fin = (string) $wpdb->get_var( $wpdb->prepare( $sql, $params ) );
+
+    $terminee = false;
+    if ( '' !== $fin ) {
+      /* Une date sans heure se lit comme la fin de journée : une séance du
+         18 n'est pas terminée à 00:00 le 18. */
+      $fin_ts   = strtotime( ( 10 === strlen( $fin ) ) ? ( $fin . ' 23:59:59' ) : $fin );
+      $terminee = ( $fin_ts && $fin_ts < current_time( 'timestamp' ) );
+    }
+
+    $cache[ $cle ] = array( 'terminee' => (bool) $terminee, 'fin' => $fin );
+    return $cache[ $cle ];
+  }
+
+  /**
+   * ACDC 3.25.329 — Cet apprenant a-t-il RÉELLEMENT passé ce type de quiz ?
+   *
+   * On cherche par le dossier ET par la personne, réunis par un OU : une
+   * participation jouée avant le rattachement ne porte pas de dossier, et une
+   * participation rattachée depuis l'écran des résultats ne porte que
+   * l'apprenant. Interroger une seule des deux clés, c'est manquer la moitié
+   * des cas — et c'est très exactement ce qui laissait la pastille grise
+   * après que David eut rattaché les trois apprenants à la main.
+   *
+   * @param object $registration Le dossier d'inscription.
+   * @param string $purpose      'assessment', 'diagnostic', 'positioning'…
+   * @return bool
+   */
+  private function acdc_registration_quiz_passe( $registration, $purpose ) {
+    global $wpdb;
+    $registration_id = isset( $registration->id ) ? (int) $registration->id : 0;
+    $learner_id      = isset( $registration->learner_id ) ? (int) $registration->learner_id : 0;
+    if ( $registration_id <= 0 && $learner_id <= 0 ) {
+      return false;
+    }
+
+    $qz_p = $wpdb->prefix . 'acdc_of_qz_participants';
+    $qz_s = $wpdb->prefix . 'acdc_of_qz_sessions';
+    $qz_q = $wpdb->prefix . 'acdc_of_qz_quizzes';
+
+    $cles   = array();
+    $params = array( (string) $purpose );
+    if ( $registration_id > 0 ) {
+      $cles[]   = 'qp.registration_id = %d';
+      $params[] = $registration_id;
+    }
+    if ( $learner_id > 0 ) {
+      $cles[]   = 'qp.learner_id = %d';
+      $params[] = $learner_id;
+    }
+
+    $sql = "SELECT COUNT(*)
+              FROM {$qz_p} qp
+              INNER JOIN {$qz_s} qs ON qs.id = qp.session_id
+              INNER JOIN {$qz_q} qq ON qq.id = qs.quiz_id
+             WHERE qq.quiz_purpose = %s
+               AND qp.completed_at IS NOT NULL
+               AND ( " . implode( ' OR ', $cles ) . ' )';
+
+    return (int) $wpdb->get_var( $wpdb->prepare( $sql, $params ) ) > 0;
+  }
+
+  /**
+   * ACDC 3.25.329 — Cet apprenant a-t-il RÉPONDU à cette enquête ?
+   *
+   * Même principe : la réponse existe dans la table des participants au
+   * questionnaire, avec sa date de fin. Le PDF récapitulatif, lui, n'est
+   * fabriqué que plus tard — en faire la condition revenait à dire qu'une
+   * enquête répondue n'avait pas été répondue.
+   *
+   * @param object $registration Le dossier d'inscription.
+   * @param string $source_type  'hot_survey', 'cold_survey'…
+   * @return bool
+   */
+  private function acdc_registration_enquete_repondue( $registration, $source_type ) {
+    global $wpdb;
+    if ( empty( $this->questionnaire_participant_table ) || empty( $this->questionnaire_session_table ) ) {
+      return false;
+    }
+    $registration_id = isset( $registration->id ) ? (int) $registration->id : 0;
+    $learner_id      = isset( $registration->learner_id ) ? (int) $registration->learner_id : 0;
+    if ( $registration_id <= 0 && $learner_id <= 0 ) {
+      return false;
+    }
+
+    $cles   = array();
+    $params = array( (string) $source_type );
+    if ( $registration_id > 0 ) {
+      $cles[]   = 'p.registration_id = %d';
+      $params[] = $registration_id;
+    }
+    if ( $learner_id > 0 ) {
+      $cles[]   = 'p.apprenant_id = %d';
+      $params[] = $learner_id;
+    }
+
+    $sql = "SELECT COUNT(*)
+              FROM {$this->questionnaire_participant_table} p
+              INNER JOIN {$this->questionnaire_session_table} s ON s.id = p.session_id
+             WHERE s.source_type = %s
+               AND p.finished_at IS NOT NULL
+               AND ( " . implode( ' OR ', $cles ) . ' )';
+
+    return (int) $wpdb->get_var( $wpdb->prepare( $sql, $params ) ) > 0;
   }
 
   /**
