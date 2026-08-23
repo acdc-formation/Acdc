@@ -2718,12 +2718,33 @@ public function render_admin_registration_contract_page() { $this->render_admin_
   /**
    * ACDC 3.25.00 — Rendu d'un sous-onglet "dossiers par entité" (apprenant, commanditaire, formation, séance).
    */
-  private function render_dossiers_by_entity( $entity_type, $search, $base_url, $paged, $per_page ) {
+  /**
+   * @param string      $entity_type learner|company|formation|session.
+   * @param string      $search      Recherche courante.
+   * @param string      $base_url    URL de l'écran appelant.
+   * @param int         $paged       Page courante.
+   * @param int         $per_page    Taille de page.
+   * @param string|null $vue_slug    ACDC 3.25.330 — Le nom que l'ÉCRAN APPELANT
+   *   donne à cette vue. Il était deviné ici, par « type d'entité + s » —
+   *   « companys », « learners ». Tant que l'explorateur ne servait qu'un seul
+   *   écran, personne ne s'en apercevait. Branché sur un second, la
+   *   supercherie tombe : les liens des dossiers repartaient avec
+   *   « trf_view=companys », valeur que l'écran Dossiers de formation ne
+   *   reconnaît pas et qu'il remplace par « inscriptions » — un clic sur un
+   *   commanditaire aurait ramené à la liste plate qu'on venait de quitter.
+   *   L'appelant nomme donc sa vue lui-même ; le repli d'avant reste pour
+   *   l'écran Conventions, qui n'a pas à changer.
+   */
+  private function render_dossiers_by_entity( $entity_type, $search, $base_url, $paged, $per_page, $vue_slug = null ) {
     global $wpdb;
 
     // Paramètre de navigation : trf_id pour la fiche, trf_view pour le sous-onglet
     $trf_id      = isset( $_GET['trf_id'] )   ? absint( wp_unslash( $_GET['trf_id'] ) )         : 0;
-    $trf_view    = isset( $_GET['trf_view'] )  ? sanitize_key( wp_unslash( $_GET['trf_view'] ) ) : ( $entity_type . 's' );
+    if ( null !== $vue_slug && '' !== (string) $vue_slug ) {
+      $trf_view = sanitize_key( (string) $vue_slug );
+    } else {
+      $trf_view = isset( $_GET['trf_view'] ) ? sanitize_key( wp_unslash( $_GET['trf_view'] ) ) : ( $entity_type . 's' );
+    }
     $entity_subtab = isset( $_GET['entity_subtab'] ) ? sanitize_key( wp_unslash( $_GET['entity_subtab'] ) ) : 'synthesis';
     $allowed_entity_subtabs = array( 'synthesis', 'need', 'objectives', 'positioning', 'contract', 'welcome', 'sessions', 'support', 'evaluations', 'documents', 'complaints', 'compliance', 'quality', 'public_info', 'accounting', 'history' );
     if ( ! in_array( $entity_subtab, $allowed_entity_subtabs, true ) ) { $entity_subtab = 'synthesis'; }

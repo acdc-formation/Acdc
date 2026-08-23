@@ -3904,35 +3904,66 @@ private function render_questionnaire_actions_panel( $session_id, $participant_i
       <?php endif; ?>
     </div>
 
+    <?php
+    /* ACDC 3.25.330 — DIX-SEPT TUILES POUR DEUX SUJETS.
+       Cet écran empilait cinq rangées de compteurs : sept sur l'ENQUÊTE, dix
+       sur les ACTIONS D'AMÉLIORATION. Sur un dossier ordinaire, les dix
+       dernières valent zéro — et un zéro affiché en gros chiffre sur fond
+       coloré se lit comme une alerte. Il fallait descendre sous cinq rangées
+       de zéros pour atteindre le tableau des envois, qui est ce qu'on vient
+       voir. « Le principe est très bon et c'est très visuel » : on garde donc
+       la forme, on retire le bruit.
+       Ce qui reste en tuiles : les quatre chiffres qu'on lit à chaque fois.
+       « Répondants ciblés » disparaît — c'est le dénominateur du taux de
+       retour, déjà présent deux cases plus loin ; « Envois terminés » aussi,
+       il se déduit du reste.
+       Les actions d'amélioration deviennent UNE ligne, et cette ligne ne
+       s'affiche que s'il y a quelque chose à traiter. Zéro action, c'est une
+       bonne nouvelle : elle tient en une phrase.
+       Cette fonction sert les six types d'enquêtes — à chaud, à froid,
+       intermédiaire, formateur, commanditaire, financeur. La correction vaut
+       donc pour les six, comme la recette le demande. */
+    $alertes = (int) $stats['alerts'];
+    ?>
     <div class="acdc-grid-4cols acdc-mb-18" style="display:grid;gap:18px">
       <div class="acdc-panel acdc-centered-stat"><div class="acdc-stat-number"><?php echo esc_html( $stats['total'] ); ?></div><div class="acdc-stat-label"><?php echo esc_html( $stat_labels['tracked'] ); ?></div></div>
-      <div class="acdc-panel acdc-centered-stat"><div class="acdc-stat-number"><?php echo esc_html( $stats['participants'] ); ?></div><div class="acdc-stat-label"><?php echo esc_html( $stat_labels['participants'] ); ?></div></div>
       <div class="acdc-panel acdc-centered-stat"><div class="acdc-stat-number"><?php echo esc_html( $stats['responses'] ); ?></div><div class="acdc-stat-label"><?php echo esc_html( $stat_labels['responses'] ); ?></div></div>
       <div class="acdc-panel acdc-centered-stat"><div class="acdc-stat-number"><?php echo esc_html( null !== $stats['response_rate'] ? $stats['response_rate'] . ' %' : '—' ); ?></div><div class="acdc-stat-label"><?php echo esc_html( $stat_labels['response_rate'] ); ?></div></div>
-    </div>
-    <div class="acdc-grid-4cols acdc-mb-18" style="display:grid;gap:18px">
-      <div class="acdc-panel acdc-centered-stat"><div class="acdc-stat-number"><?php echo esc_html( $stats['finished'] ); ?></div><div class="acdc-stat-label"><?php echo esc_html( $stat_labels['finished'] ); ?></div></div>
-      <div class="acdc-panel acdc-centered-stat"><div class="acdc-stat-number"><?php echo esc_html( $stats['alerts'] ); ?></div><div class="acdc-stat-label"><?php echo esc_html( $stat_labels['alerts'] ); ?></div></div>
-      <div class="acdc-panel acdc-centered-stat"><div class="acdc-stat-number"><?php echo esc_html( null !== $stats['average_score'] ? $stats['average_score'] : '—' ); ?></div><div class="acdc-stat-label"><?php echo esc_html( $stat_labels['average'] ); ?></div></div>
-    </div>
-
-    <div class="acdc-grid-4cols acdc-mb-18" style="display:grid;gap:18px">
-      <div class="acdc-panel acdc-centered-stat acdc-priority-stat acdc-priority-stat-haute"><div class="acdc-stat-number"><?php echo esc_html( $action_stats['priority_high'] ); ?></div><div class="acdc-stat-label">Priorité haute</div></div>
-      <div class="acdc-panel acdc-centered-stat acdc-priority-stat acdc-priority-stat-moyenne"><div class="acdc-stat-number"><?php echo esc_html( $action_stats['priority_medium'] ); ?></div><div class="acdc-stat-label">Priorité moyenne</div></div>
-      <div class="acdc-panel acdc-centered-stat acdc-priority-stat acdc-priority-stat-basse"><div class="acdc-stat-number"><?php echo esc_html( $action_stats['priority_low'] ); ?></div><div class="acdc-stat-label">Priorité basse</div></div>
+      <div class="acdc-panel acdc-centered-stat<?php echo $alertes > 0 ? ' acdc-priority-stat acdc-priority-stat-haute' : ''; ?>">
+        <div class="acdc-stat-number"><?php echo esc_html( null !== $stats['average_score'] ? $stats['average_score'] : '—' ); ?></div>
+        <div class="acdc-stat-label"><?php echo esc_html( $stat_labels['average'] ); ?></div>
+        <?php if ( $alertes > 0 ) : ?>
+          <div style="margin-top:6px;font-size:11px;font-weight:700;color:#991b1b;"><?php echo esc_html( $alertes . ' ' . strtolower( $stat_labels['alerts'] ) ); ?></div>
+        <?php endif; ?>
+      </div>
     </div>
 
-    <div class="acdc-grid-4cols acdc-mb-18" style="display:grid;gap:18px">
-      <div class="acdc-panel acdc-centered-stat"><div class="acdc-stat-number"><?php echo esc_html( $action_stats['a_traiter'] ); ?></div><div class="acdc-stat-label"><?php echo esc_html( $terms['actions'] . ' à traiter' ); ?></div></div>
-      <div class="acdc-panel acdc-centered-stat"><div class="acdc-stat-number"><?php echo esc_html( $action_stats['ouverte'] ); ?></div><div class="acdc-stat-label">Ouvertes</div></div>
-      <div class="acdc-panel acdc-centered-stat"><div class="acdc-stat-number"><?php echo esc_html( $action_stats['en_cours'] ); ?></div><div class="acdc-stat-label">En cours</div></div>
-      <div class="acdc-panel acdc-centered-stat acdc-urgency-stat acdc-urgency-stat-overdue"><div class="acdc-stat-number"><?php echo esc_html( $action_stats['en_retard'] ); ?></div><div class="acdc-stat-label">En retard</div></div>
-    </div>
-    <div class="acdc-grid-4cols acdc-mb-18" style="display:grid;gap:18px">
-      <div class="acdc-panel acdc-centered-stat acdc-urgency-stat acdc-urgency-stat-today"><div class="acdc-stat-number"><?php echo esc_html( $action_stats['aujourd_hui'] ); ?></div><div class="acdc-stat-label">Échéance aujourd’hui</div></div>
-      <div class="acdc-panel acdc-centered-stat acdc-urgency-stat acdc-urgency-stat-soon"><div class="acdc-stat-number"><?php echo esc_html( $action_stats['echeance_proche'] ); ?></div><div class="acdc-stat-label">Échéance proche</div></div>
-      <div class="acdc-panel acdc-centered-stat"><div class="acdc-stat-number"><?php echo esc_html( $action_stats['traitee'] ); ?></div><div class="acdc-stat-label">Traitées</div></div>
-    </div>
+    <?php
+    /* La ligne des actions d'amélioration : un résumé, et un lien vers le
+       détail. Elle ne prend la parole que si elle a quelque chose à dire. */
+    $actions_total = (int) $action_stats['a_traiter'] + (int) $action_stats['en_cours'] + (int) $action_stats['en_retard'];
+    ?>
+    <?php if ( $actions_total > 0 ) : ?>
+      <div class="acdc-panel acdc-mb-18" style="display:flex;align-items:center;gap:18px;flex-wrap:wrap;padding:14px 18px;">
+        <strong style="color:#0f2c52;font-size:13px;"><?php echo esc_html( $terms['actions'] ); ?></strong>
+        <span style="color:#4b5d76;font-size:13px;">
+          <strong><?php echo esc_html( $action_stats['a_traiter'] ); ?></strong> à traiter
+          · <strong><?php echo esc_html( $action_stats['en_cours'] ); ?></strong> en cours
+          <?php if ( (int) $action_stats['en_retard'] > 0 ) : ?>
+            · <strong style="color:#991b1b;"><?php echo esc_html( $action_stats['en_retard'] ); ?> en retard</strong>
+          <?php endif; ?>
+          <?php if ( (int) $action_stats['aujourd_hui'] > 0 ) : ?>
+            · <strong style="color:#92400e;"><?php echo esc_html( $action_stats['aujourd_hui'] ); ?> à échéance aujourd’hui</strong>
+          <?php endif; ?>
+          · <?php echo esc_html( $action_stats['traitee'] ); ?> traitées
+        </span>
+        <?php if ( ! $dashboard_focus && '' === $action_scope && '' === $priority_level ) : ?>
+          <a class="acdc-button acdc-button-soft" style="margin-left:auto;" href="<?php echo esc_url( add_query_arg( array( 'dashboard_focus' => '1' ), $reset_url ) ); ?>">Voir le détail</a>
+        <?php endif; ?>
+      </div>
+    <?php elseif ( (int) $action_stats['traitee'] > 0 ) : ?>
+      <p class="acdc-muted-note acdc-mb-18" style="margin:0 0 18px;">Aucune <?php echo esc_html( rtrim( strtolower( $terms['actions'] ), 's' ) ); ?> ouverte — <?php echo esc_html( $action_stats['traitee'] ); ?> traitée(s).</p>
+    <?php endif; ?>
 
     <?php if ( $dashboard_focus || '' !== $action_scope || '' !== $priority_level ) : ?>
       <div class="acdc-panel acdc-mb-18">

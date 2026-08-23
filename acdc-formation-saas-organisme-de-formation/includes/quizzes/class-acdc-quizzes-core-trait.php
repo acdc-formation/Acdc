@@ -2357,7 +2357,9 @@ trait ACDC_Quizzes_Core_Trait {
         // rendu de différencier les variantes d'une même formation (présentiel /
         // distanciel / hybride / e-learning). On filtre les brouillons et les
         // formations désactivées pour ne pas polluer le sélecteur.
-        $cols   = 'id, title, code, modality, is_active, is_draft';
+        /* ACDC 3.25.330 — La thématique accompagne la formation : c'est par
+           elle qu'on veut d'abord ranger les quiz quand il y en aura vingt. */
+        $cols   = 'id, title, code, modality, thematique, is_active, is_draft';
         $where  = 'is_active = 1 AND is_draft = 0';
         $order  = 'title ASC, modality ASC';
         $search = trim( (string) $search );

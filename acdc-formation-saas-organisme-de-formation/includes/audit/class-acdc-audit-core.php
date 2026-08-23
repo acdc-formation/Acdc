@@ -62,8 +62,11 @@ class ACDC_Audit_Core {
             'satisfaction_mi'   => array( 'label' => 'Questionnaire satisfaction (mi-parcours)', 'icon' => '' ),
             'satisfaction_fin'  => array( 'label' => 'Questionnaire satisfaction (fin)',         'icon' => '' ),
             'satisfaction_froid'=> array( 'label' => 'Questionnaire satisfaction (à froid)',     'icon' => '' ),
+            /* ACDC 3.25.330 — « Certificat » tout court n'est pas un nom légal, et
+               c'est devant un auditeur que ce document est produit. Les deux
+               pièces portent maintenant le nom que la loi leur donne. */
+            'certificat'        => array( 'label' => 'Certificat de réalisation',     'icon' => '' ),
             'attestation'       => array( 'label' => 'Attestation de fin de formation', 'icon' => '' ),
-            'certificat'        => array( 'label' => 'Certificat',                    'icon' => '' ),
             'programme'         => array( 'label' => 'Programme de formation',        'icon' => '' ),
             /* ACDC 3.21.10 — Qualiopi C1/I1 — Analyses du besoin. */
             'analyse_besoin_commanditaire' => array( 'label' => 'Analyse du besoin — Commanditaire', 'icon' => '' ),
@@ -188,8 +191,16 @@ class ACDC_Audit_Core {
             'cold_survey_document_url'              => 'satisfaction_froid',
             'diagnostic_result_document_url'        => 'diagnostic',
             'evaluation_result_document_url'        => 'evaluation',
-            'completion_certificate_document_url'   => 'attestation',
-            'end_training_certificate_document_url' => 'certificat',
+            /* ACDC 3.25.330 — CES DEUX LIGNES ÉTAIENT INVERSÉES, ICI AUSSI.
+               « completion_certificate » est le CERTIFICAT DE RÉALISATION, et
+               « end_training_certificate » l'ATTESTATION DE FIN DE FORMATION.
+               L'agrégat d'audit présentait donc chacune des deux sous le nom de
+               l'autre. La 3.25.264 avait corrigé exactement la même inversion
+               dans le score de complétude ; elle avait survécu ici — c'est-à-dire
+               sur le seul écran qu'on ouvre devant un auditeur, et où une pièce
+               mal nommée est une pièce qu'on ne retrouve pas. */
+            'completion_certificate_document_url'   => 'certificat',
+            'end_training_certificate_document_url' => 'attestation',
         );
 
         $tr_where = "WHERE is_draft = 0";
@@ -311,15 +322,48 @@ class ACDC_Audit_Core {
         }
     }
 
+    /**
+     * ACDC 3.25.330 — DEUX FOIS LA MÊME PIÈCE N'EN FAIT PAS DEUX.
+     *
+     * L'agrégat empilait sans jamais regarder ce qu'il empilait. Or plusieurs
+     * chemins mènent au même fichier — un dossier de groupe et le dossier de
+     * chacun de ses apprenants, une convention retrouvée par deux jointures —
+     * et la même pièce revenait donc plusieurs fois dans la liste. Devant un
+     * auditeur, un dossier qui montre trois fois la même feuille d'émargement
+     * ne paraît pas mieux tenu : il paraît approximatif.
+     *
+     * La clé de dédoublonnage est le COUPLE type + adresse du fichier. Deux
+     * entrées qui désignent le même fichier pour le même type sont la même
+     * preuve, quelle que soit la requête qui les a trouvées. On ne se fie pas
+     * au libellé, qui varie d'un chemin à l'autre.
+     *
+     * Une entrée SANS adresse n'est jamais écartée : on ne peut pas prouver
+     * qu'elle fait doublon, et perdre une preuve serait pire que la répéter.
+     */
     private function add_doc( &$result, $fid, $scope, $scope_id, $type, $data ) {
         $entry = array_merge( array( 'type' => $type, 'scope' => $scope ), $data );
+
         if ( 'session' === $scope ) {
-            $result[ $fid ]['sessions'][ $scope_id ]['docs'][] = $entry;
+            $panier = &$result[ $fid ]['sessions'][ $scope_id ]['docs'];
         } elseif ( 'learner' === $scope ) {
-            $result[ $fid ]['docs_learners'][] = $entry;
+            $panier = &$result[ $fid ]['docs_learners'];
         } else {
-            $result[ $fid ]['docs_formation'][] = $entry;
+            $panier = &$result[ $fid ]['docs_formation'];
         }
+
+        $adresse = isset( $entry['url'] ) ? trim( (string) $entry['url'] ) : '';
+        if ( '' !== $adresse ) {
+            foreach ( (array) $panier as $deja ) {
+                if ( (string) ( $deja['type'] ?? '' ) === (string) $type
+                  && trim( (string) ( $deja['url'] ?? '' ) ) === $adresse ) {
+                    unset( $panier );
+                    return;
+                }
+            }
+        }
+
+        $panier[] = $entry;
+        unset( $panier );
     }
 
     private function sort_by_date( $a, $b ) {

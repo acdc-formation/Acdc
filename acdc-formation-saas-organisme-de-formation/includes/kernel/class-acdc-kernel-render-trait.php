@@ -1084,6 +1084,32 @@ trait ACDC_Kernel_Render_Trait {
           array( 'tab' => 'funder_surveys',  'label' => 'Enquêtes financeurs',  'icon' => 'survey' ),
         ),
       ),
+      /* ACDC 3.25.330 — LE DOSSIER DE FORMATION EST UNE FIN, PAS UN SOUS-CAS.
+         Il était rangé en quatrième position d'un groupe « Inscription /
+         Suivi », entre « Analyse du besoin » et « Convention/Contrat » —
+         c'est-à-dire au milieu des ÉTAPES d'un parcours, alors que le dossier
+         est ce que ces étapes PRODUISENT. C'est la chemise qu'on ouvre devant
+         un auditeur, et c'est aussi le seul écran d'où l'on voit un
+         commanditaire, un apprenant ou une formation avec toutes ses pièces.
+         Il devient une section, et ses cinq vues deviennent cinq entrées —
+         elles étaient jusqu'ici cinq onglets qui rendaient tous le même
+         tableau. */
+      array(
+        'type' => 'section',
+        'label' => 'Dossiers de formation',
+      ),
+      array(
+        'type' => 'group',
+        'label' => 'Dossiers de formation',
+        'icon' => 'directories',
+        'items' => array(
+          array( 'tab' => 'trf_commanditaires', 'label' => 'Par commanditaire', 'icon' => 'companies' ),
+          array( 'tab' => 'trf_apprenants',     'label' => 'Par apprenant',     'icon' => 'learners' ),
+          array( 'tab' => 'trf_formations',     'label' => 'Par formation',     'icon' => 'formations' ),
+          array( 'tab' => 'trf_seances',        'label' => 'Par séance',        'icon' => 'sessions' ),
+          array( 'tab' => 'trf_inscriptions',   'label' => 'Toutes les inscriptions', 'icon' => 'register' ),
+        ),
+      ),
       array(
         'type' => 'section',
         'label' => 'Actions de formation',
@@ -1094,7 +1120,6 @@ trait ACDC_Kernel_Render_Trait {
         'icon' => 'enrollment',
         'items' => array(
           array( 'tab' => 'need_analyses', 'label' => 'Analyse du besoin', 'icon' => 'need' ),
-          array( 'tab' => 'trf_inscriptions', 'label' => 'Dossiers de formation', 'icon' => 'register' ),
           array( 'tab' => 'registration_contract', 'label' => 'Convention/Contrat', 'icon' => 'contract' ),
           array( 'tab' => 'register_training', 'label' => 'Inscrire en formation', 'icon' => 'register' ),
           array( 'tab' => 'registrations_pending', 'label' => 'En cours d’inscription', 'icon' => 'pending' ),
@@ -2071,12 +2096,14 @@ trait ACDC_Kernel_Render_Trait {
       );
       $current_tab_slug = isset( $trf_tab_map[ $trf_view ] ) ? $trf_tab_map[ $trf_view ] : 'trf_inscriptions';
       $base_url_trf = is_admin() ? $this->admin_tab_url( $current_tab_slug ) : $this->portal_page_url( array( 'tab' => $current_tab_slug ) );
+      /* ACDC 3.25.330 — L'ordre suit celui du menu, et il commence par le
+         commanditaire : c'est l'entrée qu'on cherche un jour d'audit. */
       $tab_labels_trf = array(
-        'inscriptions'   => 'Inscriptions',
-        'apprenants'     => 'Par apprenant',
         'commanditaires' => 'Par commanditaire',
+        'apprenants'     => 'Par apprenant',
         'formations'     => 'Par formation',
         'seances'        => 'Par séance',
+        'inscriptions'   => 'Toutes les inscriptions',
       );
       ?>
       <style>
@@ -2104,7 +2131,7 @@ trait ACDC_Kernel_Render_Trait {
       <section class="acdc-section-head">
         <div>
           <h2>Dossiers de formation</h2>
-          <p>Vue pivot des inscriptions, de leur état d'avancement et de leur historique.</p>
+          <p>Chaque dossier regroupe les pièces justificatives Qualiopi d'un commanditaire, d'un apprenant, d'une formation ou d'une séance.</p>
         </div>
         <div class="acdc-inline-wrap">
           <a class="acdc-button acdc-button-primary" href="<?php echo esc_url( is_admin() ? admin_url( 'admin.php?page=acdc-of-register-training&action=new' ) : $this->portal_page_url( array( 'tab' => 'register_training', 'action' => 'new' ) ) ); ?>">Créer une inscription</a>
@@ -2122,8 +2149,31 @@ trait ACDC_Kernel_Render_Trait {
         <?php endforeach; ?>
       </div>
       <?php
-      // ── Tous les onglets (inscriptions, apprenants, commanditaires, formations, seances)
-      // rendent la même liste d'inscriptions — section-head déjà rendue ci-dessus
+      /* ACDC 3.25.330 — CINQ ONGLETS, UNE SEULE LISTE.
+         Le commentaire d'origine le disait sans détour : « Tous les onglets
+         rendent la même liste d'inscriptions ». Cliquer sur « Par
+         commanditaire » ramenait donc exactement le tableau qu'on venait de
+         quitter. Cinq promesses, un seul écran — c'est ce qui rendait cette
+         page inutilisable, et non le tableau lui-même.
+         L'explorateur, lui, EXISTE : render_dossiers_by_entity() est écrit,
+         corrigé et éprouvé (3.25.158, 3.25.159, 3.25.163), il rend des
+         dossiers par entité et ouvre la fiche complète avec ses seize volets
+         de preuves. Il n'était branché que sur l'onglet Conventions.
+         On ne réécrit rien : on branche. C'est la même famille que d'habitude
+         — la capacité était là, l'écran qui en avait besoin ne l'appelait
+         pas. */
+      $trf_entites = array(
+        'apprenants'     => 'learner',
+        'commanditaires' => 'company',
+        'formations'     => 'formation',
+        'seances'        => 'session',
+      );
+      if ( isset( $trf_entites[ $trf_view ] ) && method_exists( $this, 'render_dossiers_by_entity' ) ) {
+        $trf_recherche = isset( $_GET['q'] ) ? sanitize_text_field( wp_unslash( $_GET['q'] ) ) : '';
+        $trf_page      = \ACDC\Support\ScreenQuery::readPaged( $_GET );
+        $this->render_dossiers_by_entity( $trf_entites[ $trf_view ], $trf_recherche, $base_url_trf, $trf_page, 25, $trf_view );
+        return;
+      }
     }
     // ── Code original (liste inscriptions + vue fiche) ────────────────────
     $search = isset( $_GET['q'] ) ? sanitize_text_field( wp_unslash( $_GET['q'] ) ) : '';
@@ -10088,7 +10138,55 @@ trait ACDC_Kernel_Render_Trait {
     }
     echo '</tbody></table>';
     echo '</div>';
-  }  private function render_front_statistics_tab() {
+  }
+
+  /**
+   * ACDC 3.25.330 — UNE BARRE QUI LIT VRAIMENT LES DONNÉES.
+   *
+   * CE QU'ELLE REMPLACE. Trois « anneaux » décoraient cet écran. Deux étaient
+   * peints en dur — « conic-gradient(#ef6b57 0 33%, #f0c038 33% 66%,
+   * #3cb371 66% 100%) » — et affichaient donc trois tiers égaux quelles que
+   * soient les données ; le troisième était vert à 100 %, toujours. Un
+   * graphique qui ne lit pas ses données n'est pas une décoration inutile :
+   * c'est une affirmation fausse, posée à côté de chiffres justes. Sur un
+   * écran dont on nous dit qu'il fait « usine à gaz », c'est exactement le
+   * genre d'élément qui coûte de l'attention sans rien rendre.
+   *
+   * Les trois « ? » qui les accompagnaient n'ouvraient rien non plus : ni
+   * infobulle, ni lien, ni script. Ils sont retirés avec.
+   *
+   * CE QU'ELLE FAIT. Une barre empilée, une part par entrée, proportionnelle
+   * au poids réel. Les libellés sont déjà écrits juste au-dessus avec leur
+   * nombre et leur pourcentage : la barre ne les répète pas, elle donne la
+   * forme d'un coup d'œil. Sans données, elle ne s'affiche pas — une barre
+   * vide est un dessin qui ment sur ce qu'il montre.
+   *
+   * @param array $serie Libellé => effectif.
+   * @return string HTML échappé, prêt à l'affichage.
+   */
+  private function acdc_barre_repartition( $serie ) {
+    $serie = is_array( $serie ) ? array_filter( array_map( 'intval', $serie ) ) : array();
+    $total = array_sum( $serie );
+    if ( $total < 1 ) {
+      return '';
+    }
+    /* Une palette fixe, parcourue dans l'ordre : deux affichages successifs
+       du même écran donnent les mêmes couleurs aux mêmes entrées. Une teinte
+       tirée au hasard obligerait à relire la légende à chaque fois. */
+    $teintes = array( '#1E4777', '#C5A253', '#3cb371', '#ef6b57', '#7c8fa8', '#f0c038' );
+    $parts   = '';
+    $i       = 0;
+    foreach ( $serie as $libelle => $effectif ) {
+      $pct      = round( ( $effectif / $total ) * 100, 2 );
+      $couleur  = $teintes[ $i % count( $teintes ) ];
+      $infobulle = sprintf( '%s : %d (%s %%)', (string) $libelle, (int) $effectif, (string) round( $pct, 1 ) );
+      $parts   .= '<span style="width:' . esc_attr( $pct ) . '%;background:' . esc_attr( $couleur ) . ';" title="' . esc_attr( $infobulle ) . '"></span>';
+      $i++;
+    }
+    return '<div class="acdc-repartition" role="img" aria-label="' . esc_attr( sprintf( 'Répartition sur %d éléments', (int) $total ) ) . '">' . $parts . '</div>';
+  }
+
+  private function render_front_statistics_tab() {
     $prospects = $this->get_prospects();
     $total_prospects = count( $prospects );
     $assigned_counts = array();
@@ -10114,9 +10212,24 @@ trait ACDC_Kernel_Render_Trait {
       $formation_counts[ $training ] = isset( $formation_counts[ $training ] ) ? $formation_counts[ $training ] + 1 : 1;
       $status_counts[ $status ] = isset( $status_counts[ $status ] ) ? $status_counts[ $status ] + 1 : 1;
 
+      /* ACDC 3.25.330 — LE TAUX DE CONVERSION SE LISAIT DANS UN LIBELLÉ.
+         « A-t-il un devis ? » se décidait en cherchant le mot « devis » DANS
+         LE TEXTE du statut du prospect, et « a-t-il une convention ? » en y
+         cherchant « convention ». Un dossier réellement converti — devis émis,
+         convention signée, facture partie — comptait donc pour zéro dès que
+         son statut ne portait pas littéralement le mot. C'est ce que montre
+         la recette : conversion à 0 % sur un dossier converti.
+         Les faits sont ailleurs, et ils sont datés : un devis existe dans la
+         table des devis, une convention dans celle des conventions, et les
+         deux portent source_prospect_id — la seule colonne qui relie une
+         pièce à son prospect, exactement comme pour la facture subrogée en
+         3.25.321. On compte des pièces, plus des mots.
+         L'annulation, elle, reste un état du prospect : aucune pièce ne la
+         matérialise, le statut est bien sa source. */
       $status_lc = function_exists( 'mb_strtolower' ) ? mb_strtolower( $status ) : strtolower( $status );
-      if ( false !== strpos( $status_lc, 'devis' ) ) { $quote_count++; }
-      if ( false !== strpos( $status_lc, 'convention' ) || false !== strpos( $status_lc, 'contrat' ) ) { $contract_count++; }
+      $pid_stat  = ! empty( $prospect->id ) ? (int) $prospect->id : 0;
+      if ( $pid_stat > 0 && $this->acdc_prospect_a_devis( $pid_stat ) ) { $quote_count++; }
+      if ( $pid_stat > 0 && $this->acdc_prospect_a_convention( $pid_stat ) ) { $contract_count++; }
       if ( false !== strpos( $status_lc, 'annul' ) ) { $cancel_count++; }
       if ( ! empty( $prospect->last_followup ) ) { $followup_count++; }
       if ( ! empty( $prospect->created_at ) ) { $created_dates[] = strtotime( $prospect->created_at ); }
@@ -10167,7 +10280,12 @@ trait ACDC_Kernel_Render_Trait {
       array( 'title' => 'Taux de relance', 'value' => $rate( $followup_count ) . '%', 'sub' => (string) $followup_count, 'kind' => 'progress', 'pct' => $rate( $followup_count ), 'color' => '#DCE4EC' ),
       array( 'title' => "Taux d'envoi d'analyse du besoin", 'value' => $rate( $analysis_count ) . '%', 'sub' => (string) $analysis_count, 'kind' => 'progress', 'pct' => $rate( $analysis_count ), 'color' => '#DCE4EC' ),
       array( 'title' => "Taux d'envoi de devis", 'value' => $rate( $quote_count ) . '%', 'sub' => (string) $quote_count, 'kind' => 'progress', 'pct' => $rate( $quote_count ), 'color' => '#DCE4EC' ),
-      array( 'title' => 'Taux de génération de convention / contrat', 'value' => $rate( $contract_count ) . '%', 'sub' => (string) $contract_count, 'kind' => 'progress', 'pct' => $rate( $contract_count ), 'color' => '#f1cc35' ),
+      /* ACDC 3.25.330 — « Taux de génération de convention / contrat » a été
+         retirée : elle affichait $contract_count, exactement le même nombre que
+         « Taux d'inscription » deux cases plus haut, sous un autre nom et dans
+         une autre couleur. Deux cartes pour un seul chiffre, c'est ce qui donne
+         à un tableau de bord son air d'usine à gaz — on cherche la différence
+         entre les deux, et il n'y en a pas. */
     );
 
     $prospect_view_base = $this->portal_page_url( array( 'tab' => 'prospects' ) );
@@ -10175,24 +10293,24 @@ trait ACDC_Kernel_Render_Trait {
     <section class="acdc-section-head"><div><h2>Statistiques commerciales</h2></div></section>
 
     <style>
-      .acdc-stat-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:18px;margin-bottom:18px}.acdc-stat-panel{position:relative;min-height:114px}.acdc-stat-panel h3{margin:0 0 10px;font-size:16px;color:#1E4777}.acdc-stat-total{position:absolute;top:0;right:0;font-size:12px;color:#3C3C3C}.acdc-stat-list{margin:0;padding-left:18px;font-size:13px;line-height:1.6}.acdc-stat-list li{margin:0 0 3px}.acdc-ring{position:absolute;right:18px;bottom:18px;width:58px;height:58px;border-radius:50%;background:conic-gradient(#ef6b57 0 33%,#f0c038 33% 66%,#3cb371 66% 100%)}.acdc-ring:after{content:'';position:absolute;inset:8px;border-radius:50%;background:#fff}.acdc-kpis{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:18px;margin-bottom:18px}.acdc-kpi-card{padding:18px;position:relative}.acdc-kpi-card h4{margin:0 0 12px;font-size:15px;color:#1E4777}.acdc-kpi-value{font-size:22px;font-weight:700;color:#667085}.acdc-kpi-sub{font-size:13px;color:#3C3C3C}.acdc-kpi-progress{height:10px;border-radius:999px;background:#DCE4EC;overflow:hidden;margin-top:18px}.acdc-kpi-progress span{display:block;height:100%;border-radius:999px}.acdc-filter-box{padding:0;overflow:hidden;margin-bottom:14px}.acdc-filter-head{display:flex;justify-content:flex-end;background:#DCE4EC;padding:10px 12px;color:#64748b;font-size:12px;text-transform:uppercase;letter-spacing:.03em}.acdc-filter-grid{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:16px;padding:16px}.acdc-filter-grid label{display:block;font-size:12px;color:#1E4777;text-transform:uppercase;margin-bottom:6px}.acdc-table-prospects td small{display:block;color:#7b8798}.acdc-eye-col{text-align:right}.acdc-help-dot{position:absolute;right:10px;bottom:10px;width:20px;height:20px;border-radius:50%;background:#E9C77C;color:#0B0706;font-size:12px;display:flex;align-items:center;justify-content:center}.acdc-count-icon{display:flex;align-items:center;gap:14px}.acdc-count-icon .box{width:40px;height:40px;border-radius:10px;background:#C5A253;color:#0B0706;display:flex;align-items:center;justify-content:center}.acdc-stat-empty{color:#3C3C3C;font-size:13px}@media (max-width:1200px){.acdc-kpis,.acdc-filter-grid,.acdc-stat-grid{grid-template-columns:1fr 1fr}}@media (max-width:782px){.acdc-kpis,.acdc-filter-grid,.acdc-stat-grid{grid-template-columns:1fr}}</style>
+      .acdc-stat-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:18px;margin-bottom:18px}.acdc-stat-panel{position:relative;min-height:114px}.acdc-stat-panel h3{margin:0 0 10px;font-size:16px;color:#1E4777}.acdc-stat-total{position:absolute;top:0;right:0;font-size:12px;color:#3C3C3C}.acdc-stat-list{margin:0;padding-left:18px;font-size:13px;line-height:1.6}.acdc-stat-list li{margin:0 0 3px}.acdc-repartition{display:flex;height:10px;border-radius:999px;overflow:hidden;margin-top:12px;background:#eef2f6}.acdc-repartition span{display:block;height:100%}.acdc-kpis{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:18px;margin-bottom:18px}.acdc-kpi-card{padding:18px;position:relative}.acdc-kpi-card h4{margin:0 0 12px;font-size:15px;color:#1E4777}.acdc-kpi-value{font-size:22px;font-weight:700;color:#667085}.acdc-kpi-sub{font-size:13px;color:#3C3C3C}.acdc-kpi-progress{height:10px;border-radius:999px;background:#DCE4EC;overflow:hidden;margin-top:18px}.acdc-kpi-progress span{display:block;height:100%;border-radius:999px}.acdc-filter-box{padding:0;overflow:hidden;margin-bottom:14px}.acdc-filter-head{display:flex;justify-content:flex-end;background:#DCE4EC;padding:10px 12px;color:#64748b;font-size:12px;text-transform:uppercase;letter-spacing:.03em}.acdc-filter-grid{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:16px;padding:16px}.acdc-filter-grid label{display:block;font-size:12px;color:#1E4777;text-transform:uppercase;margin-bottom:6px}.acdc-table-prospects td small{display:block;color:#7b8798}.acdc-eye-col{text-align:right}.acdc-count-icon{display:flex;align-items:center;gap:14px}.acdc-count-icon .box{width:40px;height:40px;border-radius:10px;background:#C5A253;color:#0B0706;display:flex;align-items:center;justify-content:center}.acdc-stat-empty{color:#3C3C3C;font-size:13px}@media (max-width:1200px){.acdc-kpis,.acdc-filter-grid,.acdc-stat-grid{grid-template-columns:1fr 1fr}}@media (max-width:782px){.acdc-kpis,.acdc-filter-grid,.acdc-stat-grid{grid-template-columns:1fr}}</style>
 
     <div class="acdc-stat-grid">
       <div class="acdc-panel acdc-stat-panel">
         <h3>Inscriptions par apporteur d'affaires</h3><div class="acdc-stat-total">(<?php echo (int) array_sum( $assigned_counts ); ?> total)</div>
-        <?php if ( ! empty( $assigned_counts ) ) : ?><ul class="acdc-stat-list"><?php foreach ( $assigned_counts as $label => $count ) : ?><li><?php echo esc_html( $label ); ?> (<?php echo (int) $count; ?> - <?php echo esc_html( $rate( $count ) ); ?>%)</li><?php endforeach; ?></ul><?php else : ?><p class="acdc-stat-empty">Aucune donnée.</p><?php endif; ?><span class="acdc-help-dot">?</span>
+        <?php if ( ! empty( $assigned_counts ) ) : ?><ul class="acdc-stat-list"><?php foreach ( $assigned_counts as $label => $count ) : ?><li><?php echo esc_html( $label ); ?> (<?php echo (int) $count; ?> - <?php echo esc_html( $rate( $count ) ); ?>%)</li><?php endforeach; ?></ul><?php else : ?><p class="acdc-stat-empty">Aucune donnée.</p><?php endif; ?><?php echo $this->acdc_barre_repartition( $assigned_counts ); ?>
       </div>
       <div class="acdc-panel acdc-stat-panel">
         <h3>Formations les plus demandées</h3><div class="acdc-stat-total">(<?php echo (int) array_sum( $formation_counts ); ?> total)</div>
-        <?php if ( ! empty( $formation_counts ) ) : ?><ul class="acdc-stat-list"><?php foreach ( $formation_counts as $label => $count ) : ?><li><?php echo esc_html( $label ); ?> (<?php echo (int) $count; ?> - <?php echo esc_html( $rate( $count ) ); ?>%)</li><?php endforeach; ?></ul><?php else : ?><p class="acdc-stat-empty">Aucune donnée.</p><?php endif; ?><div class="acdc-ring"></div><span class="acdc-help-dot">?</span>
+        <?php if ( ! empty( $formation_counts ) ) : ?><ul class="acdc-stat-list"><?php foreach ( $formation_counts as $label => $count ) : ?><li><?php echo esc_html( $label ); ?> (<?php echo (int) $count; ?> - <?php echo esc_html( $rate( $count ) ); ?>%)</li><?php endforeach; ?></ul><?php else : ?><p class="acdc-stat-empty">Aucune donnée.</p><?php endif; ?><?php echo $this->acdc_barre_repartition( $formation_counts ); ?>
       </div>
       <div class="acdc-panel acdc-stat-panel">
         <h3>Répartition des sources de prospect</h3><div class="acdc-stat-total">(<?php echo (int) array_sum( $source_counts ); ?> total)</div>
-        <?php if ( ! empty( $source_counts ) ) : ?><ul class="acdc-stat-list"><?php foreach ( $source_counts as $label => $count ) : ?><li><?php echo esc_html( $label ); ?> (<?php echo (int) $count; ?> - <?php echo esc_html( $rate( $count ) ); ?>%)</li><?php endforeach; ?></ul><?php else : ?><p class="acdc-stat-empty">Aucune donnée.</p><?php endif; ?><div class="acdc-ring"></div><span class="acdc-help-dot">?</span>
+        <?php if ( ! empty( $source_counts ) ) : ?><ul class="acdc-stat-list"><?php foreach ( $source_counts as $label => $count ) : ?><li><?php echo esc_html( $label ); ?> (<?php echo (int) $count; ?> - <?php echo esc_html( $rate( $count ) ); ?>%)</li><?php endforeach; ?></ul><?php else : ?><p class="acdc-stat-empty">Aucune donnée.</p><?php endif; ?><?php echo $this->acdc_barre_repartition( $source_counts ); ?>
       </div>
       <div class="acdc-panel acdc-stat-panel">
         <h3>Répartition des statuts des RDV</h3><div class="acdc-stat-total">(<?php echo (int) array_sum( $rdv_status_counts ); ?> total)</div>
-        <ul class="acdc-stat-list"><?php foreach ( $rdv_status_counts as $label => $count ) : ?><li><?php echo esc_html( $label ); ?> (<?php echo (int) $count; ?> - <?php echo esc_html( array_sum( $rdv_status_counts ) ? round( ( $count / array_sum( $rdv_status_counts ) ) * 100, 0 ) : 0 ); ?>%)</li><?php endforeach; ?></ul><div class="acdc-ring" style="background:conic-gradient(#2ecc71 0 100%);"></div><span class="acdc-help-dot">?</span>
+        <ul class="acdc-stat-list"><?php foreach ( $rdv_status_counts as $label => $count ) : ?><li><?php echo esc_html( $label ); ?> (<?php echo (int) $count; ?> - <?php echo esc_html( array_sum( $rdv_status_counts ) ? round( ( $count / array_sum( $rdv_status_counts ) ) * 100, 0 ) : 0 ); ?>%)</li><?php endforeach; ?></ul><?php echo $this->acdc_barre_repartition( $rdv_status_counts ); ?>
       </div>
     </div>
 
@@ -10205,7 +10323,6 @@ trait ACDC_Kernel_Render_Trait {
           <?php else : ?>
             <div class="acdc-kpi-sub" style="position:absolute;right:18px;top:18px;"><?php echo esc_html( $card['sub'] ); ?></div><div class="acdc-kpi-value"><?php echo esc_html( $card['value'] ); ?></div><div class="acdc-kpi-progress"><span style="width:<?php echo esc_attr( min( 100, max( 0, (float) $card['pct'] ) ) ); ?>%;background:<?php echo esc_attr( $card['color'] ); ?>"></span></div>
           <?php endif; ?>
-          <span class="acdc-help-dot">?</span>
         </div>
       <?php endforeach; ?>
     </div>
@@ -10404,14 +10521,14 @@ trait ACDC_Kernel_Render_Trait {
     <section class="acdc-section-head"><div><h2>Statistiques pédagogiques</h2></div></section>
 
     <style>
-      .acdc-ped-top{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:18px;margin-bottom:18px}.acdc-ped-card{position:relative;min-height:100px;padding:16px}.acdc-ped-card h3{margin:0 0 10px;font-size:15px;color:#1E4777}.acdc-ped-range{position:absolute;top:10px;right:12px}.acdc-ped-icon-line{display:flex;align-items:center;gap:14px;margin-top:10px}.acdc-ped-icon-box{width:40px;height:40px;border-radius:10px;background:#C5A253;color:#0B0706;display:flex;align-items:center;justify-content:center}.acdc-ped-main-value{font-size:22px;font-weight:700;color:#667085}.acdc-ped-list{margin:0;padding-left:18px;font-size:13px;line-height:1.55}.acdc-ped-ring{position:absolute;right:18px;top:38px;width:60px;height:60px;border-radius:50%;background:conic-gradient(#ef6b57 0 50%,#f0c038 50% 100%)}.acdc-ped-ring:after{content:'';position:absolute;inset:8px;border-radius:50%;background:#fff}.acdc-ped-total{position:absolute;top:10px;right:12px;font-size:12px;color:#3C3C3C}.acdc-ped-filter-box{padding:0;overflow:hidden;margin-bottom:18px}.acdc-ped-filter-head{display:flex;justify-content:flex-end;background:#DCE4EC;padding:10px 12px;color:#64748b;font-size:12px;text-transform:uppercase;letter-spacing:.03em}.acdc-ped-filter-grid{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:14px;padding:16px}.acdc-ped-filter-grid label{display:block;font-size:12px;color:#1E4777;text-transform:uppercase;margin-bottom:6px}.acdc-ped-help-dot{position:absolute;right:10px;bottom:10px;width:20px;height:20px;border-radius:50%;background:#E9C77C;color:#0B0706;font-size:12px;display:flex;align-items:center;justify-content:center}@media (max-width:1200px){.acdc-ped-top,.acdc-ped-filter-grid{grid-template-columns:1fr 1fr}}@media (max-width:782px){.acdc-ped-top,.acdc-ped-filter-grid{grid-template-columns:1fr}}</style>
+      .acdc-ped-top{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:18px;margin-bottom:18px}.acdc-ped-card{position:relative;min-height:100px;padding:16px}.acdc-ped-card h3{margin:0 0 10px;font-size:15px;color:#1E4777}.acdc-ped-range{position:absolute;top:10px;right:12px}.acdc-ped-icon-line{display:flex;align-items:center;gap:14px;margin-top:10px}.acdc-ped-icon-box{width:40px;height:40px;border-radius:10px;background:#C5A253;color:#0B0706;display:flex;align-items:center;justify-content:center}.acdc-ped-main-value{font-size:22px;font-weight:700;color:#667085}.acdc-ped-list{margin:0;padding-left:18px;font-size:13px;line-height:1.55}.acdc-ped-total{position:absolute;top:10px;right:12px;font-size:12px;color:#3C3C3C}.acdc-ped-filter-box{padding:0;overflow:hidden;margin-bottom:18px}.acdc-ped-filter-head{display:flex;justify-content:flex-end;background:#DCE4EC;padding:10px 12px;color:#64748b;font-size:12px;text-transform:uppercase;letter-spacing:.03em}.acdc-ped-filter-grid{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:14px;padding:16px}.acdc-ped-filter-grid label{display:block;font-size:12px;color:#1E4777;text-transform:uppercase;margin-bottom:6px}.acdc-ped-help-dot{position:absolute;right:10px;bottom:10px;width:20px;height:20px;border-radius:50%;background:#E9C77C;color:#0B0706;font-size:12px;display:flex;align-items:center;justify-content:center}@media (max-width:1200px){.acdc-ped-top,.acdc-ped-filter-grid{grid-template-columns:1fr 1fr}}@media (max-width:782px){.acdc-ped-top,.acdc-ped-filter-grid{grid-template-columns:1fr}}</style>
 
     <div class="acdc-ped-top">
       <div class="acdc-panel acdc-ped-card">
         <h3>Apprenants formés (actions de formation)</h3>
         <div class="acdc-ped-icon-line"><span class="acdc-ped-icon-box"><?php echo $this->render_inline_icon( 'learners', 18 ); ?></span><div class="acdc-ped-main-value"><?php echo (int) $trained_learners; ?></div></div>
         <p style="margin:8px 0 0;font-size:12px;color:#3C3C3C;">Personnes inscrites à au moins une action, et non le nombre de fiches du répertoire.</p>
-        <span class="acdc-ped-help-dot">?</span>
+        
       </div>
       <div class="acdc-panel acdc-ped-card">
         <h3>Heures de formation dispensées</h3>
@@ -10428,7 +10545,7 @@ trait ACDC_Kernel_Render_Trait {
       <div class="acdc-panel acdc-ped-card">
         <h3>Formations les plus populaires</h3><div class="acdc-ped-total"><?php echo '(' . (int) array_sum( $formation_counts ) . ' total)'; ?></div>
         <?php if ( ! empty( $formation_counts ) ) : ?><ul class="acdc-ped-list"><?php foreach ( $formation_counts as $label => $count ) : $pct = $total_learners ? round( ( $count / $total_learners ) * 100 ) : 0; ?><li><?php echo esc_html( $label ); ?> (<?php echo (int) $count; ?> - <?php echo (int) $pct; ?>%)</li><?php endforeach; ?></ul><?php else : ?><p style="margin:0;color:#3C3C3C;font-size:13px;">Aucune donnée.</p><?php endif; ?>
-        <div class="acdc-ped-ring"></div><span class="acdc-ped-help-dot">?</span>
+        <?php echo $this->acdc_barre_repartition( $formation_counts ); ?>
       </div>
     </div>
 
@@ -10601,33 +10718,33 @@ trait ACDC_Kernel_Render_Trait {
     <section class="acdc-section-head"><div><h2>Statistiques formateurs</h2></div></section>
 
     <style>
-      .acdc-trainer-top{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:18px;margin-bottom:18px}.acdc-trainer-card{position:relative;min-height:110px;padding:16px}.acdc-trainer-card h3{margin:0 0 10px;font-size:15px;color:#1E4777}.acdc-trainer-range{position:absolute;top:10px;right:12px}.acdc-trainer-icon-line{display:flex;align-items:center;gap:14px;margin-top:10px}.acdc-trainer-icon-box{width:40px;height:40px;border-radius:10px;background:#C5A253;color:#0B0706;display:flex;align-items:center;justify-content:center}.acdc-trainer-main-value{font-size:22px;font-weight:700;color:#667085}.acdc-trainer-list{margin:0;padding-left:18px;font-size:13px;line-height:1.55}.acdc-trainer-ring{position:absolute;right:18px;top:34px;width:60px;height:60px;border-radius:50%;background:conic-gradient(#33c35f 0 100%,#ef4444 0 100%)}.acdc-trainer-ring:after{content:'';position:absolute;inset:8px;border-radius:50%;background:#fff}.acdc-trainer-total{position:absolute;top:10px;right:12px;font-size:12px;color:#3C3C3C}.acdc-trainer-filter-box{padding:0;overflow:hidden;margin-bottom:18px}.acdc-trainer-filter-head{display:flex;justify-content:flex-end;background:#DCE4EC;padding:10px 12px;color:#64748b;font-size:12px;text-transform:uppercase;letter-spacing:.03em}.acdc-trainer-filter-grid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:14px;padding:16px}.acdc-trainer-filter-grid label{display:block;font-size:12px;color:#1E4777;text-transform:uppercase;margin-bottom:6px}.acdc-trainer-help-dot{position:absolute;right:10px;bottom:10px;width:20px;height:20px;border-radius:50%;background:#E9C77C;color:#0B0706;font-size:12px;display:flex;align-items:center;justify-content:center}.acdc-trainer-sign-link{color:#1E4777;text-decoration:none;display:inline-flex;align-items:center;gap:4px}.acdc-trainer-eye-col{text-align:right}@media (max-width:1200px){.acdc-trainer-top,.acdc-trainer-filter-grid{grid-template-columns:1fr 1fr}}@media (max-width:782px){.acdc-trainer-top,.acdc-trainer-filter-grid{grid-template-columns:1fr}}</style>
+      .acdc-trainer-top{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:18px;margin-bottom:18px}.acdc-trainer-card{position:relative;min-height:110px;padding:16px}.acdc-trainer-card h3{margin:0 0 10px;font-size:15px;color:#1E4777}.acdc-trainer-range{position:absolute;top:10px;right:12px}.acdc-trainer-icon-line{display:flex;align-items:center;gap:14px;margin-top:10px}.acdc-trainer-icon-box{width:40px;height:40px;border-radius:10px;background:#C5A253;color:#0B0706;display:flex;align-items:center;justify-content:center}.acdc-trainer-main-value{font-size:22px;font-weight:700;color:#667085}.acdc-trainer-list{margin:0;padding-left:18px;font-size:13px;line-height:1.55}.acdc-trainer-total{position:absolute;top:10px;right:12px;font-size:12px;color:#3C3C3C}.acdc-trainer-filter-box{padding:0;overflow:hidden;margin-bottom:18px}.acdc-trainer-filter-head{display:flex;justify-content:flex-end;background:#DCE4EC;padding:10px 12px;color:#64748b;font-size:12px;text-transform:uppercase;letter-spacing:.03em}.acdc-trainer-filter-grid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:14px;padding:16px}.acdc-trainer-filter-grid label{display:block;font-size:12px;color:#1E4777;text-transform:uppercase;margin-bottom:6px}.acdc-trainer-help-dot{position:absolute;right:10px;bottom:10px;width:20px;height:20px;border-radius:50%;background:#E9C77C;color:#0B0706;font-size:12px;display:flex;align-items:center;justify-content:center}.acdc-trainer-sign-link{color:#1E4777;text-decoration:none;display:inline-flex;align-items:center;gap:4px}.acdc-trainer-eye-col{text-align:right}@media (max-width:1200px){.acdc-trainer-top,.acdc-trainer-filter-grid{grid-template-columns:1fr 1fr}}@media (max-width:782px){.acdc-trainer-top,.acdc-trainer-filter-grid{grid-template-columns:1fr}}</style>
 
     <div class="acdc-trainer-top">
       <div class="acdc-panel acdc-trainer-card">
         <h3>Formateurs</h3>
         <div class="acdc-trainer-range"><span class="acdc-perf-sub">Depuis le début</span></div>
         <div class="acdc-trainer-icon-line"><span class="acdc-trainer-icon-box"><?php echo $this->render_inline_icon( 'trainers', 18 ); ?></span><div class="acdc-trainer-main-value"><?php echo (int) $total_trainers; ?></div></div>
-        <span class="acdc-trainer-help-dot">?</span>
+        
       </div>
       <div class="acdc-panel acdc-trainer-card">
         <h3>Apprenants formés</h3>
         <div class="acdc-trainer-range"><span class="acdc-perf-sub">Depuis le début</span></div>
         <div class="acdc-trainer-icon-line"><span class="acdc-trainer-icon-box"><?php echo $this->render_inline_icon( 'learners', 18 ); ?></span><div class="acdc-trainer-main-value"><?php echo (int) $total_learners; ?></div></div>
-        <span class="acdc-trainer-help-dot">?</span>
+        
       </div>
       <div class="acdc-panel acdc-trainer-card">
         <h3>Heures de formation dispensées</h3>
         <div class="acdc-trainer-range"><span class="acdc-perf-sub">Depuis le début</span></div>
         <div class="acdc-trainer-icon-line"><span class="acdc-trainer-icon-box"><?php echo $this->render_inline_icon( 'calendar', 18 ); ?></span><div class="acdc-trainer-main-value"><?php echo esc_html( $duration_label ); ?></div></div>
-        <span class="acdc-trainer-help-dot">?</span>
+        
       </div>
       <div class="acdc-panel acdc-trainer-card">
         <h3>Taux d’occupation des séances</h3><div class="acdc-trainer-total"><?php echo '(' . (int) $attendance_total . ' total)'; ?></div>
         <ul class="acdc-trainer-list">
           <?php foreach ( $presence_counts as $label => $count ) : $pct = $attendance_total ? round( ( $count / $attendance_total ) * 100 ) : 0; $dot = 'Présent' === $label ? '#33c35f' : ( 'Absent' === $label ? '#ef4444' : '#3C3C3C' ); ?><li><span style="color:<?php echo esc_attr( $dot ); ?>;">●</span> <?php echo esc_html( $label ); ?> (<?php echo (int) $count; ?> - <?php echo (int) $pct; ?>%)</li><?php endforeach; ?>
         </ul>
-        <div class="acdc-trainer-ring"></div><span class="acdc-trainer-help-dot">?</span>
+        <?php echo $this->acdc_barre_repartition( $presence_counts ); ?>
       </div>
     </div>
 
@@ -11330,7 +11447,6 @@ trait ACDC_Kernel_Render_Trait {
         <h3 style="margin:0 0 12px;font-size:15px;color:#1E4777;"><?php echo esc_html( $title ); ?></h3>
         <div class="acdc-fin-range"><span class="acdc-fin-sub">Depuis le début</span></div>
         <div class="acdc-fin-topline"><span class="acdc-fin-icon-box"><?php echo $this->render_inline_icon( 'billing', 18 ); ?></span><div><div class="acdc-fin-main-value"><?php echo esc_html( $format_eur( $total ) ); ?></div></div></div>
-        <span class="acdc-fin-help-dot">?</span>
       </div>
       <section class="acdc-section-head"><div><h2><?php echo esc_html( $table_title ); ?></h2></div></section>
       <div class="acdc-panel"><div class="acdc-table-wrap"><table class="acdc-table acdc-fin-table"><thead><tr><th>ID</th><th>Apprenant</th><th>Commanditaire</th><th>Formation</th><th>Tarif (€ HT)</th><th>Dates de formation</th><th>Séances de formation</th><th>Groupe</th><th>Progression</th><th>Formateur attitré</th><th>État dossier</th><th>Accès extranet</th><th></th></tr></thead><tbody>
@@ -11388,7 +11504,6 @@ trait ACDC_Kernel_Render_Trait {
       <h3 style="margin:0 0 12px;font-size:15px;color:#1E4777;"><?php echo esc_html( $title ); ?></h3>
       <div class="acdc-fin-range"><span class="acdc-fin-sub">Depuis le début</span></div>
       <div class="acdc-fin-topline"><span class="acdc-fin-icon-box"><?php echo $this->render_inline_icon( 'billing', 18 ); ?></span><div><div class="acdc-fin-main-value"><?php echo esc_html( $format_eur( $total ) ); ?></div><?php if ( $total <= 0 ) : ?><div class="acdc-fin-sub">Pas de donnée</div><?php endif; ?></div></div>
-      <span class="acdc-fin-help-dot">?</span>
     </div>
     <section class="acdc-section-head"><div><h2><?php echo esc_html( $table_title ); ?></h2></div></section>
     <div class="acdc-panel"><div class="acdc-table-wrap"><table class="acdc-table"><thead>

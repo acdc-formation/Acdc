@@ -323,12 +323,40 @@ body{font-family:Arial,sans-serif;background:#f5f6fa;color:#1a2744;font-size:14p
             $total_f = count( $formation['docs_formation'] ) + count( $formation['docs_learners'] );
             foreach ( $formation['sessions'] as $session ) { $total_f += count( $session['docs'] ); }
         ?>
+        <?php
+        /* ACDC 3.25.330 — CE QUI MANQUE EST AUSSI UNE INFORMATION.
+           Cet écran ne montrait que ce qu'il avait trouvé : un parcours sans
+           attestation ressemblait trait pour trait à un parcours dont
+           personne n'avait cherché l'attestation. Impossible, en le lisant,
+           de distinguer une pièce ABSENTE d'une pièce NON PRODUITE — et c'est
+           précisément la question que pose un auditeur.
+           On dresse donc la liste des types attendus et on marque ceux qui
+           sont couverts. Le vert dit « la preuve est là », le gris dit « rien
+           n'a été trouvé de ce type ». Le gris n'est pas un reproche : sur un
+           parcours sans financeur, l'enquête financeur n'a pas lieu d'être.
+           Mais il se voit, et c'est tout ce qu'on lui demande. */
+        $types_presents = array();
+        foreach ( (array) $formation['docs_formation'] as $__d ) { $types_presents[ (string) $__d['type'] ] = true; }
+        foreach ( (array) $formation['docs_learners'] as $__d )  { $types_presents[ (string) $__d['type'] ] = true; }
+        foreach ( (array) $formation['sessions'] as $__s ) {
+            foreach ( (array) $__s['docs'] as $__d ) { $types_presents[ (string) $__d['type'] ] = true; }
+        }
+        $couverts = 0;
+        foreach ( $doc_types as $__k => $__def ) { if ( isset( $types_presents[ $__k ] ) ) { $couverts++; } }
+        ?>
         <details class="audit-formation" open>
             <summary class="audit-formation-summary">
                 <?php echo esc_html( $formation['title'] ); ?>
                 <span class="audit-count"><?php echo $total_f; ?> doc<?php echo $total_f > 1 ? 's' : ''; ?></span>
+                <span class="audit-count"><?php echo (int) $couverts; ?>/<?php echo (int) count( $doc_types ); ?> types de pièces</span>
             </summary>
             <div class="audit-formation-body">
+                <div class="audit-couverture">
+                    <?php foreach ( $doc_types as $__k => $__def ) :
+                        $__ok = isset( $types_presents[ $__k ] ); ?>
+                        <span class="audit-chip<?php echo $__ok ? ' is-ok' : ''; ?>" title="<?php echo esc_attr( $__ok ? 'Pièce présente au dossier' : 'Aucune pièce de ce type trouvée' ); ?>"><?php echo $__ok ? '&#10003;' : '&#9675;'; ?> <?php echo esc_html( $__def['label'] ); ?></span>
+                    <?php endforeach; ?>
+                </div>
 
                 <?php /* Docs au niveau formation (conventions) */
                 if ( ! empty( $formation['docs_formation'] ) ) : ?>
@@ -432,6 +460,10 @@ body{font-family:Arial,sans-serif;background:#f5f6fa;color:#1a2744;font-size:14p
     private function get_shared_css() {
         return '
 .audit-subnav{display:flex;gap:8px;margin-bottom:20px;flex-wrap:wrap}
+/* ACDC 3.25.330 — La ligne de couverture : ce qui est là, et ce qui ne l\'est pas. */
+.audit-couverture{display:flex;flex-wrap:wrap;gap:6px;padding:12px 0 16px;border-bottom:1px solid #eef2f6;margin-bottom:14px}
+.audit-chip{display:inline-flex;align-items:center;gap:5px;padding:3px 10px;border-radius:20px;font-size:11px;font-weight:600;background:#f1f3f5;color:#6b7280;border:1px solid #e2e8f0}
+.audit-chip.is-ok{background:#d9f3e5;color:#1a7a50;border-color:#a7e0c4}
 .audit-section-head{display:flex;align-items:flex-start;justify-content:space-between;gap:16px;margin-bottom:18px;flex-wrap:wrap}
 .audit-section-title{font-size:18px;font-weight:800;color:#0f2c52;margin:0}
 .audit-section-sub{font-size:13px;color:#6b7280;margin-top:4px}

@@ -4,6 +4,62 @@ Toutes les modifications notables de ce projet sont documentées ici.
 Format inspiré de [Keep a Changelog](https://keepachangelog.com/fr/1.1.0/).
 L'historique détaillé antérieur est archivé dans [`release-notes/`](release-notes/).
 
+## [3.25.330] — 2026-08-23
+
+### Modifié — Quatre écrans de la recette du 23 août, et ce qu'ils cachaient
+
+**Cinq onglets qui rendaient tous la même liste.** Sur Dossiers de formation, le commentaire du
+code le disait sans détour : « Tous les onglets rendent la même liste d'inscriptions ». Cliquer
+sur « Par commanditaire » ramenait donc le tableau qu'on venait de quitter. Cinq promesses, un
+seul écran — c'est cela qui le rendait inutilisable, pas le tableau. L'explorateur par entité,
+lui, EXISTAIT : écrit, corrigé et éprouvé (3.25.158, 3.25.159, 3.25.163), il rend des dossiers
+par commanditaire, apprenant, formation ou séance et ouvre la fiche complète avec ses seize
+volets de preuves. Il n'était branché que sur l'onglet Conventions. On n'a rien réécrit : on a
+branché. Dossiers de formation devient au passage une **section principale** — c'est la chemise
+qu'on ouvre devant un auditeur, pas une étape parmi d'autres au milieu d'Inscription / Suivi.
+
+**Dix-sept tuiles pour deux sujets, sur les résultats d'enquêtes.** Sept portaient sur l'enquête,
+dix sur les actions d'amélioration — et sur un dossier ordinaire ces dix valent zéro, affiché en
+gros chiffre sur fond coloré. Il fallait descendre sous cinq rangées de zéros pour atteindre le
+tableau des envois, qui est ce qu'on vient voir. Quatre tuiles restent, les alertes gardent leur
+couleur, et les actions tiennent en une ligne qui ne s'affiche que s'il y a quelque chose à
+traiter. La fonction sert les six types d'enquêtes : la correction vaut pour les six.
+
+**L'audit Qualiopi inversait certificat et attestation.** `completion_certificate` est le
+CERTIFICAT DE RÉALISATION, `end_training_certificate` l'ATTESTATION DE FIN DE FORMATION.
+L'agrégat présentait chacune sous le nom de l'autre — la 3.25.264 avait corrigé exactement cette
+inversion dans le score de complétude, elle avait survécu ici, c'est-à-dire sur le seul écran
+qu'on ouvre devant un auditeur. Il empilait par ailleurs sans regarder ce qu'il empilait : la
+même pièce revenait plusieurs fois quand plusieurs chemins menaient au même fichier. Et il ne
+montrait que ce qu'il avait trouvé — un parcours sans attestation y ressemblait trait pour trait
+à un parcours dont personne n'avait cherché l'attestation. Une **ligne de couverture** dit
+désormais ce qui est présent et ce qui ne l'est pas.
+
+**Le taux de conversion se lisait dans un libellé.** « A-t-il un devis ? » se décidait en
+cherchant le mot « devis » DANS LE TEXTE du statut du prospect. Un dossier réellement converti —
+devis émis, convention signée, facture partie — comptait donc pour zéro dès que son statut ne
+portait pas littéralement le mot. On compte maintenant des pièces, par `source_prospect_id`, la
+même colonne qui avait débloqué la facture subrogée en 3.25.321. L'annulation, elle, reste lue
+sur le statut : aucune pièce ne la matérialise.
+
+- **Trois faux camemberts.** Les « anneaux » des statistiques commerciales, pédagogiques et
+  formateurs étaient peints en dur — trois tiers égaux, ou deux parts déclarées « 0 à 100 % »
+  chacune — et affichaient donc la même chose quelles que soient les données. Un graphique qui ne
+  lit pas ses données n'est pas une décoration inutile : c'est une affirmation fausse posée à côté
+  de chiffres justes. Remplacés par une barre de répartition calculée sur les effectifs réels.
+- **Quatre « ? » qui n'ouvraient rien** — ni infobulle, ni lien, ni script. Retirés. Ceux qui
+  portaient une vraie explication restent.
+- **Une carte en double** : « Taux de génération de convention / contrat » affichait exactement le
+  même nombre que « Taux d'inscription », sous un autre nom et dans une autre couleur.
+- **Les quiz se rangent par thématique.** La recette proposait deux niveaux d'onglets imbriqués ;
+  l'écran a déjà une barre de filtres, il lui manquait le cran au-dessus. Choisir une thématique
+  restreint les formations proposées ET les quiz affichés, en une ligne, sans quitter la page.
+
+Vérifications : 95 balayages et tests verts, dont `scan-refontes-23-aout.php` (39 règles). Sept
+sabotages éprouvés, et trois règles réécrites parce qu'elles ne pouvaient pas échouer — l'une
+lisait la fonction d'à côté, une autre comptait une chaîne présente dans une redirection sans
+rapport, la troisième aurait supprimé de la vraie aide avec la fausse.
+
 ## [3.25.329] — 2026-08-23
 
 ### Corrigé — Le cachet, le certificat, et sept écrans de la recette du 23 août

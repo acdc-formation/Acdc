@@ -14305,6 +14305,97 @@ private function acdc_pdf_masque_alpha( $image, $width, $height ) {
   }
 
   /**
+   * ACDC 3.25.330 — Les libellés des thématiques, par code.
+   *
+   * Les fiches formation ne portent que le CODE de leur thématique ; le
+   * libellé lisible vit dans le répertoire. Un filtre qui afficherait le code
+   * brut — « ia », « bureautique » — demanderait à l'utilisateur de connaître
+   * une nomenclature interne pour se servir de son propre écran.
+   *
+   * Un code sans fiche correspondante garde son code plutôt que de
+   * disparaître : la formation existe, elle doit rester atteignable.
+   *
+   * @param array $codes Codes de thématiques.
+   * @return array<string,string> code => libellé, triés par libellé.
+   */
+  public function acdc_thematiques_par_code( $codes ) {
+    global $wpdb;
+    $codes = array_values( array_unique( array_filter( array_map( 'strval', (array) $codes ) ) ) );
+    if ( empty( $codes ) || empty( $this->thematique_table ) ) {
+      return array();
+    }
+    $sortie = array();
+    foreach ( $codes as $code ) { $sortie[ $code ] = $code; }
+
+    $ph    = implode( ',', array_fill( 0, count( $codes ), '%s' ) );
+    $lignes = $wpdb->get_results( $wpdb->prepare(
+      "SELECT code, label FROM {$this->thematique_table} WHERE code IN ({$ph})",
+      $codes
+    ) );
+    foreach ( (array) $lignes as $ligne ) {
+      if ( ! empty( $ligne->code ) && ! empty( $ligne->label ) ) {
+        $sortie[ (string) $ligne->code ] = (string) $ligne->label;
+      }
+    }
+    asort( $sortie );
+    return $sortie;
+  }
+
+  /**
+   * ACDC 3.25.330 — Ce prospect a-t-il donné lieu à un devis ?
+   *
+   * On compte une PIÈCE, pas un mot. Le lien passe par source_prospect_id,
+   * la seule colonne que portent à la fois le devis, la proposition et la
+   * convention — la même que celle qui a débloqué la facture subrogée en
+   * 3.25.321. Le résultat est mis en cache le temps de la requête : l'écran
+   * des statistiques repose la question pour chaque prospect de la liste.
+   *
+   * @param int $prospect_id L'identifiant du prospect.
+   * @return bool
+   */
+  private function acdc_prospect_a_devis( $prospect_id ) {
+    global $wpdb;
+    static $cache = array();
+    $prospect_id = (int) $prospect_id;
+    if ( $prospect_id <= 0 || empty( $this->quote_table ) ) {
+      return false;
+    }
+    if ( isset( $cache[ $prospect_id ] ) ) {
+      return $cache[ $prospect_id ];
+    }
+    $cache[ $prospect_id ] = (int) $wpdb->get_var( $wpdb->prepare(
+      "SELECT COUNT(*) FROM {$this->quote_table} WHERE source_prospect_id = %d",
+      $prospect_id
+    ) ) > 0;
+    return $cache[ $prospect_id ];
+  }
+
+  /**
+   * ACDC 3.25.330 — Ce prospect a-t-il donné lieu à une convention ?
+   *
+   * Voir acdc_prospect_a_devis() : même principe, même clé.
+   *
+   * @param int $prospect_id L'identifiant du prospect.
+   * @return bool
+   */
+  private function acdc_prospect_a_convention( $prospect_id ) {
+    global $wpdb;
+    static $cache = array();
+    $prospect_id = (int) $prospect_id;
+    if ( $prospect_id <= 0 || empty( $this->registration_contract_table ) ) {
+      return false;
+    }
+    if ( isset( $cache[ $prospect_id ] ) ) {
+      return $cache[ $prospect_id ];
+    }
+    $cache[ $prospect_id ] = (int) $wpdb->get_var( $wpdb->prepare(
+      "SELECT COUNT(*) FROM {$this->registration_contract_table} WHERE source_prospect_id = %d",
+      $prospect_id
+    ) ) > 0;
+    return $cache[ $prospect_id ];
+  }
+
+  /**
    * ACDC 3.25.329 — LA FORMATION EST-ELLE TERMINÉE ?
    *
    * La colonne « Statut » d'Apprenants inscrits n'affichait que l'état

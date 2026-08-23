@@ -155,6 +155,19 @@ trait ACDC_Quizzes_Render_Trait {
 
         $formation_filter = isset( $_GET['filter_formation_id'] ) ? absint( wp_unslash( $_GET['filter_formation_id'] ) ) : 0;
         $status_filter    = isset( $_GET['filter_status'] ) ? sanitize_key( wp_unslash( $_GET['filter_status'] ) ) : '';
+        /* ACDC 3.25.330 — RANGER LES QUIZ PAR THÉMATIQUE, SANS EMPILER LES ONGLETS.
+           La recette anticipe le jour où il y aura un quiz par formation et par
+           thématique, et propose deux niveaux d'onglets imbriqués : thématique,
+           puis formation, puis les quiz. Le besoin est juste ; la forme coûte
+           cher — deux niveaux d'onglets, c'est trois clics et un retour arrière
+           pour atteindre un quiz, et une barre d'onglets qui déborde dès la
+           sixième thématique.
+           Cet écran a déjà une barre de filtres, et elle porte déjà la
+           formation. Il lui manquait le cran AU-DESSUS. Choisir une thématique
+           restreint la liste des formations à celles de cette thématique : on
+           obtient la même descente, en une seule ligne, sans jamais quitter la
+           page ni perdre les autres filtres. */
+        $thematique_filter = isset( $_GET['filter_thematique'] ) ? sanitize_text_field( wp_unslash( $_GET['filter_thematique'] ) ) : '';
         // 3.21.02 — Filtre versions : par défaut, on n'affiche que les versions
         // courantes (is_current = 1) pour ne pas noyer la liste sous les anciennes
         // versions verrouillées. L'utilisateur peut basculer sur "all" pour audit.
@@ -184,6 +197,39 @@ trait ACDC_Quizzes_Render_Trait {
         }
 
         $formations = $this->get_qz_available_formations();
+
+        /* La liste des thématiques proposées est celle des formations
+           RÉELLEMENT utilisables ici : offrir une thématique qui ne mènerait à
+           aucune formation serait offrir un cul-de-sac. */
+        $thematiques_qz = array();
+        foreach ( (array) $formations as $__f ) {
+            $__code = isset( $__f->thematique ) ? trim( (string) $__f->thematique ) : '';
+            if ( '' !== $__code ) { $thematiques_qz[ $__code ] = $__code; }
+        }
+        if ( ! empty( $thematiques_qz ) && method_exists( $this, 'acdc_thematiques_par_code' ) ) {
+            $thematiques_qz = $this->acdc_thematiques_par_code( array_keys( $thematiques_qz ) );
+        }
+        if ( '' !== $thematique_filter && ! isset( $thematiques_qz[ $thematique_filter ] ) ) {
+            $thematique_filter = '';
+        }
+
+        /* Le filtre thématique agit sur les DEUX listes : celle des formations
+           proposées au choix, et celle des quiz affichés. N'en faire qu'une des
+           deux donnerait un écran qui se contredit. */
+        if ( '' !== $thematique_filter ) {
+            $ids_thematique = array();
+            foreach ( (array) $formations as $__f ) {
+                if ( trim( (string) ( $__f->thematique ?? '' ) ) === $thematique_filter ) { $ids_thematique[] = (int) $__f->id; }
+            }
+            $formations = array_values( array_filter( (array) $formations, function ( $f ) use ( $thematique_filter ) {
+                return trim( (string) ( $f->thematique ?? '' ) ) === $thematique_filter;
+            } ) );
+            if ( 0 === $formation_filter ) {
+                $quizzes = array_values( array_filter( (array) $quizzes, function ( $q ) use ( $ids_thematique ) {
+                    return in_array( (int) ( $q->formation_id ?? 0 ), $ids_thematique, true );
+                } ) );
+            }
+        }
         ?>
         <header class="acdc-qz-list-header">
             <h1 class="acdc-qz-list-title"><?php echo esc_html( $title ); ?></h1>
@@ -219,6 +265,17 @@ trait ACDC_Quizzes_Render_Trait {
                 }
             }
             ?>
+            <label>
+                <span><?php esc_html_e( 'Thématique :', 'acdc-formation-saas' ); ?></span>
+                <select name="filter_thematique" onchange="this.form.filter_formation_id.value='0';this.form.submit();">
+                    <option value=""><?php esc_html_e( 'Toutes', 'acdc-formation-saas' ); ?></option>
+                    <?php foreach ( $thematiques_qz as $__code => $__libelle ) : ?>
+                        <option value="<?php echo esc_attr( $__code ); ?>" <?php selected( $thematique_filter, (string) $__code ); ?>>
+                            <?php echo esc_html( $__libelle ); ?>
+                        </option>
+                    <?php endforeach; ?>
+                </select>
+            </label>
             <label>
                 <span><?php esc_html_e( 'Formation :', 'acdc-formation-saas' ); ?></span>
                 <select name="filter_formation_id">
