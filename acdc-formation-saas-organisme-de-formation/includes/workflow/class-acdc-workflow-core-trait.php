@@ -1,0 +1,906 @@
+<?php
+/**
+ * ACDC Workflow — socle du module d'orchestration du parcours.
+ *
+ * Ce module ne remplace aucun module métier : il les ORDONNE. Il tient, pour
+ * chaque dossier, la liste des étapes du parcours, leur date prévue et leur
+ * état, puis déclenche au bon moment l'action correspondante.
+ *
+ * Deux principes gouvernent tout le reste :
+ *
+ *   1. LA SOURCE DE VÉRITÉ RESTE LA DONNÉE MÉTIER. Le moteur ne mémorise pas
+ *      « le devis a été signé » : il relit le devis. Un parcours se recalcule
+ *      donc à chaque passage du cron à partir de l'état réel du dossier. C'est
+ *      plus robuste qu'une chaîne d'événements : si un module oublie de prévenir,
+ *      ou si David modifie une pièce à la main, le parcours se remet d'aplomb au
+ *      passage suivant au lieu de rester bloqué.
+ *
+ *   2. RIEN NE PART TANT QUE L'ON N'A PAS VU LE PLAN. Le moteur démarre en mode
+ *      simulation : il planifie tout, journalise ce qu'il AURAIT envoyé, et
+ *      n'envoie rien. On regarde, on corrige les délais, puis on ouvre le
+ *      robinet.
+ *
+ * @since 3.25.185
+ */
+
+if ( ! defined( 'ABSPATH' ) ) {
+  exit;
+}
+
+trait ACDC_Workflow_Core_Trait {
+
+  /* =====================================================================
+   * Schéma
+   * ===================================================================== */
+
+  /**
+   * Deux tables seulement : le parcours (« run ») et ses étapes.
+   *
+   * Un parcours porte les identifiants des pièces du dossier au fur et à mesure
+   * qu'elles apparaissent — recueil, proposition, devis, convention, séance.
+   * Ces colonnes ne sont pas la vérité, elles sont un raccourci de lecture :
+   * la réconciliation les réécrit à chaque passage.
+   */
+  private function acdc_wf_install_schema() {
+    global $wpdb;
+    require_once ABSPATH . 'wp-admin/includes/upgrade.php';
+    $charset_collate = $wpdb->get_charset_collate();
+
+    $sql_runs = "CREATE TABLE {$this->workflow_run_table} (
+      id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
+      need_id BIGINT UNSIGNED DEFAULT NULL,
+      prospect_id BIGINT UNSIGNED DEFAULT NULL,
+      company_id BIGINT UNSIGNED DEFAULT NULL,
+      proposal_id BIGINT UNSIGNED DEFAULT NULL,
+      quote_id BIGINT UNSIGNED DEFAULT NULL,
+      contract_id BIGINT UNSIGNED DEFAULT NULL,
+      formation_id BIGINT UNSIGNED DEFAULT NULL,
+      session_id BIGINT UNSIGNED DEFAULT NULL,
+      funder_id BIGINT UNSIGNED DEFAULT NULL,
+      label VARCHAR(190) NOT NULL DEFAULT '',
+      phase VARCHAR(40) NOT NULL DEFAULT 'commercial',
+      status VARCHAR(20) NOT NULL DEFAULT 'active',
+      close_reason VARCHAR(190) NOT NULL DEFAULT '',
+      formation_start_at DATETIME DEFAULT NULL,
+      formation_end_at DATETIME DEFAULT NULL,
+      dates_source VARCHAR(255) NOT NULL DEFAULT '',
+      last_reconciled_at DATETIME DEFAULT NULL,
+      started_at DATETIME NOT NULL,
+      updated_at DATETIME NOT NULL,
+      closed_at DATETIME DEFAULT NULL,
+      PRIMARY KEY (id),
+      UNIQUE KEY need_id (need_id),
+      KEY status (status),
+      KEY phase (phase),
+      KEY session_id (session_id)
+    ) {$charset_collate};";
+    dbDelta( $sql_runs );
+
+    /* `dedupe_key` porte l'unicité fonctionnelle d'une étape : une même étape
+       pour une même cible ne peut exister qu'une fois par parcours. C'est ce qui
+       rend la réconciliation idempotente — elle peut tourner mille fois sans
+       jamais planifier deux fois le même envoi. */
+    $sql_steps = "CREATE TABLE {$this->workflow_step_table} (
+      id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
+      run_id BIGINT UNSIGNED NOT NULL,
+      step_key VARCHAR(60) NOT NULL DEFAULT '',
+      dedupe_key VARCHAR(120) NOT NULL DEFAULT '',
+      parent_key VARCHAR(60) NOT NULL DEFAULT '',
+      phase VARCHAR(40) NOT NULL DEFAULT '',
+      mode VARCHAR(12) NOT NULL DEFAULT 'auto',
+      label VARCHAR(190) NOT NULL DEFAULT '',
+      target_type VARCHAR(30) NOT NULL DEFAULT '',
+      target_id BIGINT UNSIGNED DEFAULT NULL,
+      target_label VARCHAR(190) NOT NULL DEFAULT '',
+      scheduled_at DATETIME DEFAULT NULL,
+      executed_at DATETIME DEFAULT NULL,
+      status VARCHAR(20) NOT NULL DEFAULT 'pending',
+      is_alert TINYINT(1) NOT NULL DEFAULT 0,
+      settled_by VARCHAR(10) NOT NULL DEFAULT '',
+      attempts SMALLINT UNSIGNED NOT NULL DEFAULT 0,
+      result_note TEXT,
+      last_error TEXT,
+      payload_json LONGTEXT,
+      created_at DATETIME NOT NULL,
+      updated_at DATETIME NOT NULL,
+      PRIMARY KEY (id),
+      UNIQUE KEY run_dedupe (run_id, dedupe_key),
+      KEY run_id (run_id),
+      KEY status (status),
+      KEY scheduled_at (scheduled_at),
+      KEY mode (mode)
+    ) {$charset_collate};";
+    dbDelta( $sql_steps );
+
+    $this->acdc_wf_migrate_replan_after_timezone_fix();
+    $this->acdc_wf_migrate_mark_human_dismissals();
+    $this->acdc_wf_migrate_purge_dateless_cancellations();
+  }
+
+  /**
+   * ACDC 3.25.191 — Les écartements manuels antérieurs à la colonne `settled_by`.
+   *
+   * Le moteur peut désormais rouvrir une étape qu'il avait lui-même écartée,
+   * mais jamais une que David a écartée à la main. Les lignes écrites avant
+   * cette distinction n'en portent pas la marque : sans ce rattrapage, le
+   * premier tour de moteur ressusciterait les tâches déjà tranchées — soit
+   * exactement le comportement que la recette venait de valider comme correct.
+   * La note laissée par l'action manuelle suffit à les reconnaître.
+   */
+  private function acdc_wf_migrate_mark_human_dismissals() {
+    global $wpdb;
+
+    if ( '1' === (string) get_option( 'acdc_of_workflow_settled_by_3_25_191', '' ) ) {
+      return;
+    }
+    update_option( 'acdc_of_workflow_settled_by_3_25_191', '1', false );
+
+    $exists = $wpdb->get_var( $wpdb->prepare( 'SHOW TABLES LIKE %s', $this->workflow_step_table ) );
+    if ( $exists !== $this->workflow_step_table ) {
+      return;
+    }
+    if ( ! $this->acdc_schema_has_column( $this->workflow_step_table, 'settled_by' ) ) {
+      return;
+    }
+
+    $wpdb->query( $wpdb->prepare(
+      "UPDATE {$this->workflow_step_table}
+          SET settled_by = 'human'
+        WHERE settled_by = '' AND result_note = %s",
+      'Écartée manuellement.'
+    ) );
+  }
+
+  /**
+   * ACDC 3.25.186 — Remise à plat des plans établis par la 3.25.185.
+   *
+   * Cette version-là planifiait avec un décalage horaire de deux fois l'offset
+   * — 17 h devenait 21 h — et, faute d'horaires de séance, semait jusqu'à 120
+   * rappels d'émargement par dossier, week-ends compris. Corriger le calcul ne
+   * suffit pas : les lignes déjà écrites gardent leurs mauvaises heures, et
+   * celles qui ont été « jouées » en simulation ne sont plus jamais recalculées.
+   *
+   * On efface donc les ÉTAPES, jamais les parcours. La table des étapes ne
+   * contient aucune donnée métier : c'est un plan, et un plan faux se refait.
+   * La réconciliation suivante le reconstruit intégralement à partir des
+   * dossiers réels.
+   *
+   * Le drapeau est posé AVANT le travail : perdre une remise à plat est
+   * rattrapable, la rejouer en boucle ne l'est pas.
+   */
+  private function acdc_wf_migrate_replan_after_timezone_fix() {
+    global $wpdb;
+
+    if ( '1' === (string) get_option( 'acdc_of_workflow_replan_3_25_186', '' ) ) {
+      return;
+    }
+    update_option( 'acdc_of_workflow_replan_3_25_186', '1', false );
+
+    $exists = $wpdb->get_var( $wpdb->prepare( 'SHOW TABLES LIKE %s', $this->workflow_step_table ) );
+    if ( $exists === $this->workflow_step_table ) {
+      $wpdb->query( "DELETE FROM {$this->workflow_step_table}" );
+    }
+  }
+
+  /**
+   * ACDC 3.25.207 — Les étapes annulées par les versions précédentes.
+   *
+   * La 3.25.205 a bien cessé d'ANNULER une étape jamais jouée : elle l'efface.
+   * Mais elle ne corrigeait que l'avenir. Le balayage ne relit que les étapes
+   * encore ouvertes — `status IN ('pending','waiting')` — et les neuf lignes
+   * signalées par la recette étaient déjà « Annulée » depuis une version
+   * antérieure : plus aucun passage du moteur ne les regardait. D'où le constat,
+   * exact, qu'« elles ne se résorbent pas d'elles-mêmes ».
+   *
+   * Le critère de suppression est sûr, et il faut voir pourquoi : TOUS les
+   * chemins légitimes de clôture écrivent `executed_at = COALESCE(executed_at,
+   * maintenant)` — la neutralisation inter-parcours comme l'écartement manuel.
+   * Une étape sans `executed_at` n'a donc pu être close que par le balayage,
+   * qui était le seul à ne pas horodater. Les lignes « Séance pilotée par le
+   * parcours n°1 », que la recette a justement saluées, portent leur date et ne
+   * sont pas concernées ; les écartements humains sont protégés deux fois.
+   *
+   * Le drapeau est posé avant le travail : rejouer une purge en boucle coûte
+   * plus cher que de la manquer une fois.
+   */
+  private function acdc_wf_migrate_purge_dateless_cancellations() {
+    global $wpdb;
+
+    if ( '1' === (string) get_option( 'acdc_of_workflow_purge_dateless_3_25_207', '' ) ) {
+      return;
+    }
+    update_option( 'acdc_of_workflow_purge_dateless_3_25_207', '1', false );
+
+    $exists = $wpdb->get_var( $wpdb->prepare( 'SHOW TABLES LIKE %s', $this->workflow_step_table ) );
+    if ( $exists !== $this->workflow_step_table ) {
+      return;
+    }
+
+    $deleted = $wpdb->query(
+      "DELETE FROM {$this->workflow_step_table}
+        WHERE executed_at IS NULL
+          AND status = 'cancelled'
+          AND settled_by <> 'human'"
+    );
+
+    if ( $deleted ) {
+      $this->log_error( 'workflow', 'Étapes annulées sans horodatage supprimées.', array(
+        'count' => (int) $deleted,
+      ) );
+    }
+  }
+
+  /* =====================================================================
+   * Registre des étapes — la traduction fidèle du schéma de David
+   * ===================================================================== */
+
+  private function acdc_wf_phases() {
+    return array(
+      'commercial'  => 'Commercial',
+      'preparation' => 'Préparation',
+      'animation'   => 'Animation',
+      'evaluation'  => 'Évaluation',
+    );
+  }
+
+  /**
+   * Chaque nœud du schéma devient une entrée ici.
+   *
+   * `mode` vaut :
+   *   - `auto`  : le moteur exécute, personne n'intervient (envois, relances) ;
+   *   - `task`  : le moteur inscrit une tâche dans la liste « À faire » et
+   *               attend que la pièce apparaisse — c'est le choix de David pour
+   *               tout document qui engage l'organisme ;
+   *   - `alert` : une tâche doublée d'un signalement au tableau de bord.
+   */
+  private function acdc_wf_step_registry() {
+    return array(
+      /* ---- Commercial ------------------------------------------------- */
+      'proposal_create' => array(
+        'phase' => 'commercial', 'mode' => 'task',
+        'label' => 'Créer la proposition commerciale',
+      ),
+      'quote_create' => array(
+        'phase' => 'commercial', 'mode' => 'task',
+        'label' => 'Créer le devis',
+      ),
+      'quote_reminder' => array(
+        'phase' => 'commercial', 'mode' => 'auto',
+        'label' => 'Relancer la signature du devis',
+      ),
+      'quote_rdv' => array(
+        'phase' => 'commercial', 'mode' => 'task',
+        'label' => 'Devis toujours non signé : créer un rendez-vous',
+      ),
+      'convention_create' => array(
+        'phase' => 'commercial', 'mode' => 'task',
+        'label' => 'Créer la convention / le contrat',
+      ),
+      'convention_reminder' => array(
+        'phase' => 'commercial', 'mode' => 'auto',
+        'label' => 'Relancer la signature de la convention',
+      ),
+      /* Le schéma laisse cette sortie sans suite. David a tranché : rendez-vous
+         ET alerte. C'est le cas où un dossier se perd sans que personne ne le
+         sache — il ne pouvait pas rester muet. */
+      'convention_rdv' => array(
+        'phase' => 'commercial', 'mode' => 'alert',
+        'label' => 'Convention non signée : créer un rendez-vous',
+      ),
+
+      /* ---- Préparation ------------------------------------------------- */
+      /* ACDC 3.25.228 — Inscrire quelqu'un en formation est un ACTE DE GESTION,
+         pas un envoi : cette étape n'a jamais eu d'automatisation et n'en aura
+         pas. Déclarée « auto », le moteur tentait de la jouer, ne trouvait
+         aucun gestionnaire et la peignait en rouge sur un dossier qui allait
+         parfaitement bien. */
+      'registration' => array(
+        'phase' => 'preparation', 'mode' => 'task',
+        'label' => 'Inscrire les apprenants nommés dans la convention',
+      ),
+      'nad_send' => array(
+        'phase' => 'preparation', 'mode' => 'auto',
+        'label' => 'Envoyer l’analyse des besoins',
+        'per_learner' => true,
+      ),
+      'trainer_pack' => array(
+        'phase' => 'preparation', 'mode' => 'auto',
+        'label' => 'Déposer le dossier de formation dans l’extranet formateur',
+      ),
+      'learner_invite' => array(
+        'phase' => 'preparation', 'mode' => 'auto',
+        'label' => 'Ouvrir l’extranet apprenant',
+        'per_learner' => true,
+      ),
+      'convocation' => array(
+        'phase' => 'preparation', 'mode' => 'auto',
+        'label' => 'Envoyer la convocation',
+      ),
+
+      /* ---- Animation ---------------------------------------------------- */
+      /* ACDC 3.25.186 — Quand la séance ne porte ni horaires ni demi-journées,
+         le moteur ne devine plus : il le dit. La 3.25.185 balayait la plage
+         calendaire entière et produisait 120 rappels sur deux mois, week-ends
+         compris, jusqu'à buter sur son propre garde-fou. Un plan faux et
+         volumineux est pire qu'un plan absent : il noie les vraies lignes. */
+      'session_hours_missing' => array(
+        'phase' => 'animation', 'mode' => 'alert',
+        'label' => 'Renseigner les horaires de la séance — sans eux, la feuille d’émargement ne peut pas être ouverte',
+      ),
+      'session_missing' => array(
+        'phase' => 'animation', 'mode' => 'alert',
+        'label' => 'Rattacher une séance au dossier — sans elle, ni convocation ni émargement ne peuvent être planifiés',
+      ),
+      /* ACDC 3.25.207 — Le libellé nomme le destinataire.
+         « Ouvrir la feuille d'émargement » décrivait l'action demandée mais
+         taisait à qui : la recette a cru, deux fois de suite, que le rappel au
+         formateur avait disparu du plan alors qu'il s'agissait de cette
+         étape-là, renommée en 3.25.193. Une ligne de plan doit se lire sans
+         connaître l'historique des versions. */
+      'emargement_am' => array(
+        'phase' => 'animation', 'mode' => 'auto',
+        'label' => 'Rappel au formateur : ouvrir la feuille d’émargement — séance du matin',
+      ),
+      'emargement_pm' => array(
+        'phase' => 'animation', 'mode' => 'auto',
+        'label' => 'Rappel au formateur : ouvrir la feuille d’émargement — séance de l’après-midi',
+      ),
+
+      /* ---- Évaluation ---------------------------------------------------- */
+      'survey_hot' => array(
+        'phase' => 'evaluation', 'mode' => 'auto',
+        'label' => 'Envoyer l’enquête à chaud aux apprenants',
+        'survey_type' => 'hot',
+      ),
+      'survey_company' => array(
+        'phase' => 'evaluation', 'mode' => 'auto',
+        'label' => 'Envoyer l’enquête entreprise',
+        'survey_type' => 'company',
+      ),
+      'survey_funder' => array(
+        'phase' => 'evaluation', 'mode' => 'auto',
+        'label' => 'Envoyer l’enquête financeur',
+        'survey_type' => 'funder',
+      ),
+      'survey_trainer' => array(
+        'phase' => 'evaluation', 'mode' => 'auto',
+        'label' => 'Envoyer l’enquête formateur',
+        'survey_type' => 'trainer',
+      ),
+      'survey_cold' => array(
+        'phase' => 'evaluation', 'mode' => 'auto',
+        'label' => 'Envoyer l’enquête à froid aux apprenants',
+        'survey_type' => 'cold',
+      ),
+    );
+  }
+
+  private function acdc_wf_step_config( $step_key ) {
+    $registry = $this->acdc_wf_step_registry();
+    $step_key = (string) $step_key;
+    /* Les relances portent la clé de leur enquête suivie de _r1, _r2, _r3. */
+    if ( preg_match( '/^(.+)_r([123])$/', $step_key, $m ) && isset( $registry[ $m[1] ] ) ) {
+      $parent = $registry[ $m[1] ];
+      $rank   = (int) $m[2];
+      return array(
+        'phase'       => $parent['phase'],
+        'mode'        => 'auto',
+        'label'       => sprintf( '%s — relance %d', $this->acdc_wf_survey_label( $m[1] ), $rank ),
+        'survey_type' => isset( $parent['survey_type'] ) ? $parent['survey_type'] : '',
+        'parent_key'  => $m[1],
+        'reminder'    => $rank,
+      );
+    }
+    return isset( $registry[ $step_key ] ) ? $registry[ $step_key ] : array();
+  }
+
+  private function acdc_wf_survey_label( $step_key ) {
+    $labels = array(
+      'survey_hot'     => 'Enquête à chaud',
+      'survey_company' => 'Enquête entreprise',
+      'survey_funder'  => 'Enquête financeur',
+      'survey_trainer' => 'Enquête formateur',
+      'survey_cold'    => 'Enquête à froid',
+    );
+    return isset( $labels[ $step_key ] ) ? $labels[ $step_key ] : (string) $step_key;
+  }
+
+  /* =====================================================================
+   * Réglages
+   * ===================================================================== */
+
+  /**
+   * Les valeurs du schéma de David servent de défauts. Tout est réglable :
+   * il ne doit plus avoir à me demander un zip pour passer 10 jours à 7.
+   */
+  private function acdc_wf_default_settings() {
+    return array(
+      'enabled'                  => 0,
+      'simulation'               => 1,
+      'test_mode'                => 1,
+      'allowed_recipients'       => '',
+      'business_days_reminders'  => 1,
+      'delays' => array(
+        /* Commercial — en jours */
+        'quote_reminder_days'        => 10,
+        'quote_rdv_after_days'       => 10,
+        'convention_reminder_days'   => 3,
+        'convention_rdv_after_days'  => 3,
+
+        /* Préparation */
+        'nad_days_before_start'      => 15,
+        'trainer_pack_days_before'   => 15,
+        'convocation_hour'           => 17,
+        'emargement_lead_minutes'    => 30,
+
+        /* ACDC 3.25.271 — Fenêtre de visibilité des quiz chez le formateur.
+           Un jour avant la première journée, deux jours après la dernière. */
+        'quiz_visible_days_before'   => 1,
+        'quiz_visible_days_after'    => 2,
+
+        /* Évaluation — décalage du premier envoi après la fin de la formation */
+        'survey_hot_offset_hours'     => 0,
+        'survey_company_offset_hours' => 24,
+        'survey_funder_offset_hours'  => 24,
+        'survey_trainer_offset_hours' => 24,
+        'survey_cold_offset_days'     => 90,
+
+        /* Évaluation — relances, CUMULATIVES : chaque délai part de la relance
+           précédente, conformément à la réponse de David (J+3, J+8, J+15). */
+        'survey_hot_reminder_hours'     => array( 24, 48, 72 ),
+        'survey_company_reminder_days'  => array( 3, 5, 7 ),
+        'survey_funder_reminder_days'   => array( 3, 5, 7 ),
+        'survey_trainer_reminder_days'  => array( 3, 5, 7 ),
+        'survey_cold_reminder_days'     => array( 3, 5, 7 ),
+      ),
+    );
+  }
+
+  private function acdc_wf_settings() {
+    $saved    = get_option( 'acdc_of_workflow_settings', array() );
+    $defaults = $this->acdc_wf_default_settings();
+    if ( ! is_array( $saved ) ) {
+      return $defaults;
+    }
+    $merged           = wp_parse_args( $saved, $defaults );
+    $merged['delays'] = wp_parse_args(
+      isset( $saved['delays'] ) && is_array( $saved['delays'] ) ? $saved['delays'] : array(),
+      $defaults['delays']
+    );
+    return $merged;
+  }
+
+  private function acdc_wf_delay( $key, $fallback = 0 ) {
+    $settings = $this->acdc_wf_settings();
+    return isset( $settings['delays'][ $key ] ) ? $settings['delays'][ $key ] : $fallback;
+  }
+
+  private function acdc_wf_is_enabled() {
+    $settings = $this->acdc_wf_settings();
+    return ! empty( $settings['enabled'] );
+  }
+
+  private function acdc_wf_is_simulation() {
+    $settings = $this->acdc_wf_settings();
+    return ! empty( $settings['simulation'] );
+  }
+
+  /* =====================================================================
+   * Garde-fou d'envoi
+   * ===================================================================== */
+
+  /**
+   * Le mode recette. Tant qu'il est actif, seule une adresse explicitement
+   * déclarée peut recevoir quoi que ce soit.
+   *
+   * Ce n'est pas une précaution théorique : la base contient onze financeurs
+   * OPCO réels, et une automatisation qui part seule écrit à de vraies
+   * personnes. Le refus est journalisé — un envoi bloqué doit se voir.
+   */
+  private function acdc_wf_may_send_to( $email ) {
+    $email    = sanitize_email( (string) $email );
+    $settings = $this->acdc_wf_settings();
+
+    if ( '' === $email || ! is_email( $email ) ) {
+      return false;
+    }
+    if ( empty( $settings['test_mode'] ) ) {
+      return true;
+    }
+
+    $allowed = array_filter( array_map(
+      'strtolower',
+      array_map( 'trim', preg_split( '/[\s,;]+/', (string) $settings['allowed_recipients'] ) )
+    ) );
+
+    return in_array( strtolower( $email ), $allowed, true );
+  }
+
+  /* =====================================================================
+   * Calendrier
+   * ===================================================================== */
+
+  /**
+   * Décalage au jour ouvré suivant — pour les RELANCES uniquement.
+   *
+   * David a été précis là-dessus : l'envoi initial part quand il doit partir,
+   * y compris un samedi, parce qu'il suit un fait (la fin de la formation).
+   * Une relance, elle, est une sollicitation : elle attend le lundi.
+   */
+  private function acdc_wf_shift_to_business_day( $timestamp ) {
+    $settings = $this->acdc_wf_settings();
+    if ( empty( $settings['business_days_reminders'] ) ) {
+      return (int) $timestamp;
+    }
+    $ts    = (int) $timestamp;
+    $guard = 0;
+    while ( in_array( (int) wp_date( 'N', $ts ), array( 6, 7 ), true ) && $guard < 7 ) {
+      $ts = $this->acdc_wf_add_days( $ts, 1 );
+      $guard++;
+    }
+    return $ts;
+  }
+
+  /**
+   * ACDC 3.25.186 — Une seule représentation du temps, et elle est explicite.
+   *
+   * La 3.25.185 mélangeait deux conventions et payait le prix classique : toutes
+   * les heures planifiées étaient décalées du double du décalage horaire — 17 h
+   * devenait 21 h en été, 19 h en hiver. L'erreur venait de current_time
+   * ('timestamp'), qui rend un horodatage DÉJÀ décalé en heure locale, puis de
+   * wp_date() qui rajoutait ce même décalage à l'affichage.
+   *
+   * La règle, désormais, tient en trois lignes :
+   *   - en mémoire, un horodatage est TOUJOURS un vrai timestamp UTC ;
+   *   - en base, une date-heure est TOUJOURS de l'heure locale (convention du
+   *     plugin, héritée de current_time('mysql')) ;
+   *   - on ne franchit la frontière qu'avec acdc_wf_mysql() dans un sens et
+   *     acdc_wf_ts() dans l'autre. Jamais strtotime() nu sur une valeur lue en
+   *     base : c'est lui qui a introduit le décalage.
+   */
+  private function acdc_wf_mysql( $timestamp ) {
+    return wp_date( 'Y-m-d H:i:s', (int) $timestamp );
+  }
+
+  private function acdc_wf_now() {
+    return time();
+  }
+
+  /** Heure locale stockée en base → horodatage UTC. */
+  private function acdc_wf_ts( $mysql_local ) {
+    $mysql_local = trim( (string) $mysql_local );
+    if ( '' === $mysql_local || 0 === strpos( $mysql_local, '0000-00-00' ) ) {
+      return 0;
+    }
+    try {
+      $date = new DateTimeImmutable( $mysql_local, wp_timezone() );
+    } catch ( Exception $e ) {
+      return 0;
+    }
+    return (int) $date->getTimestamp();
+  }
+
+  /**
+   * ACDC 3.25.187 — Un délai en JOURS se compte en jours calendaires, pas en
+   * paquets de 86 400 secondes.
+   *
+   * L'enquête à froid, posée à 90 jours d'une fin de formation le 5 août à 17 h,
+   * tombait le 3 novembre à 16 h : entre les deux, le passage à l'heure d'hiver.
+   * L'arithmétique en secondes déplace l'heure murale d'une heure à chaque
+   * changement de fuseau, et dans l'autre sens au printemps. On ajoute donc les
+   * jours dans le calendrier local, ce qui conserve l'heure voulue.
+   *
+   * Les délais en HEURES, eux, restent des durées réelles : « relancer après
+   * 24 heures » exprime un temps écoulé, pas un rendez-vous à heure fixe.
+   */
+  private function acdc_wf_add_days( $timestamp, $days ) {
+    $days = (int) $days;
+    if ( 0 === $days ) {
+      return (int) $timestamp;
+    }
+    try {
+      $date = ( new DateTimeImmutable( '@' . (int) $timestamp ) )->setTimezone( wp_timezone() );
+    } catch ( Exception $e ) {
+      return (int) $timestamp + ( $days * DAY_IN_SECONDS );
+    }
+    return (int) $date->modify( sprintf( '%+d days', $days ) )->getTimestamp();
+  }
+
+  /** Date locale + heure locale → horodatage UTC. */
+  private function acdc_wf_local_ts( $date, $time = '00:00:00' ) {
+    return $this->acdc_wf_ts( trim( (string) $date ) . ' ' . trim( (string) $time ) );
+  }
+
+  /* =====================================================================
+   * Lecture
+   * ===================================================================== */
+
+  private function acdc_wf_get_run( $run_id ) {
+    global $wpdb;
+    return $wpdb->get_row( $wpdb->prepare(
+      "SELECT * FROM {$this->workflow_run_table} WHERE id = %d",
+      (int) $run_id
+    ) );
+  }
+
+  private function acdc_wf_get_run_by_need( $need_id ) {
+    global $wpdb;
+    return $wpdb->get_row( $wpdb->prepare(
+      "SELECT * FROM {$this->workflow_run_table} WHERE need_id = %d",
+      (int) $need_id
+    ) );
+  }
+
+  private function acdc_wf_get_steps( $run_id, $statuses = array() ) {
+    global $wpdb;
+    $sql    = "SELECT * FROM {$this->workflow_step_table} WHERE run_id = %d";
+    $values = array( (int) $run_id );
+    if ( ! empty( $statuses ) ) {
+      $placeholders = implode( ',', array_fill( 0, count( $statuses ), '%s' ) );
+      $sql         .= " AND status IN ({$placeholders})";
+      $values       = array_merge( $values, array_map( 'strval', $statuses ) );
+    }
+    $sql .= " ORDER BY COALESCE(scheduled_at, '9999-12-31') ASC, id ASC";
+    return $wpdb->get_results( $wpdb->prepare( $sql, $values ) );
+  }
+
+  /**
+   * La prochaine action d'un parcours : la première étape encore à venir.
+   * C'est la colonne qui compte dans l'écran de suivi — celle qui répond à
+   * « et maintenant, il se passe quoi, et quand ? ».
+   */
+  private function acdc_wf_next_step( $run_id ) {
+    global $wpdb;
+    return $wpdb->get_row( $wpdb->prepare(
+      "SELECT * FROM {$this->workflow_step_table}
+        WHERE run_id = %d AND status IN ('pending','waiting')
+        ORDER BY (scheduled_at IS NULL) ASC, scheduled_at ASC, id ASC
+        LIMIT 1",
+      (int) $run_id
+    ) );
+  }
+
+  private function acdc_wf_status_labels() {
+    return array(
+      'waiting'   => 'En attente d’un préalable',
+      'pending'   => 'Planifiée',
+      'done'      => 'Faite',
+      /* ACDC 3.25.186 — En simulation, « Faite » était un mensonge : rien n'avait
+         été fait. L'état porte désormais lui-même la nuance, sans dépendre de la
+         colonne Observation que l'œil saute. */
+      'simulated' => 'Simulée — aucun envoi',
+      'skipped'   => 'Sans objet',
+      'cancelled' => 'Annulée',
+      'failed'    => 'En échec',
+    );
+  }
+
+  /**
+   * ACDC 3.25.186 — Le libellé d'un dossier, identique partout.
+   *
+   * Le journal affichait le thème du recueil — « Intelligence artificielle »
+   * pour quatre parcours différents. Un journal qui ne dit pas de quel dossier
+   * il parle n'est pas un journal.
+   */
+  private function acdc_wf_run_display_label( $row ) {
+    $company = isset( $row->prospect_company ) ? trim( (string) $row->prospect_company ) : '';
+    $base    = '' !== $company ? $company : (string) ( $row->run_label ?? $row->label ?? '' );
+    $need_id = (int) ( $row->need_id ?? 0 );
+    if ( '' === $base ) {
+      $base = 'Dossier';
+    }
+    return $need_id > 0 ? $base . ' (recueil n°' . $need_id . ')' : $base;
+  }
+
+  /** Les états qui signifient « cette étape est derrière nous ». */
+  private function acdc_wf_settled_statuses() {
+    return array( 'done', 'simulated', 'failed', 'skipped', 'cancelled' );
+  }
+
+  /**
+   * ACDC 3.25.223 — LA SIMULATION CONSOMMAIT LE PARCOURS POUR DE BON.
+   *
+   * Une étape jouée en simulation est marquée « Simulée » et compte comme
+   * derrière nous : c'est ce qui permet au plan de se dérouler jusqu'au bout
+   * pendant qu'on l'observe. Mais le moteur ne la rejouait JAMAIS ensuite. Un
+   * dossier ouvert pendant une phase de simulation était donc privé de ses
+   * envois définitivement : la case décochée le lendemain n'y changeait rien,
+   * et personne ne le voyait — l'écran affichait un parcours parfaitement
+   * déroulé, dont pas un e-mail n'était parti.
+   *
+   * On ne corrige pas cela en supprimant l'état « Simulée » : sans lui, on ne
+   * verrait jamais la suite d'un parcours en observation. On le rend
+   * RATTRAPABLE, et surtout VISIBLE : tant qu'il reste des étapes simulées sur
+   * des parcours actifs alors que la simulation est levée, l'écran le dit.
+   *
+   * @return int Nombre d'étapes simulées sur des parcours encore actifs.
+   */
+  private function acdc_wf_simulated_backlog_count() {
+    global $wpdb;
+
+    return (int) $wpdb->get_var(
+      "SELECT COUNT(*) FROM {$this->workflow_step_table} s
+         INNER JOIN {$this->workflow_run_table} r ON r.id = s.run_id
+        WHERE s.status = 'simulated' AND r.status = 'active'"
+    );
+  }
+
+  /**
+   * Remet les étapes simulées dans le plan, sans rien décider à leur place.
+   *
+   * Elles repartent en « planifiée », date d'exécution effacée. Le moteur les
+   * reprend alors comme des étapes ordinaires — ce qui veut dire aussi que la
+   * réconciliation les EFFACERA si le dossier ne les justifie plus. C'est
+   * exactement ce qu'on veut : on ne rejoue pas un plan mémorisé, on redonne à
+   * chaque étape sa chance d'être recalculée à partir des données réelles.
+   *
+   * Les étapes dont l'heure est passée sont replanifiées à maintenant : leur
+   * moment métier est derrière nous, mais un envoi en retard vaut mieux qu'un
+   * envoi jamais parti — c'est à l'organisme d'écarter ce qui n'a plus de sens,
+   * pas au moteur de le taire.
+   *
+   * @return int Nombre d'étapes remises au plan.
+   */
+  private function acdc_wf_replay_simulated_steps() {
+    global $wpdb;
+
+    $now = $this->acdc_wf_mysql( $this->acdc_wf_now() );
+
+    $updated = $wpdb->query( $wpdb->prepare(
+      "UPDATE {$this->workflow_step_table} s
+         INNER JOIN {$this->workflow_run_table} r ON r.id = s.run_id
+            SET s.status       = 'pending',
+                s.executed_at  = NULL,
+                s.attempts     = 0,
+                s.scheduled_at = CASE
+                  WHEN s.scheduled_at IS NULL OR s.scheduled_at < %s THEN %s
+                  ELSE s.scheduled_at
+                END,
+                s.result_note  = 'Remise au plan : cette étape avait été jouée en simulation, sans aucun envoi.',
+                s.updated_at   = %s
+          WHERE s.status = 'simulated' AND r.status = 'active'",
+      $now,
+      $now,
+      $now
+    ) );
+
+    return max( 0, (int) $updated );
+  }
+
+  /**
+   * ACDC 3.25.194 — UN SEUL CHEF D'ORCHESTRE.
+   *
+   * Quatre modules possèdent leur propre ordonnanceur, avec des règles qui ne
+   * sont pas celles du schéma : la convocation part à J-7 puis J-1, les relances
+   * de signature à 48 heures, les enquêtes à 5/10/15 jours. Brancher le workflow
+   * par-dessus sans rien dire, c'était garantir que le jour de l'ouverture du
+   * robinet chaque apprenant reçoive sa convocation DEUX fois, à deux dates
+   * différentes, et chaque entreprise deux enquêtes.
+   *
+   * La règle est donc : sur un dossier piloté par un parcours, les ordonnanceurs
+   * historiques passent leur tour. Sur tous les autres, ils continuent
+   * exactement comme avant — un organisme ne doit pas voir ses envois s'arrêter
+   * parce qu'un module de pilotage a été installé.
+   *
+   * La condition retenue est volontairement stricte : le workflow ne prend la
+   * main que lorsqu'il envoie RÉELLEMENT. En simulation, il ne fait que
+   * journaliser ; si les anciens crons se taisaient aussi, plus personne
+   * n'enverrait rien et le silence passerait pour un fonctionnement normal.
+   * Un trou d'envoi est plus dangereux qu'un doublon : le doublon se voit.
+   */
+  public function acdc_wf_is_piloting() {
+    $settings = $this->acdc_wf_settings();
+    return ! empty( $settings['enabled'] ) && empty( $settings['simulation'] );
+  }
+
+  /** Cette séance est-elle pilotée par un parcours actif ? */
+  public function acdc_wf_pilots_session( $session_id ) {
+    global $wpdb;
+
+    $session_id = (int) $session_id;
+    if ( $session_id <= 0 || ! $this->acdc_wf_is_piloting() ) {
+      return false;
+    }
+    if ( empty( $this->workflow_run_table ) ) {
+      return false;
+    }
+
+    static $cache = array();
+    if ( isset( $cache[ $session_id ] ) ) {
+      return $cache[ $session_id ];
+    }
+
+    $count = (int) $wpdb->get_var( $wpdb->prepare(
+      "SELECT COUNT(*) FROM {$this->workflow_run_table} WHERE session_id = %d AND status = 'active'",
+      $session_id
+    ) );
+
+    $cache[ $session_id ] = ( $count > 0 );
+    return $cache[ $session_id ];
+  }
+
+  /**
+   * ACDC 3.25.202 — Les émargements orphelins, et la façon de les reconnaître.
+   *
+   * La purge du 9 août a remis les compteurs d'identifiants à 1 sans effacer les
+   * tables d'émargement, restées hors de son périmètre jusqu'à la 3.25.192. Des
+   * lignes de signature se sont donc raccrochées seules à des séances recréées
+   * ensuite : la recette a trouvé des signatures du 4 mai sur des séances d'août
+   * créées le 9, portées par six personnes qui n'existent dans aucun répertoire.
+   *
+   * Deux critères, et deux seulement. Ils sont volontairement étroits :
+   *
+   *   1. UNE SIGNATURE ANTÉRIEURE À LA CRÉATION DE SA SÉANCE. C'est le critère
+   *      décisif — signer une feuille avant que la séance n'existe est
+   *      impossible, pas improbable.
+   *   2. UN SIGNATAIRE QUI NE CORRESPOND À AUCUN APPRENANT. Seulement lorsqu'un
+   *      identifiant d'apprenant est renseigné et ne pointe plus sur rien : une
+   *      ligne sans identifiant peut être une saisie libre légitime, elle n'est
+   *      jamais retenue.
+   *
+   * On ne supprime rien sur la seule ancienneté, ni sur un doute de nom : une
+   * feuille d'émargement est une pièce Qualiopi, et l'effacer à tort coûte plus
+   * cher que la laisser.
+   */
+  private function acdc_wf_orphan_emargement_rows() {
+    global $wpdb;
+
+    $learners_tbl = $wpdb->prefix . 'acdc_of_emarg_learners';
+    $sheets_tbl   = $wpdb->prefix . 'acdc_of_emarg_sessions';
+
+    foreach ( array( $learners_tbl, $sheets_tbl ) as $table ) {
+      if ( $wpdb->get_var( $wpdb->prepare( 'SHOW TABLES LIKE %s', $table ) ) !== $table ) {
+        return array();
+      }
+    }
+
+    $rows = $wpdb->get_results(
+      "SELECT el.id, el.learner_id, el.learner_name, el.signed_at,
+              sh.session_id, sh.trainer_name,
+              s.title AS session_title, s.created_at AS session_created_at,
+              COALESCE(s.start_date, DATE(s.start_at)) AS session_date,
+              l.id AS learner_exists
+         FROM {$learners_tbl} el
+         INNER JOIN {$sheets_tbl} sh ON sh.id = el.emarg_session_id
+         LEFT JOIN {$this->session_table} s ON s.id = sh.session_id
+         LEFT JOIN {$this->learner_table} l ON l.id = el.learner_id
+        ORDER BY el.id ASC
+        LIMIT 500"
+    );
+
+    $orphans = array();
+    foreach ( (array) $rows as $row ) {
+      $reasons = array();
+
+      if ( ! empty( $row->signed_at ) && ! empty( $row->session_created_at )
+        && strtotime( (string) $row->signed_at ) < strtotime( (string) $row->session_created_at ) ) {
+        $reasons[] = 'signature antérieure à la création de la séance';
+      }
+      if ( ! empty( $row->learner_id ) && empty( $row->learner_exists ) ) {
+        $reasons[] = 'apprenant absent du répertoire';
+      }
+
+      if ( ! empty( $reasons ) ) {
+        $row->orphan_reasons = $reasons;
+        $orphans[] = $row;
+      }
+    }
+
+    return $orphans;
+  }
+
+  /** Mode recette armé mais aucune adresse déclarée : plus rien ne peut partir. */
+  private function acdc_wf_test_mode_is_mute() {
+    $settings = $this->acdc_wf_settings();
+    if ( empty( $settings['test_mode'] ) ) {
+      return false;
+    }
+    return '' === trim( (string) $settings['allowed_recipients'] );
+  }
+
+  private function acdc_wf_status_label( $status ) {
+    $labels = $this->acdc_wf_status_labels();
+    $status = (string) $status;
+    return isset( $labels[ $status ] ) ? $labels[ $status ] : $status;
+  }
+}

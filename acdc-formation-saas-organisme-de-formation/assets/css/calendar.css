@@ -1,0 +1,246 @@
+.acdc-calendar-head {
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-end;
+    gap: 16px;
+    flex-wrap: wrap;
+}
+
+.acdc-calendar-toolbar {
+    display: flex;
+    align-items: center;
+    gap: 18px;
+    justify-content: flex-start;
+    margin-bottom: 18px;
+    padding: 14px 18px;
+}
+
+.acdc-calendar-title {
+    margin: 0;
+    color: var(--acdc-text);
+    font-size: 20px;
+    line-height: 25px;
+    font-weight: 600;
+}
+
+.acdc-calendar-nav-buttons {
+    display: flex;
+    gap: 8px;
+    align-items: center;
+}
+
+.acdc-calendar-nav-button {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 40px;
+    height: 40px;
+    border-radius: var(--acdc-radius-panel);
+    border: 1px solid var(--acdc-border);
+    background: #fff;
+    color: var(--acdc-text);
+    text-decoration: none;
+    font-size: 24px;
+    line-height: 1;
+}
+
+.acdc-calendar-weekdays,
+.acdc-calendar-grid {
+    display: grid;
+    grid-template-columns: repeat(7, minmax(0, 1fr));
+}
+
+.acdc-calendar-weekday {
+    padding: 14px 12px;
+    border-right: 1px solid var(--acdc-border);
+    border-bottom: 1px solid var(--acdc-border);
+    font-size: 12px;
+    line-height: 16px;
+    font-weight: 600;
+    text-transform: uppercase;
+    color: var(--acdc-text-muted);
+    background: var(--acdc-soft-bg);
+}
+
+.acdc-calendar-weekday:last-child {
+    border-right: 0;
+}
+
+.acdc-calendar-day {
+    min-height: 170px;
+    padding: 10px;
+    border-right: 1px solid var(--acdc-border);
+    border-bottom: 1px solid var(--acdc-border);
+    position: relative;
+    background: #fff;
+}
+
+.acdc-calendar-day:nth-child(7n) {
+    border-right: 0;
+}
+
+.acdc-calendar-day.is-outside {
+    background: repeating-linear-gradient(-45deg, #fafbfc, #fafbfc 6px, #f3f5f7 6px, #f3f5f7 12px);
+}
+
+.acdc-calendar-day-number {
+    font-size: 14px;
+    line-height: 18px;
+    font-weight: 500;
+    color: var(--acdc-text-muted);
+    margin-bottom: 8px;
+}
+
+.acdc-calendar-day.is-today .acdc-calendar-day-number {
+    background: var(--acdc-primary-soft);
+    color: var(--acdc-text);
+    border: 1px solid var(--acdc-primary);
+    border-radius: var(--acdc-radius-pill);
+    padding: 4px 10px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    min-width: 32px;
+}
+
+.acdc-calendar-events {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+}
+
+.acdc-calendar-event {
+    display: flex;
+    flex-direction: column;
+    gap: 3px;
+    padding: 8px 10px;
+    border-radius: var(--acdc-radius-panel);
+    background: var(--acdc-primary-soft);
+    border: 1px solid var(--acdc-primary);
+    color: var(--acdc-text);
+    text-decoration: none;
+    box-shadow: 0 1px 1px rgba(12, 45, 82, 0.04);
+}
+
+.acdc-calendar-event-time {
+    font-size: 12px;
+    line-height: 16px;
+    font-weight: 600;
+    color: var(--acdc-text);
+}
+
+.acdc-calendar-event-title {
+    font-size: 13px;
+    line-height: 16px;
+    font-weight: 500;
+}
+
+.acdc-calendar-event-meta {
+    font-size: 12px;
+    line-height: 16px;
+    color: var(--acdc-text-muted);
+}
+
+.acdc-calendar-day.has-events {
+    background: #fcfffe;
+}
+
+@media (max-width: 1100px) {
+    .acdc-calendar-weekdays,
+    .acdc-calendar-grid {
+        grid-template-columns: 1fr;
+    }
+
+    .acdc-calendar-weekday {
+        display: none;
+    }
+
+    .acdc-calendar-day {
+        min-height: auto;
+    }
+}
+
+/* ── ACDC 3.25.329 — Codes couleur par thématique, et le passé qui s'estompe ──
+   La recette du 23/08 : « ce serait bien d'avoir des codes couleur en fonction
+   des thématiques et quand la date est passée, mettre la couleur en estompé et
+   hachuré ».
+
+   La teinte n'est pas choisie ici : elle vient du répertoire des thématiques
+   (couleur_hex), portée jusqu'à l'événement dans --acdc-cal-teinte. Une séance
+   dont la formation n'a pas de thématique garde l'habillage d'origine — on ne
+   peint pas au hasard, une couleur arbitraire ferait croire à un regroupement.
+
+   Le hachurage se pose sur la CASE, l'estompage sur son CONTENU : hachurer le
+   contenu rendrait les titres illisibles, alors que le but est justement de
+   pouvoir encore les lire. */
+
+.acdc-calendar-event.has-teinte {
+    background: color-mix(in srgb, var(--acdc-cal-teinte) 14%, #fff);
+    border-color: color-mix(in srgb, var(--acdc-cal-teinte) 55%, #fff);
+    border-left: 4px solid var(--acdc-cal-teinte);
+}
+
+.acdc-calendar-event-thematique {
+    font-size: 10px;
+    line-height: 14px;
+    font-weight: 700;
+    letter-spacing: .04em;
+    text-transform: uppercase;
+    color: var(--acdc-cal-teinte, var(--acdc-text-muted));
+}
+
+/* Repli pour les navigateurs sans color-mix : la bordure gauche suffit à
+   distinguer les thématiques, et rien ne casse. */
+@supports not (background: color-mix(in srgb, #000 10%, #fff)) {
+    .acdc-calendar-event.has-teinte {
+        background: var(--acdc-primary-soft);
+        border-color: var(--acdc-border);
+    }
+}
+
+.acdc-calendar-day.is-passee {
+    background-image: repeating-linear-gradient(-45deg, rgba(12, 45, 82, .035) 0, rgba(12, 45, 82, .035) 5px, transparent 5px, transparent 11px);
+}
+
+.acdc-calendar-day.is-passee .acdc-calendar-events,
+.acdc-calendar-day.is-passee .acdc-calendar-day-number {
+    opacity: .52;
+    filter: saturate(.55);
+}
+
+/* Le survol rend au passé sa lisibilité pleine : estomper n'est pas cacher. */
+.acdc-calendar-day.is-passee:hover .acdc-calendar-events,
+.acdc-calendar-day.is-passee:focus-within .acdc-calendar-events {
+    opacity: 1;
+    filter: none;
+}
+
+/* ── ACDC 3.25.329 — Les mêmes repères dans la LISTE des séances ────────────
+   La recette parle des « onglets séance ET calendrier ». Deux écrans qui
+   montrent les mêmes objets et les distinguent différemment obligent à
+   réapprendre le code en passant de l'un à l'autre. */
+
+.acdc-session-row td.acdc-session-teinte {
+    box-shadow: inset 4px 0 0 0 var(--acdc-cal-teinte);
+}
+
+.acdc-session-thematique {
+    display: block;
+    margin-top: 3px;
+    font-size: 10px;
+    font-weight: 700;
+    letter-spacing: .04em;
+    text-transform: uppercase;
+    color: var(--acdc-cal-teinte, var(--acdc-text-muted));
+}
+
+.acdc-session-row.is-passee td {
+    opacity: .58;
+    filter: saturate(.55);
+    background-image: repeating-linear-gradient(-45deg, rgba(12, 45, 82, .035) 0, rgba(12, 45, 82, .035) 5px, transparent 5px, transparent 11px);
+}
+
+.acdc-session-row.is-passee:hover td {
+    opacity: 1;
+    filter: none;
+}

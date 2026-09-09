@@ -1,0 +1,671 @@
+.acdc-learner-form-panel .acdc-needs-section-title {
+    font-size: 18px;
+    line-height: 20px;
+}
+
+.acdc-page-evaluations .acdc-panel,
+.acdc-page-mid_surveys .acdc-panel,
+.acdc-page-hot_surveys .acdc-panel,
+.acdc-page-cold_surveys .acdc-panel,
+.acdc-page-trainer_surveys .acdc-panel,
+.acdc-page-company_surveys .acdc-panel,
+.acdc-page-funder_surveys .acdc-panel {
+    border-radius: var(--acdc-radius-panel);
+}
+
+.acdc-contract-section-card {
+    overflow: hidden;
+    margin-bottom: 16px;
+}
+
+.acdc-contract-section-head {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 12px 16px;
+    font-weight: 600;
+}
+
+.acdc-contract-section-head button {
+    background: transparent;
+    border: none;
+    cursor: pointer;
+    font-weight: 500;
+}
+
+.acdc-contract-section-body {
+    padding: 0;
+}
+
+.acdc-company-profile-form .acdc-panel,
+.acdc-profile-section,
+.acdc-contract-section-card,
+.acdc-panel-collapsible {
+    overflow: hidden;
+}
+
+.acdc-profile-section h3,
+.acdc-company-profile-form .acdc-panel h3,
+.acdc-needs-section-title,
+.acdc-block-header {
+    letter-spacing: 0;
+}
+
+.acdc-priority-badge,
+.acdc-urgency-badge {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 6px;
+    min-height: 28px;
+    padding: 4px 10px;
+    border-radius: 999px;
+    font-size: 12px;
+    font-weight: 600;
+    line-height: 1.2;
+    border: 1px solid transparent;
+    white-space: nowrap;
+}
+
+.acdc-priority-badge-haute {
+    color: #7a1f1f;
+    background: #fde8e8;
+    border-color: #f5c2c7;
+}
+
+.acdc-priority-badge-moyenne {
+    color: #7a5b00;
+    background: #fff4db;
+    border-color: #f2d394;
+}
+
+.acdc-priority-badge-basse {
+    color: #1f5f46;
+    background: #e8f7ef;
+    border-color: #b7e0c6;
+}
+
+.acdc-urgency-badge-none,
+.acdc-urgency-badge-closed {
+    color: var(--acdc-text-muted);
+    background: #f4f6f8;
+    border-color: #dbe3ea;
+}
+
+.acdc-urgency-badge-overdue {
+    color: #7a1f1f;
+    background: #fde8e8;
+    border-color: #f5c2c7;
+}
+
+.acdc-urgency-badge-today {
+    color: #7a3f00;
+    background: #fff0d8;
+    border-color: #f2cf90;
+}
+
+.acdc-urgency-badge-soon {
+    color: #6a5600;
+    background: #fff8dc;
+    border-color: #ead88d;
+}
+
+.acdc-urgency-badge-upcoming {
+    color: #0c2d52;
+    background: #edf4fb;
+    border-color: #cddced;
+}
+
+.acdc-priority-stat-haute,
+.acdc-action-row-priority-haute {
+    border-left: 4px solid #d14b4b;
+}
+
+.acdc-priority-stat-moyenne,
+.acdc-action-row-priority-moyenne {
+    border-left: 4px solid #d7a24b;
+}
+
+.acdc-priority-stat-basse,
+.acdc-action-row-priority-basse {
+    border-left: 4px solid #35b37e;
+}
+
+.acdc-urgency-stat-overdue,
+.acdc-action-row-en_retard {
+    background: linear-gradient(180deg, #fff7f7 0%, #ffffff 100%);
+}
+
+.acdc-urgency-stat-today,
+.acdc-action-row-aujourd_hui {
+    background: linear-gradient(180deg, #fffaf2 0%, #ffffff 100%);
+}
+
+.acdc-urgency-stat-soon,
+.acdc-action-row-echeance_proche {
+    background: linear-gradient(180deg, #fffdf4 0%, #ffffff 100%);
+}
+
+.acdc-action-row-priority-haute td:first-child,
+.acdc-action-row-priority-moyenne td:first-child,
+.acdc-action-row-priority-basse td:first-child {
+    position: relative;
+}
+
+.acdc-action-row-priority-haute td:first-child::before,
+.acdc-action-row-priority-moyenne td:first-child::before,
+.acdc-action-row-priority-basse td:first-child::before {
+    content: '';
+    position: absolute;
+    left: 0;
+    top: 0;
+    bottom: 0;
+    width: 4px;
+}
+
+.acdc-action-row-priority-haute td:first-child::before {
+    background: #d14b4b;
+}
+
+.acdc-action-row-priority-moyenne td:first-child::before {
+    background: #d7a24b;
+}
+
+.acdc-action-row-priority-basse td:first-child::before {
+    background: #35b37e;
+}
+
+
+
+/* 3.0.22.4 — bandeaux légers sur les blocs statistiques */
+.acdc-centered-stat {
+    position: relative;
+    overflow: hidden;
+}
+
+.acdc-centered-stat::before {
+    content: '';
+    position: absolute;
+    left: 0;
+    top: 0;
+    right: 0;
+    height: 12px;
+    background: linear-gradient(90deg, #e8f0f9 0%, #f5f8fc 100%);
+}
+
+.acdc-priority-stat-haute::before {
+    background: linear-gradient(90deg, #fde7e7 0%, #fff5f5 100%);
+}
+
+.acdc-priority-stat-moyenne::before {
+    background: linear-gradient(90deg, #fff2dc 0%, #fff9f0 100%);
+}
+
+.acdc-priority-stat-basse::before {
+    background: linear-gradient(90deg, #e8f7ef 0%, #f4fcf7 100%);
+}
+
+.acdc-urgency-stat-overdue::before {
+    background: linear-gradient(90deg, #fde7e7 0%, #fff5f5 100%);
+}
+
+.acdc-urgency-stat-today::before {
+    background: linear-gradient(90deg, #fff2dc 0%, #fff9f0 100%);
+}
+
+.acdc-urgency-stat-soon::before {
+    background: linear-gradient(90deg, #fff7e8 0%, #fffdf6 100%);
+}
+
+
+/* =============================================================
+   ACDC 3.21.19 — Formulaire public enquêtes (standalone)
+   ============================================================= */
+
+/* ---- Wrapper principal ---- */
+.acdc-survey-public-body {
+  background: #f5f6fa !important;
+  margin: 0 !important;
+  padding: 0 !important;
+}
+.acdc-survey-public-wrap {
+  /* ACDC 3.25.285 — `100vh` vaut, sur iOS, la hauteur de l'écran SANS les
+     barres du navigateur : la page dépasse donc toujours un peu, et le bas
+     reste inatteignable tant qu'on n'a pas fait défiler dans le vide. `dvh`
+     suit les barres quand elles se replient. La ligne `vh` reste écrite avant,
+     comme repli pour les navigateurs qui ignorent `dvh`. */
+  min-height: 100vh;
+  min-height: 100dvh;
+  background: #f5f6fa;
+  font-family: 'Helvetica Neue', Arial, sans-serif;
+  color: #24324a;
+}
+
+/* ---- Hero header ---- */
+.srv-hero {
+  position: relative;
+  min-height: 260px;
+  background: #0f2c52 no-repeat center center / cover;
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  overflow: hidden;
+}
+.srv-hero-overlay {
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(180deg, rgba(5,15,35,.55) 0%, rgba(5,15,35,.72) 100%);
+  pointer-events: none;
+}
+.srv-hero-inner {
+  position: relative;
+  z-index: 1;
+  padding: 22px 28px 0;
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+}
+.srv-hero-logo-wrap { margin-bottom: auto; }
+.srv-hero-logo {
+  width: 64px;
+  height: 64px;
+  border-radius: 12px;
+  object-fit: contain;
+  background: #fff;
+  padding: 4px;
+  box-shadow: 0 4px 14px rgba(0,0,0,.3);
+}
+.srv-hero-content { padding: 20px 0 0; }
+.srv-hero-badge {
+  display: inline-block;
+  font-size: 11px;
+  font-weight: 700;
+  color: #d6a353;
+  text-transform: uppercase;
+  letter-spacing: .08em;
+  margin-bottom: 8px;
+}
+.srv-hero-title {
+  font-size: 24px;
+  font-weight: 800;
+  color: #fff;
+  line-height: 1.25;
+  margin-bottom: 6px;
+  text-shadow: 0 2px 8px rgba(0,0,0,.4);
+}
+.srv-hero-sub {
+  font-size: 14px;
+  color: rgba(255,255,255,.82);
+  font-weight: 500;
+  text-shadow: 0 1px 4px rgba(0,0,0,.35);
+}
+.srv-hero-sub strong { color: #fff; }
+
+/* ---- Barre de progression ---- */
+.srv-progress-wrap {
+  position: relative;
+  z-index: 1;
+  padding: 16px 28px 14px;
+}
+.srv-progress-bar-bg {
+  height: 4px;
+  background: rgba(255,255,255,.2);
+  border-radius: 99px;
+  overflow: hidden;
+}
+.srv-progress-bar-fill {
+  height: 4px;
+  background: #d6a353;
+  border-radius: 99px;
+  transition: width .4s ease;
+}
+.srv-progress-label {
+  font-size: 11px;
+  font-weight: 700;
+  color: rgba(214,163,83,.9);
+  text-align: right;
+  margin-top: 6px;
+}
+
+/* ---- Corps ---- */
+.srv-body {
+  max-width: 700px;
+  margin: 0 auto;
+  padding: 28px 16px 60px;
+}
+
+/* ---- Cartes génériques ---- */
+.srv-card {
+  background: #fff;
+  border-radius: 14px;
+  box-shadow: 0 2px 14px rgba(15,44,82,.07);
+  margin-bottom: 16px;
+  overflow: hidden;
+}
+.srv-desc-card { padding: 20px 24px; font-size: 14px; color: #4b5d76; line-height: 1.6; }
+.srv-deadline { font-size: 13px; color: #4b5d76; margin-bottom: 16px; padding: 10px 16px; background: #fef6e4; border-radius: 8px; border-left: 3px solid #d6a353; }
+
+/* ---- Carte état terminal ---- */
+.srv-card-state { padding: 40px 28px; text-align: center; }
+.srv-card-state .srv-state-icon { font-size: 40px; margin-bottom: 12px; }
+.srv-card-state h3 { font-size: 20px; font-weight: 800; color: #0f2c52; margin-bottom: 8px; }
+.srv-card-state p { color: #4b5d76; font-size: 15px; line-height: 1.6; }
+.srv-card-success { border-top: 4px solid #35b37e; }
+
+/* ---- Question card ---- */
+.srv-question-card {
+  display: flex;
+  gap: 0;
+  padding: 0;
+}
+.srv-q-num {
+  flex-shrink: 0;
+  width: 42px;
+  display: flex;
+  align-items: flex-start;
+  justify-content: center;
+  padding-top: 22px;
+  font-size: 13px;
+  font-weight: 800;
+  color: #fff;
+  background: #0f2c52;
+  border-radius: 14px 0 0 14px;
+}
+.srv-q-body { flex: 1; padding: 20px 22px; }
+.srv-q-label { font-size: 15px; font-weight: 700; color: #0f2c52; margin-bottom: 6px; line-height: 1.5; }
+.srv-q-hint { font-size: 13px; color: #6b7a8d; margin-bottom: 14px; line-height: 1.5; }
+
+/* ---- Étoiles ---- */
+.srv-stars {
+  display: flex;
+  gap: 6px;
+  flex-wrap: wrap;
+  margin-top: 10px;
+}
+.srv-star {
+  font-size: 32px;
+  color: #dde3ec;
+  background: none;
+  border: none;
+  cursor: pointer;
+  line-height: 1;
+  padding: 0;
+  transition: color .15s, transform .1s;
+}
+.srv-star:hover, .srv-star-hover, .srv-star-on {
+  color: #d6a353;
+}
+.srv-star:active { transform: scale(.9); }
+
+/* ---- Smileys ---- */
+.srv-smileys {
+  display: flex;
+  gap: 10px;
+  flex-wrap: wrap;
+  margin-top: 10px;
+}
+.srv-smiley {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  cursor: pointer;
+  padding: 10px 14px;
+  border-radius: 12px;
+  border: 2px solid #e8edf3;
+  background: #f8f9fb;
+  transition: border-color .15s, background .15s, transform .1s;
+}
+.srv-smiley input { display: none; }
+.srv-smiley-face { font-size: 28px; line-height: 1; margin-bottom: 4px; }
+.srv-smiley-lbl { font-size: 11px; font-weight: 700; color: #6b7a8d; }
+.srv-smiley:hover, .srv-smiley-on {
+  border-color: #d6a353;
+  background: #fef6e4;
+}
+.srv-smiley-on .srv-smiley-lbl { color: #8a6d2a; }
+.srv-smiley:active { transform: scale(.95); }
+
+/* ---- NPS ---- */
+.srv-nps { margin-top: 10px; }
+.srv-nps-scale {
+  display: flex;
+  gap: 6px;
+  flex-wrap: wrap;
+  margin-bottom: 8px;
+}
+.srv-nps-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 42px;
+  height: 42px;
+  border-radius: 8px;
+  border: 2px solid #dde3ec;
+  background: #f8f9fb;
+  font-size: 14px;
+  font-weight: 700;
+  color: #4b5d76;
+  cursor: pointer;
+  transition: border-color .15s, background .15s;
+}
+.srv-nps-btn input { display: none; }
+.srv-nps-btn:hover, .srv-nps-btn.srv-nps-on {
+  border-color: #0f2c52;
+  background: #0f2c52;
+  color: #fff;
+}
+.srv-nps-labels {
+  display: flex;
+  justify-content: space-between;
+  font-size: 11px;
+  color: #6b7a8d;
+  font-weight: 600;
+  padding: 0 2px;
+}
+
+/* ---- Inputs texte ---- */
+.srv-textarea,
+.srv-input,
+.srv-select {
+  width: 100%;
+  border: 2px solid #e0e6ef;
+  border-radius: 10px;
+  padding: 12px 14px;
+  font-size: 14px;
+  color: #24324a;
+  font-family: inherit;
+  background: #f8f9fb;
+  transition: border-color .15s;
+  box-sizing: border-box;
+  margin-top: 8px;
+}
+.srv-textarea:focus, .srv-input:focus, .srv-select:focus {
+  outline: none;
+  border-color: #d6a353;
+  background: #fff;
+}
+.srv-textarea { resize: vertical; min-height: 96px; }
+
+/* ---- Oui/Non pills ---- */
+.srv-oui-non {
+  display: flex;
+  gap: 10px;
+  margin-top: 10px;
+  flex-wrap: wrap;
+}
+.srv-pill {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 90px;
+  height: 42px;
+  border-radius: 99px;
+  border: 2px solid #dde3ec;
+  background: #f8f9fb;
+  font-size: 15px;
+  font-weight: 700;
+  color: #4b5d76;
+  cursor: pointer;
+  padding: 0 22px;
+  transition: border-color .15s, background .15s, color .15s;
+}
+.srv-pill input { display: none; }
+.srv-pill:hover, .srv-pill-on {
+  border-color: #0f2c52;
+  background: #0f2c52;
+  color: #fff;
+}
+
+/* ---- Choix multiples / radio ---- */
+.srv-check-label,
+.srv-radio-label {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 14px;
+  border-radius: 10px;
+  border: 2px solid #e8edf3;
+  background: #f8f9fb;
+  margin-bottom: 8px;
+  cursor: pointer;
+  font-size: 14px;
+  color: #24324a;
+  font-weight: 500;
+  transition: border-color .15s, background .15s;
+}
+.srv-check-label:hover, .srv-radio-label:hover {
+  border-color: #d6a353;
+  background: #fef6e4;
+}
+.srv-check-label input, .srv-radio-label input {
+  width: 18px;
+  height: 18px;
+  accent-color: #0f2c52;
+  flex-shrink: 0;
+}
+
+/* ---- Bouton de soumission ---- */
+.srv-submit-wrap {
+  margin-top: 24px;
+  padding-top: 20px;
+  border-top: 1px solid #e8edf3;
+}
+.srv-submit-btn {
+  width: 100%;
+  height: 52px;
+  background: linear-gradient(135deg, #d6a353 0%, #c49340 100%);
+  color: #fff;
+  font-size: 16px;
+  font-weight: 700;
+  border: none;
+  border-radius: 12px;
+  cursor: pointer;
+  transition: opacity .15s, transform .1s;
+  font-family: inherit;
+  box-shadow: 0 4px 14px rgba(214,163,83,.35);
+}
+.srv-submit-btn:hover { opacity: .92; }
+.srv-submit-btn:active { transform: scale(.99); }
+
+/* ---- Responsive ---- */
+/* ACDC 3.25.285 — LES ÉTOILES ÉTAIENT TROP PETITES POUR ÊTRE VISÉES.
+   Mesurées au rendu : 23 × 26 px sur un téléphone, 29 × 32 sur une tablette.
+   Un doigt vise mal en-dessous d'une quarantaine de pixels — et cette
+   question-là produit le taux de satisfaction publié sur le site. Une étoile
+   touchée à côté n'est pas une gêne d'ergonomie, c'est une mesure fausse, et
+   rien ne la distinguera jamais d'une vraie.
+
+   LE CRITÈRE EST LE DOIGT, PAS LA LARGEUR. Une tablette de 1024 px se touche
+   autant qu'un téléphone de 375 : borner la correction à un seuil de largeur
+   aurait laissé l'iPad avec ses cibles de 29 px. `pointer: coarse` désigne
+   exactement ce qu'on vise — un pointeur imprécis — et laisse la souris
+   tranquille.
+
+   On agrandit la ZONE TOUCHABLE sans grossir le dessin : le rembourrage porte
+   la cible à 44 px, la marge négative rattrape l'espacement pour que la rangée
+   garde son allure. */
+@media (pointer: coarse) {
+  .srv-stars { gap: 0; margin-left: -8px; }
+  .srv-star {
+    padding: 7px 8px;
+    min-width: 44px;
+    min-height: 44px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+  }
+  .srv-smiley { min-width: 44px; min-height: 44px; }
+  .srv-nps-btn { min-height: 44px; }
+}
+
+@media (max-width: 600px) {
+  /* Le détail du dimensionnement sur petit écran.
+     Mesurées au rendu : 23 × 26 px sur un écran de 375. Un doigt vise mal
+     en-dessous d'une quarantaine de pixels, et cette question-là produit le
+     taux de satisfaction publié sur le site : une étoile touchée à côté n'est
+     pas une gêne d'ergonomie, c'est une mesure fausse — et rien ne la
+     distinguera jamais d'une vraie. On agrandit la ZONE TOUCHABLE sans grossir
+     le dessin : le rembourrage porte la cible à 44 px, la marge négative
+     rattrape l'espacement pour que la rangée garde son allure. */
+  .srv-star { font-size: 30px; }
+
+  /* Le bandeau occupait 220 px sur les 812 d'un iPhone — plus du quart de
+     l'écran pour une image décorative, avant la première question. */
+  .srv-hero { min-height: 132px; }
+  .srv-hero-inner { padding: 14px 16px 0; }
+  .srv-hero-title { font-size: 19px; }
+  .srv-progress-wrap { padding: 12px 16px 10px; }
+  .srv-body { padding: 18px 10px 50px; }
+  .srv-q-num { width: 34px; font-size: 12px; }
+  .srv-q-body { padding: 16px 14px; }
+  .srv-smileys { gap: 6px; }
+  .srv-smiley { padding: 8px 10px; min-width: 44px; min-height: 44px; }
+  /* 42 × 38 px au départ : trop court en hauteur pour un doigt. La hauteur
+     passe à 44, et la largeur se CALCULE pour que six boutons tiennent
+     exactement sur une rangée — onze notes se lisent alors sur deux lignes de
+     six et cinq. Une largeur fixe donnait 5 + 5 + 1, avec un « 10 » esseulé
+     sur sa propre ligne : lisible, mais on ne voit plus l'échelle d'un coup
+     d'œil, et c'est justement ce qu'une échelle doit donner. */
+  .srv-nps-btn {
+    /* `box-sizing` n'est pas posé globalement dans cette feuille : sans cette
+       ligne, les 2 px de bordure s'AJOUTENT à la largeur calculée, six boutons
+       réclament 300 px là où il y en a 277, et l'échelle retombe sur trois
+       rangées. Une largeur calculée au pixel près est inutile si le modèle de
+       boîte n'est pas celui qu'on croit. */
+    box-sizing: border-box;
+    flex: 0 0 calc((100% - 30px) / 6);
+    min-width: 0;
+    height: 44px;
+    padding: 0;
+    font-size: 13px;
+  }
+
+  /* Sous 360 px — iPhone SE et anciens modèles encore en service — six boutons
+     tombent à 32 px de large. On passe à cinq par rangée : l'échelle tient sur
+     trois lignes au lieu de deux, mais chaque note reste visable. Une échelle
+     qu'on lit d'un coup d'œil mais qu'on touche de travers ne vaut rien. */
+  @media (max-width: 360px) {
+    .srv-nps-btn { flex: 0 0 calc((100% - 24px) / 5); }
+  }
+}
+
+/* =============================================================
+   ACDC 3.21.19 — Éditeur admin : blocs enquêtes
+   ============================================================= */
+.acdc-survey-block .acdc-survey-answers-list .acdc-survey-answer-row {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  margin-bottom: 6px;
+}
+.acdc-remove-survey-answer {
+  background: none;
+  border: 1px solid #f5c2c7;
+  color: #7a1f1f;
+  border-radius: 6px;
+  padding: 2px 8px;
+  cursor: pointer;
+  font-size: 12px;
+  flex-shrink: 0;
+}
+.acdc-remove-survey-answer:hover { background: #fde8e8; }

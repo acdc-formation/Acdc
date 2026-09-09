@@ -1,0 +1,1055 @@
+/* ============================================================
+ * ACDC Formation SAAS — Pages Live (host + player)
+ * 3.21.04.2-b — Refonte mockup PDF
+ * ============================================================ */
+
+@keyframes acdc-qz-fadein {
+    from { opacity: 0; transform: translateY(6px); }
+    to   { opacity: 1; transform: translateY(0); }
+}
+@keyframes acdc-qz-spin {
+    to { transform: rotate(360deg); }
+}
+@keyframes acdc-qz-podium-rise {
+    from { opacity: 0; transform: translateY(60px) scale(0.85); }
+    to   { opacity: 1; transform: translateY(0) scale(1); }
+}
+
+/* === ROOT — fond crème pour TOUT sauf podium === */
+body.page-template-default:has(.acdc-qz-live-host),
+body.page-template-default:has(.acdc-qz-live-player) {
+    margin: 0;
+    background: #fff;
+}
+.acdc-qz-live-host,
+.acdc-qz-live-player {
+    height: 100vh;
+    overflow: hidden;
+    display: flex;
+    flex-direction: column;
+    background: #fff;
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+    color: #0f2c52;
+}
+
+/* ===== HEADER COMMUN ===== */
+.acdc-qz-live-host-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 10px 20px;
+    background: #fff;
+    border-bottom: 1px solid rgba(15,44,82,0.06);
+}
+.acdc-qz-live-host-logo { height: 48px; width: auto; }
+.acdc-qz-live-host-brand { display: flex; align-items: center; gap: 10px; }
+.acdc-qz-live-host-brand-text { font-size: 18px; font-weight: 800; color: #0f2c52; }
+.acdc-qz-live-host-brand-sub { font-size: 11px; color: #4b5d76; letter-spacing: 0.08em; }
+
+/* ===== MAIN HOST ===== */
+.acdc-qz-live-host-main { flex: 1; min-height: 0; display: flex; flex-direction: column; position: relative; }
+
+/* ===== MAIN PLAYER =====
+   ACDC 3.25.288 — Cette règle n'existait pas. L'écran formateur avait la
+   sienne ; l'écran apprenant, qui porte la même structure, ne l'a jamais eue.
+   Conséquence : <main> restait un bloc ordinaire, donc TOUS les « flex: 1 ;
+   min-height: 0 » écrits en dessous — sur les états, sur la grille des
+   réponses — ne s'appliquaient à rien. Ils étaient là, ils se lisaient dans la
+   feuille, et ils ne faisaient rien. Le conteneur du player étant en
+   height:100vh; overflow:hidden, tout ce que ces règles auraient dû comprimer
+   était simplement coupé : sur un iPhone en portrait, une question à six
+   réponses en choix multiple mettait le bouton « Valider mes réponses » hors
+   de l'écran, sans défilement possible pour aller le chercher. */
+.acdc-qz-live-player-main { flex: 1; min-height: 0; display: flex; flex-direction: column; position: relative; }
+
+/* ===== STATES ===== */
+.acdc-qz-host-state { display: none; flex: 1; min-height: 0; }
+/* fade-in sur activation */
+.acdc-qz-host-state.is-active { display: flex; animation: acdc-qz-fadein 0.3s ease; }
+.acdc-qz-player-state { display: none; flex: 1; min-height: 0; flex-direction: column; }
+.acdc-qz-player-state.is-active { display: flex; flex-direction: column; animation: acdc-qz-fadein 0.3s ease; }
+
+/* ===== LOBBY HOST ===== */
+.acdc-qz-host-state-lobby { flex-direction: row; gap: 0; align-items: stretch; background: #fef8f2; }
+.acdc-qz-host-card {
+    width: 640px; /* doublé depuis 320px */
+    min-width: 400px;
+    background: #fff;
+    border-radius: 16px;
+    margin: 20px;
+    padding: 0;
+    box-shadow: 0 2px 16px rgba(15,44,82,0.10);
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+}
+/* ACDC 3.25.289 — Ces deux modificateurs étaient écrits dans le gabarit et
+   n'existaient nulle part dans la feuille : les deux cartes héritaient donc de
+   la même largeur de 640 px. Une liste de prénoms n'a pas besoin d'autant de
+   place qu'un QR code avec son URL ; ce qui est repris va au centre, là où la
+   salle lit le nom du quiz et où le formateur cherche « Commencer ». */
+.acdc-qz-host-card-join { width: 460px; min-width: 340px; }
+.acdc-qz-host-card-participants { width: 380px; min-width: 260px; }
+/* L'icône de l'en-tête de carte n'avait pas de règle : elle se posait sur la
+   ligne de base du texte au lieu d'être centrée avec le titre. */
+.acdc-qz-host-card-icon { display: inline-flex; align-items: center; color: #d6a353; }
+.acdc-qz-host-card-header {
+    background: #0f2c52;
+    color: #fef6e4; /* clair lisible sur fond marine */
+    padding: 14px 20px;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+}
+.acdc-qz-host-card-header h2 { margin: 0; font-size: 18px; font-weight: 700; color: #fef6e4; }
+.acdc-qz-host-participants-count {
+    display: flex; align-items: center; gap: 6px;
+    background: #d6a353; color: #fff;
+    border-radius: 20px; padding: 3px 10px;
+    font-size: 13px; font-weight: 700;
+}
+/* QR */
+.acdc-qz-host-qr {
+    width: 180px; height: 180px;
+    margin: 16px auto 0;
+    border: 3px solid #d6a353;
+    border-radius: 10px;
+    overflow: hidden;
+    display: flex; align-items: center; justify-content: center;
+}
+.acdc-qz-host-pin-label { text-align: center; font-size: 13px; color: #4b5d76; margin: 10px 0 4px; }
+.acdc-qz-host-pin { text-align: center; font-size: 38px; font-weight: 900; color: #0f2c52; margin: 0; letter-spacing: 3px; }
+.acdc-qz-host-pin-sep { display: flex; align-items: center; margin: 8px 24px; }
+.acdc-qz-host-pin-sep span:first-child, .acdc-qz-host-pin-sep span:last-child { flex: 1; height: 1px; background: #d6a353; }
+.acdc-qz-host-pin-sep-dot { color: #d6a353; margin: 0 8px; font-size: 10px; }
+.acdc-qz-host-join-hint { text-align: center; font-size: 20px; color: #0f2c52; margin: 8px 16px 16px; line-height: 1.5; font-weight: 600; word-break: break-all; }
+.acdc-qz-host-join-hint strong { display: block; color: #d6a353; font-weight: 800; font-size: 14px; text-transform: uppercase; letter-spacing: 0.05em; margin-bottom: 4px; }
+/* Centre lobby */
+.acdc-qz-host-center {
+    flex: 1; display: flex; flex-direction: column;
+    align-items: center; justify-content: center; gap: 18px;
+    padding: 24px;
+}
+.acdc-qz-host-center-stars { color: #d6a353; font-size: 20px; }
+.acdc-qz-host-center-title { font-size: 20px; color: #0f2c52; font-weight: 700; margin: 0; text-align: center; }
+.acdc-qz-host-center-quiz-name {
+    font-size: 28px; font-weight: 900; color: #0f2c52; text-align: center;
+    background: #fff; border: 2px solid #0f2c52; border-radius: 12px;
+    padding: 20px 40px; max-width: 700px; text-transform: uppercase;
+    letter-spacing: 0.03em;
+}
+.acdc-qz-host-start-btn-center {
+    font-size: 22px; font-weight: 800; padding: 16px 60px;
+    border-radius: 40px; text-transform: uppercase; letter-spacing: 0.05em;
+    background: linear-gradient(135deg, #c8922a 0%, #d6a353 50%, #c8922a 100%);
+    border: none; color: #fff; cursor: pointer; box-shadow: 0 4px 18px rgba(214,163,83,0.5);
+}
+.acdc-qz-host-start-btn-center:hover { transform: scale(1.03); }
+/* Participants list */
+.acdc-qz-host-participants-list { list-style: none; margin: 0; padding: 12px; flex: 1; overflow-y: auto; }
+.acdc-qz-host-participants-empty { text-align: center; color: #aaa; font-size: 13px; padding: 20px; }
+.acdc-qz-host-participant { display: flex; align-items: center; gap: 8px; padding: 6px 8px; border-radius: 8px; margin-bottom: 4px; font-size: 14px; font-weight: 600; }
+.acdc-qz-host-participant:nth-child(odd) { background: #fbf8f7; }
+
+/* ===== QUESTION HOST ===== */
+.acdc-qz-host-state-question { flex-direction: column; padding: 40px 40px 0; background: #fff; }
+.acdc-qz-host-question-title {
+    text-align: center; font-size: 36px; font-weight: 800; color: #0f2c52;
+    margin: 0 0 32px; line-height: 1.25;
+}
+/* ACDC 3.25.289 — Même correction que côté apprenant, et ici sans filet : au-dessus
+   de 1024 px responsive.css ne déverrouille pas l'écran, qui reste en
+   height:100vh; overflow:hidden. Sur un vidéoprojecteur en 1280×720 ou un
+   portable en 1366×768 — les deux résolutions les plus courantes — une question
+   à six réponses coupait la sixième tuile ET le bouton « Réponse » du
+   formateur, qui n'avait alors plus aucun moyen de révéler la bonne réponse.
+   Contrairement à l'écran apprenant, on ne touche PAS à align-content : ici le
+   <main> a toujours été en boîte flexible, les tuiles remplissent donc déjà la
+   hauteur, et c'est ce qu'il faut sur un vidéoprojecteur. */
+.acdc-qz-host-question-answers {
+    display: grid; grid-template-columns: 1fr 1fr;
+    gap: 16px; flex: 1;
+    min-height: 0; overflow-y: auto;
+    padding: 4px; box-sizing: border-box;
+}
+.acdc-qz-host-answer-tile {
+    display: flex; align-items: center; gap: 20px;
+    padding: 36px 40px; border-radius: 14px;
+    color: #0f2c52; font-size: 26px; font-weight: 700; min-height: 100px;
+}
+.acdc-qz-host-answer-tile-0 { background: #feeceb; }
+.acdc-qz-host-answer-tile-1 { background: #e9f2fa; }
+.acdc-qz-host-answer-tile-2 { background: #fff4d6; }
+.acdc-qz-host-answer-tile-3 { background: #e8f4ec; }
+.acdc-qz-host-answer-tile-4 { background: #f3e5f5; }
+/* ACDC 3.25.288 — Les lettres vont de A à F dans le code qui construit les
+   réponses ; les couleurs s'arrêtaient à E. Une question à six réponses
+   affichait donc la sixième sans fond, sur le vidéoprojecteur comme sur le
+   téléphone : elle avait l'air désactivée. */
+.acdc-qz-host-answer-tile-5 { background: #e4f2f4; }
+.acdc-qz-host-answer-letter {
+    background: rgba(15,44,82,0.15); color: #0f2c52;
+    width: 52px; height: 52px; border-radius: 50%;
+    display: flex; align-items: center; justify-content: center;
+    font-weight: 900; font-size: 22px; flex-shrink: 0;
+}
+/* Barre basse question/reveal */
+.acdc-qz-host-question-footer {
+    display: flex; align-items: center; justify-content: space-between;
+    padding: 14px 0; margin-top: 16px;
+    border-top: 2px solid rgba(15,44,82,0.06);
+}
+.acdc-qz-host-q-counter { font-size: 28px; font-weight: 900; color: #d6a353; min-width: 60px; }
+.acdc-qz-host-q-type { font-size: 15px; color: #4b5d76; font-weight: 500; }
+.acdc-qz-host-footer-btn {
+    font-size: 16px; font-weight: 700; padding: 10px 28px;
+    border-radius: 30px; border: none; cursor: pointer;
+    background: linear-gradient(135deg,#c8922a 0%,#d6a353 100%);
+    color: #fff; box-shadow: 0 2px 12px rgba(214,163,83,0.4);
+}
+
+/* ===== RÉVÉLATION HOST (même layout que question) ===== */
+.acdc-qz-host-state-reveal { flex-direction: column; padding: 40px 40px 0; background: #fff; }
+.acdc-qz-host-reveal-answers-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; flex: 1; }
+.acdc-qz-host-reveal-stats {
+    text-align: center;
+    font-size: 17px;
+    font-weight: 700;
+    color: #0f2c52;
+    padding: 6px 0 10px;
+    letter-spacing: 0.01em;
+}
+.acdc-qz-host-reveal-tile {
+    border-radius: 14px; color: #0f2c52;
+    font-size: 22px; font-weight: 700; overflow: hidden;
+}
+.acdc-qz-host-reveal-tile.acdc-qz-host-answer-tile-0 { background: #feeceb; }
+.acdc-qz-host-reveal-tile.acdc-qz-host-answer-tile-1 { background: #e9f2fa; }
+.acdc-qz-host-reveal-tile.acdc-qz-host-answer-tile-2 { background: #fff4d6; }
+.acdc-qz-host-reveal-tile.acdc-qz-host-answer-tile-3 { background: #e8f4ec; }
+.acdc-qz-host-reveal-tile.acdc-qz-host-answer-tile-4 { background: #f3e5f5; }
+.acdc-qz-host-reveal-tile.acdc-qz-host-answer-tile-5 { background: #e4f2f4; }
+.acdc-qz-host-reveal-tile.is-reveal-correct { background: #e8f5e9; border: 3px solid #4caf50; transform: scale(1.02); }
+.acdc-qz-host-reveal-tile.is-reveal-wrong   { background: #fce4ec; border: 2px solid #ef9a9a; opacity: 0.65; }
+.acdc-qz-host-reveal-tile-top {
+    display: flex; align-items: center; gap: 16px; padding: 28px 32px 14px;
+}
+.acdc-qz-host-reveal-badge {
+    margin-left: auto; background: #4caf50; color: #fff;
+    width: 40px; height: 40px; border-radius: 50%;
+    display: flex; align-items: center; justify-content: center;
+    font-size: 22px; font-weight: 900; flex-shrink: 0;
+}
+.acdc-qz-host-reveal-bar-wrap {
+    position: relative; background: rgba(15,44,82,0.07);
+    height: 30px; margin: 0 14px 14px; border-radius: 6px;
+    overflow: hidden; display: flex; align-items: center;
+}
+.acdc-qz-host-reveal-bar {
+    position: absolute; left: 0; top: 0; height: 100%;
+    border-radius: 6px; width: 0%;
+    transition: width 0.7s cubic-bezier(0.4,0,0.2,1);
+    background: rgba(15,44,82,0.15);
+}
+.is-reveal-correct .acdc-qz-host-reveal-bar { background: rgba(76,175,80,0.4); }
+.is-reveal-wrong   .acdc-qz-host-reveal-bar { background: rgba(239,154,154,0.45); }
+.acdc-qz-host-reveal-bar-label { position: relative; z-index: 1; font-size: 13px; font-weight: 700; color: #0f2c52; padding: 0 12px; }
+
+/* ===== PODIUM — fond BLANC, images en hauteur ===== */
+.acdc-qz-host-state-podium,
+.acdc-qz-player-state-podium {
+    display: none; flex-direction: column;
+    background: #fef8f2; color: #0f2c52;
+    flex: 1; min-height: 0; position: relative; overflow: hidden;
+}
+/* Podium HOST + PLAYER actif → position fixe plein écran, hauteur explicite */
+.acdc-qz-host-state-podium.is-active,
+.acdc-qz-player-state-podium.is-active {
+    display: flex !important;
+    flex-direction: column !important;
+    position: fixed !important;
+    top: 0 !important; right: 0 !important; bottom: 0 !important; left: 0 !important;
+    z-index: 50;
+    height: 100vh !important;
+    overflow: hidden;
+}
+
+/* Podium-wrap : reset TOUS les conflits hérités, flex:1 dans le conteneur fixe */
+.acdc-qz-host-state-podium.is-active .acdc-qz-podium-wrap,
+.acdc-qz-player-state-podium.is-active .acdc-qz-podium-wrap {
+    position: relative !important;
+    top: auto !important; bottom: auto !important;
+    left: auto !important; right: auto !important;
+    transform: none !important;
+    margin: 0 auto !important;
+    flex: 1 !important;
+    min-height: 0 !important;
+    /* ACDC 3.25.325 — Même largeur de scène que la règle de base : deux valeurs
+       différentes pour le même conteneur, et les proportions se décalent. */
+    width: 1000px;
+    max-width: 100%;
+}
+
+/* =====================================================
+   PODIUM — UNE SCÈNE, DES PROPORTIONS, PLUS DE TABLEAUX
+   ACDC 3.25.325.
+
+   CE QUI N'ALLAIT PAS. L'image du podium portait 60 % de vide : le dessin
+   n'occupait que 1021 × 581 pixels d'un fichier de 1086 × 1448. Servie en
+   « width: 103% » MAIS plafonnée en « max-height: 32vh », avec object-fit:
+   contain, elle se réduisait pour tenir dans la hauteur — et sa LARGEUR tombait
+   avec elle. Mesuré au navigateur sur un écran de 1920 × 1080 : un podium de
+   243 px de large sous des personnages de 507 px de haut. Le jouet et les
+   géants. C'est exactement ce que rapporte la recette du 18 août : « les
+   personnages ont la bonne taille, mais pas le podium ».
+
+   Et comme les blocs étaient placés en pourcentage du CONTENEUR pendant que
+   l'image se dimensionnait sur la HAUTEUR DE L'ÉCRAN, aucun réglage ne pouvait
+   être juste ailleurs que sur l'écran où il avait été fait à l'œil. D'où les
+   six jeux de coordonnées par point de rupture, en double (homme / femme), plus
+   un septième jeu écrit en dur dans le JavaScript de l'écran formateur.
+
+   CE QU'ON FAIT. L'image est recadrée sur son dessin. Le conteneur du podium
+   devient une SCÈNE qui porte exactement le rapport de l'image (1021/581) : dès
+   lors, un pourcentage dans la scène désigne le même point du dessin à toutes
+   les tailles. Les trois positions sont MESURÉES sur les pixels de l'image —
+   dessus des marches à 86,7 %, 56,3 % et 49,7 % de sa hauteur ; centres des
+   marches à 15,7 %, 49,5 % et 85,2 % de sa largeur — et non plus estimées.
+   Un seul jeu de règles, plus aucun tableau par écran.
+   ===================================================== */
+
+.acdc-qz-podium-wrap {
+    flex: 1; min-height: 0;
+    position: relative;
+    width: 1000px; max-width: 100%;
+    margin: 0 auto;
+}
+
+/* LA SCÈNE — même rapport que le dessin, posée au sol du conteneur. */
+.acdc-qz-podium {
+    position: absolute;
+    bottom: 14px; left: 50%;
+    transform: translateX(-50%);
+    /* DEUX BORNES, ET LE RAPPORT TOUJOURS RESPECTÉ. La scène prend 92 % de la
+       largeur disponible — sauf si la HAUTEUR ne suit pas : au-dessus de la
+       marche d'or il faut encore la place du personnage, sinon les têtes sortent
+       de l'écran, ce qui arrivait sur un portable de 768 px. « min() » retient la
+       plus contraignante des deux, et « aspect-ratio » déduit la hauteur : le
+       cadre a donc exactement le rapport du dessin, à toutes les tailles.
+       Une borne posée sur « max-width » aurait, elle, écrasé le rapport : la
+       hauteur restait celle demandée pendant que la largeur était rognée. */
+    width: min(92%, 86vh); height: auto;
+    aspect-ratio: 1021 / 581;
+    top: auto; right: auto;
+}
+.acdc-qz-podium-base {
+    position: absolute; inset: 0;
+    width: 100%; height: 100%;
+    max-height: none;
+    object-fit: contain; object-position: bottom;
+    pointer-events: none; z-index: 1;
+}
+.acdc-qz-podium-block {
+    position: absolute; text-align: center; z-index: 15;
+    opacity: 0; transition: opacity 0.7s ease;
+    display: flex; flex-direction: column; align-items: center;
+    /* Un bloc large comme sa marche, recentré sur elle par la marge : le
+       « transform » est déjà pris par l'animation d'arrivée. */
+    width: 30%; margin-left: -15%;
+}
+.acdc-qz-podium-block.is-visible { opacity: 1; animation: acdc-qz-podium-rise 0.7s cubic-bezier(0.34,1.56,0.64,1) forwards; }
+.acdc-qz-podium-avatar { width: 132%; height: auto; max-width: none; display: block; }
+.acdc-qz-podium-name { font-size: 18px; font-weight: 800; color: #0f2c52; margin-bottom: 2px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 100%; }
+.acdc-qz-podium-score { font-size: 14px; font-weight: 700; color: #d6a353; margin-bottom: 4px; }
+
+/* Les trois places, mesurées sur le dessin. */
+.acdc-qz-podium-block-1 { bottom: 86.7%; left: 49.5%; right: auto; }
+.acdc-qz-podium-block-2 { bottom: 56.3%; left: 15.7%; right: auto; }
+.acdc-qz-podium-block-3 { bottom: 49.7%; left: 85.2%; right: auto; }
+
+.acdc-qz-player-podium-myrank { position: absolute; top: 25px; right: 25px; bottom: auto; }
+
+@media (max-width: 880px) {
+    /* Sur un téléphone, le nom et le score sous la marche deviennent illisibles
+       à cette échelle : on les réduit plutôt que de les laisser déborder. */
+    .acdc-qz-podium-name  { font-size: 12px; }
+    .acdc-qz-podium-score { font-size: 10px; }
+}
+
+/* --- Leaderboard HOST — structure --- */
+.acdc-qz-host-leaderboard-rest {
+    /* ACDC 3.25.325 — Une seule ancre, en bas à gauche de l'écran. Les valeurs
+       posées écran par écran — jusqu'à « bottom: 818px » — visaient un podium
+       qui ne faisait plus la même taille d'un poste à l'autre. Le classement se
+       lit à côté du podium, pas par-dessus. */
+    position: absolute;
+    left: 24px; bottom: 24px;
+    max-height: 62vh;
+    border-radius: 10px; overflow: auto;
+    background: rgba(255,255,255,0.95);
+    box-shadow: 0 4px 14px rgba(0,0,0,.12);
+    opacity: 0; transition: opacity 0.6s ease;
+}
+.acdc-qz-host-leaderboard-rest.is-visible { opacity: 1; }
+.acdc-qz-leaderboard-badge {
+    border-radius: 50%; background: #d6a353; color: #fff; font-weight: 900;
+    display: inline-flex; align-items: center; justify-content: center;
+}
+.acdc-qz-leaderboard-table { border-collapse: collapse; width: 100%; }
+.acdc-qz-leaderboard-table thead th {
+    background: #fbf2e3; color: #8a6d2a;
+    font-weight: 800; text-transform: uppercase;
+    border-bottom: 2px solid #d6a353;
+}
+.acdc-qz-leaderboard-table tbody td {
+    border-bottom: 1px solid #f0e6dc;
+    color: #0f2c52; font-weight: 600;
+}
+.acdc-qz-leaderboard-table tbody tr:last-child td { border-bottom: none; }
+
+/* =====================================================
+   HOST — leaderboard + image podium calibrés par breakpoint
+   ===================================================== */
+
+/* Défaut — Écran large ≥2400px */
+.acdc-qz-host-leaderboard-rest { min-width: 100px; font-size: 25px; }
+.acdc-qz-leaderboard-table thead th { font-size: 24px; padding: 14px 16px; }
+.acdc-qz-leaderboard-table tbody td { font-size: 25px; padding: 14px 16px; }
+.acdc-qz-leaderboard-badge { width: 29px; height: 29px; font-size: 15px; }
+
+@media (max-width: 1366px) { /* Portable */
+    .acdc-qz-host-leaderboard-rest { min-width: 100px; font-size: 14px; }
+  .acdc-qz-leaderboard-table thead th { font-size: 13px; padding: 6px 8px; }
+  .acdc-qz-leaderboard-table tbody td { font-size: 14px; padding: 6px 8px; }
+  .acdc-qz-leaderboard-badge { width: 17px; height: 17px; font-size: 9px; }
+}
+@media (max-width: 1200px) { /* Tablette paysage */
+    .acdc-qz-host-leaderboard-rest { min-width: 100px; font-size: 12px; }
+  .acdc-qz-leaderboard-table thead th { font-size: 11px; padding: 3px 5px; }
+  .acdc-qz-leaderboard-table tbody td { font-size: 12px; padding: 3px 5px; }
+  .acdc-qz-leaderboard-badge { width: 18px; height: 18px; font-size: 9px; }
+}
+@media (max-width: 1024px) { /* Tablette portrait */
+    .acdc-qz-host-leaderboard-rest { min-width: 130px; font-size: 12px; }
+  .acdc-qz-leaderboard-table thead th { font-size: 11px; padding: 3px 5px; }
+  .acdc-qz-leaderboard-table tbody td { font-size: 12px; padding: 3px 5px; }
+  .acdc-qz-leaderboard-badge { width: 15px; height: 15px; font-size: 8px; }
+}
+@media (max-width: 880px) { /* Mobile Paysage */
+    .acdc-qz-host-leaderboard-rest { min-width: 160px; font-size: 12px; }
+  .acdc-qz-leaderboard-table thead th { font-size: 11px; padding: 3px 5px; }
+  .acdc-qz-leaderboard-table tbody td { font-size: 12px; padding: 3px 5px; }
+  .acdc-qz-leaderboard-badge { width: 12px; height: 12px; font-size: 7px; }
+}
+@media (max-width: 767px) { /* Portrait mobile */
+    .acdc-qz-host-leaderboard-rest { min-width: 160px; font-size: 12px; }
+  .acdc-qz-leaderboard-table thead th { font-size: 11px; padding: 3px 5px; }
+  .acdc-qz-leaderboard-table tbody td { font-size: 12px; padding: 3px 5px; }
+  .acdc-qz-leaderboard-badge { width: 12px; height: 12px; font-size: 7px; }
+}
+
+/* Carte "Vous" (player) */
+.acdc-qz-player-podium-myrank {
+    position: absolute; bottom: 20px; right: 576px;
+    opacity: 0; transition: opacity 0.6s ease;
+}
+.acdc-qz-player-podium-myrank.is-visible { opacity: 1; }
+.acdc-qz-vous-card {
+    background: rgba(255,255,255,0.95); border: 2px solid #d6a353;
+    border-radius: 10px; padding: 16px 24px; text-align: center; min-width: 160px;
+}
+.acdc-qz-vous-label { font-size: 13px; font-weight: 700; color: #4b5d76; text-transform: uppercase; letter-spacing: 0.06em; margin-bottom: 4px; }
+.acdc-qz-vous-rank { font-size: 32px; font-weight: 900; color: #0f2c52; margin-bottom: 2px; }
+.acdc-qz-vous-score { font-size: 20px; font-weight: 900; color: #d6a353; }
+
+/* Confettis */
+.acdc-qz-confetti-canvas { display: none; position: absolute; inset: 0; width: 100%; height: 100%; pointer-events: none; }
+.acdc-qz-confetti-canvas.is-active { display: block; }
+
+/* ===== FOOTER HOST ===== */
+.acdc-qz-live-host-footer {
+    display: flex; justify-content: space-between; align-items: center;
+    padding: 8px 16px;
+    background: #0f2c52; color: rgba(255,255,255,0.85);
+    font-size: 12px;
+}
+.acdc-qz-live-host-footer-left { display: flex; align-items: center; gap: 16px; }
+.acdc-qz-host-footer-pill {
+    display: flex; align-items: center; gap: 5px;
+    border: 1px solid rgba(255,255,255,0.3); border-radius: 20px; padding: 3px 10px;
+    cursor: pointer;
+}
+.acdc-qz-host-footer-pin strong { color: #d6a353; }
+.acdc-qz-host-footer-url { display: inline-flex; align-items: center; gap: 5px; }
+.acdc-qz-live-host-footer-right { display: flex; align-items: center; gap: 8px; }
+.acdc-qz-host-footer-icon { background: none; border: none; color: rgba(255,255,255,0.7); cursor: pointer; padding: 4px; }
+
+/* ===== PAGE PLAYER — HEADER ===== */
+.acdc-qz-live-player-header {
+    display: flex; justify-content: space-between; align-items: center;
+    padding: 8px 20px; background: #fff; border-bottom: 1px solid rgba(15,44,82,0.06);
+    min-height: 50px;
+}
+.acdc-qz-live-player-logo { height: 36px; width: auto; }
+.acdc-qz-live-player-brand-text { font-size: 15px; font-weight: 800; color: #0f2c52; }
+/* ACDC 3.25.288 — Même famille que <main> : l'écran apprenant émet
+   « acdc-qz-live-player-brand », « -meta », « -nickname » et « -score », et la
+   feuille ne connaissait que « -brand-text » et « acdc-qz-player-header-score »,
+   deux noms que rien n'écrit. L'en-tête que voit l'apprenant pendant toute la
+   partie était donc sans mise en forme : pseudo et score collés l'un à l'autre,
+   pas de pastille dorée, pas de repli quand le pseudo est long. */
+.acdc-qz-live-player-brand { font-size: 15px; font-weight: 800; color: #0f2c52; }
+.acdc-qz-live-player-meta {
+    display: flex; align-items: center; gap: 10px;
+    min-width: 0; /* pour que le pseudo puisse être tronqué plutôt que pousser le score */
+}
+.acdc-qz-live-player-nickname {
+    font-size: 14px; font-weight: 700; color: #0f2c52;
+    max-width: 40vw; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+.acdc-qz-live-player-score,
+.acdc-qz-player-header-score {
+    background: #d6a353; color: #fff;
+    border-radius: 20px; padding: 4px 14px;
+    font-size: 13px; font-weight: 800; white-space: nowrap; flex-shrink: 0;
+}
+
+/* ===== JOIN PLAYER ===== */
+.acdc-qz-player-state-join { background: #fff; align-items: center; justify-content: flex-start; overflow-y: auto; }
+.acdc-qz-player-join-inner { max-width: 760px; width: 100%; margin: 0 auto; padding: 40px 24px 60px; }
+.acdc-qz-player-join-title { font-size: 32px; font-weight: 900; color: #0f2c52; text-align: center; margin: 0 0 8px; text-transform: uppercase; letter-spacing: 0.03em; }
+.acdc-qz-player-join-subtitle { text-align: center; color: #4b5d76; font-size: 15px; margin: 0 0 32px; }
+.acdc-qz-player-join-fields { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; margin-bottom: 28px; }
+.acdc-qz-player-field { display: flex; flex-direction: column; gap: 6px; }
+.acdc-qz-player-field-label { font-size: 13px; font-weight: 700; color: #0f2c52; }
+.acdc-qz-player-field input {
+    height: 52px; border: 2px solid #e0d8ce; border-radius: 10px;
+    padding: 0 16px; font-size: 16px; color: #0f2c52; background: #fbf8f7;
+    outline: none; transition: border-color 0.2s;
+}
+.acdc-qz-player-field input:focus { border-color: #d6a353; }
+
+/* Grandes cartes avatar */
+.acdc-qz-player-avatar-label-text { font-size: 15px; font-weight: 700; color: #0f2c52; margin: 0 0 12px; }
+.acdc-qz-player-avatar-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; margin-bottom: 28px; }
+.acdc-qz-player-avatar-card-big { cursor: pointer; }
+.acdc-qz-player-avatar-card-big input { position: absolute; opacity: 0; pointer-events: none; }
+.acdc-qz-player-avatar-card-inner {
+    display: flex; align-items: center; justify-content: space-between;
+    padding: 28px 32px; border: 2px solid #e0d8ce; border-radius: 14px;
+    background: #fbf8f7; transition: border-color 0.2s, background 0.2s;
+}
+.acdc-qz-player-avatar-card-big.is-selected .acdc-qz-player-avatar-card-inner,
+.acdc-qz-player-avatar-card-big:has(input:checked) .acdc-qz-player-avatar-card-inner {
+    border-color: #d6a353; background: #fef6e4;
+}
+.acdc-qz-player-avatar-symbol { font-size: 54px; color: #d6a353; line-height: 1; }
+.acdc-qz-player-avatar-name { font-size: 20px; font-weight: 700; color: #0f2c52; }
+/* Bouton rejoindre */
+.acdc-qz-player-join-submit {
+    width: 100%; height: 56px; font-size: 18px; font-weight: 800; text-transform: uppercase;
+    letter-spacing: 0.05em; border-radius: 14px; border: none; cursor: pointer;
+    background: linear-gradient(135deg,#c8922a 0%,#d6a353 100%); color: #fff;
+    box-shadow: 0 4px 18px rgba(214,163,83,0.4); margin-bottom: 16px;
+}
+.acdc-qz-player-error { color: #e91e63; font-size: 14px; text-align: center; min-height: 20px; margin: 0; }
+/* Spinner inline après join */
+.acdc-qz-player-waiting-inline {
+    display: none; align-items: center; gap: 10px;
+    justify-content: center; color: #d6a353; font-weight: 600; font-size: 15px; margin-top: 16px;
+}
+.acdc-qz-player-waiting-spinner {
+    width: 22px; height: 22px; border: 3px solid #e0d8ce;
+    border-top-color: #d6a353; border-radius: 50%;
+    animation: acdc-qz-spin 0.7s linear infinite; flex-shrink: 0;
+}
+
+/* ===== WAITING PLAYER ===== */
+.acdc-qz-player-state-waiting { background: #fef8f2; align-items: center; justify-content: center; }
+.acdc-qz-player-card { text-align: center; padding: 40px 24px; max-width: 480px; width: 100%; }
+.acdc-qz-player-loader {
+    width: 48px; height: 48px; border: 4px solid #e0d8ce;
+    border-top-color: #d6a353; border-radius: 50%;
+    animation: acdc-qz-spin 0.8s linear infinite; margin: 0 auto 20px;
+}
+.acdc-qz-player-waiting-title { font-size: 26px; font-weight: 800; color: #0f2c52; margin: 0 0 8px; }
+.acdc-qz-player-waiting-text { color: #4b5d76; font-size: 15px; margin: 0; }
+.acdc-qz-player-waiting-avatar { font-size: 48px; margin-top: 20px; }
+
+/* ===== QUESTION PLAYER ===== */
+.acdc-qz-player-state-question { background: #fff; padding: 32px 20px 0; }
+.acdc-qz-player-question-title { text-align: center; font-size: 22px; color: #0f2c52; font-weight: 800; line-height: 1.35; margin: 0 0 24px; }
+/* ACDC 3.25.288 — La zone des réponses est la seule qui défile.
+
+   Au-dessus de 1024 px, le conteneur du player reste en height:100vh avec
+   overflow:hidden : ce qui dépasse n'est pas « plus bas », il est coupé. En
+   dessous, responsive.css déverrouille déjà la page, et le débordement se
+   rattrape en faisant défiler tout l'écran — énoncé compris. Dans les deux cas
+   le résultat est mauvais sur une question chronométrée : ou bien la réponse
+   D n'existe pas, ou bien il faut la chercher pendant que le compteur tourne.
+
+   La grille refusait de se comprimer parce qu'un élément flex ne descend pas
+   sous la hauteur de son contenu ; min-height:0 lève ce plancher et overflow-y
+   rend le débordement atteignable SANS bouger l'énoncé, la consigne, le bouton
+   de validation ni le compteur, qui restent fixes.
+
+   align-content: start parce que la grille occupe désormais toute la hauteur
+   disponible : sans cette ligne, quatre réponses s'étireraient en pavés de
+   330 px sur un écran d'ordinateur. Les boutons gardent leur hauteur, la place
+   qui reste reste vide — c'est l'aspect qui est en production aujourd'hui.
+
+   La marge intérieure préserve l'anneau de sélection, qui déborde de 6 px du
+   bouton et serait rogné par le défilement : c'est le seul signe qui confirme
+   à l'apprenant que sa réponse est prise. */
+.acdc-qz-player-question-answers {
+    display: grid; grid-template-columns: 1fr 1fr; gap: 12px; flex: 1;
+    min-height: 0; overflow-y: auto; padding: 6px; box-sizing: border-box;
+    align-content: start;
+}
+.acdc-qz-player-answer-btn {
+    border: 0; padding: 24px 20px; border-radius: 14px;
+    color: #0f2c52; font-size: 18px; font-weight: 700;
+    text-align: left; display: flex; align-items: center; gap: 14px;
+    cursor: pointer; transition: transform 0.1s ease; min-height: 80px;
+}
+.acdc-qz-player-answer-btn:active { transform: scale(0.97); }
+.acdc-qz-player-answer-btn.is-selected { box-shadow: 0 0 0 4px #d6a353, 0 0 0 6px #fff; }
+/* ACDC 3.25.288 — Le libellé n'avait aucune règle alors que le bouton est une
+   boîte flexible : sans min-width:0, un mot long ne se coupe pas et déborde du
+   bouton au lieu de passer à la ligne. */
+.acdc-qz-player-answer-label,
+.acdc-qz-host-answer-label { flex: 1; min-width: 0; overflow-wrap: break-word; }
+.acdc-qz-player-answer-letter {
+    background: rgba(15,44,82,0.15); color: #0f2c52;
+    width: 40px; height: 40px; border-radius: 50%;
+    display: flex; align-items: center; justify-content: center;
+    font-weight: 900; font-size: 17px; flex-shrink: 0;
+}
+/* Barre basse player question */
+.acdc-qz-player-question-footer {
+    display: flex; align-items: center; justify-content: space-between;
+    padding: 12px 0; margin-top: 12px;
+    border-top: 2px solid rgba(15,44,82,0.06);
+}
+.acdc-qz-player-q-counter { font-size: 22px; font-weight: 900; color: #d6a353; }
+.acdc-qz-player-q-type { font-size: 14px; color: #4b5d76; font-weight: 500; }
+
+/* FIX 2 : états qui centrent leur contenu — hauteur forcée */
+.acdc-qz-player-state-feedback.is-active,
+.acdc-qz-player-state-waiting.is-active {
+    display: flex !important;
+    flex-direction: column !important;
+    justify-content: center !important;
+    align-items: center !important;
+    flex: 1 !important;
+    min-height: 0 !important;
+}
+.acdc-qz-player-state-feedback { background: #fef8f2; align-items: center; justify-content: center; }
+.acdc-qz-player-feedback-card {
+    background: #fff; border-radius: 20px; padding: 40px 30px;
+    text-align: center; border-top: 8px solid #d6a353;
+    box-shadow: 0 4px 24px rgba(15,44,82,0.10); max-width: 400px; width: 90%;
+}
+.acdc-qz-player-feedback-card.is-correct { border-top-color: #4caf50; }
+.acdc-qz-player-feedback-card.is-wrong   { border-top-color: #e91e63; }
+.acdc-qz-player-feedback-icon { font-size: 64px; margin-bottom: 14px; animation: acdc-qz-fadein 0.3s ease; }
+.acdc-qz-player-feedback-title { font-size: 28px; color: #0f2c52; font-weight: 900; margin: 0 0 10px; }
+.acdc-qz-player-feedback-score { font-size: 30px; font-weight: 900; color: #d6a353; margin: 0 0 6px; }
+.acdc-qz-player-feedback-card.is-wrong .acdc-qz-player-feedback-score { color: #4b5d76; }
+.acdc-qz-player-feedback-sub { font-size: 14px; color: #4b5d76; margin: 0; }
+
+/* ===== RESPONSIVE ===== */
+@media (max-width: 768px) {
+    .acdc-qz-host-state-lobby { flex-direction: column; }
+    .acdc-qz-host-card { width: auto; margin: 10px; }
+    .acdc-qz-host-question-answers,
+    .acdc-qz-host-reveal-answers-grid { grid-template-columns: 1fr; }
+    .acdc-qz-host-question-title { font-size: 22px; }
+    .acdc-qz-host-answer-tile { font-size: 18px; padding: 20px 24px; }
+    /* Join player — tout en 1 colonne sur mobile */
+    .acdc-qz-player-state-join { overflow-y: auto; justify-content: flex-start; }
+    .acdc-qz-player-join-inner { padding: 20px 16px 40px; }
+    .acdc-qz-player-join-title { font-size: 22px; }
+    .acdc-qz-player-join-subtitle { font-size: 13px; margin-bottom: 20px; }
+    .acdc-qz-player-join-fields { grid-template-columns: 1fr; gap: 14px; margin-bottom: 20px; }
+    .acdc-qz-player-field input { height: 46px; font-size: 16px; }
+    .acdc-qz-player-avatar-grid { grid-template-columns: 1fr 1fr; gap: 10px; margin-bottom: 20px; }
+    .acdc-qz-player-avatar-card-inner { padding: 16px 12px; }
+    .acdc-qz-player-avatar-symbol { font-size: 36px; }
+    .acdc-qz-player-avatar-name { font-size: 15px; }
+    .acdc-qz-player-join-submit { height: 50px; font-size: 16px; }
+    /* Questions player */
+    .acdc-qz-player-question-title { font-size: 18px; margin-bottom: 16px; }
+    .acdc-qz-player-question-answers { grid-template-columns: 1fr; gap: 10px; }
+    .acdc-qz-player-answer-btn { font-size: 16px; padding: 18px 16px; min-height: 60px; }
+    /* Puzzle mobile — 1 colonne (slots en haut, bank en bas) */
+    .acdc-qz-player-puzzle-inner { grid-template-columns: 1fr; }
+    /* ACDC 3.25.325 — Plus d'élargissement des blocs sur téléphone : la scène
+       étant proportionnelle, un bloc plus large que sa marche décale le
+       personnage, puisqu'il est recentré par une marge calculée sur 30 %. */
+}
+
+/* Très petits écrans (<480px) — avatar cards compactes */
+@media (max-width: 480px) {
+    .acdc-qz-player-join-inner { padding: 16px 12px 32px; }
+    .acdc-qz-player-join-title { font-size: 19px; }
+    .acdc-qz-player-join-fields { gap: 10px; }
+    .acdc-qz-player-avatar-grid { gap: 8px; }
+    .acdc-qz-player-avatar-card-inner { padding: 12px 8px; }
+    .acdc-qz-player-avatar-symbol { font-size: 28px; }
+    .acdc-qz-player-avatar-name { font-size: 13px; }
+    .acdc-qz-player-join-submit { font-size: 14px; height: 46px; }
+    .acdc-qz-player-answer-btn { font-size: 14px; padding: 14px 12px; }
+}
+.acdc-qz-player-open-wrap { flex: 1; display: flex; flex-direction: column; gap: 16px; padding: 0 0 16px; }
+.acdc-qz-player-open-textarea {
+    flex: 1; min-height: 160px; border: 2px solid #d6a353; border-radius: 12px;
+    padding: 16px; font-size: 16px; color: #0f2c52; background: #fbf8f7;
+    outline: none; resize: none; font-family: inherit; line-height: 1.5;
+}
+.acdc-qz-player-open-textarea:focus { border-color: #0f2c52; }
+.acdc-qz-player-open-submit { align-self: flex-end; padding: 12px 32px; border-radius: 30px; font-size: 16px; font-weight: 700; }
+
+/* FIX 3 : Puzzle — même hauteur slots et tiles */
+.acdc-qz-player-puzzle-slots,
+.acdc-qz-player-puzzle-bank { display: flex; flex-direction: column; gap: 10px; }
+.acdc-qz-puzzle-slot,
+.acdc-qz-puzzle-tile { min-height: 72px; box-sizing: border-box; }
+.acdc-qz-player-puzzle-wrap { flex: 1; display: flex; flex-direction: column; gap: 16px; padding: 0 0 16px; }
+.acdc-qz-player-puzzle-inner { flex: 1; display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
+.acdc-qz-player-puzzle-slots { display: flex; flex-direction: column; gap: 10px; }
+.acdc-qz-player-puzzle-bank  { display: flex; flex-direction: column; gap: 10px; }
+/* Slot vide */
+.acdc-qz-puzzle-slot {
+    min-height: 64px; border: 2px dashed #d6a353; border-radius: 12px;
+    display: flex; align-items: center; padding: 0 16px; gap: 12px;
+    cursor: pointer; background: #fbf8f7; transition: background 0.15s;
+    font-size: 15px; font-weight: 600; color: #0f2c52;
+}
+.acdc-qz-puzzle-slot.is-drop-target { background: #fef6e4; border-style: solid; }
+.acdc-qz-puzzle-slot-num {
+    width: 32px; height: 32px; border-radius: 50%;
+    background: rgba(214,163,83,0.2); color: #8a6d2a;
+    display: flex; align-items: center; justify-content: center;
+    font-weight: 900; font-size: 16px; flex-shrink: 0;
+}
+.acdc-qz-puzzle-slot-text { flex: 1; font-size: 15px; font-style: italic; color: #aaa; }
+.acdc-qz-puzzle-slot.is-filled .acdc-qz-puzzle-slot-text { font-style: normal; color: #0f2c52; }
+/* Tile du bank (réponses draggables) */
+.acdc-qz-puzzle-tile {
+    min-height: 64px; border-radius: 12px; padding: 14px 18px;
+    font-size: 16px; font-weight: 700; color: #0f2c52;
+    cursor: grab; display: flex; align-items: center;
+    transition: opacity 0.2s, transform 0.15s;
+    user-select: none;
+}
+.acdc-qz-puzzle-tile:active { cursor: grabbing; transform: scale(0.97); }
+.acdc-qz-puzzle-tile.is-placed { opacity: 0.3; cursor: default; pointer-events: none; }
+.acdc-qz-puzzle-tile.is-selected { box-shadow: 0 0 0 3px #d6a353; }
+/* Bouton valider puzzle */
+.acdc-qz-player-puzzle-submit {
+    align-self: center; padding: 14px 40px; border-radius: 30px;
+    font-size: 17px; font-weight: 700; border: none; cursor: pointer;
+}
+
+/* ===== MULTI-SELECT footer ===== */
+.acdc-qz-player-multi-footer { padding: 12px 0 0; display: flex; justify-content: center; }
+.acdc-qz-player-multi-submit {
+    padding: 14px 40px; border-radius: 30px;
+    font-size: 17px; font-weight: 700; border: none; cursor: pointer;
+    background: linear-gradient(135deg,#c8922a 0%,#d6a353 100%);
+    color: #fff; box-shadow: 0 2px 12px rgba(214,163,83,0.4);
+}
+
+/* ===== RÉVÉLATION RÉPONSE LIBRE (open_text) ===== */
+.acdc-qz-host-open-text-reveal { display: flex; flex-direction: column; gap: 16px; padding: 12px 0; }
+.acdc-qz-host-open-text-expected {
+    background: #e8f5e9; border: 2px solid #4caf50; border-radius: 12px; padding: 18px 22px;
+}
+.acdc-qz-host-open-text-expected-label {
+    font-size: 12px; font-weight: 700; text-transform: uppercase;
+    letter-spacing: 0.06em; color: #1b5e20; margin-bottom: 8px;
+}
+.acdc-qz-host-open-text-expected-body { font-size: 18px; font-weight: 600; color: #0f2c52; line-height: 1.5; }
+.acdc-qz-host-open-text-note { font-size: 14px; color: #4b5d76; font-style: italic; text-align: center; margin: 0; }
+
+/* ===== RÉVÉLATION SONDAGE (poll) — barres horizontales ===== */
+.acdc-qz-host-poll-reveal {
+    display: flex; flex-direction: column; gap: 14px;
+    padding: 0; flex: 1;
+}
+.acdc-qz-poll-bar-row {
+    display: flex; align-items: center; gap: 16px;
+    padding: 16px 20px; border-radius: 12px;
+    background: #fff; box-shadow: 0 1px 4px rgba(15,44,82,.07);
+}
+.acdc-qz-poll-bar-label {
+    display: flex; align-items: center; gap: 12px;
+    min-width: 260px; font-size: 22px; font-weight: 700; color: #0f2c52;
+}
+.acdc-qz-poll-bar-track {
+    flex: 1; height: 28px; background: rgba(15,44,82,.07);
+    border-radius: 8px; overflow: hidden;
+}
+.acdc-qz-poll-bar-fill {
+    height: 100%; border-radius: 8px;
+    transition: width .7s cubic-bezier(.4,0,.2,1);
+    opacity: .7;
+}
+.acdc-qz-poll-bar-count {
+    min-width: 80px; text-align: right;
+    font-size: 20px; font-weight: 800; color: #0f2c52;
+}
+.acdc-qz-poll-bar-count span { font-size: 14px; color: #4b5d76; font-weight: 500; }
+
+/* ===== RÉVÉLATION PUZZLE HOST — 2 colonnes comme le player ===== */
+.acdc-qz-host-puzzle-reveal {
+    display: grid; grid-template-columns: 1fr 1fr; gap: 16px; flex: 1;
+}
+.acdc-qz-host-puzzle-slots-col,
+.acdc-qz-host-puzzle-bank-col { display: flex; flex-direction: column; gap: 10px; }
+.acdc-qz-host-puzzle-slot {
+    display: flex; align-items: center; gap: 14px;
+    min-height: 72px; border-radius: 12px; padding: 16px 20px;
+    font-size: 22px; font-weight: 700; color: #0f2c52;
+}
+.acdc-qz-host-puzzle-num {
+    width: 40px; height: 40px; border-radius: 50%; flex-shrink: 0;
+    display: flex; align-items: center; justify-content: center;
+    font-weight: 900; font-size: 18px;
+}
+.acdc-qz-host-puzzle-label { flex: 1; }
+
+/* =====================================================
+   3.21.04.3 — Barre de compte à rebours (timer)
+   HOST + PLAYER — styles indépendants
+   ===================================================== */
+
+/* HOST */
+/* HOST — barre plein écran en haut de page (position:fixed, toujours visible) */
+.acdc-qz-host-timer-bar-wrap {
+    position: fixed; top: 0; left: 0; right: 0; z-index: 9999;
+    height: 8px; background: rgba(15,44,82,0.08);
+}
+.acdc-qz-host-timer-bar {
+    height: 100%; width: 100%;
+    background: linear-gradient(90deg, #d6a353 0%, #f0b55a 100%);
+    transition: width 0.3s linear;
+}
+.acdc-qz-host-timer-bar.is-urgent {
+    background: linear-gradient(90deg, #e53935 0%, #ef9a9a 100%);
+}
+.acdc-qz-host-timer-count {
+    position: fixed; top: 8px; right: 16px; z-index: 9999;
+    font-size: 14px; font-weight: 900; color: #0f2c52;
+    min-width: 36px; text-align: right; pointer-events: none;
+}
+.acdc-qz-host-timer-count.is-urgent { color: #e53935; }
+
+/* PLAYER — barre plein écran en haut de page */
+.acdc-qz-player-timer-bar-wrap {
+    position: fixed; top: 0; left: 0; right: 0; z-index: 9999;
+    height: 6px; background: rgba(15,44,82,0.08);
+}
+.acdc-qz-player-timer-bar {
+    height: 100%; width: 100%;
+    background: linear-gradient(90deg, #d6a353 0%, #f0b55a 100%);
+    transition: width 0.3s linear;
+}
+.acdc-qz-player-timer-bar.is-urgent {
+    background: linear-gradient(90deg, #e53935 0%, #ef9a9a 100%);
+}
+.acdc-qz-player-timer-count {
+    position: fixed; top: 6px; right: 16px; z-index: 9999;
+    font-size: 13px; font-weight: 900; color: #0f2c52;
+    min-width: 30px; text-align: right; pointer-events: none;
+}
+.acdc-qz-player-timer-count.is-urgent { color: #e53935; }
+
+/* Tab-switch marker (HOST lobby list) */
+.acdc-qz-host-participant.has-tab-switch::after {
+    content: ' ⚠️'; font-size: 13px;
+}
+.acdc-qz-tab-switch-badge {
+    font-size: 11px; font-weight: 700; color: #b45309;
+    background: #fef3c7; border-radius: 6px; padding: 1px 6px; white-space: nowrap;
+}
+/* ACDC 3.25.327 — Un joueur qui n'a pas choisi son nom : ses réponses n'iront
+   dans aucun dossier, et une évaluation des acquis rattachée à personne ne
+   valide rien. Le formateur le voit dans le salon, quand il peut encore lui
+   demander de se reconnecter — et non sur l'écran de résultats, trop tard. */
+/* ACDC 3.25.327 — L'avertissement de repli en invité, côté apprenant. */
+.acdc-qz-player-guest-note {
+    width: 100%; margin: 10px 0 0; padding: 10px 12px;
+    background: #fff4e5; border: 1px solid #f0c98a; border-radius: 8px;
+    font-size: 12.5px; line-height: 1.5; color: #8a5a12; text-align: center;
+}
+.acdc-qz-unlinked-badge {
+    font-size: 11px; font-weight: 700; color: #b45309;
+    background: #fff4e5; border: 1px solid #f0c98a; border-radius: 6px;
+    padding: 1px 6px; white-space: nowrap;
+}
+
+/* ACDC 3.25.168 — Consigne de saisie sous l'énoncé (« une seule » / « plusieurs »
+   réponses). Elle n'existait qu'en pied d'écran, en gris et en petit corps : sur une
+   évaluation dont le résultat est opposable, ne pas voir qu'on pouvait cocher
+   plusieurs cases est un piège. Le rouge est réservé au cas multiple — c'est là que
+   l'erreur se produit ; le choix unique reste sobre, pour ne pas diluer l'alerte. */
+.acdc-qz-answer-instruction {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    margin: 10px 0 16px;
+    padding: 9px 14px;
+    border-radius: 8px;
+    font-size: 15px;
+    font-weight: 700;
+    letter-spacing: .01em;
+    line-height: 1.35;
+}
+.acdc-qz-answer-instruction.is-multi {
+    color: #b91c1c;
+    background: #fef2f2;
+    border: 1px solid #fecaca;
+}
+/* ACDC 3.25.173 — « Une seule réponse possible » était en gris, sans pictogramme,
+   dans un corps trois fois plus petit que l'énoncé : depuis le fond d'une salle,
+   l'énoncé se lisait et la consigne se devinait. Les deux consignes ont désormais le
+   même poids ; seule la couleur les distingue, l'alerte restant réservée au cas où
+   l'on peut se tromper en ne cochant qu'une case. */
+.acdc-qz-answer-instruction.is-single {
+    color: #1e3a5f;
+    background: #eff6ff;
+    border: 1px solid #bfdbfe;
+}
+
+/* ACDC 3.25.173 — Carte de retour joueur : troisième état, la réponse en partie
+   juste. Elle s'affichait « ❌ Mauvaise réponse / +0 pt » alors que le moteur
+   créditait bien les points au prorata. Ambre, entre le vert et le rouge. */
+.acdc-qz-player-feedback-card.is-partial {
+    background: #fffbeb;
+    border-color: #fde68a;
+    color: #92400e;
+}
+
+/* =====================================================
+   ACDC 3.25.288 — TÉLÉPHONE EN PAYSAGE : LA CONTRAINTE EST LA HAUTEUR
+
+   Toutes les adaptations de cette feuille sont indexées sur la LARGEUR :
+   1366, 1200, 1024, 880, 767, 768, 480. Un iPhone tenu en paysage fait
+   812 × 375 — il est large, donc il reçoit le traitement vertical d'un
+   grand écran, avec ses boutons de 80 px et son en-tête de 50 px. La
+   dernière réponse tombait à 380 px dans un écran de 375 px de haut.
+
+   On comprime ici tout ce qui n'est pas une réponse — en-tête, énoncé,
+   pied — pour rendre la place aux boutons. Deux colonnes, parce qu'en
+   paysage c'est la largeur qui abonde. Les boutons gardent 48 px, au-dessus
+   du seuil de 44 px retenu pour toutes les cibles tactiles du plugin.
+
+   La garde « orientation: landscape » évite d'imposer deux colonnes à une
+   fenêtre étroite et basse, où elles seraient illisibles ; ce cas-là est
+   couvert par le défilement de la zone des réponses.
+   ===================================================== */
+@media (max-height: 500px) and (orientation: landscape) {
+    .acdc-qz-live-player-header { min-height: 0; padding: 4px 16px; }
+    .acdc-qz-live-player-logo { height: 26px; }
+    .acdc-qz-player-state-question { padding: 6px 16px 0; }
+    .acdc-qz-player-question-title { font-size: 15px; line-height: 1.25; margin-bottom: 6px; }
+    .acdc-qz-answer-instruction { font-size: 12px; padding: 3px 8px; margin: 0 0 4px; }
+    .acdc-qz-player-question-answers { grid-template-columns: 1fr 1fr; gap: 8px; }
+    .acdc-qz-player-answer-btn { min-height: 48px; padding: 10px 12px; font-size: 14px; gap: 10px; }
+    .acdc-qz-player-answer-letter { width: 30px; height: 30px; font-size: 14px; }
+    .acdc-qz-player-question-footer { padding: 4px 0; margin-top: 4px; }
+    .acdc-qz-player-q-counter { font-size: 16px; }
+    .acdc-qz-player-q-type { font-size: 12px; }
+    .acdc-qz-player-multi-footer { padding-top: 6px; }
+    .acdc-qz-player-multi-submit { padding: 8px 24px; font-size: 14px; }
+    /* Le retour d'information doit tenir lui aussi : il s'affiche seul, centré,
+       et sa carte faisait 274 px dans 375. */
+    .acdc-qz-player-feedback-card { padding: 16px 24px; }
+    .acdc-qz-player-feedback-icon { font-size: 38px; margin-bottom: 4px; }
+    .acdc-qz-player-feedback-title { font-size: 20px; margin-bottom: 6px; }
+    .acdc-qz-player-feedback-score { font-size: 22px; margin-bottom: 4px; }
+    /* Attente et puzzle : mêmes 375 px de haut. */
+    .acdc-qz-player-card { padding: 16px 24px; }
+    .acdc-qz-player-loader { width: 34px; height: 34px; margin-bottom: 12px; }
+    .acdc-qz-player-waiting-title { font-size: 20px; }
+    .acdc-qz-player-waiting-avatar { font-size: 30px; margin-top: 10px; }
+    .acdc-qz-puzzle-slot, .acdc-qz-puzzle-tile { min-height: 48px; font-size: 14px; }
+}
+
+/* ACDC 3.25.288 — « Valider mes réponses » ne quitte jamais l'écran.
+
+   Sous 1024 px, responsive.css rend la page défilante — c'est ce qui a réparé
+   les écrans verrouillés. Mais une question à choix multiple avec six réponses
+   dépasse encore la hauteur d'un téléphone : le bouton de validation se
+   retrouve sous la ligne de flottaison, et rien ne dit à l'apprenant qu'il
+   existe. Il coche, il attend, le temps s'écoule.
+
+   Le bouton reste donc collé au bas de l'écran tant que la question est
+   affichée. Il ne prend la place de personne — il n'apparaît que sur les
+   questions à choix multiple, les seules où il faille valider. */
+@media (max-width: 1024px) {
+    .acdc-qz-player-multi-footer {
+        position: sticky;
+        bottom: 0;
+        z-index: 5;
+        background: #fff;
+        padding: 10px 0;
+        /* Un simple filet : un halo blanc plus large délavait la dernière
+           ligne de réponses au lieu de la séparer. */
+        border-top: 1px solid rgba(15,44,82,0.08);
+        box-shadow: 0 -4px 10px -6px rgba(15,44,82,0.25);
+    }
+    .acdc-qz-player-multi-submit { width: 100%; min-height: 48px; }
+}
+
+/* ACDC 3.25.289 — « Session live introuvable », « Vous n'êtes pas le formateur
+   de cette session » : quatre messages que le formateur peut recevoir en
+   ouvrant sa session devant la salle, et qui s'affichaient en texte brut collé
+   en haut à gauche de la page, sans rien pour les distinguer du reste. */
+.acdc-qz-live-error {
+    max-width: 640px; margin: 40px auto; padding: 24px 28px;
+    background: #fff; border-left: 6px solid #e53935; border-radius: 12px;
+    box-shadow: 0 4px 18px rgba(15,44,82,0.10);
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+    color: #0f2c52;
+}
+.acdc-qz-live-error p { margin: 0; font-size: 16px; font-weight: 600; }
+
+/* =====================================================
+   ACDC 3.25.289 — VIDÉOPROJECTEUR : LA HAUTEUR EST LA CONTRAINTE
+
+   Le 1080p a de la place ; le 720p et le 768p n'en ont pas. Les tuiles sont
+   dimensionnées pour être lues du fond de la salle — 26 px de texte, 100 px de
+   haut minimum, 36 px de marge intérieure — et six réponses dont les libellés
+   passent sur deux lignes demandent 900 px de haut alors que l'écran en fait
+   768. On resserre ce qui n'est pas le texte des réponses, et le texte lui-même
+   juste assez : 19 px projetés restent lisibles du fond, un bouton « Réponse »
+   hors écran ne l'est pas du tout.
+   ===================================================== */
+@media (max-height: 820px) {
+    .acdc-qz-live-host-header { padding: 6px 20px; }
+    .acdc-qz-live-host-logo { height: 34px; }
+    .acdc-qz-host-state-question,
+    .acdc-qz-host-state-reveal { padding: 16px 28px 0; }
+    .acdc-qz-host-question-title { font-size: 26px; margin-bottom: 14px; line-height: 1.2; }
+    .acdc-qz-host-question-answers { gap: 10px; }
+    /* Le plancher de 100 px empêchait trois rangées de tenir ; on le lève, les
+       tuiles continuent de remplir la hauteur disponible. */
+    .acdc-qz-host-answer-tile { min-height: 0; padding: 18px 24px; gap: 14px; }
+    /* Et on ne réduit le texte QUE lorsqu'il y a cinq réponses ou plus : c'est
+       le seul cas où six tuiles ne tiennent pas. À quatre réponses, la salle
+       garde les 26 px d'origine. */
+    .acdc-qz-host-question-answers:has(> :nth-child(5)) .acdc-qz-host-answer-tile {
+        padding: 12px 18px; font-size: 20px;
+    }
+    .acdc-qz-host-question-answers:has(> :nth-child(5)) .acdc-qz-host-answer-letter {
+        width: 38px; height: 38px; font-size: 17px;
+    }
+    .acdc-qz-host-question-footer { padding: 8px 0; margin-top: 8px; }
+    .acdc-qz-host-q-counter { font-size: 22px; }
+    .acdc-qz-host-q-type { font-size: 13px; }
+    .acdc-qz-host-footer-btn { padding: 8px 22px; font-size: 15px; }
+    .acdc-qz-host-reveal-bar-label { font-size: 12px; }
+}

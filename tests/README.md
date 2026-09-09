@@ -1,0 +1,92 @@
+# Vérifications automatiques
+
+Trois de mes régressions récentes auraient été attrapées ici. Ces contrôles se
+lancent sans WordPress, en quelques secondes.
+
+    php tests/test-prix.php            # normalisation des montants (20 cas réels)
+    php tests/test-nom-personne.php    # personne vs raison sociale (7 cas)
+    php tests/test-deroule-seances.php # déroulé des séances sur la convention
+    php tests/test-cascade-adresse.php # ordre des sources du préremplissage devis
+    php tests/test-decoupe-adresse.php # découpage rue / CP / ville du lieu de formation
+    php tests/test-lieu-convention.php # priorité des sources du lieu de la convention
+    php tests/test-completude.php      # étapes et calcul de la barre de complétude
+    php tests/test-client-proposition.php # d'où viennent raison sociale, SIRET et adresse
+    php tests/test-images-pdf.php      # réduction des images embarquées dans le PDF
+    php tests/test-programme-formation.php # lien et pièce jointe du programme de formation
+    php tests/test-convocation.php     # dates, horaires et lieu annoncés par la convocation
+    php tests/test-inscription-convention.php # la convention signée crée les dossiers
+    php tests/test-cachet-proportions.php # le cachet et la signature ne sont jamais déformés
+    php tests/test-protection-dossiers.php # aucune protection ne remonte à la racine des uploads
+    php tests/test-secret-financeur.php # un champ mot de passe vide n'efface jamais
+    php tests/test-facturation-opco.php # qui reçoit la facture, et pour quel montant
+    php tests/test-jalons-prospect.php  # étapes franchies comptées par le suivi commercial
+    php tests/test-rappel-contrat-formateur.php # rappel du contrat formateur après signature
+    php tests/test-montant-mission.php # heures, taux et montant : le calcul dans les deux sens
+    php tests/test-seance-brouillon.php # séance sans formateur : convocation retenue, extranet ouvert
+    php tests/test-mots-reserves.php   # le calendrier ne s'arrête pas au 31 décembre
+    php tests/test-indicateurs.php     # les taux publiés : mesurés, pondérés, jamais moyennés deux fois
+    php tests/test-fenetre-quiz.php    # quiz visibles chez le formateur : de J-1 à J+2
+    php tests/test-libelle-formation.php # deux formations du même nom ne se confondent jamais
+    php tests/test-indicateurs-publies.php # organisme seul / tout compris, dispensées / suivies
+    php tests/test-bpf-prestations.php # le BPF des prestations extérieures : deux entités, deux déclarations
+    php tests/test-exercice-comptable.php # un exercice à cheval sur deux années reste borné juste
+    node tests/test-signature-trace.js # continuité du tracé des signatures
+    php tests/scan-global-wpdb.php acdc-formation-saas-organisme-de-formation
+    php tests/scan-envois-email.php  # e-mails qui contournent la porte commune
+    php tests/scan-liens-proteges.php # liens directs vers un dossier interdit d’accès
+    php tests/scan-tarif-jour.php    # tarif catalogue (un TOTAL) injecté dans « Tarif jour »
+    php tests/scan-programme-formation.php # lecture directe de program_file_url
+    php tests/scan-convocation-unique.php  # convocation composée hors du composeur commun
+    php tests/scan-seances-en-dur.php # horaires de séance écrits en dur
+    php tests/scan-charte-documents.php # documents qui dessinent leur propre en-tête
+    php tests/scan-actions-publiques.php # actions publiques bloquées pour les visiteurs
+    php tests/scan-pdf-sans-filet.php # fabrication de PDF sans rattrapage d'erreur
+    php tests/scan-secrets-en-page.php # secret (clé API, mot de passe) imprimé dans le HTML
+    php tests/scan-reste-a-charge.php # reste à charge saisi au lieu d'être calculé
+    php tests/scan-parcours-prospect.php # devis sans prospect, pastilles et filtre divergents
+    php tests/scan-accueil-analyse.php # l'analyse du besoin salue toujours le même destinataire
+    php tests/scan-images-deformees.php # image plafonnée en largeur ET en hauteur
+    php tests/scan-noms-documents.php # certificat de réalisation et attestation ne s'échangent pas
+    php tests/scan-colonnes-lues.php # conclure sur une colonne jamais chargée
+    php tests/scan-apprenants-seance.php # les apprenants d'une séance comptés au même endroit
+    php tests/scan-ancre-parcours.php # un parcours s'ancre au recueil OU à la convention
+    php tests/scan-seance-brouillon.php # tous les chemins de convocation passent par la même porte
+    php tests/scan-mots-reserves.php # un écran n'emploie jamais un mot réservé de WordPress
+    php tests/scan-filtres-decoratifs.php # un filtre affiché sait où envoyer sa valeur
+    php tests/scan-portee-formateur.php # un formateur ne voit que ses séances, jamais les coordonnées
+    php tests/scan-email-mobile.php # le gabarit d'e-mail reste lisible sur un écran de 375 px
+    php tests/scan-responsive.php # la couche d'adaptation aux écrans est en place et chargée
+    php tests/scan-portail-visiteur.php # les actions des portails sont jouables par leurs utilisateurs
+    php tests/scan-sql-invalide.php # une virgule orpheline rend une liste vide, sans un mot
+    php tests/scan-formation-identifiable.php # une formation proposée dit toujours sa modalité
+    php tests/scan-gestionnaire-absent.php # un bouton branché sur une fonction qui n'existe pas
+    php tests/scan-interrupteur-branche.php # un automatisme Qualiopi qui ne commande rien
+    php tests/scan-demarrage-plugin.php # une migration ne fait jamais taire l'extranet
+    php tests/scan-preuve-quiz.php # un résultat de quiz arrive toujours sur un dossier
+    php tests/scan-quiz-live-habille.php # une classe posée par le quiz live sans règle de style
+    php tests/scan-identite-unique.php # SIRET, NDA et coordonnées : appelés, jamais recopiés
+    php tests/test-identite-organisme.php # fiche entreprise et marque : qui gagne, champ par champ
+    php tests/scan-durcissement.php # les durcissements de l'audit du 16 août, du Drive aux fuseaux
+    php tests/scan-suppressions-tracees.php # une suppression laisse une trace, ou elle n'a jamais eu lieu
+    php tests/test-convention-complete.php # ce qui bloque une convention, ce qui la signale seulement
+    php tests/test-demi-journees.php # la pause déjeuner n'est jamais comptée comme du temps de formation
+    php tests/test-tva-regime.php # les régimes de TVA, leurs mentions, et le passé qui ne se réécrit pas
+    php tests/scan-tva-branchee.php # un seul réglage de TVA, figé sur le document, jamais écrit en dur
+    php tests/test-nom-document.php # noms de fichiers lisibles, durées lisibles
+    php tests/scan-recette-ecrans.php # les cinq défauts d'écran de la recette de bout en bout
+    php tests/scan-migrations-schema.php # une colonne ajoutée sans migration ne sort jamais (signature ET émargement)
+    php tests/test-texte-alternatif.php # la version texte des e-mails : liens gardés, style perdu
+    php tests/scan-audit-17-aout.php # les dix corrections de l'audit du 17 août
+    php tests/scan-purge-selective.php # la remise à zéro se choisit ligne par ligne
+    php tests/scan-workflow-et-remontees.php # une étape en attente est réexaminée, jamais oubliée
+    php tests/scan-actions-formulaire.php # le bas d'un formulaire n'est pas une colonne d'actions
+    php tests/scan-cloison-analyses.php # une analyse du besoin ne sort jamais de son apprenant
+    php tests/scan-proposition-financiere.php # le prix annoncé est celui qui sera facturé
+    php tests/scan-podium-proportions.php # le podium à l'échelle de ceux qui montent dessus
+    php tests/scan-enquete-par-parcours.php # une enquête par formation, pas par journée
+    php tests/scan-rattachement-quiz.php # un quiz se rattache toujours à quelqu'un
+    php tests/scan-resultats-apprenant.php # l'apprenant lit ses résultats et peut les emporter
+    php tests/scan-quiz-et-documents.php # chaque écran lit la source qui est réellement écrite
+
+Le dernier balaie tout le plugin et signale les fonctions qui utilisent `$wpdb`
+sans l'avoir importé — la faute qui a produit l'erreur fatale de la 3.25.236.

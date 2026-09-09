@@ -1,0 +1,11 @@
+{
+  "mcpServers": {
+    "wordpress-acdc": {
+      "type": "http",
+      "url": "https://acdcformation.com/wp-json/acdc-mcp/v1/mcp",
+      "headers": {
+        "Authorization": "Basic ${ACDC_MCP_BASIC}"
+      }
+    }
+  }
+}

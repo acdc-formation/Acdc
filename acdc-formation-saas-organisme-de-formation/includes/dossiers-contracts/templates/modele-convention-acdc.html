@@ -1,0 +1,502 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Convention de formation professionnelle - ACDC-Formation</title>
+  <style>
+    :root {
+      --navy: #0C2D52;
+      --gold: #C5A253;
+      --ink: #1f2937;
+      --muted: #6b7280;
+      --line: #d7dde6;
+      --paper: #ffffff;
+      --soft: #f8fafc;
+      --soft2: #f3f6fa;
+    }
+
+    @page { size: A4 portrait; margin: 0; }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      background: #eef2f6;
+      font-family: Rubik, Arial, Helvetica, sans-serif;
+      color: var(--ink);
+    }
+
+    .page {
+      width: 210mm;
+      min-height: 297mm;
+      margin: 0 auto 12px;
+      background: var(--paper);
+      box-shadow: 0 10px 30px rgba(12,45,82,0.08);
+      position: relative;
+      padding: 11mm 12.5mm 18mm;
+      overflow: hidden;
+      page-break-after: always;
+    }
+    .page:last-child { page-break-after: auto; }
+
+    .header {
+      display: flex;
+      justify-content: space-between;
+      align-items: flex-start;
+      gap: 8mm;
+      border-bottom: 1.5px solid var(--gold);
+      padding-bottom: 3.5mm;
+      margin-bottom: 6mm;
+    }
+    .brand {
+      display: flex;
+      align-items: center;
+      gap: 4mm;
+      min-width: 0;
+    }
+    .brand img {
+      height: 16mm;
+      width: auto;
+      object-fit: contain;
+      flex-shrink: 0;
+    }
+    .brand-text strong {
+      display: block;
+      color: var(--navy);
+      font-size: 13.6pt;
+      line-height: 1.08;
+      font-weight: 700;
+    }
+    .brand-text span {
+      display: block;
+      margin-top: 0.8mm;
+      color: var(--gold);
+      font-size: 7.7pt;
+      font-weight: 500;
+      letter-spacing: 0.01em;
+    }
+    .company {
+      text-align: right;
+      font-size: 8pt;
+      line-height: 1.32;
+      color: #374151;
+      max-width: 64mm;
+    }
+
+    h1 {
+      margin: 0 0 1.8mm;
+      color: var(--navy);
+      font-size: 15.6pt;
+      font-weight: 700;
+      letter-spacing: 0.01em;
+    }
+    .subtitle {
+      margin-bottom: 5mm;
+      font-size: 8.1pt;
+      color: #4b5563;
+      line-height: 1.35;
+    }
+
+    .article {
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      padding: 4mm 4.5mm;
+      background: #fff;
+      margin-bottom: 5mm;
+    }
+    .article-title {
+      font-size: 8.8pt;
+      /* Pas de text-transform:uppercase : mPDF ne met pas les lettres accentuées en capitale
+         (« EFFECTIF FORMé »). Les titres restent en casse naturelle, accents corrects. */
+      letter-spacing: 0.02em;
+      color: var(--gold);
+      font-weight: 700;
+      margin-bottom: 2mm;
+    }
+    .text {
+      font-size: 8.3pt;
+      line-height: 1.42;
+      color: #1f2937;
+      text-align: justify;
+    }
+
+    .grid-2 {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 6mm;
+      margin-bottom: 5mm;
+    }
+    .grid-3 {
+      display: grid;
+      grid-template-columns: 1fr 1fr 1fr;
+      gap: 5mm;
+      margin-top: 3mm;
+    }
+
+    .field {
+      display: flex;
+      align-items: baseline;
+      gap: 2mm;
+      margin: 1.8mm 0;
+      font-size: 8.5pt;
+      line-height: 1.4;
+    }
+    .field strong {
+      color: var(--navy);
+      font-weight: 600;
+      min-width: 34mm;
+    }
+    .line {
+      flex: 1;
+      min-height: 4mm;
+      border-bottom: 1px solid #bfc8d5;
+    }
+    .textarea {
+      min-height: 16mm;
+      border: 1px solid var(--line);
+      border-radius: 7px;
+      background: var(--soft);
+      padding: 3mm 3.5mm;
+      font-size: 8.2pt;
+      color: #374151;
+      line-height: 1.4;
+    }
+    .textarea.large { min-height: 24mm; }
+    .textarea.xl { min-height: 36mm; }
+
+    .chip-row {
+      display: flex;
+      gap: 4mm;
+      flex-wrap: wrap;
+      margin-top: 2mm;
+    }
+    .chip {
+      background: var(--soft2);
+      border: 1px solid var(--line);
+      border-radius: 999px;
+      padding: 1.6mm 3mm;
+      font-size: 7.8pt;
+      color: var(--navy);
+      font-weight: 500;
+    }
+
+    .notes {
+      position: absolute;
+      left: 12.5mm;
+      right: 12.5mm;
+      bottom: 31mm;
+      font-size: 7.1pt;
+      line-height: 1.28;
+      color: #374151;
+    }
+    .notes p {
+      margin: 0 0 1.8mm;
+      text-align: justify;
+    }
+
+    .signature-zone {
+      position: absolute;
+      left: 12.5mm;
+      right: 12.5mm;
+      bottom: 12mm;
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 10mm;
+      align-items: end;
+    }
+    .sign-box {
+      text-align: center;
+      border-top: 1px solid var(--line);
+      padding-top: 3.2mm;
+      min-height: 14mm;
+      font-size: 7.9pt;
+      color: #4b5563;
+      position: relative;
+      overflow: visible;
+    }
+
+    .footer {
+      position: absolute;
+      left: 10mm;
+      right: 10mm;
+      bottom: 4mm;
+      border-top: 1px solid var(--line);
+      padding-top: 2.2mm;
+      text-align: center;
+      font-size: 6.8pt;
+      line-height: 1.22;
+      color: #4b5563;
+    }
+
+    @media print {
+      body { background: white; }
+      .page { margin: 0; box-shadow: none; }
+    }
+  </style>
+</head>
+<body>
+  <div class="page">
+    <div class="header">
+      <div class="brand">
+        <img src="https://acdcformation.com/wp-content/uploads/2026/03/Logo-ACDC.png" alt="Logo ACDC-Formation" />
+        <div class="brand-text">
+          <strong>ACDC-Formation</strong>
+          <span>Azur - Compétences - Développement - Conseils</span>
+        </div>
+      </div>
+      <div class="company">
+        <strong>ACDC-Formation</strong><br />
+        7 avenue Paul Cézanne<br />
+        83310 Cogolin - France<br />
+        Siret : 405109901 00042<br />
+        NDA : 93 83 08347 83
+      </div>
+    </div>
+
+    <h1>Convention de formation professionnelle</h1>
+    <div class="subtitle">Articles L6353-1 et L.6353-2 du Code du travail et Décret n°2018-1341 du 28 décembre 2018</div>
+
+    <div class="article">
+      <div class="article-title">Formation</div>
+      <div class="text"><strong>{{formation_intitule}}</strong></div>
+    </div>
+
+    <div class="article">
+      <div class="article-title">Entre les soussignés</div>
+      <div class="grid-2" style="margin-bottom:0;">
+        <div>
+          <div class="field"><strong>Organisme :</strong><span> ACDC Formation</span></div>
+          <div class="field"><strong>Siège social :</strong><span> 7 avenue Paul Cézanne, 83310 Cogolin</span></div>
+          <div class="field"><strong>SIRET / identification :</strong><span> 405109901 00042</span></div>
+          <div class="field"><strong>Représenté par :</strong><span> David Contal</span></div>
+          <div class="field"><strong>Qualité :</strong><span> Gérant</span></div>
+          <div class="text" style="margin-top:2mm;">Ci-après nommé l'organisme de formation.</div>
+        </div>
+        <div>
+          <div class="field"><strong>Bénéficiaire :</strong><span> {{prospect_entreprise}}</span></div>
+          <div class="field"><strong>Siège social :</strong><span> {{prospect_adresse}} {{prospect_code_postal}} {{prospect_ville}}</span></div>
+          <div class="field"><strong>SIRET / identification :</strong><span> {{prospect_siret}}</span></div>
+          <div class="field"><strong>Représenté par :</strong><span> {{prospect_signataire_nom_complet}}</span></div>
+          <div class="field"><strong>Qualité :</strong><span> {{prospect_signataire_fonction}}</span></div>
+          <div class="text" style="margin-top:2mm;">Ci-après nommé le bénéficiaire.</div>
+        </div>
+      </div>
+    </div>
+
+    <div class="article" style="margin-bottom:0;">
+      <div class="article-title">Article 1 - Objet de la convention</div>
+      <div class="text">
+        L'organisme de formation organisera l'action de formation suivante : {{formation_intitule}}.<br /><br />
+        <strong>Dates :</strong> {{session_date_debut}} au {{session_date_fin}}<br />
+        <strong>Durée :</strong> {{formation_duree}} heures<br />
+        <strong>Format :</strong> Présentiel (Créer une variable)<br />
+        <strong>Lieu de la formation :</strong> {{session_lieu}}<br /><br />
+        ACDC - Formation est engagée dans une démarche inclusive visant à garantir l'accès à la formation pour tous. Accueil des publics en situation de handicap : nos formations sont ouvertes à toute personne, sous réserve de la compatibilité entre le handicap et les exigences de la formation. Chaque situation est étudiée individuellement afin de mettre en place les adaptations nécessaires. Accessibilité des locaux : la salle principale de formation ne dispose pas d'un accès pour les personnes à mobilité réduite. Dans ce cas, ACDC - Formation met à disposition, sur demande, une salle extérieure conforme aux normes d'accessibilité pour les handicaps moteurs. Adaptation pédagogique : tous les supports de formation sont conçus selon le principe du FALC (Facile à Lire et à Comprendre). Les formateurs sont sensibilisés à la prise en compte des handicaps invisibles (dyslexie, dyspraxie, troubles de l'attention, etc.). Des aménagements spécifiques peuvent être proposés : temps supplémentaire, supports adaptés, accompagnement individualisé. Pour toute demande particulière, les référents handicap d'ACDC - Formation (Ann-Cécile Joucher ou David Contal) étudieront les besoins et coordonneront les adaptations nécessaires avant le démarrage de la formation.<br /><br />
+        Les formations sont dispensées dans un environnement professionnel conforme aux exigences de qualité et de confort nécessaires au bon déroulement des apprentissages. En présentiel : salle équipée d'un vidéoprojecteur ou d'un écran grand format, connexion Internet haut débit, paperboard, supports de cours imprimés ou numériques, espace respectant les normes de sécurité, d'accessibilité et d'hygiène en vigueur. En distanciel (visioconférence) : plateforme de visioconférence sécurisée (Teams, Zoom ou équivalent), accès à un espace numérique partagé (documents, ressources pédagogiques, évaluations), assistance technique en cas de difficulté de connexion, support pédagogique projeté à l'écran et remis en version numérique. Environnement pédagogique : les formations s'appuient sur des supports interactifs, des études de cas, des mises en situation et des outils numériques adaptés. Chaque participant bénéficie d'un accompagnement personnalisé pour favoriser l'acquisition des compétences et l'application concrète des contenus dans son activité professionnelle.
+      </div>
+    </div>
+
+    <div class="footer">
+      7 avenue Paul Cézanne - 83310 Cogolin - France - Siret : 405109901 00042 - NDA : 93 83 08347 83<br />
+      e-mail : contact@acdc-formation.com - Tél : 06 78 26 91 10 - site web : acdc-formation.com
+    </div>
+  </div>
+
+  <div class="page">
+    <div class="header">
+      <div class="brand">
+        <img src="https://acdcformation.com/wp-content/uploads/2026/03/Logo-ACDC.png" alt="Logo ACDC-Formation" />
+        <div class="brand-text">
+          <strong>ACDC-Formation</strong>
+          <span>Azur - Compétences - Développement - Conseils</span>
+        </div>
+      </div>
+      <div class="company">
+        <strong>ACDC-Formation</strong><br />
+        7 avenue Paul Cézanne<br />
+        83310 Cogolin - France<br />
+        Siret : 405109901 00042<br />
+        NDA : 93 83 08347 83
+      </div>
+    </div>
+
+    <h1>Convention de formation professionnelle – suite</h1>
+
+    <div class="article">
+      <div class="article-title">Article 2 - Nature et caractéristiques de l'action de formation</div>
+      <div class="text">
+        <strong>Objectifs de la formation :</strong> {{formation_objectif}}<br /><br />
+        <strong>Programme de la formation :</strong> Annexe à la présente convention.<br /><br />
+        <strong>Modalités de mise en œuvre, de suivi et d'évaluation :</strong><br />
+        Modalités de mise en œuvre :<br />
+        – Des formateurs expérimentés ;<br />
+        – Des supports de formation remis aux participants par voie dématérialisée ou en main propre ;<br />
+        – Des temps d'échanges s'appuyant notamment sur des cas pratiques exposés par le bénéficiaire.<br /><br />
+        Modalités de suivi :<br />
+        – Feuilles d'émargement signées par les apprenants et formateurs par demi-journée de formation ;<br />
+        – Récapitulatif complet de l'ensemble des feuilles d'émargement, signé par les apprenants et formateurs ;<br />
+        – Certificat de réalisation de la formation.<br /><br />
+        Évaluation de la formation :<br />
+        – Évaluation de satisfaction des apprenants : évaluation intermédiaire à mi-formation ;<br />
+        – Évaluation à chaud à la fin de la formation et évaluation à froid 1 mois après la fin de la formation ;<br />
+        – Test de positionnement avant la formation et évaluation des acquis à la fin de la formation ;<br />
+        – Évaluation de la formation par le formateur ;<br />
+      </div>
+    </div>
+
+    <div class="article">
+      <div class="article-title">Article 3 - Engagement de participation</div>
+      <div class="text">Le bénéficiaire s'engage à assurer la présence du ou des participants aux dates, lieux et heures prévues pour la formation.</div>
+    </div>
+
+    <div class="article">
+      <div class="article-title">Article 4 - Effectif formé</div>
+      <div class="text">
+        <strong>Nombre d'apprenants :</strong> (Créer une variable)<br />
+        <strong>Apprenant :</strong> (Créer une variable), (Créer une variable),
+      </div>
+    </div>
+
+    <div class="article">
+      <div class="article-title">Article 5 - Dispositions financières</div>
+      <div class="text">
+        En contrepartie de cette action de formation, le bénéficiaire s’acquittera des coûts suivants :<br /><br />
+        <strong>Frais pédagogiques :</strong> {{formation_prix}} €<br />
+        <strong>Taux de TVA :</strong> (Créer une variable) €<br />
+        <strong>Prix total € TTC :</strong> (Créer une variable) €<br />
+        <strong>TOTAL GÉNÉRAL :</strong> (Créer une variable)€<br /><br />
+        1) En cas de financement par un tiers (OPCO, Pôle emploi, CPF…), l'Apprenant reste personnellement responsable du règlement de la totalité du prix si le financeur refuse ou interrompt sa prise en charge.<br />
+        2) Dans le cas d'une subrogation de paiement par un financeur, celle-ci devra nous être communiquée par écrit avant le début de la formation.<br />
+        3) En cas de refus par le financeur de la subrogation et/ou du règlement de la formation ou d'une partie de la formation, le solde de la prestation sera dû par le bénéficiaire à réception de facture.<br />
+              </div>
+    </div>
+
+    <div class="footer">
+      7 avenue Paul Cézanne - 83310 Cogolin - France - Siret : 405109901 00042 - NDA : 93 83 08347 83<br />
+      e-mail : contact@acdc-formation.com - Tél : 06 78 26 91 10 - site web : acdc-formation.com
+    </div>
+  </div>
+  <div class="page">
+    <div class="header">
+      <div class="brand">
+        <img src="https://acdcformation.com/wp-content/uploads/2026/03/Logo-ACDC.png" alt="Logo ACDC-Formation" />
+        <div class="brand-text">
+          <strong>ACDC-Formation</strong>
+          <span>Azur - Compétences - Développement - Conseils</span>
+        </div>
+      </div>
+      <div class="company">
+        <strong>ACDC-Formation</strong><br />
+        7 avenue Paul Cézanne<br />
+        83310 Cogolin - France<br />
+        Siret : 405109901 00042<br />
+        NDA : 93 83 08347 83
+      </div>
+    </div>
+
+    <h1>Convention de formation professionnelle – suite</h1>
+
+    <div class="article">
+      <div class="article-title">Article 6 - Modalités de règlement</div>
+      <div class="text">
+        Ce prix couvre l'intégralité des frais pédagogiques engagés par l'Organisme. Le règlement est exigible à réception de facture. Les modalités sont définies dans les Conditions Générales de Vente annexées.
+      </div>
+    </div>
+    
+    <div class="article">
+      <div class="article-title">Article 7 - Annulation / Report / Dédommagement / Réparation / Dédit</div>
+      <div class="text">
+        Toute demande d'annulation ou de report d'une inscription doit être notifiée par écrit, par lettre ou par courriel, et réceptionnée par ACDC - Formation pour être recevable. À défaut, aucune demande ne sera prise en considération.<br /><br />
+        En cas d'annulation imputable au Client, les sommes déjà versées ou facturées demeurent acquises, en tout ou partie, selon la date de notification par rapport à la date prévue de début de la formation, à savoir :<br />
+        – Plus de quatorze (14) jours francs avant : remboursement intégral, déduction faite des frais déjà engagés ;<br />
+        – Entre quatorze (14) et sept (7) jours francs : remboursement limité à soixante-quinze pour cent (75 %) des sommes perçues, après déduction des frais engagés ;<br />
+        – Entre sept (7) jours francs et quarante-huit (48) heures : remboursement limité à cinquante pour cent (50 %) des sommes perçues, après déduction des frais engagés ;<br />
+        – Moins de quarante-huit (48) heures avant : aucune restitution n'est due, l'intégralité des sommes facturées ou versées restant acquise à ACDC - Formation à titre d'indemnité forfaitaire.<br /><br />
+        En cas d'abandon en cours de formation par le ou les apprenants désignés, aucune restitution ne sera due au Client, sauf en cas de survenance d'un événement de force majeure dûment caractérisé au sens de l'article 1218 du Code civil. Dans cette hypothèse, les sommes correspondant à la partie de la formation non exécutée feront l'objet d'une restitution.<br /><br />
+        Le Prestataire se réserve par ailleurs le droit d'annuler ou de reporter une session de formation en cas de force majeure ou en cas de nombre de participants insuffisant (inférieur à huit [8] stagiaires, sauf stipulation particulière convenue entre les Parties). Le Client en sera informé dans les meilleurs délais et pourra, à son choix, reporter son inscription à une session ultérieure ou obtenir le remboursement intégral des sommes versées, à l'exclusion expresse de toute autre indemnité ou dommages-intérêts. Pour le surplus, les modalités applicables en matière d'annulation, de report et leurs conséquences financières sont précisées dans les Conditions Générales de Vente, lesquelles prévalent sur toute stipulation contraire des documents contractuels du Client.
+      </div>
+    </div>
+
+    <div class="article">
+      <div class="article-title">Article 8 - Date d'effet de la convention</div>
+      <div class="text">La présente convention prend effet à compter de sa date de signature. Le délai de rétractation est de 14 jours.</div>
+    </div>
+
+    <div class="article" style="margin-bottom:5mm;">
+      <div class="article-title">Article 9 - Différends éventuels</div>
+      <div class="text">Si une contestation ou un différend ne peuvent être réglés à l'amiable, le Tribunal le plus proche géographiquement du siège social du défendeur sera seul compétent pour régler le litige.</div>
+    </div>
+
+    <div class="article">
+      <div class="article-title">Article 10 - Engagements de l'Apprenant</div>
+      <div class="text">L'Apprenant s'engage à suivre la formation avec assiduité et ponctualité, à respecter les consignes pédagogiques et organisationnelles données par les formateurs, ainsi que le Règlement Intérieur annexé à la présente convention (Annexe 3). L'Apprenant s'interdit toute reproduction, enregistrement ou diffusion non autorisée des supports, outils ou contenus pédagogiques. Toute inexécution de ces obligations pourra entraîner son exclusion immédiate de la formation, sans remboursement ni indemnité, et engager sa responsabilité.</div>
+    </div>
+
+    <div class="footer">
+      7 avenue Paul Cézanne - 83310 Cogolin - France - Siret : 405109901 00042 - NDA : 93 83 08347 83<br />
+      e-mail : contact@acdc-formation.com - Tél : 06 78 26 91 10 - site web : acdc-formation.com
+    </div>
+  </div>
+
+  <div class="page">
+    <div class="header">
+      <div class="brand">
+        <img src="https://acdcformation.com/wp-content/uploads/2026/03/Logo-ACDC.png" alt="Logo ACDC-Formation" />
+        <div class="brand-text">
+          <strong>ACDC-Formation</strong>
+          <span>Azur - Compétences - Développement - Conseils</span>
+        </div>
+      </div>
+      <div class="company">
+        <strong>ACDC-Formation</strong><br />
+        7 avenue Paul Cézanne<br />
+        83310 Cogolin - France<br />
+        Siret : 405109901 00042<br />
+        NDA : 93 83 08347 83
+      </div>
+    </div>
+
+    <h1>Convention de formation professionnelle – Fin</h1>
+
+        <div class="article">
+      <div class="article-title">Article 11 - Engagements de l'Organisme de Formation</div>
+      <div class="text">L'Organisme de formation s'engage à mettre en œuvre les moyens pédagogiques, techniques et humains nécessaires au bon déroulement de la formation, et à délivrer à l'Apprenant, à l'issue de celle-ci, une attestation mentionnant les objectifs, la nature et la durée de l'action suivie.</div>
+    </div>
+
+    <div class="article">
+      <div class="article-title">Article 12 - Discipline et sanctions</div>
+      <div class="text">Tout manquement de l'Apprenant aux obligations du présent contrat ou au règlement intérieur pourra donner lieu à l'application des sanctions disciplinaires prévues par ce règlement, pouvant aller jusqu'à l'exclusion définitive de la formation, sans remboursement ni indemnité.</div>
+    </div>
+
+    <div class="article">
+      <div class="article-title">Article 13 - Données personnelles et confidentialité</div>
+      <div class="text">Les données personnelles de l'Apprenant sont collectées et traitées par l'Organisme conformément au RGPD et à la loi Informatique et Libertés modifiée. L'Apprenant bénéficie d'un droit d'accès, de rectification, de suppression et d'opposition. La politique de confidentialité d'ACDC - Formation est publique, accessible sur le site internet de l'Organisme et communiquée à l'apprenant au moment de l'inscription.</div>
+    </div>
+
+    <div class="article">
+      <div class="article-title">Article 14 - Litiges</div>
+      <div class="text">Tout litige relatif à l'interprétation ou à l'exécution de la présente convention, non résolu amiablement, sera soumis à la compétence exclusive des juridictions du ressort de la Cour d'appel de DRAGUIGNAN.</div>
+    </div>
+
+    <div class="article" style="margin-bottom:0;">
+      <div class="article-title">Fait à Cogolin, le 13/04/2026</div>
+      <div class="text">
+        <strong>Pour le bénéficiaire :</strong> {{prospect_entreprise}} - {{prospect_signataire_nom_complet}}<br />
+        <strong>Pour l'organisme de formation :</strong> ACDC Formation - David Contal
+      </div>
+    </div>
+
+    <div class="signature-zone">
+      <div class="sign-box">Signature du bénéficiaire</div>
+      <div class="sign-box">
+        <img src="https://acdcformation.com/wp-content/uploads/2026/04/Cachet-et-signature.png" alt="Signature" style="position:absolute; right:2mm; bottom:-8mm; height:80mm; width:auto; object-fit:contain; opacity:0.95; z-index:3;" />
+        Signature de l'organisme de formation
+      </div>
+    </div>
+
+    <div class="footer">
+      7 avenue Paul Cézanne - 83310 Cogolin - France - Siret : 405109901 00042 - NDA : 93 83 08347 83<br />
+      e-mail : contact@acdc-formation.com - Tél : 06 78 26 91 10 - site web : acdc-formation.com
+    </div>
+  </div>
+</body>
+</html>
