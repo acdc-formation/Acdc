@@ -1,0 +1,945 @@
+/* ACDC 3.20.95 — CSS du portail formateur.
+   Réplique structurelle de learner-portal.css : sidebar verticale + zone centrale,
+   pour mettre l'extranet formateur au même niveau visuel que l'extranet apprenant.
+   Les classes sont préfixées acdc-trainer-portal-* pour permettre des variantes
+   ultérieures sans interférer avec le portail apprenant. */
+
+.acdc-trainer-portal-layout {
+    display: grid;
+    grid-template-columns: 280px minmax(0, 1fr);
+    gap: 24px;
+}
+
+.acdc-trainer-portal-nav {
+    padding: 24px;
+    border-right: 1px solid var(--acdc-border);
+    background: #fff;
+}
+
+.acdc-trainer-portal-content {
+    padding: 24px;
+}
+
+.acdc-trainer-nav-list {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+}
+
+.acdc-trainer-nav-item {
+    display: block;
+    padding: 12px 14px;
+    border: 1px solid var(--acdc-border);
+    border-radius: 10px;
+    background: #fff;
+    color: var(--acdc-text);
+    text-decoration: none;
+}
+
+.acdc-trainer-nav-item-active,
+.acdc-trainer-nav-item:hover {
+    background: #F3E3BF;
+    border-color: #C5A253;
+    color: #0B0706;
+}
+
+.acdc-trainer-dashboard-grid .acdc-workflow-card {
+    min-height: 120px;
+}
+
+.acdc-trainer-list-plain {
+    margin: 0;
+    padding-left: 18px;
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+}
+
+@media (max-width: 960px) {
+    .acdc-trainer-portal-layout {
+        grid-template-columns: 1fr;
+    }
+    .acdc-trainer-portal-nav {
+        border-right: none;
+        border-bottom: 1px solid var(--acdc-border);
+    }
+    .acdc-trainer-portal-content {
+        padding: 18px;
+    }
+}
+
+/* ACDC 3.20.97 — Aération du dashboard formateur.
+   Override scopé à .acdc-trainer-portal-content : on augmente le gap des grilles
+   (cartes statistiques + blocs 2 colonnes) sans toucher au reste du plugin
+   ni au portail apprenant. Le gap par défaut global reste 18px ailleurs. */
+.acdc-trainer-portal-content .acdc-cards-grid,
+.acdc-trainer-portal-content .acdc-grid-2cols {
+    gap: 24px;
+}
+
+/* Espacement vertical entre les rangées du dashboard formateur (cartes → bandeau,
+   bandeau → bloc 1, bloc 1 → bloc 2). La classe acdc-mt-24 existe déjà mais on
+   la renforce localement à 28px pour un rythme visuel plus respirant. */
+.acdc-trainer-portal-content .acdc-mt-24 {
+    margin-top: 28px;
+}
+
+/* ============================================================
+ * ACDC 3.21.03.2-a — Vue Mes quiz dans le portail formateur
+ * Lecture seule. Liste filtrable par finalité.
+ * ============================================================ */
+
+.acdc-trainer-portal-quizzes-header {
+    margin-bottom: 24px;
+}
+
+.acdc-trainer-portal-quizzes-header h1 {
+    margin: 0 0 6px 0;
+    font-size: 24px;
+    font-weight: 700;
+    color: #0f2c52;
+}
+
+.acdc-trainer-portal-quizzes-subtitle {
+    margin: 0;
+    color: #4b5d76;
+    font-size: 14px;
+}
+
+/* Onglets de filtrage par finalité */
+.acdc-trainer-portal-quizzes-tabs {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+    margin-bottom: 24px;
+    border-bottom: 1px solid #e5eaf2;
+    padding-bottom: 0;
+}
+
+.acdc-trainer-portal-quizzes-tab {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    padding: 10px 16px;
+    border-radius: 8px 8px 0 0;
+    color: #4b5d76;
+    font-size: 14px;
+    font-weight: 500;
+    text-decoration: none;
+    border-bottom: 2px solid transparent;
+    transition: all 0.15s ease;
+}
+
+.acdc-trainer-portal-quizzes-tab:hover {
+    background: #f6f8fb;
+    color: #0f2c52;
+}
+
+.acdc-trainer-portal-quizzes-tab.is-active {
+    color: #0f2c52;
+    font-weight: 700;
+    border-bottom-color: #d6a353;
+}
+
+.acdc-trainer-portal-quizzes-count {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    min-width: 22px;
+    height: 22px;
+    padding: 0 6px;
+    background: #e5eaf2;
+    color: #0f2c52;
+    border-radius: 11px;
+    font-size: 12px;
+    font-weight: 700;
+}
+
+.acdc-trainer-portal-quizzes-tab.is-active .acdc-trainer-portal-quizzes-count {
+    background: #d6a353;
+    color: #fff;
+}
+
+/* Grille de cartes */
+.acdc-trainer-portal-quizzes-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
+    gap: 16px;
+}
+
+.acdc-trainer-portal-quiz-card {
+    background: #ffffff;
+    border: 1px solid #e5eaf2;
+    border-radius: 12px;
+    padding: 20px;
+    transition: all 0.15s ease;
+    display: flex;
+    flex-direction: column;
+}
+
+.acdc-trainer-portal-quiz-card:hover {
+    border-color: #d6a353;
+    box-shadow: 0 4px 16px rgba(15, 44, 82, 0.08);
+}
+
+.acdc-trainer-portal-quiz-card-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    gap: 8px;
+    margin-bottom: 12px;
+}
+
+.acdc-trainer-portal-quiz-purpose {
+    font-size: 12px;
+    font-weight: 600;
+    color: #4b5d76;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+}
+
+.acdc-trainer-portal-quiz-status {
+    font-size: 11px;
+    font-weight: 700;
+    padding: 4px 10px;
+    border-radius: 999px;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+}
+
+.acdc-trainer-portal-quiz-status-draft {
+    background: #fff4d6;
+    color: #8a6d2a;
+}
+
+.acdc-trainer-portal-quiz-status-active {
+    background: #e8f4ec;
+    color: #2d6a4f;
+}
+
+.acdc-trainer-portal-quiz-status-archived {
+    background: #f3f4f6;
+    color: #6b7280;
+}
+
+.acdc-trainer-portal-quiz-title {
+    margin: 0 0 8px 0;
+    font-size: 16px;
+    font-weight: 600;
+    color: #0f2c52;
+    line-height: 1.4;
+}
+
+.acdc-trainer-portal-quiz-version {
+    display: inline-block;
+    margin-left: 6px;
+    padding: 2px 8px;
+    background: #f6f8fb;
+    color: #4b5d76;
+    font-size: 11px;
+    font-weight: 700;
+    border-radius: 6px;
+    vertical-align: middle;
+}
+
+.acdc-trainer-portal-quiz-locked {
+    margin: 0 0 8px 0;
+    font-size: 12px;
+    color: #b45309;
+    font-weight: 600;
+}
+
+.acdc-trainer-portal-quiz-card-footer {
+    margin-top: auto;
+    padding-top: 12px;
+    border-top: 1px solid #f3f4f6;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 10px;
+    flex-wrap: wrap;
+}
+
+.acdc-trainer-portal-quiz-link {
+    color: #d6a353;
+    font-size: 14px;
+    font-weight: 600;
+    text-decoration: none;
+}
+
+.acdc-trainer-portal-quiz-link:hover {
+    color: #b8843a;
+    text-decoration: underline;
+}
+
+.acdc-tp-quiz-launch-btn {
+    padding: 6px 14px !important;
+    font-size: 13px !important;
+    height: 36px !important;
+}
+
+.acdc-tp-quiz-launch-hint {
+    font-size: 12px;
+    color: #9ca3af;
+    font-style: italic;
+}
+
+/* État vide */
+.acdc-trainer-portal-quizzes-empty {
+    background: #f6f8fb;
+    border: 1px dashed #d1d5db;
+    border-radius: 12px;
+    padding: 40px 24px;
+    text-align: center;
+}
+
+.acdc-trainer-portal-quizzes-empty p {
+    margin: 0 0 8px 0;
+    color: #4b5d76;
+}
+
+.acdc-trainer-portal-quizzes-hint {
+    color: #9ca3af;
+    font-size: 13px;
+    font-style: italic;
+}
+
+/* Page bloquée (permission refusée) */
+.acdc-trainer-portal-quizzes-blocked {
+    background: #fef6e4;
+    border: 1px solid #f0b45e;
+    border-radius: 12px;
+    padding: 24px;
+}
+
+.acdc-trainer-portal-quizzes-blocked h1 {
+    margin: 0 0 12px 0;
+    color: #0f2c52;
+}
+
+.acdc-trainer-portal-quizzes-blocked p {
+    margin: 0 0 8px 0;
+    color: #4b5d76;
+}
+
+/* Mobile */
+@media (max-width: 640px) {
+    .acdc-trainer-portal-quizzes-tabs {
+        flex-direction: column;
+        gap: 4px;
+        border-bottom: none;
+    }
+    .acdc-trainer-portal-quizzes-tab {
+        border-radius: 8px;
+        border-bottom: none;
+        background: #f6f8fb;
+    }
+    .acdc-trainer-portal-quizzes-tab.is-active {
+        background: #fef6e4;
+    }
+    .acdc-trainer-portal-quizzes-grid {
+        grid-template-columns: 1fr;
+    }
+}
+
+/* ============================================================
+ * ACDC 3.21.03.2-b — Composants additionnels Mes quiz
+ * Modales, vue détail, notices, listes apprenants
+ * ============================================================ */
+
+/* Header de liste avec bouton Créer à droite */
+.acdc-trainer-portal-quizzes-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-start;
+    gap: 24px;
+    flex-wrap: wrap;
+}
+
+.acdc-trainer-portal-quizzes-header-text {
+    flex: 1;
+    min-width: 280px;
+}
+
+.acdc-trainer-portal-quizzes-header-actions {
+    flex-shrink: 0;
+}
+
+/* Notices succès/erreur */
+.acdc-trainer-portal-quiz-notice {
+    margin: 0 0 16px 0;
+    padding: 12px 16px;
+    border-radius: 10px;
+    font-size: 14px;
+    border: 1px solid transparent;
+}
+
+.acdc-trainer-portal-quiz-notice-success {
+    background: #e8f4ec;
+    border-color: #2d6a4f;
+    color: #1b5e3f;
+}
+
+.acdc-trainer-portal-quiz-notice-error {
+    background: #fde2e1;
+    border-color: #c0392b;
+    color: #7d2820;
+}
+
+.acdc-trainer-portal-quiz-notice-info {
+    background: #e9f2fa;
+    border-color: #1e4777;
+    color: #0f2c52;
+}
+
+/* Modale (préfixée acdc-tp-* pour ne pas collider avec acdc-qz-modal admin) */
+.acdc-tp-modal {
+    position: fixed;
+    inset: 0;
+    z-index: 100000;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 16px;
+}
+
+.acdc-tp-modal[hidden] {
+    display: none;
+}
+
+.acdc-tp-modal-overlay {
+    position: absolute;
+    inset: 0;
+    background: rgba(15, 44, 82, 0.55);
+    backdrop-filter: blur(2px);
+    cursor: pointer;
+}
+
+.acdc-tp-modal-dialog {
+    position: relative;
+    background: #ffffff;
+    border-radius: 16px;
+    box-shadow: 0 20px 60px rgba(15, 44, 82, 0.25);
+    max-width: 540px;
+    width: 100%;
+    max-height: 92vh;
+    overflow-y: auto;
+    display: flex;
+    flex-direction: column;
+}
+
+.acdc-tp-modal-dialog-wide {
+    max-width: 720px;
+}
+
+.acdc-tp-modal-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 20px 24px;
+    border-bottom: 1px solid #e5eaf2;
+}
+
+.acdc-tp-modal-header h2 {
+    margin: 0;
+    font-size: 18px;
+    font-weight: 700;
+    color: #0f2c52;
+}
+
+.acdc-tp-modal-close {
+    background: transparent;
+    border: 0;
+    font-size: 28px;
+    line-height: 1;
+    color: #6b7280;
+    cursor: pointer;
+    padding: 4px 8px;
+    border-radius: 6px;
+}
+
+.acdc-tp-modal-close:hover {
+    background: #f6f8fb;
+    color: #0f2c52;
+}
+
+.acdc-tp-modal-body {
+    padding: 24px;
+    flex: 1;
+}
+
+.acdc-tp-modal-footer {
+    display: flex;
+    justify-content: flex-end;
+    gap: 12px;
+    padding-top: 20px;
+    border-top: 1px solid #e5eaf2;
+    margin-top: 20px;
+}
+
+/* Champs de formulaire dans la modale */
+.acdc-tp-field {
+    margin: 0 0 16px 0;
+}
+
+.acdc-tp-field label {
+    display: block;
+    margin-bottom: 6px;
+    font-size: 13px;
+    font-weight: 600;
+    color: #4b5d76;
+}
+
+.acdc-tp-field input[type="text"],
+.acdc-tp-field input[type="email"],
+.acdc-tp-field select,
+.acdc-tp-field textarea {
+    width: 100%;
+    height: 40px;
+    padding: 0 12px;
+    background: #ffffff;
+    border: 1px solid #d1d5db;
+    border-radius: 10px;
+    font-size: 14px;
+    color: #0f2c52;
+    box-sizing: border-box;
+}
+
+.acdc-tp-field textarea {
+    height: auto;
+    min-height: 60px;
+    padding: 10px 12px;
+    resize: vertical;
+}
+
+.acdc-tp-field input:focus,
+.acdc-tp-field select:focus,
+.acdc-tp-field textarea:focus {
+    outline: none;
+    border-color: #d6a353;
+    box-shadow: 0 0 0 3px rgba(214, 163, 83, 0.15);
+}
+
+.acdc-tp-required {
+    color: #0f2c52;
+}
+
+.acdc-tp-required span[aria-hidden] {
+    color: #c0392b;
+}
+
+.acdc-tp-hint {
+    display: block;
+    margin-top: 6px;
+    font-size: 12px;
+    color: #6b7280;
+    font-style: italic;
+}
+
+/* Liste apprenants pour l'envoi */
+.acdc-tp-learner-list {
+    background: #f6f8fb;
+    border-radius: 10px;
+    padding: 8px;
+    max-height: 240px;
+    overflow-y: auto;
+}
+
+.acdc-tp-learner-item {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    padding: 8px 10px;
+    border-radius: 8px;
+    cursor: pointer;
+    transition: background 0.1s ease;
+}
+
+.acdc-tp-learner-item:hover {
+    background: #ffffff;
+}
+
+.acdc-tp-learner-item input[type="checkbox"] {
+    margin: 0;
+    flex-shrink: 0;
+}
+
+.acdc-tp-learner-name {
+    font-weight: 600;
+    color: #0f2c52;
+    font-size: 14px;
+}
+
+.acdc-tp-learner-email {
+    color: #6b7280;
+    font-size: 13px;
+    margin-left: auto;
+}
+
+/* Vue détail d'un quiz */
+.acdc-trainer-portal-breadcrumb {
+    margin: 0 0 16px 0;
+    font-size: 13px;
+    color: #6b7280;
+}
+
+.acdc-trainer-portal-breadcrumb a {
+    color: #d6a353;
+    text-decoration: none;
+}
+
+.acdc-trainer-portal-breadcrumb a:hover {
+    text-decoration: underline;
+}
+
+.acdc-trainer-portal-breadcrumb span[aria-hidden] {
+    margin: 0 6px;
+}
+
+.acdc-trainer-portal-quiz-detail-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-start;
+    gap: 24px;
+    flex-wrap: wrap;
+    margin-bottom: 24px;
+    padding-bottom: 20px;
+    border-bottom: 1px solid #e5eaf2;
+}
+
+.acdc-trainer-portal-quiz-detail-header h1 {
+    margin: 6px 0 8px 0;
+    font-size: 22px;
+    font-weight: 700;
+    color: #0f2c52;
+}
+
+.acdc-trainer-portal-quiz-detail-meta {
+    margin: 0;
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+    align-items: center;
+    font-size: 13px;
+    color: #4b5d76;
+}
+
+.acdc-trainer-portal-quiz-detail-questions-count {
+    color: #6b7280;
+    font-style: italic;
+}
+
+.acdc-trainer-portal-quiz-detail-actions {
+    flex-shrink: 0;
+}
+
+.acdc-trainer-portal-quiz-detail-disabled-hint {
+    color: #b45309;
+    font-size: 13px;
+    font-style: italic;
+    margin: 0;
+    max-width: 300px;
+    text-align: right;
+}
+
+.acdc-trainer-portal-quiz-detail-description {
+    background: #f6f8fb;
+    border-radius: 10px;
+    padding: 16px 20px;
+    margin-bottom: 24px;
+    color: #4b5d76;
+}
+
+.acdc-trainer-portal-quiz-detail-questions h2 {
+    margin: 0 0 12px 0;
+    font-size: 16px;
+    font-weight: 700;
+    color: #0f2c52;
+}
+
+.acdc-trainer-portal-quiz-detail-question-list {
+    margin: 0;
+    padding: 0;
+    counter-reset: tp-q;
+    list-style: none;
+}
+
+.acdc-trainer-portal-quiz-detail-question-item {
+    counter-increment: tp-q;
+    display: flex;
+    align-items: flex-start;
+    gap: 12px;
+    padding: 12px 16px;
+    background: #ffffff;
+    border: 1px solid #e5eaf2;
+    border-radius: 10px;
+    margin-bottom: 8px;
+}
+
+.acdc-trainer-portal-quiz-detail-question-item::before {
+    content: counter(tp-q);
+    flex-shrink: 0;
+    width: 28px;
+    height: 28px;
+    background: #fef6e4;
+    color: #d6a353;
+    font-weight: 700;
+    border-radius: 50%;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 13px;
+}
+
+.acdc-trainer-portal-quiz-detail-question-type {
+    margin-left: auto;
+    font-size: 12px;
+    color: #6b7280;
+    font-style: italic;
+}
+
+.acdc-trainer-portal-quiz-detail-empty-questions {
+    background: #fef6e4;
+    border: 1px dashed #f0b45e;
+    border-radius: 10px;
+    padding: 16px;
+    color: #8a6d2a;
+    margin: 0;
+}
+
+.acdc-trainer-portal-quiz-detail-hint {
+    margin-top: 24px;
+    padding: 12px 16px;
+    background: #e9f2fa;
+    border-radius: 10px;
+    color: #4b5d76;
+    font-size: 13px;
+    font-style: italic;
+}
+
+/* Mobile */
+@media (max-width: 640px) {
+    .acdc-trainer-portal-quizzes-header {
+        flex-direction: column;
+        gap: 12px;
+    }
+    .acdc-trainer-portal-quizzes-header-actions {
+        width: 100%;
+    }
+    .acdc-trainer-portal-quizzes-header-actions .acdc-button {
+        width: 100%;
+    }
+    .acdc-tp-modal-body {
+        padding: 16px;
+    }
+    .acdc-trainer-portal-quiz-detail-header {
+        flex-direction: column;
+    }
+    .acdc-trainer-portal-quiz-detail-disabled-hint {
+        text-align: left;
+        max-width: 100%;
+    }
+}
+
+/* ============================================================
+ * ACDC 3.21.04.1 — Écrans résultats portail formateur
+ * ============================================================ */
+
+.acdc-tp-results {
+    /* Conteneur global de la vue résultats */
+}
+
+.acdc-tp-results-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-start;
+    gap: 24px;
+    flex-wrap: wrap;
+    margin-bottom: 24px;
+    padding-bottom: 20px;
+    border-bottom: 1px solid #e5eaf2;
+}
+.acdc-tp-results-header h1 {
+    margin: 0 0 6px 0;
+    color: #0f2c52;
+    font-size: 22px;
+}
+.acdc-tp-results-meta {
+    margin: 0;
+    color: #4b5d76;
+    font-size: 14px;
+}
+
+.acdc-tp-results-tabs {
+    display: flex;
+    gap: 4px;
+    border-bottom: 2px solid #e5eaf2;
+    margin-bottom: 20px;
+}
+.acdc-tp-results-tabs a {
+    padding: 10px 18px;
+    text-decoration: none;
+    color: #4b5d76;
+    font-weight: 500;
+    border-bottom: 2px solid transparent;
+    margin-bottom: -2px;
+}
+.acdc-tp-results-tabs a:hover { color: #0f2c52; }
+.acdc-tp-results-tabs a.is-active {
+    color: #0f2c52;
+    font-weight: 700;
+    border-bottom-color: #d6a353;
+}
+
+.acdc-tp-results-table {
+    width: 100%;
+    border-collapse: collapse;
+    margin-top: 12px;
+    background: #ffffff;
+    border-radius: 12px;
+    overflow: hidden;
+    box-shadow: 0 2px 8px rgba(15, 44, 82, 0.04);
+}
+.acdc-tp-results-table th,
+.acdc-tp-results-table td {
+    text-align: left;
+    padding: 12px 16px;
+    border-bottom: 1px solid #e5eaf2;
+    vertical-align: middle;
+    font-size: 14px;
+}
+.acdc-tp-results-table thead th {
+    background: #f6f8fb;
+    font-weight: 600;
+    color: #0f2c52;
+    font-size: 13px;
+}
+.acdc-tp-results-table tbody tr:hover { background: #fbf8f7; }
+
+.acdc-tp-pass-yes { color: #1b5e3f; font-weight: 700; }
+.acdc-tp-pass-no { color: #c0392b; font-weight: 700; }
+
+/* Détail individuel formateur */
+.acdc-tp-results-question-list {
+    list-style: none;
+    margin: 0;
+    padding: 0;
+}
+.acdc-tp-result-question {
+    background: #ffffff;
+    border: 1px solid #e5eaf2;
+    border-radius: 12px;
+    padding: 18px 22px;
+    margin-bottom: 16px;
+}
+.acdc-tp-result-question-header {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    margin-bottom: 12px;
+}
+.acdc-tp-result-question-num {
+    background: #fef6e4;
+    color: #d6a353;
+    font-weight: 700;
+    width: 32px;
+    height: 32px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    border-radius: 50%;
+    font-size: 13px;
+    flex-shrink: 0;
+}
+.acdc-tp-result-question-header h3 {
+    flex: 1;
+    margin: 0;
+    color: #0f2c52;
+    font-size: 15px;
+    font-weight: 600;
+}
+.acdc-tp-result-badge {
+    padding: 4px 10px;
+    border-radius: 999px;
+    font-size: 11px;
+    font-weight: 700;
+    text-transform: uppercase;
+}
+.acdc-tp-result-badge-correct { background: #e8f4ec; color: #1b5e3f; }
+.acdc-tp-result-badge-wrong { background: #fde2e1; color: #7d2820; }
+.acdc-tp-result-badge-pending { background: #fef6e4; color: #8a6d2a; }
+
+.acdc-tp-result-choices {
+    list-style: none;
+    margin: 0;
+    padding: 0;
+}
+.acdc-tp-result-choices li {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    padding: 8px 12px;
+    border-radius: 8px;
+    margin-bottom: 4px;
+}
+.acdc-tp-result-choices li.is-selected { background: #e9f2fa; }
+.acdc-tp-result-choices li.is-correct { background: #e8f4ec; }
+.acdc-tp-result-choices li.is-wrong-selection { background: #fde2e1; }
+.acdc-tp-result-choices li.is-selected.is-correct { background: #d4f0e2; }
+.acdc-tp-result-choice-flag-correct { color: #1b5e3f; font-size: 12px; font-weight: 600; }
+
+.acdc-tp-result-puzzle {
+    background: #fbf8f7;
+    padding: 12px 16px;
+    border-radius: 8px;
+}
+.acdc-tp-result-puzzle-list {
+    margin: 4px 0 12px 0;
+    padding-left: 20px;
+}
+.acdc-tp-result-puzzle-list li {
+    padding: 4px 8px;
+    margin-bottom: 4px;
+    border-radius: 6px;
+    background: #ffffff;
+}
+.acdc-tp-result-puzzle-list.is-expected li { background: #e8f4ec; }
+
+.acdc-tp-result-open-answer blockquote {
+    background: #fbf8f7;
+    border-left: 4px solid #d6a353;
+    padding: 12px 16px;
+    margin: 8px 0;
+    color: #0f2c52;
+    font-style: italic;
+}
+
+.acdc-tp-manual-grading {
+    background: #fef6e4;
+    border: 1px solid #f0b45e;
+    border-radius: 8px;
+    padding: 14px 18px;
+    margin-top: 12px;
+}
+.acdc-tp-manual-grading fieldset { border: 0; padding: 0; margin: 0; }
+.acdc-tp-manual-grading legend { color: #8a6d2a; padding: 0 4px; font-weight: 700; }
+.acdc-tp-manual-grading input[type="number"] {
+    width: 80px;
+    height: 36px;
+    padding: 0 10px;
+    margin-left: 8px;
+    border: 1px solid #d1d5db;
+    border-radius: 8px;
+}
+
+@media (max-width: 640px) {
+    .acdc-tp-results-header { flex-direction: column; }
+    .acdc-tp-results-table {
+        display: block;
+        overflow-x: auto;
+        white-space: nowrap;
+    }
+    .acdc-tp-results-tabs {
+        overflow-x: auto;
+    }
+}
