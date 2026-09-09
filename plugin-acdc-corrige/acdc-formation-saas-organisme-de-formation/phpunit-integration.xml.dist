@@ -1,0 +1,24 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  Configuration PHPUnit de la suite « integration » (WordPress réel + base jetable).
+  La suite « unit » pure conserve sa propre config (phpunit.xml.dist).
+
+  Défaut STRICT (aligné sur la suite unit) : failOnWarning=true, failOnRisky=true.
+  Si la cellule minimale WP 6.2 × PHP 8.2 échoue réellement sur du bruit émis par
+  le CŒUR WordPress, l'évidence sera capturée en CI, PUIS une baseline ciblée
+  (n'ignorant QUE le cœur, jamais le plugin) sera proposée séparément. Aucun
+  affaiblissement silencieux du défaut.
+-->
+<phpunit xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+         xsi:noNamespaceSchemaLocation="https://schema.phpunit.de/9.6/phpunit.xsd"
+         bootstrap="tests/bootstrap-integration.php"
+         colors="true"
+         cacheResultFile=".phpunit-integration.result.cache"
+         failOnWarning="true"
+         failOnRisky="true">
+    <testsuites>
+        <testsuite name="integration">
+            <directory>tests/Integration</directory>
+        </testsuite>
+    </testsuites>
+</phpunit>

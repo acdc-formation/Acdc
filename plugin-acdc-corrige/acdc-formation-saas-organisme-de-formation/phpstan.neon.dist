@@ -1,0 +1,24 @@
+includes:
+    - vendor/szepeviktor/phpstan-wordpress/extension.neon
+
+parameters:
+    level: 4
+    paths:
+        - includes
+        - acdc-formation-saas-organisme-de-formation.php
+        - uninstall.php
+    excludePaths:
+        - assets/js/vendor/*
+        - includes/quizzes/vendor/*
+        - vendor/*
+    bootstrapFiles:
+        - vendor/php-stubs/wordpress-stubs/wordpress-stubs.php
+    scanFiles:
+        - vendor/php-stubs/wordpress-stubs/wordpress-stubs.php
+    # Le code utilise massivement des traits fusionnés (méthodes définies dans d'autres traits) :
+    # on tolère les appels/propriétés inter-traits le temps de la modularisation.
+    ignoreErrors:
+        - '#Call to an undefined method#'
+        - '#Access to an undefined property#'
+        - '#Undefined variable: \$this#'
+    reportUnmatchedIgnoredErrors: false

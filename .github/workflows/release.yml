@@ -1,0 +1,74 @@
+name: Release — ZIP plugin ACDC
+
+on:
+  push:
+    tags: [ 'v*' ]
+  workflow_dispatch:   # build manuel à la demande (onglet Actions → Run workflow)
+
+permissions:
+  contents: write      # nécessaire pour créer la Release et y attacher le ZIP
+
+env:
+  PLUGIN_DIR: plugin-acdc-corrige/acdc-formation-saas-organisme-de-formation
+  PLUGIN_SLUG: acdc-formation-saas-organisme-de-formation
+
+jobs:
+  build:
+    name: Construire et publier le ZIP
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Vérifier la syntaxe PHP (garde-fou avant packaging)
+        working-directory: ${{ env.PLUGIN_DIR }}
+        run: find . -name '*.php' -not -path './vendor/*' -print0 | xargs -0 -n1 -P4 php -l > /dev/null
+
+      - name: Lire la version du plugin
+        id: ver
+        run: |
+          VERSION=$(grep -oP "Version:\s*\K[0-9.]+" "${PLUGIN_DIR}/${PLUGIN_SLUG}.php" | head -1)
+          echo "version=${VERSION}" >> "$GITHUB_OUTPUT"
+          echo "Version détectée : ${VERSION}"
+
+      - name: Assembler le paquet (dossier plugin à la racine du ZIP)
+        run: |
+          set -euo pipefail
+          STAGE="build/${PLUGIN_SLUG}"
+          mkdir -p "${STAGE}"
+          rsync -a \
+            --exclude '.git' \
+            --exclude '.github' \
+            --exclude 'vendor' \
+            --exclude 'node_modules' \
+            --exclude '.phpunit.result.cache' \
+            --exclude '.phpunit-integration.result.cache' \
+            --exclude '/tests' \
+            --exclude '/bin' \
+            --exclude '/phpunit.xml.dist' \
+            --exclude '/phpunit-integration.xml.dist' \
+            --exclude '/phpcs.xml.dist' \
+            --exclude '/phpstan.neon.dist' \
+            --exclude '/composer.json' \
+            --exclude '/composer.lock' \
+            "${PLUGIN_DIR}/" "${STAGE}/"
+          ZIP="${PLUGIN_SLUG}-${{ steps.ver.outputs.version }}.zip"
+          ( cd build && zip -rq "../${ZIP}" "${PLUGIN_SLUG}" )
+          echo "ZIP_NAME=${ZIP}" >> "$GITHUB_ENV"
+          unzip -l "${ZIP}" | tail -3
+
+      - name: Publier l'artefact du run (téléchargeable depuis Actions)
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ env.PLUGIN_SLUG }}-${{ steps.ver.outputs.version }}
+          path: ${{ env.ZIP_NAME }}
+          if-no-files-found: error
+
+      - name: Créer la Release GitHub (uniquement sur un tag)
+        if: startsWith(github.ref, 'refs/tags/')
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release create "${GITHUB_REF_NAME}" "${ZIP_NAME}" \
+            --title "ACDC ${GITHUB_REF_NAME}" \
+            --notes "Paquet d'installation du plugin (version ${{ steps.ver.outputs.version }}). Voir CHANGELOG.md." \
+            --repo "${GITHUB_REPOSITORY}"

@@ -1,0 +1,871 @@
+.acdc-table-wrap {
+    overflow: auto;
+    background: #FFFFFF;
+    border: 1px solid var(--acdc-border-soft);
+    border-radius: var(--acdc-radius-panel);
+}
+
+.acdc-table {
+    width: 100%;
+    border-collapse: separate;
+    border-spacing: 0;
+    background: #FFFFFF;
+}
+
+.acdc-table th,
+.acdc-table td {
+    padding: 14px 16px;
+    border-bottom: 1px solid var(--acdc-border-soft);
+    text-align: left;
+    vertical-align: top;
+}
+
+.acdc-table th {
+    color: var(--acdc-text);
+    font-size: 12px;
+    line-height: 16px;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.02em;
+    background: var(--acdc-soft-bg);
+}
+
+.acdc-table td {
+    font-size: 14px;
+    line-height: 18px;
+    color: var(--acdc-text);
+    background: #FFFFFF;
+}
+
+.acdc-table tbody tr:last-child td {
+    border-bottom: 0;
+}
+
+.acdc-table td:last-child {
+    white-space: nowrap;
+}
+
+.acdc-table td a {
+    font-weight: 500;
+}
+
+.acdc-table-prospects td small,
+.acdc-table td small {
+    color: var(--acdc-text-muted);
+}
+
+
+.acdc-actions-cell-icons,
+.acdc-sig-doc-cell,
+.acdc-table td.acdc-sig-doc-cell,
+.acdc-table td.acdc-actions-cell-icons {
+    white-space: nowrap;
+}
+
+.acdc-row-action-icon,
+.acdc-row-view-link,
+.acdc-row-edit-link,
+.acdc-row-delete-link,
+.acdc-row-menu-toggle,
+.acdc-row-menu-button,
+.acdc-table-action-trigger {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: var(--acdc-action-icon-frame-size, 34px);
+    height: var(--acdc-action-icon-frame-size, 34px);
+    padding: 0;
+    margin: 0 6px 0 0;
+    border: none;
+    background: transparent;
+    color: var(--acdc-action-icon-color, var(--acdc-icon-color, var(--acdc-primary, #8b5b23))) !important;
+    text-decoration: none;
+    vertical-align: middle;
+    cursor: pointer;
+}
+
+.acdc-actions-cell-icons > a:last-child,
+.acdc-actions-cell-icons > button:last-child,
+.acdc-actions-cell-icons .acdc-row-action-icon:last-child,
+.acdc-actions-cell-icons .acdc-row-menu-toggle:last-child,
+.acdc-actions-cell-icons .acdc-table-action-trigger:last-child {
+    margin-right: 0;
+}
+
+.acdc-row-action-icon:hover,
+.acdc-row-view-link:hover,
+.acdc-row-edit-link:hover,
+.acdc-row-delete-link:hover,
+.acdc-row-menu-toggle:hover,
+.acdc-row-menu-button:hover,
+.acdc-table-action-trigger:hover,
+.acdc-row-action-icon:focus-visible,
+.acdc-row-view-link:focus-visible,
+.acdc-row-edit-link:focus-visible,
+.acdc-row-delete-link:focus-visible,
+.acdc-row-menu-toggle:focus-visible,
+.acdc-row-menu-button:focus-visible,
+.acdc-table-action-trigger:focus-visible {
+    color: var(--acdc-action-icon-color, var(--acdc-icon-color, var(--acdc-primary, #8b5b23))) !important;
+    outline: none;
+}
+
+.acdc-row-action-icon-svg,
+.acdc-row-view-link > span[aria-hidden="true"],
+.acdc-row-edit-link > span[aria-hidden="true"],
+.acdc-row-delete-link > span[aria-hidden="true"],
+.acdc-row-menu-toggle > span[aria-hidden="true"],
+.acdc-table-action-trigger > span[aria-hidden="true"] {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: var(--acdc-action-icon-glyph-size, 25px) !important;
+    height: var(--acdc-action-icon-glyph-size, 25px) !important;
+    line-height: 1;
+    color: inherit;
+}
+
+.acdc-row-action-icon svg,
+.acdc-row-view-link svg,
+.acdc-row-edit-link svg,
+.acdc-row-delete-link svg,
+.acdc-row-menu-toggle svg,
+.acdc-row-menu-button svg,
+.acdc-table-action-trigger svg {
+    width: var(--acdc-action-icon-glyph-size, 25px) !important;
+    height: var(--acdc-action-icon-glyph-size, 25px) !important;
+    stroke: currentColor;
+}
+
+
+/* 3.18.52 — uniformisation stricte de toutes les icônes d'actions de tableau */
+.acdc-actions-cell-icons,
+.acdc-actions-cell-icons a,
+.acdc-actions-cell-icons button,
+.acdc-actions-cell-icons .acdc-row-menu,
+.acdc-actions-cell-icons .acdc-row-action-icon,
+.acdc-actions-cell-icons .acdc-row-view-link,
+.acdc-actions-cell-icons .acdc-row-edit-link,
+.acdc-actions-cell-icons .acdc-row-delete-link,
+.acdc-actions-cell-icons .acdc-row-menu-toggle,
+.acdc-actions-cell-icons .acdc-row-menu-button,
+.acdc-actions-cell-icons .acdc-table-action-trigger,
+.acdc-table td[class*="action"] a,
+.acdc-table td[class*="action"] button,
+.acdc-table td:last-child a[title="Voir"],
+.acdc-table td:last-child a[title="Modifier"],
+.acdc-table td:last-child a[title="Supprimer"],
+.acdc-table td:last-child button[title="Voir"],
+.acdc-table td:last-child button[title="Modifier"],
+.acdc-table td:last-child button[title="Supprimer"] {
+    color: var(--acdc-action-icon-color, var(--acdc-icon-color, var(--acdc-primary, #8b5b23))) !important;
+}
+
+.acdc-actions-cell-icons svg,
+.acdc-actions-cell-icons img,
+.acdc-actions-cell-icons .dashicons,
+.acdc-actions-cell-icons [class*="dashicons-"],
+.acdc-actions-cell-icons i,
+.acdc-actions-cell-icons .fa,
+.acdc-actions-cell-icons .fas,
+.acdc-actions-cell-icons .far,
+.acdc-actions-cell-icons .fal,
+.acdc-actions-cell-icons .fab,
+.acdc-actions-cell-icons [aria-hidden="true"] > svg,
+.acdc-row-action-icon svg,
+.acdc-row-view-link svg,
+.acdc-row-edit-link svg,
+.acdc-row-delete-link svg,
+.acdc-row-menu-toggle svg,
+.acdc-row-menu-button svg,
+.acdc-table-action-trigger svg,
+.acdc-row-action-icon .dashicons,
+.acdc-row-view-link .dashicons,
+.acdc-row-edit-link .dashicons,
+.acdc-row-delete-link .dashicons,
+.acdc-row-menu-toggle .dashicons,
+.acdc-row-menu-button .dashicons,
+.acdc-table-action-trigger .dashicons {
+    width: var(--acdc-action-icon-glyph-size, 25px) !important;
+    height: var(--acdc-action-icon-glyph-size, 25px) !important;
+    min-width: var(--acdc-action-icon-glyph-size, 25px) !important;
+    min-height: var(--acdc-action-icon-glyph-size, 25px) !important;
+    max-width: var(--acdc-action-icon-glyph-size, 25px) !important;
+    max-height: var(--acdc-action-icon-glyph-size, 25px) !important;
+    font-size: var(--acdc-action-icon-glyph-size, 25px) !important;
+    line-height: var(--acdc-action-icon-glyph-size, 25px) !important;
+    color: var(--acdc-action-icon-color, var(--acdc-icon-color, var(--acdc-primary, #8b5b23))) !important;
+    fill: currentColor !important;
+    stroke: currentColor !important;
+    vertical-align: middle !important;
+    flex: 0 0 var(--acdc-action-icon-glyph-size, 25px) !important;
+}
+
+.acdc-actions-cell-icons [aria-hidden="true"],
+.acdc-row-action-icon [aria-hidden="true"],
+.acdc-row-view-link [aria-hidden="true"],
+.acdc-row-edit-link [aria-hidden="true"],
+.acdc-row-delete-link [aria-hidden="true"],
+.acdc-row-menu-toggle [aria-hidden="true"],
+.acdc-row-menu-button [aria-hidden="true"],
+.acdc-table-action-trigger [aria-hidden="true"] {
+    width: var(--acdc-action-icon-glyph-size, 25px) !important;
+    height: var(--acdc-action-icon-glyph-size, 25px) !important;
+    min-width: var(--acdc-action-icon-glyph-size, 25px) !important;
+    min-height: var(--acdc-action-icon-glyph-size, 25px) !important;
+    color: var(--acdc-action-icon-color, var(--acdc-icon-color, var(--acdc-primary, #8b5b23))) !important;
+}
+
+.acdc-actions-cell-icons .dashicons:before,
+.acdc-row-action-icon .dashicons:before,
+.acdc-row-view-link .dashicons:before,
+.acdc-row-edit-link .dashicons:before,
+.acdc-row-delete-link .dashicons:before,
+.acdc-row-menu-toggle .dashicons:before,
+.acdc-row-menu-button .dashicons:before,
+.acdc-table-action-trigger .dashicons:before {
+    color: var(--acdc-action-icon-color, var(--acdc-icon-color, var(--acdc-primary, #8b5b23))) !important;
+    font-size: var(--acdc-action-icon-glyph-size, 25px) !important;
+    line-height: var(--acdc-action-icon-glyph-size, 25px) !important;
+}
+
+/* 3.20.06 — Actions apprenants : menu 3 points horizontal + œil + crayon + poubelle */
+.acdc-learners-actions-cell {
+    display: flex;
+    align-items: center;
+    justify-content: flex-start;
+    gap: 10px;
+    min-width: 178px;
+}
+
+.acdc-learners-actions-cell .acdc-row-menu,
+.acdc-learners-actions-cell .acdc-row-action-icon {
+    flex: 0 0 auto;
+}
+
+.acdc-learners-actions-cell .acdc-row-action-icon,
+.acdc-learners-actions-cell .acdc-row-menu-toggle {
+    margin: 0 !important;
+}
+
+.acdc-learners-actions-cell .acdc-row-menu-dropdown {
+    min-width: 230px;
+}
+
+/* 3.20.07 — Correction réelle Répertoire Apprenants : actions et colonnes */
+.acdc-table th:nth-child(1),
+.acdc-table td:nth-child(1) {
+    min-width: 82px;
+}
+
+.acdc-table th:nth-child(4),
+.acdc-table td:nth-child(4) {
+    width: 74px;
+    min-width: 74px;
+    max-width: 74px;
+    text-align: center;
+    white-space: nowrap;
+}
+
+.acdc-table th:nth-child(5),
+.acdc-table td:nth-child(5),
+.acdc-table th:nth-child(6),
+.acdc-table td:nth-child(6) {
+    white-space: nowrap;
+}
+
+.acdc-learner-prospect-cell {
+    text-align: center !important;
+}
+
+.acdc-origin-status {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 22px;
+    height: 22px;
+    border-radius: 999px;
+    font-size: 17px;
+    font-weight: 800;
+    line-height: 1;
+}
+
+.acdc-origin-status-yes {
+    color: #15803d;
+}
+
+.acdc-origin-status-no {
+    color: #dc2626;
+}
+
+.acdc-learners-actions-cell {
+    display: flex !important;
+    align-items: center !important;
+    justify-content: flex-start !important;
+    gap: var(--acdc-action-icon-gap, 12px) !important;
+    min-width: 178px !important;
+    white-space: nowrap !important;
+    flex-wrap: nowrap !important;
+}
+
+.acdc-learners-actions-cell .acdc-row-menu,
+.acdc-learners-actions-cell .acdc-row-action-icon {
+    display: inline-flex !important;
+    align-items: center !important;
+    justify-content: center !important;
+    flex: 0 0 auto !important;
+    width: var(--acdc-action-icon-frame-size, 25px) !important;
+    height: var(--acdc-action-icon-frame-size, 25px) !important;
+    min-width: var(--acdc-action-icon-frame-size, 25px) !important;
+    min-height: var(--acdc-action-icon-frame-size, 25px) !important;
+    margin: 0 !important;
+    padding: 0 !important;
+}
+
+.acdc-learners-actions-cell svg,
+.acdc-learners-actions-cell .dashicons {
+    width: var(--acdc-action-icon-glyph-size, 25px) !important;
+    height: var(--acdc-action-icon-glyph-size, 25px) !important;
+    min-width: var(--acdc-action-icon-glyph-size, 25px) !important;
+    min-height: var(--acdc-action-icon-glyph-size, 25px) !important;
+    font-size: var(--acdc-action-icon-glyph-size, 25px) !important;
+    line-height: var(--acdc-action-icon-glyph-size, 25px) !important;
+    color: var(--acdc-action-icon-color, var(--acdc-icon-color, var(--acdc-primary, #8b5b23))) !important;
+}
+
+.acdc-learners-actions-cell .acdc-row-menu-dropdown,
+.acdc-learners-actions-cell .acdc-row-menu-dropdown-floating {
+    min-width: 220px !important;
+}
+
+/* 3.20.08 — Répertoire Apprenants : correction stricte colonnes + actions en une seule ligne */
+.acdc-learners-table {
+    table-layout: auto !important;
+}
+
+.acdc-learners-table th,
+.acdc-learners-table td {
+    vertical-align: middle !important;
+}
+
+.acdc-learners-table th:nth-child(1),
+.acdc-learners-table td:nth-child(1) {
+    width: 76px !important;
+    min-width: 76px !important;
+    white-space: nowrap !important;
+}
+
+.acdc-learners-table th:nth-child(4),
+.acdc-learners-table td:nth-child(4) {
+    width: 88px !important;
+    min-width: 88px !important;
+    max-width: 88px !important;
+    text-align: center !important;
+    white-space: nowrap !important;
+}
+
+.acdc-learners-table th:nth-child(5),
+.acdc-learners-table td:nth-child(5) {
+    width: 172px !important;
+    min-width: 172px !important;
+    white-space: nowrap !important;
+    word-break: normal !important;
+    overflow-wrap: normal !important;
+}
+
+.acdc-learners-table th:nth-child(6),
+.acdc-learners-table td:nth-child(6) {
+    width: 128px !important;
+    min-width: 128px !important;
+    white-space: nowrap !important;
+    word-break: normal !important;
+    overflow-wrap: normal !important;
+}
+
+.acdc-learners-table th:nth-child(12),
+.acdc-learners-table td:nth-child(12) {
+    width: 148px !important;
+    min-width: 148px !important;
+    white-space: nowrap !important;
+}
+
+.acdc-learners-table .acdc-learner-prospect-cell {
+    text-align: center !important;
+}
+
+.acdc-learners-table .acdc-origin-status {
+    display: inline-flex !important;
+    align-items: center !important;
+    justify-content: center !important;
+    width: 22px !important;
+    height: 22px !important;
+    border-radius: 999px !important;
+    font-size: 14px !important;
+    font-weight: 800 !important;
+    line-height: 1 !important;
+    background: #ffffff !important;
+}
+
+.acdc-learners-table .acdc-origin-status-yes {
+    color: #16a34a !important;
+    border: 2px solid #22c55e !important;
+}
+
+.acdc-learners-table .acdc-origin-status-no {
+    color: #ef4444 !important;
+    border: 2px solid #ef4444 !important;
+}
+
+.acdc-learners-table td.acdc-learners-actions-cell {
+    display: table-cell !important;
+    white-space: nowrap !important;
+    text-align: right !important;
+}
+
+.acdc-learners-actions-inline {
+    display: inline-flex !important;
+    flex-direction: row !important;
+    align-items: center !important;
+    justify-content: flex-end !important;
+    gap: var(--acdc-action-icon-gap, 10px) !important;
+    flex-wrap: nowrap !important;
+    white-space: nowrap !important;
+    min-width: 146px !important;
+}
+
+.acdc-learners-actions-inline .acdc-row-menu,
+.acdc-learners-actions-inline .acdc-row-action-icon,
+.acdc-learners-actions-inline .acdc-row-menu-toggle,
+.acdc-learners-actions-inline a,
+.acdc-learners-actions-inline button {
+    display: inline-flex !important;
+    flex: 0 0 auto !important;
+    align-items: center !important;
+    justify-content: center !important;
+    width: var(--acdc-action-icon-frame-size, 25px) !important;
+    height: var(--acdc-action-icon-frame-size, 25px) !important;
+    min-width: var(--acdc-action-icon-frame-size, 25px) !important;
+    min-height: var(--acdc-action-icon-frame-size, 25px) !important;
+    padding: 0 !important;
+    margin: 0 !important;
+    border: 0 !important;
+    background: transparent !important;
+    color: var(--acdc-action-icon-color, var(--acdc-icon-color, var(--acdc-primary, #8b5b23))) !important;
+    line-height: 1 !important;
+}
+
+.acdc-learners-actions-inline svg,
+.acdc-learners-actions-inline .dashicons,
+.acdc-learners-actions-inline .dashicons:before {
+    width: var(--acdc-action-icon-glyph-size, 25px) !important;
+    height: var(--acdc-action-icon-glyph-size, 25px) !important;
+    min-width: var(--acdc-action-icon-glyph-size, 25px) !important;
+    min-height: var(--acdc-action-icon-glyph-size, 25px) !important;
+    font-size: var(--acdc-action-icon-glyph-size, 25px) !important;
+    line-height: var(--acdc-action-icon-glyph-size, 25px) !important;
+    color: var(--acdc-action-icon-color, var(--acdc-icon-color, var(--acdc-primary, #8b5b23))) !important;
+    stroke: currentColor !important;
+}
+
+.acdc-learners-actions-inline .acdc-row-menu-dropdown,
+.acdc-learners-actions-inline .acdc-row-menu-dropdown-floating {
+    min-width: 220px !important;
+    text-align: left !important;
+}
+
+/* 3.20.12 — Répertoire Groupes : colonnes stabilisées + actions homogènes */
+.acdc-groups-table {
+    table-layout: fixed !important;
+    width: 100% !important;
+}
+
+.acdc-groups-table th,
+.acdc-groups-table td {
+    vertical-align: middle !important;
+}
+
+.acdc-groups-table th:nth-child(1),
+.acdc-groups-table td:nth-child(1) {
+    width: 28% !important;
+}
+
+.acdc-groups-table th:nth-child(2),
+.acdc-groups-table td:nth-child(2) {
+    width: 12% !important;
+}
+
+.acdc-groups-table th:nth-child(3),
+.acdc-groups-table td:nth-child(3) {
+    width: 16% !important;
+}
+
+.acdc-groups-table th:nth-child(4),
+.acdc-groups-table td:nth-child(4) {
+    width: 13% !important;
+    min-width: 150px !important;
+    white-space: normal !important;
+    overflow-wrap: anywhere !important;
+}
+
+.acdc-groups-table th:nth-child(5),
+.acdc-groups-table td:nth-child(5) {
+    width: 13% !important;
+    min-width: 150px !important;
+    white-space: normal !important;
+    overflow-wrap: anywhere !important;
+}
+
+.acdc-groups-table th:nth-child(6),
+.acdc-groups-table td:nth-child(6) {
+    width: 10% !important;
+}
+
+.acdc-groups-table th:nth-child(7),
+.acdc-groups-table td:nth-child(7) {
+    width: 148px !important;
+    min-width: 148px !important;
+    white-space: nowrap !important;
+    text-align: right !important;
+}
+
+.acdc-groups-actions-cell {
+    display: table-cell !important;
+    white-space: nowrap !important;
+    text-align: right !important;
+}
+
+.acdc-groups-actions-inline {
+    display: inline-flex !important;
+    flex-direction: row !important;
+    align-items: center !important;
+    justify-content: flex-end !important;
+    gap: var(--acdc-action-icon-gap, 10px) !important;
+    flex-wrap: nowrap !important;
+    white-space: nowrap !important;
+    min-width: 146px !important;
+}
+
+.acdc-groups-actions-inline .acdc-row-menu,
+.acdc-groups-actions-inline .acdc-row-action-icon,
+.acdc-groups-actions-inline .acdc-row-menu-toggle,
+.acdc-groups-actions-inline a,
+.acdc-groups-actions-inline button {
+    display: inline-flex !important;
+    flex: 0 0 auto !important;
+    align-items: center !important;
+    justify-content: center !important;
+    width: var(--acdc-action-icon-frame-size, 25px) !important;
+    height: var(--acdc-action-icon-frame-size, 25px) !important;
+    min-width: var(--acdc-action-icon-frame-size, 25px) !important;
+    min-height: var(--acdc-action-icon-frame-size, 25px) !important;
+    padding: 0 !important;
+    margin: 0 !important;
+    border: 0 !important;
+    background: transparent !important;
+    color: var(--acdc-action-icon-color, var(--acdc-icon-color, var(--acdc-primary, #8b5b23))) !important;
+    line-height: 1 !important;
+}
+
+.acdc-groups-actions-inline svg,
+.acdc-groups-actions-inline .dashicons,
+.acdc-groups-actions-inline .dashicons:before {
+    width: var(--acdc-action-icon-glyph-size, 25px) !important;
+    height: var(--acdc-action-icon-glyph-size, 25px) !important;
+    min-width: var(--acdc-action-icon-glyph-size, 25px) !important;
+    min-height: var(--acdc-action-icon-glyph-size, 25px) !important;
+    font-size: var(--acdc-action-icon-glyph-size, 25px) !important;
+    line-height: var(--acdc-action-icon-glyph-size, 25px) !important;
+    color: var(--acdc-action-icon-color, var(--acdc-icon-color, var(--acdc-primary, #8b5b23))) !important;
+    stroke: currentColor !important;
+}
+
+.acdc-groups-actions-inline .acdc-row-menu-dropdown,
+.acdc-groups-actions-inline .acdc-row-menu-dropdown-floating {
+    min-width: 280px !important;
+    text-align: left !important;
+}
+
+.acdc-group-document-space .acdc-group-documents-table th:nth-child(1),
+.acdc-group-document-space .acdc-group-documents-table td:nth-child(1) {
+    width: 34% !important;
+}
+
+/* ACDC 3.20.16 — Répertoire Entreprises : colonnes et actions alignées */
+.acdc-companies-table th,
+.acdc-companies-table td { vertical-align: middle; }
+.acdc-companies-table th:nth-child(1),
+.acdc-companies-table td:nth-child(1) { width: 150px; }
+.acdc-companies-table th:nth-child(2),
+.acdc-companies-table td:nth-child(2) { min-width: 180px; }
+.acdc-companies-table th:nth-child(3),
+.acdc-companies-table td:nth-child(3) { width: 78px; text-align:center; }
+.acdc-companies-table th:nth-child(5),
+.acdc-companies-table td:nth-child(5) { width: 95px; }
+.acdc-companies-table th:nth-child(7),
+.acdc-companies-table td:nth-child(7) { min-width: 220px; }
+.acdc-companies-table th:last-child,
+.acdc-companies-table td:last-child { width: 150px; text-align:right; }
+.acdc-companies-table .acdc-nowrap { white-space: nowrap; }
+.acdc-company-prospect-cell { text-align:center; }
+.acdc-prospect-indicator { display:inline-flex; align-items:center; justify-content:center; width:22px; height:22px; border-radius:999px; font-size:18px; line-height:1; font-weight:700; }
+.acdc-prospect-indicator.is-yes { color:#22c55e; border:2px solid #22c55e; }
+.acdc-prospect-indicator.is-no { color:#ef4444; border:2px solid #ef4444; }
+.acdc-companies-actions-inline { display:inline-flex; align-items:center; justify-content:flex-end; gap:var(--acdc-action-icon-gap, 12px); white-space:nowrap; width:100%; }
+.acdc-companies-actions-inline .acdc-row-menu,
+.acdc-companies-actions-inline .acdc-row-action-icon,
+.acdc-companies-actions-inline .acdc-row-menu-toggle,
+.acdc-companies-actions-inline a,
+.acdc-companies-actions-inline button { display:inline-flex; align-items:center; justify-content:center; width:var(--acdc-action-icon-frame-size, 25px) !important; height:var(--acdc-action-icon-frame-size, 25px) !important; min-width:var(--acdc-action-icon-frame-size, 25px) !important; min-height:var(--acdc-action-icon-frame-size, 25px) !important; padding:0 !important; margin:0 !important; border:0 !important; background:transparent !important; color:var(--acdc-action-icon-color, var(--acdc-icon-color, var(--acdc-primary, #8b5b23))) !important; line-height:1 !important; text-decoration:none !important; cursor:pointer; }
+.acdc-companies-actions-inline svg,
+.acdc-companies-actions-inline .dashicons,
+.acdc-companies-actions-inline .dashicons:before { width:var(--acdc-action-icon-glyph-size, 25px) !important; height:var(--acdc-action-icon-glyph-size, 25px) !important; font-size:var(--acdc-action-icon-glyph-size, 25px) !important; color:var(--acdc-action-icon-color, var(--acdc-icon-color, var(--acdc-primary, #8b5b23))) !important; stroke:currentColor !important; }
+.acdc-companies-actions-inline .acdc-row-menu-dropdown,
+.acdc-companies-actions-inline .acdc-row-menu-dropdown-floating { width:auto !important; height:auto !important; min-width:230px !important; min-height:0 !important; padding:8px !important; color:#1E4777 !important; text-align:left; }
+.acdc-companies-actions-inline .acdc-row-menu-dropdown a,
+.acdc-companies-actions-inline .acdc-row-menu-dropdown-floating a { display:block !important; width:auto !important; height:auto !important; min-width:0 !important; padding:10px 12px !important; color:#1E4777 !important; font-size:13px !important; font-weight:600 !important; text-align:left; }
+
+/* ACDC 3.20.37 — Alignement strict à gauche de toutes les colonnes de tableaux */
+.acdc-portal-shell table th,
+.acdc-portal-shell table td,
+.acdc-page table th,
+.acdc-page table td,
+.acdc-panel table th,
+.acdc-panel table td,
+.acdc-table-wrap table th,
+.acdc-table-wrap table td,
+table.acdc-table th,
+table.acdc-table td,
+.acdc-admin-shell table th,
+.acdc-admin-shell table td {
+    text-align: left !important;
+}
+
+.acdc-portal-shell table th > *,
+.acdc-portal-shell table td > *,
+.acdc-page table th > *,
+.acdc-page table td > *,
+.acdc-panel table th > *,
+.acdc-panel table td > *,
+.acdc-table-wrap table th > *,
+.acdc-table-wrap table td > *,
+table.acdc-table th > *,
+table.acdc-table td > *,
+.acdc-admin-shell table th > *,
+.acdc-admin-shell table td > * {
+    text-align: left !important;
+}
+
+.acdc-table td:last-child,
+.acdc-actions-cell-icons,
+.acdc-table td.acdc-actions-cell-icons,
+.acdc-companies-actions-inline,
+.acdc-groups-actions-inline {
+    text-align: left !important;
+    justify-content: flex-start !important;
+}
+
+/* Page Formations — actions, duplication, archivage et indicateur Qualiopi */
+.acdc-formations-actions {
+  white-space: nowrap;
+  text-align: right;
+}
+.acdc-formations-actions .acdc-action-icon,
+.acdc-formations-actions .acdc-row-menu-toggle {
+  width: var(--acdc-action-icon-frame-size, 34px);
+  height: var(--acdc-action-icon-frame-size, 34px);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid rgba(139, 91, 35, .18);
+  border-radius: var(--acdc-action-icon-radius, 10px);
+  background: #ffffff;
+  color: var(--acdc-action-icon-color, var(--acdc-icon-color, var(--acdc-primary, #8b5b23)));
+  text-decoration: none;
+  vertical-align: middle;
+}
+.acdc-formations-actions .acdc-action-icon svg,
+.acdc-formations-actions .acdc-row-menu-dropdown svg {
+  width: var(--acdc-action-icon-glyph-size, 20px);
+  height: var(--acdc-action-icon-glyph-size, 20px);
+}
+.acdc-formations-actions .acdc-action-icon:hover,
+.acdc-formations-actions .acdc-row-menu-toggle:hover {
+  background: rgba(214, 163, 83, .12);
+  border-color: rgba(139, 91, 35, .36);
+}
+.acdc-formations-actions .acdc-row-menu {
+  display: inline-flex;
+  position: relative;
+  vertical-align: middle;
+}
+.acdc-formations-actions .acdc-row-menu-toggle {
+  cursor: pointer;
+  font-size: 22px;
+  line-height: 1;
+  margin-left: 4px;
+}
+.acdc-formations-actions .acdc-row-menu-dropdown {
+  position: absolute;
+  right: 0;
+  top: calc(100% + 8px);
+  z-index: 40;
+  min-width: 185px;
+  display: none;
+  padding: 6px;
+  border: 1px solid rgba(15, 23, 42, .10);
+  border-radius: 14px;
+  background: #ffffff;
+  box-shadow: 0 18px 40px rgba(15, 23, 42, .16);
+  text-align: left;
+}
+.acdc-formations-actions .acdc-row-menu.is-open .acdc-row-menu-dropdown,
+.acdc-formations-actions .acdc-row-menu:hover .acdc-row-menu-dropdown,
+.acdc-formations-actions .acdc-row-menu:focus-within .acdc-row-menu-dropdown {
+  display: block;
+}
+.acdc-formations-actions .acdc-row-menu-dropdown a {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 9px 10px;
+  border-radius: 10px;
+  color: #243042;
+  text-decoration: none;
+  font-size: 13px;
+  font-weight: 600;
+}
+.acdc-formations-actions .acdc-row-menu-dropdown a:hover {
+  background: rgba(214, 163, 83, .12);
+  color: var(--acdc-action-icon-color, var(--acdc-icon-color, var(--acdc-primary, #8b5b23)));
+}
+.acdc-qualiopi-icon {
+  width: calc(var(--acdc-icon-size, 25px) + 5px);
+  height: calc(var(--acdc-icon-size, 25px) + 5px);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 999px;
+}
+.acdc-qualiopi-icon svg {
+  width: var(--acdc-icon-size, 25px);
+  height: var(--acdc-icon-size, 25px);
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 2;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+/* Couleurs sémantiques (vert = conforme, rouge = non conforme) conservées
+ * volontairement en dur car porteuses de sens fonctionnel.
+ */
+.acdc-qualiopi-icon-ok {
+  color: #1f9d55;
+  background: rgba(31, 157, 85, .10);
+}
+.acdc-qualiopi-icon-ko {
+  color: #b42318;
+  background: rgba(180, 35, 24, .10);
+}
+
+/* Formations — ajustements tableau 3.20.50 */
+.acdc-formations-table-wrap{
+  overflow: visible !important;
+}
+.acdc-formation-qualiopi-cell{
+  text-align:center;
+  vertical-align:middle;
+}
+.acdc-formation-qualiopi-cell .acdc-origin-status{
+  margin:auto;
+}
+.acdc-formation-prereq-cell{
+  overflow:visible;
+}
+.acdc-formation-prereq-wrap{
+  display:inline-flex;
+  align-items:center;
+}
+.acdc-formation-prereq-trigger,
+.acdc-formation-prereq-trigger:visited{
+  display:inline-block;
+  color:#d6ad6b !important;
+  font-size:inherit;
+  font-weight:400;
+  line-height:1.4;
+  text-decoration:none;
+  cursor:pointer;
+}
+.acdc-formation-prereq-trigger:hover,
+.acdc-formation-prereq-trigger:focus,
+.acdc-formation-prereq-trigger:active{
+  color:#d6ad6b !important;
+  outline:none;
+  text-decoration:none;
+}
+.acdc-formation-prereq-content[hidden]{
+  display:none !important;
+}
+.acdc-formation-prereq-popover{
+  z-index:99999;
+  display:none;
+  min-width:360px;
+  max-width:620px;
+  padding:16px 22px;
+  color:#65728b;
+  background:#fff;
+  border:1px solid #d9e4ef;
+  border-radius:16px;
+  box-shadow:0 16px 35px rgba(15, 32, 56, .12);
+  line-height:1.45;
+  white-space:normal;
+  text-align:left;
+}
+.acdc-formation-prereq-popover-floating{
+  position:fixed;
+}
+.acdc-formation-prereq-popover[hidden]{
+  display:none !important;
+}
+.acdc-formation-prereq-popover.is-open{
+  display:block;
+}
+.acdc-formations-actions{
+  display:flex;
+  align-items:center;
+  justify-content:flex-start;
+  gap:10px;
+}
+.acdc-formations-actions .acdc-row-menu{
+  order:0;
+}
+.acdc-formations-actions .acdc-action-icon{
+  order:1;
+}
+
+/* 3.20.53 — Formations : verrouillage définitif de la couleur du lien Prérequis */
+body .acdc-table td.acdc-formation-prereq-cell a.acdc-formation-prereq-trigger,
+body .acdc-table td.acdc-formation-prereq-cell a.acdc-formation-prereq-trigger:link,
+body .acdc-table td.acdc-formation-prereq-cell a.acdc-formation-prereq-trigger:visited,
+body .acdc-table td.acdc-formation-prereq-cell a.acdc-formation-prereq-trigger:hover,
+body .acdc-table td.acdc-formation-prereq-cell a.acdc-formation-prereq-trigger:focus,
+body .acdc-table td.acdc-formation-prereq-cell a.acdc-formation-prereq-trigger:active{
+  color:#d6ad6b !important;
+  -webkit-text-fill-color:#d6ad6b !important;
+  font-size:inherit !important;
+  font-weight:400 !important;
+  line-height:inherit !important;
+  text-decoration:none !important;
+  background:transparent !important;
+  border:0 !important;
+  box-shadow:none !important;
+  appearance:none !important;
+}
+
+/* ACDC 3.21.29-hotfix4 — Tableau Analyses du besoin : surcharge colonne Intitulé */
+.acdc-nad-analyses-table th:nth-child(1),
+.acdc-nad-analyses-table td:nth-child(1) {
+    min-width: 800px;
+    width: 800px;
+    white-space: normal;
+    word-break: break-word;
+}
